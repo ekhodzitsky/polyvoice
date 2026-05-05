@@ -21,7 +21,7 @@ Output: SPEAKER_00: 0.10s -  7.60s
 
 ```toml
 [dependencies]
-polyvoice = { version = "0.4", features = ["onnx"] }
+polyvoice = { version = "0.5", features = ["onnx"] }
 ```
 
 ### 2. Download models
@@ -64,6 +64,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Python
+
+```bash
+pip install polyvoice  # or: cd python && maturin develop --release
+```
+
+```python
+import polyvoice
+
+pipeline = polyvoice.Pipeline("models/")
+turns = pipeline("meeting.wav")
+
+for turn in turns:
+    print(f"{turn.speaker}: {turn.start:.1f}s - {turn.end:.1f}s")
+```
+
+## CLI
+
+```bash
+cargo install polyvoice --features cli
+
+polyvoice download-models
+polyvoice diarize meeting.wav
+polyvoice diarize meeting.wav --format json
+polyvoice diarize meeting.wav --format rttm --max-speakers 4
+```
+
 ## How it works
 
 ```
@@ -93,7 +120,7 @@ WAV / PCM audio (16 kHz mono)
 | Concurrent sessions | Lock-free session pool | Thread-limited |
 | Streaming | `OnlineDiarizer` built-in | Third-party wrappers |
 
-polyannote is the gold standard for accuracy. polyvoice trades some accuracy for deployment simplicity: no Python runtime, no GPU required, ~30 MB total.
+pyannote is the gold standard for accuracy. polyvoice trades some accuracy for deployment simplicity: no Python runtime, no GPU required, ~30 MB total.
 
 ## Features
 
@@ -104,7 +131,9 @@ polyannote is the gold standard for accuracy. polyvoice trades some accuracy for
 - **Silero VAD** — integrated voice activity detection with stateful LSTM context.
 - **Overlap detection** — find regions where multiple speakers talk simultaneously.
 - **Word alignment** — assign speaker IDs to transcript words by timestamp.
-- **C FFI** — drop-in `.so`/`.dylib`/`.dll` for Python, Go, Node.js callers.
+- **Python bindings** — `pip install polyvoice`, 3-line API via PyO3/maturin.
+- **CLI** — `polyvoice diarize meeting.wav` with text/json/rttm output.
+- **C FFI** — drop-in `.so`/`.dylib`/`.dll` for Go, Node.js, C++ callers.
 - **Safety verified** — Miri (memory), Loom (concurrency), cargo-fuzz (inputs), across Linux/macOS/Windows.
 
 ## Configuration
@@ -166,9 +195,9 @@ for seg in segments {
 - [x] C FFI bindings
 - [x] Miri / Loom / fuzz verification
 - [x] Cross-platform CI
+- [x] Python bindings (PyO3 / maturin)
+- [x] CLI tool (`polyvoice diarize` / `download-models`)
 - [ ] DER benchmarks on AMI / VoxConverse
-- [ ] Python bindings (PyO3 / maturin)
-- [ ] CLI tool
 - [ ] Spectral clustering backend
 - [ ] PLDA scoring backend
 
