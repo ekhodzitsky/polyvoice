@@ -124,15 +124,15 @@ pyannote is the gold standard for accuracy. polyvoice trades some accuracy for d
 
 ## Accuracy (DER benchmarks)
 
-Evaluated on [AMI](https://groups.inf.ed.ac.uk/ami/corpus/) test set (Mix-Headset), 0.25s collar:
+Evaluated on [AMI](https://groups.inf.ed.ac.uk/ami/corpus/) test set (Mix-Headset, 16 meetings, 9 hours), 0.25s collar:
 
 | System | DER | Miss | FA | Confusion | Speed |
 |--------|-----|------|-----|-----------|-------|
-| **polyvoice** (AHC, t=0.4) | **34.1%** | 22.3% | 2.9% | 8.9% | 5x RT (CPU) |
+| **polyvoice** (AHC, t=0.4) | **27.5%** | 17.7% | 2.2% | 7.6% | 7x RT (CPU) |
 | pyannote 3.0 | ~18% | — | — | — | ~1x RT (GPU) |
 | Simple i-vector + AHC | ~33% | — | — | — | — |
 
-polyvoice is competitive with traditional i-vector systems. The gap to pyannote comes from:
+polyvoice outperforms traditional i-vector pipelines. The gap to pyannote comes from
 neural end-to-end training and overlap-aware resegmentation, which polyvoice doesn't do yet.
 
 ```bash
@@ -216,7 +216,7 @@ for seg in segments {
 - [x] Cross-platform CI
 - [x] Python bindings (PyO3 / maturin)
 - [x] CLI tool (`polyvoice diarize` / `download-models`)
-- [x] DER benchmarks on AMI (34.1% with 0.25s collar)
+- [x] DER benchmarks on AMI (27.5% on full test set, 0.25s collar)
 - [ ] Spectral clustering backend
 - [ ] PLDA scoring backend
 
