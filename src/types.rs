@@ -13,6 +13,106 @@ impl fmt::Display for SpeakerId {
     }
 }
 
+/// A validated sample rate (8000–192000 Hz).
+///
+/// Invariant: 8000 <= inner <= 192000.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SampleRate(u32);
+
+impl SampleRate {
+    /// { 8000 <= rate && rate <= 192000 }
+    /// `fn new(rate: u32) -> Option<SampleRate>`
+    /// { ret.is_some() => ret.unwrap().0 == rate }
+    pub fn new(rate: u32) -> Option<Self> {
+        (8000..=192000).contains(&rate).then_some(Self(rate))
+    }
+
+    pub fn get(&self) -> u32 {
+        self.0
+    }
+}
+
+impl Default for SampleRate {
+    fn default() -> Self {
+        Self(16000)
+    }
+}
+
+/// A validated confidence score in [0.0, 1.0].
+///
+/// Invariant: 0.0 <= inner <= 1.0.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Confidence(f32);
+
+impl Confidence {
+    /// { 0.0 <= v && v <= 1.0 }
+    /// `fn new(v: f32) -> Option<Confidence>`
+    /// { ret.is_some() => ret.unwrap().0 == v }
+    pub fn new(v: f32) -> Option<Self> {
+        (0.0..=1.0).contains(&v).then_some(Self(v))
+    }
+
+    pub fn get(&self) -> f32 {
+        self.0
+    }
+}
+
+impl Default for Confidence {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
+/// A validated embedding dimension (> 0).
+///
+/// Invariant: inner > 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct EmbeddingDim(usize);
+
+impl EmbeddingDim {
+    /// { dim > 0 }
+    /// `fn new(dim: usize) -> Option<EmbeddingDim>`
+    /// { ret.is_some() => ret.unwrap().0 == dim }
+    pub fn new(dim: usize) -> Option<Self> {
+        (dim > 0).then_some(Self(dim))
+    }
+
+    pub fn get(&self) -> usize {
+        self.0
+    }
+}
+
+impl Default for EmbeddingDim {
+    fn default() -> Self {
+        Self(256)
+    }
+}
+
+/// A non-negative duration in seconds.
+///
+/// Invariant: inner >= 0.0.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Seconds(f32);
+
+impl Seconds {
+    /// { v >= 0.0 }
+    /// `fn new(v: f32) -> Option<Seconds>`
+    /// { ret.is_some() => ret.unwrap().0 == v }
+    pub fn new(v: f32) -> Option<Self> {
+        (v >= 0.0).then_some(Self(v))
+    }
+
+    pub fn get(&self) -> f32 {
+        self.0
+    }
+}
+
+impl Default for Seconds {
+    fn default() -> Self {
+        Self(0.0)
+    }
+}
+
 /// A time interval in seconds.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TimeRange {

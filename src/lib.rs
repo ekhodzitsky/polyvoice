@@ -1,3 +1,8 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used))]
+#![cfg_attr(not(test), deny(clippy::expect_used))]
+#![cfg_attr(not(test), deny(clippy::panic))]
+#![deny(unsafe_op_in_unsafe_fn)]
+
 //! # polyvoice
 //!
 //! Speaker diarization library for Rust — online (streaming) and offline
@@ -27,6 +32,8 @@
 
 pub mod cluster;
 pub mod embedding;
+#[cfg(feature = "ffi")]
+pub mod ffi;
 pub mod offline;
 pub mod online;
 pub mod overlap;
@@ -43,7 +50,10 @@ pub use embedding::{DummyExtractor, EmbeddingExtractor, EmbeddingError};
 pub use offline::OfflineDiarizer;
 pub use online::OnlineDiarizer;
 pub use overlap::detect_overlaps;
-pub use types::*;
+pub use types::{
+    Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate, Seconds,
+    Segment, SpeakerId, SpeakerTurn, TimeRange, WordAlignment,
+};
 pub use vad::{segment_speech, EnergyVad, VoiceActivityDetector, VadError};
 
 #[cfg(feature = "onnx")]

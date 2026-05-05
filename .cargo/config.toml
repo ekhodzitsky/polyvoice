@@ -1,0 +1,10 @@
+[build]
+rustflags = ["-D", "warnings"]
+
+[env]
+RUST_BACKTRACE = "1"
+
+[alias]
+check-all = "clippy --all-targets --all-features -- -D warnings"
+test-all = "test --all-features"
+doc-check = "doc --no-deps --all-features"

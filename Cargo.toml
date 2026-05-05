@@ -12,6 +12,8 @@ categories = ["multimedia::audio", "science"]
 default = []
 # Enable ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
+# Enable C FFI bindings.
+ffi = []
 
 [dependencies]
 # ONNX Runtime — matches the ecosystem version.
@@ -37,6 +39,7 @@ ndarray = { version = "0.16", default-features = false }
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+proptest = "1"
 
 [profile.release]
 lto = true

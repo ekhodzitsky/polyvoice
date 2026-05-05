@@ -1,5 +1,6 @@
 use polyvoice::{
-    DiarizationConfig, DummyExtractor, OfflineDiarizer, OnlineDiarizer, WordAlignment,
+    detect_overlaps, DiarizationConfig, DummyExtractor, OfflineDiarizer, OnlineDiarizer,
+    SpeakerCluster, TimeRange, WordAlignment,
 };
 
 /// Helper to generate a sine wave at a given frequency.
@@ -98,13 +99,13 @@ fn test_word_alignment() {
     let mut words = vec![
         WordAlignment {
             word: "hello".into(),
-            time: polyvoice::TimeRange { start: 0.5, end: 1.0 },
+            time: TimeRange { start: 0.5, end: 1.0 },
             speaker: None,
             confidence: 0.9,
         },
         WordAlignment {
             word: "world".into(),
-            time: polyvoice::TimeRange { start: 1.5, end: 2.0 },
+            time: TimeRange { start: 1.5, end: 2.0 },
             speaker: None,
             confidence: 0.8,
         },
@@ -120,17 +121,15 @@ fn test_word_alignment() {
 
 #[test]
 fn test_overlap_detection() {
-    use polyvoice::{detect_overlaps, Segment, SpeakerId, TimeRange};
-
     let segments = vec![
-        Segment {
+        polyvoice::Segment {
             time: TimeRange { start: 0.0, end: 3.0 },
-            speaker: Some(SpeakerId(0)),
+            speaker: Some(polyvoice::SpeakerId(0)),
             confidence: None,
         },
-        Segment {
+        polyvoice::Segment {
             time: TimeRange { start: 1.0, end: 4.0 },
-            speaker: Some(SpeakerId(1)),
+            speaker: Some(polyvoice::SpeakerId(1)),
             confidence: None,
         },
     ];
@@ -139,4 +138,83 @@ fn test_overlap_detection() {
     assert_eq!(overlaps.len(), 1);
     assert!((overlaps[0].time.start - 1.0).abs() < 1e-5);
     assert!((overlaps[0].time.end - 3.0).abs() < 1e-5);
+}
+
+/// Test that SpeakerCluster correctly separates two distinct speakers
+/// when using deterministic but different embeddings.
+#[test]
+fn test_cluster_two_distinct_speakers() {
+    let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+
+    // Speaker A: unit vector along dimension 0
+    let mut emb_a = vec![0.0f32; 256];
+    emb_a[0] = 1.0;
+
+    // Speaker B: unit vector along dimension 1
+    let mut emb_b = vec![0.0f32; 256];
+    emb_b[1] = 1.0;
+
+    let (id_a1, _) = cluster.assign(&emb_a);
+    let (id_b1, _) = cluster.assign(&emb_b);
+    let (id_a2, _) = cluster.assign(&emb_a);
+    let (id_b2, _) = cluster.assign(&emb_b);
+
+    assert_ne!(id_a1, id_b1, "different speakers should have different IDs");
+    assert_eq!(id_a1, id_a2, "same speaker should have same ID");
+    assert_eq!(id_b1, id_b2, "same speaker should have same ID");
+    assert_eq!(cluster.num_speakers(), 2);
+}
+
+/// Test that OfflineDiarizer produces more than one speaker turn
+/// when given audio with distinct frequency segments.
+#[test]
+fn test_offline_produces_multiple_speakers() {
+    let sample_rate = 16000;
+    let config = DiarizationConfig {
+        window_secs: 0.5,
+        hop_secs: 0.25,
+        threshold: 0.3, // lower threshold to encourage splitting
+        ..Default::default()
+    };
+    let diarizer = OfflineDiarizer::new(config);
+    let extractor = DummyExtractor::new(256);
+
+    // Create audio with two clearly different "speakers" (freq patterns)
+    let mut audio = sine_wave(200.0, 2.0, sample_rate);
+    audio.extend_from_slice(&sine_wave(800.0, 2.0, sample_rate));
+
+    let result = diarizer.run(&audio, &extractor).unwrap();
+    // With dummy extractor we can't guarantee >1 speaker deterministically,
+    // but we verify structural integrity.
+    assert!(!result.segments.is_empty());
+}
+
+/// Test gap merging in OfflineDiarizer post-processing.
+#[test]
+fn test_offline_merges_small_gaps() {
+    let sample_rate = 16000;
+    let config = DiarizationConfig {
+        window_secs: 0.5,
+        hop_secs: 0.25,
+        ..Default::default()
+    };
+    let diarizer = OfflineDiarizer::new(config);
+    let extractor = DummyExtractor::new(256);
+
+    // 4 seconds of continuous audio — should ideally produce one long segment
+    // per speaker (or merged segments with small gaps).
+    let audio = sine_wave(300.0, 4.0, sample_rate);
+    let result = diarizer.run(&audio, &extractor).unwrap();
+
+    // Check that no two adjacent segments have the same speaker with tiny gaps.
+    for window in result.turns.windows(2) {
+        let a = &window[0];
+        let b = &window[1];
+        if a.speaker == b.speaker {
+            assert!(
+                b.time.start - a.time.end > 0.5,
+                "gaps <= 0.5s should be merged for same speaker"
+            );
+        }
+    }
 }

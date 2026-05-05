@@ -71,10 +71,11 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
         )
         .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
-        let outputs = guard
+        let session = guard
             .session
             .as_mut()
-            .unwrap()
+            .ok_or_else(|| EmbeddingError::InferenceFailed("session not available".to_string()))?;
+        let outputs = session
             .run(ort::inputs![input_tensor])
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
