@@ -27,7 +27,8 @@ Thumbs.db
 # ONNX model files (should be downloaded, not committed)
 *.onnx
 
-# Benchmark results
+# Benchmark data and results
+/data/
 /bench-results/
 
 # cargo-kimi artifacts

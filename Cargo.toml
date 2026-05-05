@@ -76,6 +76,11 @@ name = "polyvoice"
 path = "src/bin/polyvoice.rs"
 required-features = ["cli"]
 
+[[bin]]
+name = "polyvoice-bench"
+path = "src/bin/polyvoice-bench.rs"
+required-features = ["cli"]
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
 

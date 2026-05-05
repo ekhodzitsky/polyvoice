@@ -34,6 +34,7 @@
 
 pub mod ahc;
 pub mod cluster;
+pub mod der;
 pub mod embedding;
 pub mod features;
 #[cfg(feature = "ffi")]
@@ -45,6 +46,7 @@ pub mod offline;
 pub mod online;
 pub mod overlap;
 pub mod pipeline;
+pub mod rttm;
 pub mod silero_vad;
 pub mod types;
 pub mod utils;
