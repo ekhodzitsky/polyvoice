@@ -27,7 +27,7 @@ impl OfflineDiarizer {
     ) -> Result<DiarizationResult, crate::embedding::EmbeddingError> {
         let window = self.config.window_samples();
         let hop = self.config.hop_samples();
-        let sr = self.config.sample_rate as f64;
+        let sr = self.config.sample_rate.get() as f64;
 
         if samples.len() < window {
             return Ok(DiarizationResult {
@@ -94,7 +94,7 @@ impl OfflineDiarizer {
         }
 
         // Merge adjacent segments with the same speaker and small gaps.
-        segments = merge_segments(segments, 0.5); // merge gaps up to 500ms
+        segments = merge_segments(segments, self.config.max_gap_secs as f64);
 
         // Remove very short segments (< min_speech_secs).
         segments.retain(|s| s.time.duration() >= self.config.min_speech_secs as f64);

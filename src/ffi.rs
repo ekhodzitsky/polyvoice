@@ -105,7 +105,7 @@ pub unsafe extern "C" fn polyvoice_diarizer_run( // SAFETY: C ABI entry point de
         return ptr::null_mut();
     }
 
-    let mut turns = Vec::new();
+    let mut turns: Vec<PolyvoiceTurn> = Vec::new();
     let mut start = 0usize;
     while start + window <= audio.len() {
         let chunk = &audio[start..start + window];
@@ -113,13 +113,23 @@ pub unsafe extern "C" fn polyvoice_diarizer_run( // SAFETY: C ABI entry point de
             Ok(emb) => {
                 let (speaker, _conf) = d.cluster.assign(&emb);
                 let speaker_cstr = match CString::new(format!("SPEAKER_{:02}", speaker.0)) {
-                    Ok(s) => s.into_raw(),
-                    Err(_) => return ptr::null_mut(),
+                    Ok(s) => s,
+                    Err(_) => {
+                        // Free already allocated strings before returning NULL.
+                        for turn in &turns {
+                            if !turn.speaker.is_null() {
+                                unsafe { // SAFETY: speaker was created by CString::into_raw.
+                                    let _ = CString::from_raw(turn.speaker);
+                                }
+                            }
+                        }
+                        return ptr::null_mut();
+                    }
                 };
                 turns.push(PolyvoiceTurn {
-                    speaker: speaker_cstr,
-                    start: (start as f32 / d.config.sample_rate as f32),
-                    end: ((start + window) as f32 / d.config.sample_rate as f32),
+                    speaker: speaker_cstr.into_raw(),
+                    start: (start as f32 / d.config.sample_rate.get() as f32),
+                    end: ((start + window) as f32 / d.config.sample_rate.get() as f32),
                 });
             }
             Err(_) => {
@@ -130,8 +140,9 @@ pub unsafe extern "C" fn polyvoice_diarizer_run( // SAFETY: C ABI entry point de
     }
 
     let num_turns = turns.len();
-    let turns_ptr = turns.as_mut_ptr();
-    std::mem::forget(turns); // Ownership transferred to C.
+    let mut boxed = turns.into_boxed_slice();
+    let turns_ptr = boxed.as_mut_ptr();
+    std::mem::forget(boxed); // Ownership transferred to C.
 
     let result = PolyvoiceResult {
         turns: turns_ptr,
@@ -169,9 +180,10 @@ pub unsafe extern "C" fn polyvoice_result_free( // SAFETY: C ABI entry point fre
     unsafe { // SAFETY: we checked result is non-null; it was created by Box::into_raw.
         let r = &mut *result;
         if !r.turns.is_null() {
-            // SAFETY: turns was created by Vec::into_raw_parts equivalent (forget after as_mut_ptr).
-            let turns = Vec::from_raw_parts(r.turns, r.num_turns, r.num_turns);
-            for turn in turns {
+            // SAFETY: turns was created by Vec::into_boxed_slice + forget.
+            let slice_ptr = std::ptr::slice_from_raw_parts_mut(r.turns, r.num_turns);
+            let turns = Box::from_raw(slice_ptr);
+            for turn in turns.iter() {
                 if !turn.speaker.is_null() {
                     // SAFETY: speaker was created by CString::into_raw.
                     let _ = CString::from_raw(turn.speaker);
@@ -186,5 +198,5 @@ pub unsafe extern "C" fn polyvoice_result_free( // SAFETY: C ABI entry point fre
 #[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
 pub extern "C" fn polyvoice_version() -> *const c_char { // SAFETY: C ABI entry point returning a static nul-terminated string.
     // SAFETY: c-string literal has static lifetime and is nul-terminated.
-    c"0.2.0".as_ptr() as *const c_char
+    c"0.3.0".as_ptr() as *const c_char
 }

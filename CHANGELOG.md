@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-05-05
+
+### Added
+- `FbankExtractor` — cached log-mel filterbank extractor that reuses FFT planner, Hamming window, and mel-filterbank matrices across calls.
+- `VadConfig` — configurable VAD parameters (`frame_size`, `threshold`, `min_silence_ms`).
+- `FbankConfig` exported publicly.
+- `max_gap_secs` field in `DiarizationConfig` for configurable gap merging.
+- Property-based tests for clustering, overlap detection, and fbank shape invariants.
+
+### Fixed
+- **CRITICAL** `ffi.rs`: eliminated UB in `Vec::from_raw_parts` by using `Box::into_raw` + `Box::from_raw` with slice reconstruction.
+- **CRITICAL** `ffi.rs`: fixed memory leak when `CString::new` fails during turn construction.
+- **CRITICAL** `utils.rs`: replaced `assert_eq!` panic in `cosine_similarity` with graceful fallback + `tracing::warn`.
+- **CRITICAL** `online.rs`: fixed `align_words` logic — now stores `SpeakerId` in embedding_buffer and performs correct time-based lookup.
+- **CRITICAL** `overlap.rs`: fixed phantom overlap bug when segments do not start at `t=0.0`.
+- **MAJOR** `ecapa.rs` / `onnx.rs`: strict exact-match check for embedding dimension (replaces silent truncation).
+- **MAJOR** `onnx.rs` / `ecapa.rs`: bounds check for ONNX model outputs before indexing.
+- **MAJOR** `features.rs`: `RealFftPlanner` no longer recreated on every `compute_fbank` call when using `FbankExtractor`.
+
+### Changed
+- **BREAKING** `DiarizationConfig.sample_rate` is now `SampleRate` (newtype) instead of raw `u32`.
+- **BREAKING** `EnergyVad::new` now takes `frame_size: usize`.
+- **BREAKING** `segment_speech` now takes `&VadConfig` parameter.
+- Bumped `ndarray` to `0.17` for `ort` 2.0.0-rc.12 compatibility.
+
 ## [0.2.0] - 2025-05-05
 
 ### Added

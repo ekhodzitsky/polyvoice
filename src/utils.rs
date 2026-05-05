@@ -1,10 +1,17 @@
 //! Math utilities for diarization.
 
-/// { a.len() == b.len() }
+/// { true }
 /// `fn cosine_similarity(a: &[f32], b: &[f32]) -> f32`
 /// { ret >= -1.0 && ret <= 1.0 }
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "vector length mismatch");
+    if a.len() != b.len() {
+        tracing::warn!(
+            "cosine_similarity length mismatch: {} vs {}, returning 0.0",
+            a.len(),
+            b.len()
+        );
+        return 0.0;
+    }
     let mut dot = 0.0f32;
     let mut norm_a = 0.0f32;
     let mut norm_b = 0.0f32;

@@ -8,7 +8,7 @@
 //! - Output: `[batch, embedding_dim]` f32
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
-use crate::features::{compute_fbank, FbankConfig};
+use crate::features::FbankExtractor;
 use crate::types::DiarizationConfig;
 use crate::utils::l2_normalize;
 use std::path::Path;
@@ -17,7 +17,7 @@ use std::path::Path;
 pub struct EcapaTdnnExtractor {
     pool: crossbeam_queue::ArrayQueue<ort::session::Session>,
     embedding_dim: usize,
-    fbank_config: FbankConfig,
+    fbank: FbankExtractor,
 }
 
 #[cfg(feature = "onnx")]
@@ -38,7 +38,7 @@ impl EcapaTdnnExtractor {
         Ok(Self {
             pool,
             embedding_dim,
-            fbank_config: FbankConfig::default(),
+            fbank: FbankExtractor::new(crate::features::FbankConfig::default()),
         })
     }
 
@@ -57,12 +57,12 @@ impl EmbeddingExtractor for EcapaTdnnExtractor {
             EmbeddingError::InferenceFailed("ONNX session pool exhausted".to_string())
         })?;
 
-        let fbank = compute_fbank(samples, &self.fbank_config)
+        let fbank = self.fbank.extract(samples)
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
         if fbank.is_empty() {
             return Err(EmbeddingError::InvalidInput {
-                expected: self.fbank_config.win_length,
+                expected: self.fbank.config.win_length,
                 got: samples.len(),
             });
         }
@@ -84,12 +84,24 @@ impl EmbeddingExtractor for EcapaTdnnExtractor {
             .run(ort::inputs![tensor])
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
-        let (_, data) = outputs[0]
+        if outputs.iter().next().is_none() {
+            return Err(EmbeddingError::InferenceFailed(
+                "ONNX model produced no outputs".to_string(),
+            ));
+        }
+        let (_, data) = &outputs[0]
             .try_extract_tensor::<f32>()
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
+        let data_len = data.len();
+        if data_len != self.embedding_dim {
+            return Err(EmbeddingError::InferenceFailed(format!(
+                "expected embedding dim {}, got {}",
+                self.embedding_dim, data_len
+            )));
+        }
         let mut embedding = vec![0.0f32; self.embedding_dim];
-        embedding.copy_from_slice(&data[..self.embedding_dim.min(data.len())]);
+        embedding.copy_from_slice(data);
         l2_normalize(&mut embedding);
 
         Ok(embedding)

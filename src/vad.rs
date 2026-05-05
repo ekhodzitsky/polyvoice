@@ -27,20 +27,43 @@ pub enum VadError {
     InvalidChunkSize { expected: usize, got: usize },
 }
 
+/// Configuration for voice activity detection.
+#[derive(Debug, Clone, Copy)]
+pub struct VadConfig {
+    /// Frame size in samples.
+    pub frame_size: usize,
+    /// Speech probability threshold.
+    pub threshold: f32,
+    /// Minimum silence duration to split segments (ms).
+    pub min_silence_ms: f32,
+}
+
+impl Default for VadConfig {
+    fn default() -> Self {
+        Self {
+            frame_size: 512,
+            threshold: 0.5,
+            min_silence_ms: 300.0,
+        }
+    }
+}
+
 /// A simple energy-based VAD for tests and fallback scenarios.
 pub struct EnergyVad {
     threshold: f32,
     sample_rate: u32,
+    frame_size: usize,
 }
 
 impl EnergyVad {
-    /// { sample_rate >= 8000 }
-    /// `fn new(threshold_db: f32, sample_rate: u32) -> Self`
-    /// { ret.sample_rate == sample_rate }
-    pub fn new(threshold_db: f32, sample_rate: u32) -> Self {
+    /// { sample_rate >= 8000 && frame_size > 0 }
+    /// `fn new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Self`
+    /// { ret.sample_rate == sample_rate && ret.frame_size == frame_size }
+    pub fn new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Self {
         Self {
             threshold: 10f32.powf(threshold_db / 20.0),
             sample_rate,
+            frame_size,
         }
     }
 }
@@ -49,16 +72,14 @@ impl VoiceActivityDetector for EnergyVad {
     fn reset(&mut self) {}
 
     fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, VadError> {
-        // Frame-level energy: use 512-sample windows.
-        let frame_size = 512usize;
-        if !samples.len().is_multiple_of(frame_size) {
+        if !samples.len().is_multiple_of(self.frame_size) {
             return Err(VadError::InvalidChunkSize {
-                expected: frame_size,
+                expected: self.frame_size,
                 got: samples.len(),
             });
         }
-        let mut probs = Vec::with_capacity(samples.len() / frame_size);
-        for chunk in samples.chunks(frame_size) {
+        let mut probs = Vec::with_capacity(samples.len() / self.frame_size);
+        for chunk in samples.chunks(self.frame_size) {
             let energy: f32 = chunk.iter().map(|s| s * s).sum::<f32>().sqrt();
             let prob = (energy / self.threshold).min(1.0);
             probs.push(prob);
@@ -71,16 +92,17 @@ impl VoiceActivityDetector for EnergyVad {
     }
 }
 
-/// { samples.len() >= 512 }
-/// `fn segment_speech<V: VoiceActivityDetector>(vad: &mut V, samples: &[f32], config: &DiarizationConfig) -> Result<Vec<(usize, usize)>, VadError>`
+/// { samples.len() >= vad_config.frame_size }
+/// `fn segment_speech<V: VoiceActivityDetector>(vad: &mut V, samples: &[f32], config: &DiarizationConfig, vad_config: &VadConfig) -> Result<Vec<(usize, usize)>, VadError>`
 /// { ret.iter().all(|(s, e)| s < e) }
 pub fn segment_speech<V: VoiceActivityDetector>(
     vad: &mut V,
     samples: &[f32],
     config: &DiarizationConfig,
+    vad_config: &VadConfig,
 ) -> Result<Vec<(usize, usize)>, VadError> {
     vad.reset();
-    let frame_size = 512usize;
+    let frame_size = vad_config.frame_size;
     let num_frames = samples.len() / frame_size;
     let mut probs = Vec::with_capacity(num_frames);
     for i in 0..num_frames {
@@ -89,18 +111,18 @@ pub fn segment_speech<V: VoiceActivityDetector>(
         probs.extend(frame_probs);
     }
 
-    let sr = config.sample_rate as f32;
+    let sr = config.sample_rate.get() as f32;
     let ms_per_frame = (frame_size as f32 / sr) * 1000.0;
     let min_speech_frames =
         ((config.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
-    let threshold = 0.5f32; // Default speech probability threshold.
+    let threshold = vad_config.threshold;
 
     let mut segments = Vec::new();
     let mut in_speech = false;
     let mut seg_start = 0usize;
     let mut silence_count = 0usize;
     let min_silence_frames =
-        ((300.0f32) / ms_per_frame).ceil() as usize; // 300 ms default min silence.
+        (vad_config.min_silence_ms / ms_per_frame).ceil() as usize;
 
     for (i, &prob) in probs.iter().enumerate() {
         if in_speech {

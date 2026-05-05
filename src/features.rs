@@ -144,6 +144,89 @@ fn hamming_window(n: usize) -> Vec<f32> {
         .collect()
 }
 
+/// Cached log-mel filterbank extractor.
+///
+/// Reuses the FFT planner, window, and mel-filterbank matrices across calls,
+/// eliminating per-call allocation overhead.
+pub struct FbankExtractor {
+    pub config: FbankConfig,
+    r2c: std::sync::Arc<dyn realfft::RealToComplex<f32>>,
+    window: Vec<f32>,
+    mel_filters: Vec<Vec<f32>>,
+}
+
+impl FbankExtractor {
+    /// { config.n_fft > 0 && config.n_mels > 0 }
+    /// `fn new(config: FbankConfig) -> Self`
+    /// { ret.config == config }
+    pub fn new(config: FbankConfig) -> Self {
+        let mut planner = RealFftPlanner::<f32>::new();
+        let r2c = planner.plan_fft_forward(config.n_fft);
+        let window = hamming_window(config.win_length);
+        let mel_filters =
+            mel_filterbank(config.n_fft, config.n_mels, config.sample_rate, config.f_min, config.f_max);
+        Self {
+            config,
+            r2c,
+            window,
+            mel_filters,
+        }
+    }
+
+    /// { samples.len() >= self.config.win_length || ret.is_empty() }
+    /// `fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError>`
+    /// { ret.iter().all(|f| f.len() == self.config.n_mels) }
+    pub fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError> {
+        if samples.len() < self.config.win_length {
+            return Ok(Vec::new());
+        }
+
+        let pre = pre_emphasis(samples, self.config.pre_emphasis);
+        let frames = frame(&pre, self.config.win_length, self.config.hop_length);
+        let mut spectrum = self.r2c.make_output_vec();
+        let mut melspec = Vec::with_capacity(frames.len());
+        let spectrum_len = spectrum.len();
+
+        for fr in frames {
+            let mut buf = vec![0.0f32; self.config.n_fft];
+            for (i, &v) in fr.iter().enumerate() {
+                buf[i] = v * self.window[i];
+            }
+
+            if buf.len() != self.config.n_fft {
+                return Err(FbankError::Shape(format!(
+                    "buffer len {} != n_fft {}",
+                    buf.len(),
+                    self.config.n_fft
+                )));
+            }
+            if spectrum.len() != spectrum_len {
+                return Err(FbankError::Shape(
+                    "spectrum buffer resized unexpectedly".to_string(),
+                ));
+            }
+
+            self.r2c
+                .process(&mut buf, &mut spectrum)
+                .map_err(|e| FbankError::Fft(e.to_string()))?;
+
+            let mut power = vec![0.0f32; self.config.n_fft / 2 + 1];
+            for (i, c) in spectrum.iter().enumerate() {
+                power[i] = c.norm_sqr();
+            }
+
+            let mut mel = vec![0.0f32; self.config.n_mels];
+            for (i, filter) in self.mel_filters.iter().enumerate() {
+                let sum = filter.iter().zip(power.iter()).map(|(a, b)| a * b).sum::<f32>();
+                mel[i] = sum.max(1e-10).ln();
+            }
+            melspec.push(mel);
+        }
+
+        Ok(melspec)
+    }
+}
+
 fn mel_filterbank(
     n_fft: usize,
     n_mels: usize,

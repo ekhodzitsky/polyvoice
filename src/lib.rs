@@ -38,6 +38,7 @@ pub mod embedding;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 pub mod features;
+pub use features::{compute_fbank, FbankConfig, FbankExtractor};
 pub mod offline;
 pub mod online;
 pub mod overlap;
@@ -60,7 +61,7 @@ pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate, Seconds,
     Segment, SpeakerId, SpeakerTurn, TimeRange, WordAlignment,
 };
-pub use vad::{segment_speech, EnergyVad, VoiceActivityDetector, VadError};
+pub use vad::{segment_speech, EnergyVad, VadConfig, VoiceActivityDetector, VadError};
 
 #[cfg(feature = "onnx")]
 pub use onnx::OnnxEmbeddingExtractor;

@@ -9,6 +9,7 @@
 - **Online (streaming) diarization** — process audio chunk-by-chunk in real time.
 - **Offline (file) diarization** — process an entire audio buffer with post-processing (segment merging, gap filling).
 - **Sliding-window embeddings** — configurable window and hop sizes instead of fixed segments.
+- **ECAPA-TDNN ONNX extractor** — built-in 80-bin log-mel filterbank + ONNX inference.
 - **Session pool for ONNX models** — no `Mutex` contention under concurrent load.
 - **VAD integration trait** — plug in Silero VAD, Energy VAD, or your own implementation.
 - **Overlap detection** — identify regions where multiple speakers are active simultaneously.
@@ -57,13 +58,14 @@ let segments = diarizer.feed(&chunk, &extractor).unwrap();
 
 ### With ONNX embedding extractor
 
-Enable the `onnx` feature and use a WeSpeaker / ECAPA-TDNN ONNX model:
+Enable the `onnx` feature and use a WeSpeaker or ECAPA-TDNN ONNX model:
 
 ```toml
 [dependencies]
 polyvoice = { git = "https://github.com/ekhodzitsky/polyvoice", features = ["onnx"] }
 ```
 
+**WeSpeaker (raw audio input):**
 ```rust
 use polyvoice::{OnnxEmbeddingExtractor, OfflineDiarizer, DiarizationConfig};
 use std::path::Path;
@@ -73,6 +75,22 @@ let extractor = OnnxEmbeddingExtractor::new(
     Path::new("wespeaker_resnet34.onnx"),
     256,              // embedding dimension
     24000,            // window samples (1.5s @ 16kHz)
+    4,                // pool size
+).unwrap();
+
+let diarizer = OfflineDiarizer::new(config);
+let result = diarizer.run(&samples, &extractor).unwrap();
+```
+
+**ECAPA-TDNN (fbank input):**
+```rust
+use polyvoice::{EcapaTdnnExtractor, OfflineDiarizer, DiarizationConfig};
+use std::path::Path;
+
+let config = DiarizationConfig::default();
+let extractor = EcapaTdnnExtractor::new(
+    Path::new("ecapa_tdnn.onnx"),
+    192,              // embedding dimension
     4,                // pool size
 ).unwrap();
 
@@ -96,7 +114,7 @@ polyvoice
 ## Configuration
 
 ```rust
-use polyvoice::DiarizationConfig;
+use polyvoice::{DiarizationConfig, SampleRate};
 
 let config = DiarizationConfig {
     threshold: 0.5,           // cosine similarity threshold
@@ -104,17 +122,26 @@ let config = DiarizationConfig {
     window_secs: 1.5,         // analysis window
     hop_secs: 0.75,           // sliding step
     min_speech_secs: 0.25,    // discard shorter segments
-    sample_rate: 16000,       // expected sample rate
+    max_gap_secs: 0.5,        // merge same-speaker gaps under 500ms
+    sample_rate: SampleRate::new(16000).unwrap(),
 };
 ```
 
+## Benchmarks
+
+```bash
+cargo bench --all-features
+```
+
+Measures offline diarization latency and ECAPA fbank throughput on synthetic multi-speaker audio.
+
 ## Roadmap to 1.0
 
-- [ ] ECAPA-TDNN ONNX extractor (in addition to WeSpeaker)
+- [x] ECAPA-TDNN ONNX extractor (in addition to WeSpeaker)
+- [x] C FFI bindings
 - [ ] Agglomerative re-clustering pass for offline mode
 - [ ] PLDA scoring backend
 - [ ] `no_std` support for embedded targets
-- [ ] C FFI bindings
 
 ## License
 

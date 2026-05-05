@@ -10,8 +10,8 @@ pub struct OnlineDiarizer {
     cluster: SpeakerCluster,
     /// Accumulated raw samples since last extraction.
     audio_buffer: Vec<f32>,
-    /// Embeddings extracted per hop, aligned to audio_buffer position.
-    embedding_buffer: Vec<(usize, Vec<f32>, f32)>, // (end_sample, embedding, confidence)
+    /// Speakers extracted per hop, aligned to audio_buffer position.
+    embedding_buffer: Vec<(usize, SpeakerId, f32)>, // (end_sample, speaker, confidence)
     /// Current best-guess speaker for the latest audio.
     current_speaker: Option<SpeakerId>,
     /// Running timestamp offset in samples.
@@ -53,7 +53,7 @@ impl OnlineDiarizer {
             self.current_speaker = Some(speaker);
 
             let segment_end = self.total_samples + window;
-            self.embedding_buffer.push((segment_end, embedding, confidence));
+            self.embedding_buffer.push((segment_end, speaker, confidence));
 
             // Drain hop samples from the front of the buffer (sliding window).
             self.audio_buffer.drain(..hop);
@@ -62,8 +62,8 @@ impl OnlineDiarizer {
             new_segments.push(Segment {
                 time: TimeRange {
                     start: (self.total_samples.saturating_sub(window) as f64)
-                        / self.config.sample_rate as f64,
-                    end: (self.total_samples as f64) / self.config.sample_rate as f64,
+                        / self.config.sample_rate.get() as f64,
+                    end: (self.total_samples as f64) / self.config.sample_rate.get() as f64,
                 },
                 speaker: Some(speaker),
                 confidence: Some(confidence),
@@ -79,14 +79,14 @@ impl OnlineDiarizer {
     pub fn align_words(&self, words: &mut [WordAlignment]) {
         for word in words.iter_mut() {
             let mid_sample = ((word.time.start + word.time.end) / 2.0
-                * self.config.sample_rate as f64) as usize;
+                * self.config.sample_rate.get() as f64) as usize;
 
-            // Find the first embedding whose end_sample >= mid_sample.
+            // Find the first window whose end_sample >= mid_sample.
             let speaker = self
                 .embedding_buffer
                 .iter()
                 .find(|(end, _, _)| *end >= mid_sample)
-                .and(self.current_speaker)
+                .map(|(_, spk, _)| *spk)
                 .or(self.current_speaker);
 
             word.speaker = speaker;
@@ -125,13 +125,14 @@ impl OnlineDiarizer {
         let (speaker, confidence) = self.cluster.assign(&embedding);
         self.current_speaker = Some(speaker);
         self.total_samples += self.audio_buffer.len();
+        self.embedding_buffer.push((self.total_samples, speaker, confidence));
         self.audio_buffer.clear();
 
         Ok(Some(Segment {
             time: TimeRange {
                 start: (self.total_samples.saturating_sub(window) as f64)
-                    / self.config.sample_rate as f64,
-                end: (self.total_samples as f64) / self.config.sample_rate as f64,
+                    / self.config.sample_rate.get() as f64,
+                end: (self.total_samples as f64) / self.config.sample_rate.get() as f64,
             },
             speaker: Some(speaker),
             confidence: Some(confidence),

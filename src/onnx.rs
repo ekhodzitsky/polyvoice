@@ -78,12 +78,24 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
             .run(ort::inputs![input_tensor])
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
-        let (_, data) = outputs[0]
+        if outputs.iter().next().is_none() {
+            return Err(EmbeddingError::InferenceFailed(
+                "ONNX model produced no outputs".to_string(),
+            ));
+        }
+        let (_, data) = &outputs[0]
             .try_extract_tensor::<f32>()
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
+        let data_len = data.len();
+        if data_len != self.embedding_dim {
+            return Err(EmbeddingError::InferenceFailed(format!(
+                "expected embedding dim {}, got {}",
+                self.embedding_dim, data_len
+            )));
+        }
         let mut embedding = vec![0.0f32; self.embedding_dim];
-        embedding.copy_from_slice(&data[..self.embedding_dim.min(data.len())]);
+        embedding.copy_from_slice(data);
         l2_normalize(&mut embedding);
 
         Ok(embedding)

@@ -27,7 +27,7 @@ pub fn detect_overlaps(segments: &[Segment]) -> Vec<OverlapRegion> {
 
     let mut active: Vec<SpeakerId> = Vec::new();
     let mut overlaps = Vec::new();
-    let mut last_time = 0.0f64;
+    let mut last_time = events.first().map(|e| e.0).unwrap_or(0.0);
 
     for (time, is_start, speaker) in events {
         if time > last_time && active.len() > 1 {

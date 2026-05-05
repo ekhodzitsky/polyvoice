@@ -194,8 +194,10 @@ pub struct DiarizationConfig {
     pub hop_secs: f32,
     /// Minimum speech duration to consider for clustering, in seconds.
     pub min_speech_secs: f32,
+    /// Maximum gap between same-speaker segments to merge, in seconds.
+    pub max_gap_secs: f32,
     /// Sample rate expected by the embedding model (usually 16000).
-    pub sample_rate: u32,
+    pub sample_rate: SampleRate,
 }
 
 impl Default for DiarizationConfig {
@@ -206,7 +208,8 @@ impl Default for DiarizationConfig {
             window_secs: 1.5,
             hop_secs: 0.75,
             min_speech_secs: 0.25,
-            sample_rate: 16000,
+            max_gap_secs: 0.5,
+            sample_rate: SampleRate(16000),
         }
     }
 }
@@ -216,20 +219,20 @@ impl DiarizationConfig {
     /// `fn window_samples(&self) -> usize`
     /// { ret == (self.window_secs * self.sample_rate as f32) as usize }
     pub fn window_samples(&self) -> usize {
-        (self.window_secs * self.sample_rate as f32) as usize
+        (self.window_secs * self.sample_rate.get() as f32) as usize
     }
 
     /// { self.hop_secs >= 0.0 }
     /// `fn hop_samples(&self) -> usize`
     /// { ret == (self.hop_secs * self.sample_rate as f32) as usize }
     pub fn hop_samples(&self) -> usize {
-        (self.hop_secs * self.sample_rate as f32) as usize
+        (self.hop_secs * self.sample_rate.get() as f32) as usize
     }
 
     /// { self.min_speech_secs >= 0.0 }
     /// `fn min_speech_samples(&self) -> usize`
     /// { ret == (self.min_speech_secs * self.sample_rate as f32) as usize }
     pub fn min_speech_samples(&self) -> usize {
-        (self.min_speech_secs * self.sample_rate as f32) as usize
+        (self.min_speech_secs * self.sample_rate.get() as f32) as usize
     }
 }
