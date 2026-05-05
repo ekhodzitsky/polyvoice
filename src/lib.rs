@@ -45,6 +45,7 @@ pub use features::{FbankConfig, FbankExtractor};
 pub mod offline;
 pub mod online;
 pub mod overlap;
+pub mod silero_vad;
 pub mod types;
 pub mod utils;
 pub mod vad;
@@ -65,6 +66,7 @@ pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate, Seconds, Segment,
     SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
 };
+pub use silero_vad::SileroVad;
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
 
 #[cfg(feature = "onnx")]
