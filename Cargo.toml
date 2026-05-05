@@ -22,6 +22,9 @@ ffi = []
 # ONNX Runtime — matches the ecosystem version.
 ort = { version = "2.0.0-rc.12", optional = true }
 
+# WAV file I/O
+hound = "3.5"
+
 # Lock-free queue for ONNX session pooling
 crossbeam-queue = "0.3"
 
@@ -42,6 +45,7 @@ realfft = "3.5"
 num-complex = "0.4"
 
 [dev-dependencies]
+hound = "3.5"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 proptest = "1"
