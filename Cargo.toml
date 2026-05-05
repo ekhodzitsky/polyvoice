@@ -1,6 +1,6 @@
 [package]
 name = "polyvoice"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 description = "Speaker diarization library for Rust — online and offline, ONNX-powered, ecosystem-agnostic"
 license = "MIT"

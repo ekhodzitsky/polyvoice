@@ -198,5 +198,5 @@ pub unsafe extern "C" fn polyvoice_result_free( // SAFETY: C ABI entry point fre
 #[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
 pub extern "C" fn polyvoice_version() -> *const c_char { // SAFETY: C ABI entry point returning a static nul-terminated string.
     // SAFETY: c-string literal has static lifetime and is nul-terminated.
-    c"0.4.0".as_ptr() as *const c_char
+    c"0.4.1".as_ptr() as *const c_char
 }
