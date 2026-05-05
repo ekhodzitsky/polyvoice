@@ -25,7 +25,9 @@ fn main() {
     )
     .expect("failed to load ONNX model");
 
-    let result = diarizer.run(&samples, &extractor).expect("diarization failed");
+    let result = diarizer
+        .run(&samples, &extractor)
+        .expect("diarization failed");
     println!("Detected {} speaker(s)", result.num_speakers);
 }
 

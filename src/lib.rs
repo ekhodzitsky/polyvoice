@@ -35,9 +35,9 @@
 
 pub mod cluster;
 pub mod embedding;
+pub mod features;
 #[cfg(feature = "ffi")]
 pub mod ffi;
-pub mod features;
 pub use features::{FbankConfig, FbankExtractor};
 // Deprecated: `compute_fbank` is still accessible via `polyvoice::features::compute_fbank`
 // but no longer re-exported at the crate root. Use `FbankExtractor::extract` instead.
@@ -49,24 +49,23 @@ pub mod utils;
 pub mod vad;
 
 #[cfg(feature = "onnx")]
-pub mod onnx;
-#[cfg(feature = "onnx")]
 pub mod ecapa;
+#[cfg(feature = "onnx")]
+pub mod onnx;
 
 // Public re-exports for ergonomic use.
 pub use cluster::SpeakerCluster;
-pub use embedding::{DummyExtractor, EmbeddingExtractor, EmbeddingError};
+pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 pub use offline::OfflineDiarizer;
 pub use online::OnlineDiarizer;
-pub use overlap::{detect_overlaps, OverlapRegion};
+pub use overlap::{OverlapRegion, detect_overlaps};
 pub use types::{
-    Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate, Seconds,
-    Segment, SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment,
-    remap_segments, remap_turns,
+    Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate, Seconds, Segment,
+    SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
 };
-pub use vad::{segment_speech, EnergyVad, VadConfig, VoiceActivityDetector, VadError};
+pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
 
 #[cfg(feature = "onnx")]
-pub use onnx::OnnxEmbeddingExtractor;
-#[cfg(feature = "onnx")]
 pub use ecapa::EcapaTdnnExtractor;
+#[cfg(feature = "onnx")]
+pub use onnx::OnnxEmbeddingExtractor;

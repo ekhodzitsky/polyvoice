@@ -14,7 +14,9 @@ fn main() {
     let diarizer = OfflineDiarizer::new(config);
     let extractor = DummyExtractor::new(256);
 
-    let result = diarizer.run(&samples, &extractor).expect("diarization failed");
+    let result = diarizer
+        .run(&samples, &extractor)
+        .expect("diarization failed");
 
     println!("Detected {} speaker(s):", result.num_speakers);
     for turn in &result.turns {

@@ -1,6 +1,6 @@
 use polyvoice::{
-    detect_overlaps, DiarizationConfig, DummyExtractor, OfflineDiarizer, OnlineDiarizer,
-    SpeakerCluster, TimeRange, WordAlignment,
+    DiarizationConfig, DummyExtractor, OfflineDiarizer, OnlineDiarizer, SpeakerCluster, TimeRange,
+    WordAlignment, detect_overlaps,
 };
 
 /// Helper to generate a sine wave at a given frequency.
@@ -99,13 +99,19 @@ fn test_word_alignment() {
     let mut words = vec![
         WordAlignment {
             word: "hello".into(),
-            time: TimeRange { start: 0.5, end: 1.0 },
+            time: TimeRange {
+                start: 0.5,
+                end: 1.0,
+            },
             speaker: None,
             confidence: 0.9,
         },
         WordAlignment {
             word: "world".into(),
-            time: TimeRange { start: 1.5, end: 2.0 },
+            time: TimeRange {
+                start: 1.5,
+                end: 2.0,
+            },
             speaker: None,
             confidence: 0.8,
         },
@@ -123,12 +129,18 @@ fn test_word_alignment() {
 fn test_overlap_detection() {
     let segments = vec![
         polyvoice::Segment {
-            time: TimeRange { start: 0.0, end: 3.0 },
+            time: TimeRange {
+                start: 0.0,
+                end: 3.0,
+            },
             speaker: Some(polyvoice::SpeakerId(0)),
             confidence: None,
         },
         polyvoice::Segment {
-            time: TimeRange { start: 1.0, end: 4.0 },
+            time: TimeRange {
+                start: 1.0,
+                end: 4.0,
+            },
             speaker: Some(polyvoice::SpeakerId(1)),
             confidence: None,
         },

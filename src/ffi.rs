@@ -27,7 +27,7 @@
 use crate::cluster::SpeakerCluster;
 use crate::embedding::{DummyExtractor, EmbeddingExtractor};
 use crate::types::DiarizationConfig;
-use std::ffi::{c_char, c_float, CString};
+use std::ffi::{CString, c_char, c_float};
 use std::os::raw::c_int;
 use std::ptr;
 
@@ -58,7 +58,8 @@ pub struct PolyvoiceResult {
 /// # Safety
 /// Returns a pointer that must be freed with `polyvoice_diarizer_free`.
 #[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub unsafe extern "C" fn polyvoice_diarizer_new( // SAFETY: C ABI entry point with raw pointer return; caller must free result.
+pub unsafe extern "C" fn polyvoice_diarizer_new(
+    // SAFETY: C ABI entry point with raw pointer return; caller must free result.
     threshold: c_float,
     max_speakers: c_int,
 ) -> *mut PolyvoiceDiarizer {
@@ -84,7 +85,8 @@ pub unsafe extern "C" fn polyvoice_diarizer_new( // SAFETY: C ABI entry point wi
 /// Returns a `PolyvoiceResult` that must be freed with `polyvoice_result_free`.
 /// Returns NULL on error.
 #[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub unsafe extern "C" fn polyvoice_diarizer_run( // SAFETY: C ABI entry point dereferencing raw pointers from caller.
+pub unsafe extern "C" fn polyvoice_diarizer_run(
+    // SAFETY: C ABI entry point dereferencing raw pointers from caller.
     diarizer: *mut PolyvoiceDiarizer,
     samples: *const c_float,
     sample_count: usize,
@@ -92,10 +94,12 @@ pub unsafe extern "C" fn polyvoice_diarizer_run( // SAFETY: C ABI entry point de
     if diarizer.is_null() || samples.is_null() || sample_count == 0 {
         return ptr::null_mut();
     }
-    let d = unsafe { // SAFETY: we checked diarizer is non-null above.
+    let d = unsafe {
+        // SAFETY: we checked diarizer is non-null above.
         &mut *diarizer
     };
-    let audio = unsafe { // SAFETY: we checked samples is non-null and sample_count > 0.
+    let audio = unsafe {
+        // SAFETY: we checked samples is non-null and sample_count > 0.
         std::slice::from_raw_parts(samples, sample_count)
     };
 
@@ -118,7 +122,8 @@ pub unsafe extern "C" fn polyvoice_diarizer_run( // SAFETY: C ABI entry point de
                         // Free already allocated strings before returning NULL.
                         for turn in &turns {
                             if !turn.speaker.is_null() {
-                                unsafe { // SAFETY: speaker was created by CString::into_raw.
+                                unsafe {
+                                    // SAFETY: speaker was created by CString::into_raw.
                                     let _ = CString::from_raw(turn.speaker);
                                 }
                             }
@@ -156,11 +161,13 @@ pub unsafe extern "C" fn polyvoice_diarizer_run( // SAFETY: C ABI entry point de
 /// # Safety
 /// `diarizer` must be a valid pointer returned by `polyvoice_diarizer_new` or NULL.
 #[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub unsafe extern "C" fn polyvoice_diarizer_free( // SAFETY: C ABI entry point freeing raw pointer previously created by Box::into_raw.
+pub unsafe extern "C" fn polyvoice_diarizer_free(
+    // SAFETY: C ABI entry point freeing raw pointer previously created by Box::into_raw.
     diarizer: *mut PolyvoiceDiarizer,
 ) {
     if !diarizer.is_null() {
-        unsafe { // SAFETY: we checked diarizer is non-null; it was created by Box::into_raw.
+        unsafe {
+            // SAFETY: we checked diarizer is non-null; it was created by Box::into_raw.
             let _ = Box::from_raw(diarizer);
         }
     }
@@ -171,13 +178,15 @@ pub unsafe extern "C" fn polyvoice_diarizer_free( // SAFETY: C ABI entry point f
 /// # Safety
 /// `result` must be a valid pointer returned by `polyvoice_diarizer_run` or NULL.
 #[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub unsafe extern "C" fn polyvoice_result_free( // SAFETY: C ABI entry point freeing raw pointer and its nested allocations.
+pub unsafe extern "C" fn polyvoice_result_free(
+    // SAFETY: C ABI entry point freeing raw pointer and its nested allocations.
     result: *mut PolyvoiceResult,
 ) {
     if result.is_null() {
         return;
     }
-    unsafe { // SAFETY: we checked result is non-null; it was created by Box::into_raw.
+    unsafe {
+        // SAFETY: we checked result is non-null; it was created by Box::into_raw.
         let r = &mut *result;
         if !r.turns.is_null() {
             // SAFETY: turns was created by Vec::into_boxed_slice + forget.
@@ -196,7 +205,8 @@ pub unsafe extern "C" fn polyvoice_result_free( // SAFETY: C ABI entry point fre
 
 /// Return the library version as a static C string.
 #[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub extern "C" fn polyvoice_version() -> *const c_char { // SAFETY: C ABI entry point returning a static nul-terminated string.
+pub extern "C" fn polyvoice_version() -> *const c_char {
+    // SAFETY: C ABI entry point returning a static nul-terminated string.
     // SAFETY: c-string literal has static lifetime and is nul-terminated.
-    c"0.4.2".as_ptr() as *const c_char
+    c"0.4.3".as_ptr() as *const c_char
 }

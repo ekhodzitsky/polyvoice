@@ -156,14 +156,19 @@ impl SpeakerCluster {
         }
         let from_c = self.centroids.remove(from_idx);
         // After removal, if into_idx was after from_idx, it shifts left by one.
-        let adjusted_into = if into_idx > from_idx { into_idx - 1 } else { into_idx };
+        let adjusted_into = if into_idx > from_idx {
+            into_idx - 1
+        } else {
+            into_idx
+        };
         if adjusted_into >= self.centroids.len() {
             return None;
         }
         let into_c = &mut self.centroids[adjusted_into];
         let total_count = into_c.count + from_c.count;
         for (i, v) in into_c.vector.iter_mut().enumerate() {
-            *v = (*v * into_c.count as f32 + from_c.vector[i] * from_c.count as f32) / total_count as f32;
+            *v = (*v * into_c.count as f32 + from_c.vector[i] * from_c.count as f32)
+                / total_count as f32;
         }
         l2_normalize(&mut into_c.vector);
         into_c.count = total_count;

@@ -131,16 +131,14 @@ pub fn segment_speech<V: VoiceActivityDetector>(
 
     let sr = config.sample_rate.get() as f32;
     let ms_per_frame = (frame_size as f32 / sr) * 1000.0;
-    let min_speech_frames =
-        ((config.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
+    let min_speech_frames = ((config.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
     let threshold = vad_config.threshold;
 
     let mut segments = Vec::new();
     let mut in_speech = false;
     let mut seg_start = 0usize;
     let mut silence_count = 0usize;
-    let min_silence_frames =
-        (vad_config.min_silence_ms / ms_per_frame).ceil() as usize;
+    let min_silence_frames = (vad_config.min_silence_ms / ms_per_frame).ceil() as usize;
 
     for (i, &prob) in probs.iter().enumerate() {
         if in_speech {

@@ -9,8 +9,8 @@
 //! LOOM_MAX_PREEMPTIONS=2 cargo test --test loom_pool
 //! ```
 
-use loom::sync::atomic::{AtomicUsize, Ordering};
 use loom::sync::Arc;
+use loom::sync::atomic::{AtomicUsize, Ordering};
 use loom::thread;
 use std::cell::RefCell;
 

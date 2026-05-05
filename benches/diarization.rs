@@ -4,9 +4,9 @@
 //! preprocessing on synthetic multi-speaker audio (two speakers,
 //! alternating segments).
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use polyvoice::{DiarizationConfig, DummyExtractor, OfflineDiarizer};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use polyvoice::features::{FbankConfig, FbankExtractor};
+use polyvoice::{DiarizationConfig, DummyExtractor, OfflineDiarizer};
 
 /// Generate a 10-second synthetic waveform with two alternating speakers.
 ///

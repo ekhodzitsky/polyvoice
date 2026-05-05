@@ -53,7 +53,11 @@ impl OnnxEmbeddingExtractor {
 
 #[cfg(feature = "onnx")]
 impl EmbeddingExtractor for OnnxEmbeddingExtractor {
-    fn extract(&self, samples: &[f32], _config: &DiarizationConfig) -> Result<Vec<f32>, EmbeddingError> {
+    fn extract(
+        &self,
+        samples: &[f32],
+        _config: &DiarizationConfig,
+    ) -> Result<Vec<f32>, EmbeddingError> {
         let mut guard = self.checkout().ok_or_else(|| {
             EmbeddingError::InferenceFailed("ONNX session pool exhausted".to_string())
         })?;
@@ -65,10 +69,9 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
             });
         }
 
-        let input_tensor = ort::value::TensorRef::from_array_view(
-            ([1_usize, self.window_samples], samples),
-        )
-        .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
+        let input_tensor =
+            ort::value::TensorRef::from_array_view(([1_usize, self.window_samples], samples))
+                .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
         let session = guard
             .session

@@ -4,10 +4,9 @@
 //! two-speaker audio with known turn boundaries, runs offline diarization,
 //! and computes DER, precision, recall, and F1.
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use polyvoice::{
-    DiarizationConfig, EmbeddingExtractor, EmbeddingError,
-    OfflineDiarizer, SpeakerTurn, TimeRange,
+    DiarizationConfig, EmbeddingError, EmbeddingExtractor, OfflineDiarizer, SpeakerTurn, TimeRange,
 };
 
 /// Extractor that returns a deterministic embedding based on the dominant
@@ -41,7 +40,11 @@ impl FrequencyExtractor {
 }
 
 impl EmbeddingExtractor for FrequencyExtractor {
-    fn extract(&self, samples: &[f32], config: &DiarizationConfig) -> Result<Vec<f32>, EmbeddingError> {
+    fn extract(
+        &self,
+        samples: &[f32],
+        config: &DiarizationConfig,
+    ) -> Result<Vec<f32>, EmbeddingError> {
         let freq = self.dominant_freq(samples, config.sample_rate.get());
         // Map frequency to an index in the embedding vector.
         let idx = (freq / 100.0) as usize % self.dim;
@@ -58,7 +61,10 @@ impl EmbeddingExtractor for FrequencyExtractor {
 /// Generate synthetic audio with known speaker turns.
 ///
 /// Speaker A: 200 Hz sine, Speaker B: 400 Hz sine.
-fn generate_ground_truth_audio(sample_rate: u32, duration_secs: usize) -> (Vec<f32>, Vec<SpeakerTurn>) {
+fn generate_ground_truth_audio(
+    sample_rate: u32,
+    duration_secs: usize,
+) -> (Vec<f32>, Vec<SpeakerTurn>) {
     let total_samples = sample_rate as usize * duration_secs;
     let mut samples = vec![0.0f32; total_samples];
     let mut turns = Vec::new();
@@ -66,11 +72,20 @@ fn generate_ground_truth_audio(sample_rate: u32, duration_secs: usize) -> (Vec<f
     // Alternating every 2 seconds.
     let segment_secs = 2usize;
     for seg_start in (0..duration_secs).step_by(segment_secs) {
-        let freq = if (seg_start / segment_secs).is_multiple_of(2) { 200.0 } else { 400.0 };
+        let freq = if (seg_start / segment_secs).is_multiple_of(2) {
+            200.0
+        } else {
+            400.0
+        };
         let start_sample = seg_start * sample_rate as usize;
         let end_sample = ((seg_start + segment_secs) * sample_rate as usize).min(total_samples);
 
-        for (i, sample) in samples.iter_mut().enumerate().take(end_sample).skip(start_sample) {
+        for (i, sample) in samples
+            .iter_mut()
+            .enumerate()
+            .take(end_sample)
+            .skip(start_sample)
+        {
             let t = i as f32 / sample_rate as f32;
             *sample = 0.5 * (2.0 * std::f32::consts::PI * freq * t).sin();
         }
@@ -143,7 +158,12 @@ fn compute_der(reference: &[SpeakerTurn], hypothesis: &[SpeakerTurn]) -> (f64, f
     }
 
     let der = (miss + fa + confusion) / total_ref_time;
-    (der, miss / total_ref_time, fa / total_ref_time, confusion / total_ref_time)
+    (
+        der,
+        miss / total_ref_time,
+        fa / total_ref_time,
+        confusion / total_ref_time,
+    )
 }
 
 fn bench_der(c: &mut Criterion) {

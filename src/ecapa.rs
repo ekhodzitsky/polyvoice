@@ -52,12 +52,18 @@ impl EcapaTdnnExtractor {
 
 #[cfg(feature = "onnx")]
 impl EmbeddingExtractor for EcapaTdnnExtractor {
-    fn extract(&self, samples: &[f32], _config: &DiarizationConfig) -> Result<Vec<f32>, EmbeddingError> {
+    fn extract(
+        &self,
+        samples: &[f32],
+        _config: &DiarizationConfig,
+    ) -> Result<Vec<f32>, EmbeddingError> {
         let mut guard = self.checkout().ok_or_else(|| {
             EmbeddingError::InferenceFailed("ONNX session pool exhausted".to_string())
         })?;
 
-        let fbank = self.fbank.extract(samples)
+        let fbank = self
+            .fbank
+            .extract(samples)
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
         if fbank.is_empty() {
@@ -135,7 +141,11 @@ impl EcapaTdnnExtractor {
     /// { false }
     /// `fn new(_model_path: &Path, _embedding_dim: usize, _pool_size: usize) -> Result<Self, anyhow::Error>`
     /// { false }
-    pub fn new(_model_path: &Path, _embedding_dim: usize, _pool_size: usize) -> anyhow::Result<Self> {
+    pub fn new(
+        _model_path: &Path,
+        _embedding_dim: usize,
+        _pool_size: usize,
+    ) -> anyhow::Result<Self> {
         anyhow::bail!("the `onnx` feature is not enabled")
     }
 }

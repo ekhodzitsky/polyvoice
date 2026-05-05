@@ -162,8 +162,22 @@ mod tests {
     #[test]
     fn test_unlabeled_segments_ignored() {
         let segs = vec![
-            Segment { time: TimeRange { start: 0.0, end: 2.0 }, speaker: Some(SpeakerId(0)), confidence: None },
-            Segment { time: TimeRange { start: 1.0, end: 3.0 }, speaker: None, confidence: None },
+            Segment {
+                time: TimeRange {
+                    start: 0.0,
+                    end: 2.0,
+                },
+                speaker: Some(SpeakerId(0)),
+                confidence: None,
+            },
+            Segment {
+                time: TimeRange {
+                    start: 1.0,
+                    end: 3.0,
+                },
+                speaker: None,
+                confidence: None,
+            },
         ];
         let overlaps = detect_overlaps(&segs);
         // The unlabeled segment should be ignored; no overlap detected.

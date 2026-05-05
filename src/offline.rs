@@ -2,7 +2,9 @@
 
 use crate::cluster::SpeakerCluster;
 use crate::embedding::EmbeddingExtractor;
-use crate::types::{DiarizationConfig, DiarizationResult, Segment, SpeakerId, SpeakerTurn, TimeRange};
+use crate::types::{
+    DiarizationConfig, DiarizationResult, Segment, SpeakerId, SpeakerTurn, TimeRange,
+};
 
 /// Offline diarizer that processes an entire audio file at once.
 pub struct OfflineDiarizer {
@@ -139,9 +141,7 @@ fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment> {
     let mut current = segments[0].clone();
 
     for next in segments.into_iter().skip(1) {
-        if current.speaker == next.speaker
-            && next.time.start - current.time.end <= max_gap_secs
-        {
+        if current.speaker == next.speaker && next.time.start - current.time.end <= max_gap_secs {
             current.time.end = next.time.end;
             // Average confidence.
             if let (Some(c1), Some(c2)) = (current.confidence, next.confidence) {
@@ -203,17 +203,26 @@ mod tests {
     fn test_merge_segments() {
         let segs = vec![
             Segment {
-                time: TimeRange { start: 0.0, end: 1.0 },
+                time: TimeRange {
+                    start: 0.0,
+                    end: 1.0,
+                },
                 speaker: Some(SpeakerId(0)),
                 confidence: Some(0.8),
             },
             Segment {
-                time: TimeRange { start: 1.2, end: 2.0 },
+                time: TimeRange {
+                    start: 1.2,
+                    end: 2.0,
+                },
                 speaker: Some(SpeakerId(0)),
                 confidence: Some(0.9),
             },
             Segment {
-                time: TimeRange { start: 2.5, end: 3.0 },
+                time: TimeRange {
+                    start: 2.5,
+                    end: 3.0,
+                },
                 speaker: Some(SpeakerId(1)),
                 confidence: Some(0.7),
             },

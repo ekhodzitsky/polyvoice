@@ -67,7 +67,8 @@ impl OnlineDiarizer {
             self.current_speaker = Some(speaker);
 
             let segment_end = self.total_samples + window;
-            self.embedding_buffer.push((segment_end, speaker, confidence));
+            self.embedding_buffer
+                .push((segment_end, speaker, confidence));
 
             // Drain hop samples from the front of the buffer (sliding window).
             self.audio_buffer.drain(..hop);
@@ -173,7 +174,8 @@ impl OnlineDiarizer {
         let (speaker, confidence) = self.cluster.assign(&embedding);
         self.current_speaker = Some(speaker);
         self.total_samples += self.audio_buffer.len();
-        self.embedding_buffer.push((self.total_samples, speaker, confidence));
+        self.embedding_buffer
+            .push((self.total_samples, speaker, confidence));
         self.audio_buffer.clear();
 
         Ok(Some(Segment {

@@ -61,11 +61,11 @@ impl Default for FbankConfig {
 /// ⚠️ **Deprecated since 0.4.0**: This function allocates an FFT planner, Hamming
 /// window, and mel-filterbank on every call. For repeated extraction use
 /// [`FbankExtractor::extract`] instead.
-#[deprecated(since = "0.4.0", note = "use FbankExtractor::extract for cached computation")]
-pub fn compute_fbank(
-    samples: &[f32],
-    config: &FbankConfig,
-) -> Result<Vec<Vec<f32>>, FbankError> {
+#[deprecated(
+    since = "0.4.0",
+    note = "use FbankExtractor::extract for cached computation"
+)]
+pub fn compute_fbank(samples: &[f32], config: &FbankConfig) -> Result<Vec<Vec<f32>>, FbankError> {
     if samples.len() < config.win_length {
         return Ok(Vec::new());
     }
@@ -73,7 +73,13 @@ pub fn compute_fbank(
     let pre = pre_emphasis(samples, config.pre_emphasis);
     let frames = frame(&pre, config.win_length, config.hop_length);
     let window = hamming_window(config.win_length);
-    let mel_filters = mel_filterbank(config.n_fft, config.n_mels, config.sample_rate, config.f_min, config.f_max);
+    let mel_filters = mel_filterbank(
+        config.n_fft,
+        config.n_mels,
+        config.sample_rate,
+        config.f_min,
+        config.f_max,
+    );
 
     let mut planner = RealFftPlanner::<f32>::new();
     let r2c = planner.plan_fft_forward(config.n_fft);
@@ -89,10 +95,16 @@ pub fn compute_fbank(
         }
 
         if buf.len() != config.n_fft {
-            return Err(FbankError::Shape(format!("buffer len {} != n_fft {}", buf.len(), config.n_fft)));
+            return Err(FbankError::Shape(format!(
+                "buffer len {} != n_fft {}",
+                buf.len(),
+                config.n_fft
+            )));
         }
         if spectrum.len() != spectrum_len {
-            return Err(FbankError::Shape("spectrum buffer resized unexpectedly".to_string()));
+            return Err(FbankError::Shape(
+                "spectrum buffer resized unexpectedly".to_string(),
+            ));
         }
 
         r2c.process(&mut buf, &mut spectrum)
@@ -105,7 +117,11 @@ pub fn compute_fbank(
 
         let mut mel = vec![0.0f32; config.n_mels];
         for (i, filter) in mel_filters.iter().enumerate() {
-            let sum = filter.iter().zip(power.iter()).map(|(a, b)| a * b).sum::<f32>();
+            let sum = filter
+                .iter()
+                .zip(power.iter())
+                .map(|(a, b)| a * b)
+                .sum::<f32>();
             mel[i] = sum.max(1e-10).ln();
         }
         melspec.push(mel);
@@ -141,9 +157,7 @@ fn frame(samples: &[f32], win_length: usize, hop_length: usize) -> Vec<Vec<f32>>
 
 fn hamming_window(n: usize) -> Vec<f32> {
     (0..n)
-        .map(|i| {
-            0.54 - 0.46 * (2.0 * std::f32::consts::PI * i as f32 / (n as f32 - 1.0)).cos()
-        })
+        .map(|i| 0.54 - 0.46 * (2.0 * std::f32::consts::PI * i as f32 / (n as f32 - 1.0)).cos())
         .collect()
 }
 
@@ -173,8 +187,13 @@ impl FbankExtractor {
         let mut planner = RealFftPlanner::<f32>::new();
         let r2c = planner.plan_fft_forward(config.n_fft);
         let window = hamming_window(config.win_length);
-        let mel_filters =
-            mel_filterbank(config.n_fft, config.n_mels, config.sample_rate, config.f_min, config.f_max);
+        let mel_filters = mel_filterbank(
+            config.n_fft,
+            config.n_mels,
+            config.sample_rate,
+            config.f_min,
+            config.f_max,
+        );
         Self {
             config,
             r2c,
@@ -237,7 +256,11 @@ impl FbankExtractor {
 
             let mut mel = vec![0.0f32; self.config.n_mels];
             for (i, filter) in self.mel_filters.iter().enumerate() {
-                let sum = filter.iter().zip(power.iter()).map(|(a, b)| a * b).sum::<f32>();
+                let sum = filter
+                    .iter()
+                    .zip(power.iter())
+                    .map(|(a, b)| a * b)
+                    .sum::<f32>();
                 mel[i] = sum.max(1e-10).ln();
             }
             melspec.push(mel);

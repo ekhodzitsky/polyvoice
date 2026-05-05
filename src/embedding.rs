@@ -32,7 +32,11 @@ pub trait EmbeddingExtractor: Send + Sync {
     /// The caller is responsible for ensuring the buffer length matches the model
     /// expectations (usually `config.window_samples()`). Implementations may pad
     /// or truncate, but should prefer returning an error when the input is unusable.
-    fn extract(&self, samples: &[f32], config: &DiarizationConfig) -> Result<Vec<f32>, EmbeddingError>;
+    fn extract(
+        &self,
+        samples: &[f32],
+        config: &DiarizationConfig,
+    ) -> Result<Vec<f32>, EmbeddingError>;
 
     /// Dimensionality of the produced embedding vectors.
     fn embedding_dim(&self) -> usize;
@@ -64,7 +68,11 @@ impl DummyExtractor {
 }
 
 impl EmbeddingExtractor for DummyExtractor {
-    fn extract(&self, samples: &[f32], _config: &DiarizationConfig) -> Result<Vec<f32>, EmbeddingError> {
+    fn extract(
+        &self,
+        samples: &[f32],
+        _config: &DiarizationConfig,
+    ) -> Result<Vec<f32>, EmbeddingError> {
         let _ = samples; // unused
         let mut seed = self.seed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut vec = vec![0.0f32; self.dim];

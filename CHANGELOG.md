@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2025-05-05
+
+### Fixed
+- `cargo fmt` applied across the entire codebase (CI `fmt` job was failing).
+
 ## [0.4.2] - 2025-05-05
 
 ### Fixed
