@@ -8,8 +8,7 @@
 //! Speaker diarization library for Rust — online (streaming) and offline
 //! (file-based), ONNX-powered, and ecosystem-agnostic.
 //!
-//! Designed to be embedded into STT servers such as `gigastt`, `phostt`,
-//! `nihostt`, `siamstt`, or any other Rust application that needs to answer
+//! Designed to be embedded into any Rust application that needs to answer
 //! the question **"who spoke when?"**.
 //!
 //! ## Quick start
