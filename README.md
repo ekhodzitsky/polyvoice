@@ -2,7 +2,7 @@
 
 > Speaker diarization library for Rust — online (streaming) and offline (file-based), ONNX-powered, and ecosystem-agnostic.
 
-`polyvoice` answers the question **"who spoke when?"** in audio streams or files. It is designed to be embedded into STT servers such as [`gigastt`](https://github.com/ekhodzitsky/gigastt), [`phostt`](https://github.com/ekhodzitsky/phostt), `nihostt`, `siamstt`, or any other Rust application.
+`polyvoice` answers the question **"who spoke when?"** in audio streams or files. It is designed to be embedded into STT servers, real-time transcription pipelines, or any other Rust application that needs speaker-aware audio processing.
 
 ## Features
 
