@@ -45,6 +45,7 @@ pub use features::{FbankConfig, FbankExtractor};
 pub mod offline;
 pub mod online;
 pub mod overlap;
+pub mod pipeline;
 pub mod silero_vad;
 pub mod types;
 pub mod utils;
@@ -62,6 +63,7 @@ pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 pub use offline::OfflineDiarizer;
 pub use online::OnlineDiarizer;
 pub use overlap::{OverlapRegion, detect_overlaps};
+pub use pipeline::{Pipeline, PipelineError};
 pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate, Seconds, Segment,
     SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
