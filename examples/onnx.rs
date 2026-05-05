@@ -5,7 +5,7 @@
 
 #[cfg(feature = "onnx")]
 fn main() {
-    use polyvoice::{DiarizationConfig, EcapaTdnnExtractor, OfflineDiarizer};
+    use polyvoice::{DiarizationConfig, FbankOnnxExtractor, OfflineDiarizer};
     use std::path::Path;
 
     let model_path = std::env::args()
@@ -18,7 +18,7 @@ fn main() {
 
     let config = DiarizationConfig::default();
     let diarizer = OfflineDiarizer::new(config);
-    let extractor = EcapaTdnnExtractor::new(
+    let extractor = FbankOnnxExtractor::new(
         Path::new(&model_path),
         192, // embedding dimension
         4,   // pool size

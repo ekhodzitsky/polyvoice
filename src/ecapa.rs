@@ -14,14 +14,14 @@ use crate::utils::l2_normalize;
 use std::path::Path;
 
 #[cfg(feature = "onnx")]
-pub struct EcapaTdnnExtractor {
+pub struct FbankOnnxExtractor {
     pool: crossbeam_queue::ArrayQueue<ort::session::Session>,
     embedding_dim: usize,
     fbank: FbankExtractor,
 }
 
 #[cfg(feature = "onnx")]
-impl EcapaTdnnExtractor {
+impl FbankOnnxExtractor {
     /// { pool_size > 0 }
     /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> Result<Self, anyhow::Error>`
     /// { ret.pool.len() == pool_size }
@@ -51,7 +51,7 @@ impl EcapaTdnnExtractor {
 }
 
 #[cfg(feature = "onnx")]
-impl EmbeddingExtractor for EcapaTdnnExtractor {
+impl EmbeddingExtractor for FbankOnnxExtractor {
     fn extract(
         &self,
         samples: &[f32],
@@ -136,10 +136,10 @@ impl Drop for PooledSession<'_> {
 }
 
 #[cfg(not(feature = "onnx"))]
-pub struct EcapaTdnnExtractor;
+pub struct FbankOnnxExtractor;
 
 #[cfg(not(feature = "onnx"))]
-impl EcapaTdnnExtractor {
+impl FbankOnnxExtractor {
     /// { false }
     /// `fn new(_model_path: &Path, _embedding_dim: usize, _pool_size: usize) -> Result<Self, anyhow::Error>`
     /// { false }
@@ -151,3 +151,6 @@ impl EcapaTdnnExtractor {
         anyhow::bail!("the `onnx` feature is not enabled")
     }
 }
+
+#[deprecated(since = "0.5.0", note = "renamed to FbankOnnxExtractor")]
+pub type EcapaTdnnExtractor = FbankOnnxExtractor;

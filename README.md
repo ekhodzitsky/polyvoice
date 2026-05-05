@@ -36,13 +36,13 @@ bash scripts/download-models.sh
 ```rust,no_run
 use polyvoice::{
     Pipeline, DiarizationConfig, VadConfig,
-    EcapaTdnnExtractor, SileroVad,
+    FbankOnnxExtractor, SileroVad,
 };
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load models
-    let extractor = EcapaTdnnExtractor::new(
+    let extractor = FbankOnnxExtractor::new(
         Path::new("models/wespeaker_resnet34.onnx"),
         256, // embedding dim
         4,   // ONNX session pool size
