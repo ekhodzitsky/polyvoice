@@ -60,6 +60,10 @@ harness = false
 name = "der"
 harness = false
 
+[[bench]]
+name = "der_ami"
+harness = false
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
 
