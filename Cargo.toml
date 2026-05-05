@@ -17,6 +17,8 @@ default = []
 onnx = ["dep:ort"]
 # Enable C FFI bindings.
 ffi = []
+# Enable CLI binary (polyvoice command).
+cli = ["onnx", "dep:clap", "dep:ureq", "dep:dirs"]
 
 [dependencies]
 # ONNX Runtime — matches the ecosystem version.
@@ -44,6 +46,11 @@ ndarray = { version = "0.17", default-features = false }
 realfft = "3.5"
 num-complex = "0.4"
 
+# CLI (optional)
+clap = { version = "4", features = ["derive", "env"], optional = true }
+ureq = { version = "3", optional = true }
+dirs = { version = "6", optional = true }
+
 [dev-dependencies]
 hound = "3.5"
 tempfile = "3"
@@ -63,6 +70,11 @@ harness = false
 [[bench]]
 name = "der_ami"
 harness = false
+
+[[bin]]
+name = "polyvoice"
+path = "src/bin/polyvoice.rs"
+required-features = ["cli"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
