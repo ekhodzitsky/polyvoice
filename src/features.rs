@@ -270,6 +270,39 @@ impl FbankExtractor {
     }
 }
 
+/// Apply cepstral mean normalization (CMN) to fbank features.
+///
+/// Subtracts the per-bin mean across all frames. Required by WeSpeaker
+/// models to normalize channel effects.
+pub fn apply_cmvn(frames: &[Vec<f32>]) -> Vec<Vec<f32>> {
+    if frames.is_empty() {
+        return Vec::new();
+    }
+    let n_bins = frames[0].len();
+    let n_frames = frames.len() as f32;
+
+    let mut means = vec![0.0f32; n_bins];
+    for frame in frames {
+        for (i, &v) in frame.iter().enumerate() {
+            means[i] += v;
+        }
+    }
+    for m in &mut means {
+        *m /= n_frames;
+    }
+
+    frames
+        .iter()
+        .map(|frame| {
+            frame
+                .iter()
+                .zip(means.iter())
+                .map(|(&v, &m)| v - m)
+                .collect()
+        })
+        .collect()
+}
+
 fn mel_filterbank(
     n_fft: usize,
     n_mels: usize,
@@ -353,5 +386,26 @@ mod tests {
         let sum: f32 = w.iter().sum();
         // Hamming window sum is approximately 200 (half of length * 0.5 average? No, average ~0.5)
         assert!(sum > 150.0 && sum < 250.0);
+    }
+
+    #[test]
+    fn test_apply_cmvn() {
+        let frames = vec![
+            vec![1.0, 2.0, 3.0],
+            vec![3.0, 4.0, 5.0],
+            vec![5.0, 6.0, 7.0],
+        ];
+        let normalized = apply_cmvn(&frames);
+        assert_eq!(normalized.len(), 3);
+        assert!((normalized[0][0] - (-2.0)).abs() < 1e-5);
+        assert!((normalized[1][0] - 0.0).abs() < 1e-5);
+        assert!((normalized[2][0] - 2.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_apply_cmvn_empty() {
+        let frames: Vec<Vec<f32>> = vec![];
+        let normalized = apply_cmvn(&frames);
+        assert!(normalized.is_empty());
     }
 }
