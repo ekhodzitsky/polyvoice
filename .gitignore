@@ -1,0 +1,31 @@
+# Rust
+/target
+/Cargo.lock
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+
+# Test artifacts
+/tests/output/
+*.wav
+*.mp3
+*.flac
+
+# ONNX model files (should be downloaded, not committed)
+*.onnx
+
+# Benchmark results
+/bench-results/
