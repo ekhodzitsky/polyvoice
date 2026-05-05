@@ -19,7 +19,9 @@ pub struct OnlineDiarizer {
 }
 
 impl OnlineDiarizer {
-    /// Create a new online diarizer with the given configuration.
+    /// { true }
+    /// `fn new(config: DiarizationConfig) -> Self`
+    /// { ret.cluster.num_speakers() == 0 }
     pub fn new(config: DiarizationConfig) -> Self {
         Self {
             cluster: SpeakerCluster::new(config),
@@ -31,10 +33,9 @@ impl OnlineDiarizer {
         }
     }
 
-    /// Feed a chunk of audio (mono, `config.sample_rate` Hz) into the diarizer.
-    ///
-    /// The extractor is called whenever enough samples accumulate for a window.
-    /// Returns any newly finalized segments.
+    /// { true }
+    /// `fn feed<E: EmbeddingExtractor>(&mut self, samples: &[f32], extractor: &E) -> Result<Vec<Segment>, EmbeddingError>`
+    /// { ret.iter().all(|s| s.speaker.is_some()) }
     pub fn feed<E: EmbeddingExtractor>(
         &mut self,
         samples: &[f32],
@@ -72,11 +73,9 @@ impl OnlineDiarizer {
         Ok(new_segments)
     }
 
-    /// Assign speakers to words based on their timestamps.
-    ///
-    /// Each word is matched to the embedding window whose time range overlaps
-    /// the word's midpoint. If no exact overlap exists, the nearest preceding
-    /// speaker is used.
+    /// { true }
+    /// `fn align_words(&self, words: &mut [WordAlignment])`
+    /// { words.iter().all(|w| w.speaker.is_some() || self.current_speaker.is_none()) }
     pub fn align_words(&self, words: &mut [WordAlignment]) {
         for word in words.iter_mut() {
             let mid_sample = ((word.time.start + word.time.end) / 2.0
@@ -94,19 +93,23 @@ impl OnlineDiarizer {
         }
     }
 
-    /// Return the current best-guess speaker (if any embeddings have been extracted).
+    /// { true }
+    /// `fn current_speaker(&self) -> Option<SpeakerId>`
+    /// { ret == self.current_speaker }
     pub fn current_speaker(&self) -> Option<SpeakerId> {
         self.current_speaker
     }
 
-    /// Number of distinct speakers observed so far.
+    /// { true }
+    /// `fn num_speakers(&self) -> usize`
+    /// { ret == self.cluster.num_speakers() }
     pub fn num_speakers(&self) -> usize {
         self.cluster.num_speakers()
     }
 
-    /// Flush remaining audio and return a final segment for trailing audio.
-    ///
-    /// The trailing samples shorter than a full window are padded with zeros.
+    /// { true }
+    /// `fn flush<E: EmbeddingExtractor>(&mut self, extractor: &E) -> Result<Option<Segment>, EmbeddingError>`
+    /// { ret.is_none() => self.audio_buffer.is_empty() }
     pub fn flush<E: EmbeddingExtractor>(
         &mut self,
         extractor: &E,

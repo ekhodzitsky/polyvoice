@@ -37,6 +37,9 @@ pub struct DummyExtractor {
 }
 
 impl DummyExtractor {
+    /// { dim > 0 }
+    /// `fn new(dim: usize) -> Self`
+    /// { ret.dim == dim }
     pub fn new(dim: usize) -> Self {
         Self {
             dim,

@@ -10,18 +10,16 @@ pub struct OfflineDiarizer {
 }
 
 impl OfflineDiarizer {
-    /// Create a new offline diarizer.
+    /// { true }
+    /// `fn new(config: DiarizationConfig) -> Self`
+    /// { ret.config == config }
     pub fn new(config: DiarizationConfig) -> Self {
         Self { config }
     }
 
-    /// Run diarization on a complete audio buffer.
-    ///
-    /// The buffer is split into overlapping windows, embeddings are extracted,
-    /// and a two-pass clustering is performed:
-    /// 1. Initial online clustering to get raw speaker labels per window.
-    /// 2. Post-processing: merge short segments, reassign overlapping windows,
-    ///    and optionally re-cluster all embeddings globally.
+    /// { samples.len() >= self.config.window_samples() || ret.segments.is_empty() }
+    /// `fn run<E: EmbeddingExtractor>(&self, samples: &[f32], extractor: &E) -> Result<DiarizationResult, EmbeddingError>`
+    /// { ret.num_speakers <= self.config.max_speakers }
     pub fn run<E: EmbeddingExtractor>(
         &self,
         samples: &[f32],

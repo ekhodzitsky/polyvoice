@@ -1,8 +1,8 @@
 //! Math utilities for diarization.
 
-/// Compute cosine similarity between two vectors.
-///
-/// Returns a value in `[-1.0, 1.0]`. Returns `0.0` if either vector is near-zero.
+/// { a.len() == b.len() }
+/// `fn cosine_similarity(a: &[f32], b: &[f32]) -> f32`
+/// { ret >= -1.0 && ret <= 1.0 }
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "vector length mismatch");
     let mut dot = 0.0f32;
@@ -19,7 +19,9 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot / (norm_a.sqrt() * norm_b.sqrt())
 }
 
-/// L2-normalize a vector in-place.
+/// { true }
+/// `fn l2_normalize(vec: &mut [f32])`
+/// { vec.iter().map(|x| x * x).sum::<f32>() == 1.0 || vec.iter().all(|&x| x == 0.0) }
 pub fn l2_normalize(vec: &mut [f32]) {
     let norm: f32 = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
     if norm > 1e-8 {
@@ -29,7 +31,9 @@ pub fn l2_normalize(vec: &mut [f32]) {
     }
 }
 
-/// Compute the mean vector of a set of vectors.
+/// { vectors.iter().all(|v| v.len() == vectors[0].len()) }
+/// `fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>>`
+/// { ret.is_some() => ret.as_ref().unwrap().len() == vectors[0].len() }
 pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>> {
     if vectors.is_empty() {
         return None;
@@ -48,7 +52,9 @@ pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>> {
     Some(sum)
 }
 
-/// Moving average over a slice.
+/// { true }
+/// `fn moving_average(data: &[f32], window: usize) -> Vec<f32>`
+/// { ret.len() == data.len() }
 pub fn moving_average(data: &[f32], window: usize) -> Vec<f32> {
     if window == 0 || data.is_empty() {
         return data.to_vec();

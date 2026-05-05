@@ -34,6 +34,9 @@ pub struct EnergyVad {
 }
 
 impl EnergyVad {
+    /// { sample_rate >= 8000 }
+    /// `fn new(threshold_db: f32, sample_rate: u32) -> Self`
+    /// { ret.sample_rate == sample_rate }
     pub fn new(threshold_db: f32, sample_rate: u32) -> Self {
         Self {
             threshold: 10f32.powf(threshold_db / 20.0),
@@ -68,7 +71,9 @@ impl VoiceActivityDetector for EnergyVad {
     }
 }
 
-/// Segment raw audio into speech / non-speech regions using a VAD.
+/// { samples.len() >= 512 }
+/// `fn segment_speech<V: VoiceActivityDetector>(vad: &mut V, samples: &[f32], config: &DiarizationConfig) -> Result<Vec<(usize, usize)>, VadError>`
+/// { ret.iter().all(|(s, e)| s < e) }
 pub fn segment_speech<V: VoiceActivityDetector>(
     vad: &mut V,
     samples: &[f32],

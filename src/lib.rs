@@ -17,16 +17,19 @@
 //! ```rust,no_run
 //! use polyvoice::{OfflineDiarizer, DiarizationConfig, DummyExtractor};
 //!
-//! let config = DiarizationConfig::default();
-//! let diarizer = OfflineDiarizer::new(config);
-//! let extractor = DummyExtractor::new(256);
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let config = DiarizationConfig::default();
+//!     let diarizer = OfflineDiarizer::new(config);
+//!     let extractor = DummyExtractor::new(256);
 //!
-//! // Load 16 kHz mono f32 samples (e.g. from an audio file decoder).
-//! let samples: Vec<f32> = vec![0.0; 16000 * 10];
-//! let result = diarizer.run(&samples, &extractor).unwrap();
+//!     // Load 16 kHz mono f32 samples (e.g. from an audio file decoder).
+//!     let samples: Vec<f32> = vec![0.0; 16000 * 10];
+//!     let result = diarizer.run(&samples, &extractor)?;
 //!
-//! for turn in &result.turns {
-//!     println!("{}: {:.2}s - {:.2}s", turn.speaker, turn.time.start, turn.time.end);
+//!     for turn in &result.turns {
+//!         println!("{}: {:.2}s - {:.2}s", turn.speaker, turn.time.start, turn.time.end);
+//!     }
+//!     Ok(())
 //! }
 //! ```
 
@@ -34,6 +37,7 @@ pub mod cluster;
 pub mod embedding;
 #[cfg(feature = "ffi")]
 pub mod ffi;
+pub mod features;
 pub mod offline;
 pub mod online;
 pub mod overlap;
@@ -43,6 +47,8 @@ pub mod vad;
 
 #[cfg(feature = "onnx")]
 pub mod onnx;
+#[cfg(feature = "onnx")]
+pub mod ecapa;
 
 // Public re-exports for ergonomic use.
 pub use cluster::SpeakerCluster;
@@ -58,3 +64,5 @@ pub use vad::{segment_speech, EnergyVad, VoiceActivityDetector, VadError};
 
 #[cfg(feature = "onnx")]
 pub use onnx::OnnxEmbeddingExtractor;
+#[cfg(feature = "onnx")]
+pub use ecapa::EcapaTdnnExtractor;

@@ -25,7 +25,9 @@ pub struct SpeakerCluster {
 }
 
 impl SpeakerCluster {
-    /// Create an empty clusterer with the given configuration.
+    /// { true }
+    /// `fn new(config: DiarizationConfig) -> Self`
+    /// { ret.centroids.is_empty() }
     pub fn new(config: DiarizationConfig) -> Self {
         Self {
             centroids: Vec::new(),
@@ -33,9 +35,9 @@ impl SpeakerCluster {
         }
     }
 
-    /// Assign an embedding to a speaker ID.
-    ///
-    /// Returns the speaker ID and the confidence (cosine similarity) of the assignment.
+    /// { !embedding.is_empty() }
+    /// `fn assign(&mut self, embedding: &[f32]) -> (SpeakerId, f32)`
+    /// { ret.1 >= -1.0 && ret.1 <= 1.0 }
     pub fn assign(&mut self, embedding: &[f32]) -> (SpeakerId, f32) {
         let mut best_id: Option<usize> = None;
         let mut best_sim = f32::NEG_INFINITY;
@@ -72,12 +74,16 @@ impl SpeakerCluster {
         (SpeakerId(new_id as u32), 1.0)
     }
 
-    /// Return the number of distinct speakers seen so far.
+    /// { true }
+    /// `fn num_speakers(&self) -> usize`
+    /// { ret == self.centroids.len() }
     pub fn num_speakers(&self) -> usize {
         self.centroids.len()
     }
 
-    /// Return centroids as immutable slices.
+    /// { true }
+    /// `fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)>`
+    /// { ret.len() == self.centroids.len() }
     pub fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)> {
         self.centroids
             .iter()
@@ -93,7 +99,9 @@ impl SpeakerCluster {
             .collect()
     }
 
-    /// Merge two speakers (used by post-processing or re-clustering).
+    /// { from != into }
+    /// `fn merge(&mut self, from: SpeakerId, into: SpeakerId)`
+    /// { self.centroids.len() <= old(self.centroids.len()) }
     pub fn merge(&mut self, from: SpeakerId, into: SpeakerId) {
         let from_idx = from.0 as usize;
         let into_idx = into.0 as usize;

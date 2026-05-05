@@ -2,10 +2,9 @@
 
 use crate::types::{Segment, SpeakerId, TimeRange};
 
-/// Detect overlapping speech regions from per-window speaker assignments.
-///
-/// Given a list of segments (typically from a fine-grained sliding-window
-/// analysis), returns regions where more than one speaker is active.
+/// { true }
+/// `fn detect_overlaps(segments: &[Segment]) -> Vec<OverlapRegion>`
+/// { ret.iter().all(|o| o.speakers.len() > 1) }
 pub fn detect_overlaps(segments: &[Segment]) -> Vec<OverlapRegion> {
     if segments.len() < 2 {
         return Vec::new();

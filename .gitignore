@@ -29,3 +29,7 @@ Thumbs.db
 
 # Benchmark results
 /bench-results/
+
+# cargo-kimi artifacts
+.kimi/
+kimi-score.svg

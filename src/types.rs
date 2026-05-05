@@ -27,6 +27,9 @@ impl SampleRate {
         (8000..=192000).contains(&rate).then_some(Self(rate))
     }
 
+    /// { true }
+    /// `fn get(&self) -> u32`
+    /// { ret == self.0 }
     pub fn get(&self) -> u32 {
         self.0
     }
@@ -52,6 +55,9 @@ impl Confidence {
         (0.0..=1.0).contains(&v).then_some(Self(v))
     }
 
+    /// { true }
+    /// `fn get(&self) -> f32`
+    /// { ret == self.0 }
     pub fn get(&self) -> f32 {
         self.0
     }
@@ -77,6 +83,9 @@ impl EmbeddingDim {
         (dim > 0).then_some(Self(dim))
     }
 
+    /// { true }
+    /// `fn get(&self) -> usize`
+    /// { ret == self.0 }
     pub fn get(&self) -> usize {
         self.0
     }
@@ -102,6 +111,9 @@ impl Seconds {
         (v >= 0.0).then_some(Self(v))
     }
 
+    /// { true }
+    /// `fn get(&self) -> f32`
+    /// { ret == self.0 }
     pub fn get(&self) -> f32 {
         self.0
     }
@@ -123,7 +135,9 @@ pub struct TimeRange {
 }
 
 impl TimeRange {
-    /// Duration in seconds.
+    /// { self.end >= self.start }
+    /// `fn duration(&self) -> f64`
+    /// { ret >= 0.0 }
     pub fn duration(&self) -> f64 {
         self.end - self.start
     }
@@ -198,17 +212,23 @@ impl Default for DiarizationConfig {
 }
 
 impl DiarizationConfig {
-    /// Number of samples per analysis window.
+    /// { self.window_secs >= 0.0 }
+    /// `fn window_samples(&self) -> usize`
+    /// { ret == (self.window_secs * self.sample_rate as f32) as usize }
     pub fn window_samples(&self) -> usize {
         (self.window_secs * self.sample_rate as f32) as usize
     }
 
-    /// Number of samples per hop.
+    /// { self.hop_secs >= 0.0 }
+    /// `fn hop_samples(&self) -> usize`
+    /// { ret == (self.hop_secs * self.sample_rate as f32) as usize }
     pub fn hop_samples(&self) -> usize {
         (self.hop_secs * self.sample_rate as f32) as usize
     }
 
-    /// Number of samples for minimum speech duration.
+    /// { self.min_speech_secs >= 0.0 }
+    /// `fn min_speech_samples(&self) -> usize`
+    /// { ret == (self.min_speech_secs * self.sample_rate as f32) as usize }
     pub fn min_speech_samples(&self) -> usize {
         (self.min_speech_secs * self.sample_rate as f32) as usize
     }
