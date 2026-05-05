@@ -47,6 +47,7 @@ pub mod overlap;
 pub mod types;
 pub mod utils;
 pub mod vad;
+pub mod wav;
 
 #[cfg(feature = "onnx")]
 pub mod ecapa;
