@@ -33,6 +33,7 @@
 //! }
 //! ```
 
+pub mod ahc;
 pub mod cluster;
 pub mod embedding;
 pub mod features;
