@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "polyvoice"
+version = "0.5.0"
+description = "Speaker diarization — who spoke when. Rust + ONNX, no Python runtime overhead."
+readme = "../README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+keywords = ["diarization", "speaker", "audio", "speech", "onnx"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "License :: OSI Approved :: MIT License",
+]
+
+[project.urls]
+Homepage = "https://github.com/ekhodzitsky/polyvoice"
+Repository = "https://github.com/ekhodzitsky/polyvoice"
+
+[tool.maturin]
+python-source = "."
+module-name = "polyvoice._polyvoice"
+features = ["pyo3/extension-module"]

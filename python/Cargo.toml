@@ -1,0 +1,13 @@
+[package]
+name = "polyvoice-python"
+version = "0.5.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "_polyvoice"
+crate-type = ["cdylib"]
+
+[dependencies]
+polyvoice = { path = "..", features = ["onnx"] }
+pyo3 = { version = "0.28", features = ["extension-module"] }
