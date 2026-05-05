@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2025-05-05
+
+### Fixed
+- CI: macOS and Windows runners now test without `onnx` feature to avoid `ort` platform-specific binary issues.
+
+### Changed
+- Rewrote README.md with a product-focused, sales-oriented structure: badges, value proposition, comparison table, architecture diagram, and production-readiness indicators.
+
 ## [0.4.1] - 2025-05-05
 
 ### Changed

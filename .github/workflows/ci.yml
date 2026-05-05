@@ -13,14 +13,20 @@ jobs:
   check:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            flags: --all-targets --all-features
+          - os: macos-latest
+            flags: --all-targets --features ffi
+          - os: windows-latest
+            flags: --all-targets --features ffi
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: cargo check
-        run: cargo check --all-targets --all-features
+        run: cargo check ${{ matrix.flags }}
 
   fmt:
     runs-on: ubuntu-latest
@@ -35,7 +41,13 @@ jobs:
   clippy:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            flags: --all-targets --all-features
+          - os: macos-latest
+            flags: --all-targets --features ffi
+          - os: windows-latest
+            flags: --all-targets --features ffi
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -44,19 +56,25 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: cargo clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy ${{ matrix.flags }} -- -D warnings
 
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            flags: --all-features
+          - os: macos-latest
+            flags: --features ffi
+          - os: windows-latest
+            flags: --features ffi
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: cargo test
-        run: cargo test --all-features
+        run: cargo test ${{ matrix.flags }}
 
   doc:
     runs-on: ubuntu-latest

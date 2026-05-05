@@ -1,31 +1,46 @@
 # polyvoice
 
-> Speaker diarization library for Rust — online (streaming) and offline (file-based), ONNX-powered, and ecosystem-agnostic.
+[![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/polyvoice)](https://crates.io/crates/polyvoice)
+[![Docs.rs](https://docs.rs/polyvoice/badge.svg)](https://docs.rs/polyvoice)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-`polyvoice` answers the question **"who spoke when?"** in audio streams or files. It is designed to be embedded into STT servers, real-time transcription pipelines, or any other Rust application that needs speaker-aware audio processing.
+> **Speaker diarization for Rust — real-time, accurate, and production-hardened.**
+>
+> Turn any audio stream into a clear timeline of *who spoke when*.
 
-## Features
+## What is speaker diarization?
 
-- **Online (streaming) diarization** — process audio chunk-by-chunk in real time.
-- **Offline (file) diarization** — process an entire audio buffer with post-processing (segment merging, gap filling).
-- **Sliding-window embeddings** — configurable window and hop sizes instead of fixed segments.
-- **ECAPA-TDNN ONNX extractor** — built-in 80-bin log-mel filterbank + ONNX inference.
-- **Session pool for ONNX models** — no `Mutex` contention under concurrent load.
-- **VAD integration trait** — plug in Silero VAD, Energy VAD, or your own implementation.
-- **Overlap detection** — identify regions where multiple speakers are active simultaneously.
-- **Word-level speaker alignment** — assign speaker IDs to individual words using timestamps.
-- **Zero Python dependencies** — pure Rust + ONNX Runtime.
+Speech-to-text tells you **what** was said. Speaker diarization tells you **who** said it.
+
+```
+Input:  "hello world how are you"
+Output: SPEAKER_00: 0.0s - 1.2s  "hello world"
+        SPEAKER_01: 1.5s - 2.8s  "how are you"
+```
+
+Without diarization, transcripts are a wall of text. With it, every word is attributed to the right person — essential for meeting minutes, call analytics, podcasts, and court recordings.
+
+## Why polyvoice?
+
+| You need... | `polyvoice` delivers |
+|-------------|----------------------|
+| **Real-time streaming** | `OnlineDiarizer` processes audio chunk-by-chunk with sub-second latency |
+| **File-based batch** | `OfflineDiarizer` two-pass pipeline with gap merging and overlap detection |
+| **No Python in production** | Pure Rust + ONNX Runtime. No GIL, no virtualenv, no dependency hell |
+| **Concurrent inference** | Lock-free ONNX session pool — scale to many connections without `Mutex` contention |
+| **Plug your own model** | `EmbeddingExtractor` trait: WeSpeaker, ECAPA-TDNN, or your custom ONNX model |
+| **C FFI** | Drop-in `.so`/`.dylib`/`.dll` for Python, Go, Node.js, or C++ callers |
+| **Safety guarantees** | Verified with Miri (unsafe memory), Loom (concurrency model-checking), and fuzzing |
 
 ## Quick start
 
-Add to your `Cargo.toml`:
-
 ```toml
 [dependencies]
-polyvoice = { git = "https://github.com/ekhodzitsky/polyvoice" }
+polyvoice = "0.4"
 ```
 
-### Offline diarization
+### Offline diarization (file / batch)
 
 ```rust
 use polyvoice::{OfflineDiarizer, DiarizationConfig, DummyExtractor};
@@ -34,7 +49,7 @@ let config = DiarizationConfig::default();
 let diarizer = OfflineDiarizer::new(config);
 let extractor = DummyExtractor::new(256);
 
-let samples: Vec<f32> = vec![0.0; 16000 * 10]; // 10s of 16 kHz mono audio
+let samples: Vec<f32> = vec![0.0; 16000 * 10]; // 10 s of 16 kHz mono audio
 let result = diarizer.run(&samples, &extractor).unwrap();
 
 for turn in &result.turns {
@@ -42,7 +57,7 @@ for turn in &result.turns {
 }
 ```
 
-### Online diarization
+### Real-time streaming
 
 ```rust
 use polyvoice::{OnlineDiarizer, DiarizationConfig, DummyExtractor};
@@ -51,38 +66,21 @@ let config = DiarizationConfig::default();
 let mut diarizer = OnlineDiarizer::new(config);
 let extractor = DummyExtractor::new(256);
 
-// Feed audio chunks as they arrive (e.g. from a WebSocket stream)
-let chunk = vec![0.0f32; 16000]; // 1 second
-let segments = diarizer.feed(&chunk, &extractor).unwrap();
+while let Some(chunk) = microphone.read() {
+    let segments = diarizer.feed(&chunk, &extractor).unwrap();
+    for seg in segments {
+        println!("Speaker {:?} from {:.2}s", seg.speaker, seg.time.start);
+    }
+}
 ```
 
-### With ONNX embedding extractor
-
-Enable the `onnx` feature and use a WeSpeaker or ECAPA-TDNN ONNX model:
+### With an ONNX model (WeSpeaker / ECAPA-TDNN)
 
 ```toml
 [dependencies]
-polyvoice = { git = "https://github.com/ekhodzitsky/polyvoice", features = ["onnx"] }
+polyvoice = { version = "0.4", features = ["onnx"] }
 ```
 
-**WeSpeaker (raw audio input):**
-```rust
-use polyvoice::{OnnxEmbeddingExtractor, OfflineDiarizer, DiarizationConfig};
-use std::path::Path;
-
-let config = DiarizationConfig::default();
-let extractor = OnnxEmbeddingExtractor::new(
-    Path::new("wespeaker_resnet34.onnx"),
-    256,              // embedding dimension
-    24000,            // window samples (1.5s @ 16kHz)
-    4,                // pool size
-).unwrap();
-
-let diarizer = OfflineDiarizer::new(config);
-let result = diarizer.run(&samples, &extractor).unwrap();
-```
-
-**ECAPA-TDNN (fbank input):**
 ```rust
 use polyvoice::{EcapaTdnnExtractor, OfflineDiarizer, DiarizationConfig};
 use std::path::Path;
@@ -90,8 +88,8 @@ use std::path::Path;
 let config = DiarizationConfig::default();
 let extractor = EcapaTdnnExtractor::new(
     Path::new("ecapa_tdnn.onnx"),
-    192,              // embedding dimension
-    4,                // pool size
+    192, // embedding dimension
+    4,   // session pool size
 ).unwrap();
 
 let diarizer = OfflineDiarizer::new(config);
@@ -101,15 +99,52 @@ let result = diarizer.run(&samples, &extractor).unwrap();
 ## Architecture
 
 ```
-polyvoice
-├── embedding      # EmbeddingExtractor trait + ONNX pool implementation
-├── cluster        # Online incremental centroid clustering
-├── vad            # Voice Activity Detection trait + utilities
-├── online         # StreamingDiarizer (chunk-by-chunk)
-├── offline        # OfflineDiarizer (two-pass with post-processing)
-├── overlap        # Overlap detection from segment lists
-└── types          # Config, SpeakerId, Segment, WordAlignment, etc.
+Input audio (f32 PCM)
+       │
+       ▼
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   VAD        │ --> │  Embedding   │ --> │   Speaker    │ --> Turns / Segments
+│  (optional)  │     │  Extractor   │     │   Cluster    │
+└──────────────┘     └──────────────┘     └──────────────┘
+                          ONNX pool            Incremental
+                          (lock-free)          cosine-sim clustering
 ```
+
+## Key features
+
+- **🎙️ Online & Offline** — stream chunks in real time or process entire files in one shot.
+- **🧠 ONNX-powered** — ECAPA-TDNN and WeSpeaker extractors with built-in 80-bin log-mel filterbank.
+- **⚡ Lock-free session pool** — `crossbeam-queue` backed pool eliminates `Mutex` contention under concurrent load.
+- **🔌 VAD trait** — plug in Silero VAD, Energy VAD, or your own voice-activity detector.
+- **🗣️ Overlap detection** — find regions where multiple speakers talk simultaneously.
+- **📝 Word alignment** — assign speaker IDs to individual transcript words by timestamp.
+- **🔒 Memory-safe FFI** — C ABI with Miri-verified unsafe code and Valgrind-tested Python bindings.
+- **🦀 Pure Rust** — zero Python dependencies in production.
+
+## Production readiness
+
+This crate is hardened for production use:
+
+| Verification | Tool |
+|--------------|------|
+| Unsafe memory safety | **Miri** ( nightly CI ) |
+| Concurrency correctness | **Loom** model-checking |
+| Input fuzzing | **cargo-fuzz** (4 targets, nightly CI) |
+| API stability | **cargo-semver-checks** |
+| Cross-platform | Ubuntu, macOS, Windows CI |
+| Dependency audit | **cargo-audit** |
+
+## Benchmarks
+
+```bash
+cargo bench --all-features
+```
+
+| Benchmark | Metric |
+|-----------|--------|
+| Offline diarization (10 s) | Latency on synthetic two-speaker audio |
+| ECAPA fbank (10 s) | Log-mel throughput |
+| DER (10 s) | Diarization Error Rate vs. ground truth |
 
 ## Configuration
 
@@ -118,27 +153,21 @@ use polyvoice::{DiarizationConfig, SampleRate};
 
 let config = DiarizationConfig {
     threshold: 0.5,           // cosine similarity threshold
-    max_speakers: 64,         // speaker limit
+    max_speakers: 64,         // hard speaker limit
     window_secs: 1.5,         // analysis window
     hop_secs: 0.75,           // sliding step
     min_speech_secs: 0.25,    // discard shorter segments
-    max_gap_secs: 0.5,        // merge same-speaker gaps under 500ms
+    max_gap_secs: 0.5,        // merge same-speaker gaps under 500 ms
     sample_rate: SampleRate::new(16000).unwrap(),
 };
 ```
 
-## Benchmarks
+## Roadmap
 
-```bash
-cargo bench --all-features
-```
-
-Measures offline diarization latency and ECAPA fbank throughput on synthetic multi-speaker audio.
-
-## Roadmap to 1.0
-
-- [x] ECAPA-TDNN ONNX extractor (in addition to WeSpeaker)
+- [x] ECAPA-TDNN ONNX extractor
 - [x] C FFI bindings
+- [x] Miri / Loom / fuzz verification
+- [x] Cross-platform CI
 - [ ] Agglomerative re-clustering pass for offline mode
 - [ ] PLDA scoring backend
 - [ ] `no_std` support for embedded targets
