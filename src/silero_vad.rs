@@ -11,8 +11,10 @@ use crate::vad::{VadError, VoiceActivityDetector};
 pub struct SileroVad {
     session: ort::session::Session,
     state: Vec<f32>,
+    context: Vec<f32>,
     sample_rate: u32,
     chunk_size: usize,
+    context_size: usize,
 }
 
 #[cfg(feature = "onnx")]
@@ -25,17 +27,25 @@ impl SileroVad {
             .commit_from_file(model_path)
             .map_err(|e| anyhow::anyhow!("load model: {e}"))?;
 
+        let context_size = if chunk_size >= 512 { 64 } else { 32 };
+
         Ok(Self {
             session,
             state: vec![0.0f32; Self::STATE_SIZE],
+            context: vec![0.0f32; context_size],
             sample_rate: 16000,
             chunk_size,
+            context_size,
         })
     }
 
     fn run_chunk(&mut self, chunk: &[f32]) -> Result<f32, VadError> {
+        let mut input = Vec::with_capacity(self.context_size + chunk.len());
+        input.extend_from_slice(&self.context);
+        input.extend_from_slice(chunk);
+
         let input_tensor =
-            ort::value::TensorRef::from_array_view(([1_usize, chunk.len()], chunk))
+            ort::value::TensorRef::from_array_view(([1_usize, input.len()], input.as_slice()))
                 .map_err(|e| VadError::Model(e.to_string()))?;
 
         let sr_array = ndarray::arr0(self.sample_rate as i64);
@@ -67,6 +77,10 @@ impl SileroVad {
             .ok_or_else(|| VadError::Model("empty probability output".to_string()))?;
 
         self.state = new_state.to_vec();
+        if chunk.len() >= self.context_size {
+            self.context
+                .copy_from_slice(&chunk[chunk.len() - self.context_size..]);
+        }
 
         Ok(prob)
     }
@@ -76,6 +90,7 @@ impl SileroVad {
 impl VoiceActivityDetector for SileroVad {
     fn reset(&mut self) {
         self.state = vec![0.0f32; Self::STATE_SIZE];
+        self.context.fill(0.0);
     }
 
     fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, VadError> {

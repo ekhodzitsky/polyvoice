@@ -1,14 +1,14 @@
-//! ECAPA-TDNN speaker embedding extractor.
+//! ONNX speaker embedding extractor (WeSpeaker, ECAPA-TDNN, etc.).
 //!
-//! Loads an ONNX-exported ECAPA-TDNN model (e.g. from SpeechBrain) and runs
-//! log-mel filterbank preprocessing before inference.
+//! Loads an ONNX model and runs log-mel filterbank + CMVN preprocessing
+//! before inference.
 //!
 //! Expected ONNX I/O:
 //! - Input: `[batch, time, n_mels]` f32 (typically `n_mels = 80`)
 //! - Output: `[batch, embedding_dim]` f32
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
-use crate::features::FbankExtractor;
+use crate::features::{FbankExtractor, apply_cmvn};
 use crate::types::DiarizationConfig;
 use crate::utils::l2_normalize;
 use std::path::Path;
@@ -72,6 +72,8 @@ impl EmbeddingExtractor for EcapaTdnnExtractor {
                 got: samples.len(),
             });
         }
+
+        let fbank = apply_cmvn(&fbank);
 
         let n_frames = fbank.len();
         let n_mels = fbank[0].len();
