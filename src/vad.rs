@@ -56,9 +56,16 @@ pub struct EnergyVad {
 }
 
 impl EnergyVad {
-    /// { sample_rate >= 8000 && frame_size > 0 }
-    /// `fn new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Self`
-    /// { ret.sample_rate == sample_rate && ret.frame_size == frame_size }
+    /// Create an energy-based voice activity detector.
+    ///
+    /// `threshold_db` is the energy threshold in dB (converted internally to linear).
+    /// `frame_size` must be a positive multiple of the expected chunk size.
+    ///
+    /// ```rust
+    /// use polyvoice::{EnergyVad, VoiceActivityDetector};
+    /// let vad = EnergyVad::new(-40.0, 16000, 512);
+    /// assert_eq!(vad.sample_rate(), 16000);
+    /// ```
     pub fn new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Self {
         Self {
             threshold: 10f32.powf(threshold_db / 20.0),
@@ -92,9 +99,20 @@ impl VoiceActivityDetector for EnergyVad {
     }
 }
 
-/// { samples.len() >= vad_config.frame_size }
-/// `fn segment_speech<V: VoiceActivityDetector>(vad: &mut V, samples: &[f32], config: &DiarizationConfig, vad_config: &VadConfig) -> Result<Vec<(usize, usize)>, VadError>`
-/// { ret.iter().all(|(s, e)| s < e) }
+/// Segment speech regions using a voice activity detector.
+///
+/// Returns a list of `(start_sample, end_sample)` pairs where speech was detected.
+///
+/// ```rust
+/// use polyvoice::{EnergyVad, segment_speech, DiarizationConfig, VadConfig};
+/// let mut vad = EnergyVad::new(-40.0, 16000, 512);
+/// let samples = vec![0.5f32; 16000]; // 1 second of "loud" audio
+/// let config = DiarizationConfig::default();
+/// let vad_config = VadConfig::default();
+/// let segs = segment_speech(&mut vad, &samples, &config, &vad_config).unwrap();
+/// assert!(!segs.is_empty());
+/// assert!(segs.iter().all(|(s, e)| s < e));
+/// ```
 pub fn segment_speech<V: VoiceActivityDetector>(
     vad: &mut V,
     samples: &[f32],

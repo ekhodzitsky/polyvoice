@@ -38,7 +38,9 @@ pub mod embedding;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 pub mod features;
-pub use features::{compute_fbank, FbankConfig, FbankExtractor};
+pub use features::{FbankConfig, FbankExtractor};
+// Deprecated: `compute_fbank` is still accessible via `polyvoice::features::compute_fbank`
+// but no longer re-exported at the crate root. Use `FbankExtractor::extract` instead.
 pub mod offline;
 pub mod online;
 pub mod overlap;
@@ -56,10 +58,11 @@ pub use cluster::SpeakerCluster;
 pub use embedding::{DummyExtractor, EmbeddingExtractor, EmbeddingError};
 pub use offline::OfflineDiarizer;
 pub use online::OnlineDiarizer;
-pub use overlap::detect_overlaps;
+pub use overlap::{detect_overlaps, OverlapRegion};
 pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate, Seconds,
-    Segment, SpeakerId, SpeakerTurn, TimeRange, WordAlignment,
+    Segment, SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment,
+    remap_segments, remap_turns,
 };
 pub use vad::{segment_speech, EnergyVad, VadConfig, VoiceActivityDetector, VadError};
 

@@ -7,6 +7,73 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SpeakerId(pub u32);
 
+/// A remapping table produced by [`SpeakerCluster::merge`](crate::cluster::SpeakerCluster::merge).
+///
+/// When two speaker centroids are merged, all indices after the removed one shift
+/// left by one. This struct captures the old → new mapping so that callers can
+/// update any stored [`SpeakerId`]s (e.g. in [`Segment`]s or [`SpeakerTurn`]s).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpeakerIdRemap {
+    /// Mapping from old SpeakerId to new SpeakerId.
+    mapping: Vec<(SpeakerId, SpeakerId)>,
+}
+
+impl SpeakerIdRemap {
+    /// Create a remap from a raw vector of (old, new) pairs.
+    ///
+    /// { mapping.iter().all(|(old, new)| old != new) }
+    /// `fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Self`
+    /// { ret.mapping.len() == mapping.len() }
+    pub fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Self {
+        Self { mapping }
+    }
+
+    /// Apply the remap to a single [`SpeakerId`].
+    ///
+    /// Returns the new ID if the old ID was remapped, otherwise returns `id` unchanged.
+    pub fn remap(&self, id: SpeakerId) -> SpeakerId {
+        self.mapping
+            .iter()
+            .find(|(old, _)| *old == id)
+            .map(|(_, new)| *new)
+            .unwrap_or(id)
+    }
+
+    /// Returns true if no IDs were changed.
+    pub fn is_empty(&self) -> bool {
+        self.mapping.is_empty()
+    }
+
+    /// Returns the number of remapped IDs.
+    pub fn len(&self) -> usize {
+        self.mapping.len()
+    }
+}
+
+/// Remap speaker IDs in a slice of [`Segment`]s in-place.
+///
+/// { true }
+/// `fn remap_segments(segments: &mut [Segment], remap: &SpeakerIdRemap)`
+/// { segments.iter().all(|s| s.speaker.map_or(true, |spk| remap.remap(spk) == s.speaker.unwrap())) || !remap.is_empty() }
+pub fn remap_segments(segments: &mut [Segment], remap: &SpeakerIdRemap) {
+    for seg in segments.iter_mut() {
+        if let Some(spk) = seg.speaker {
+            seg.speaker = Some(remap.remap(spk));
+        }
+    }
+}
+
+/// Remap speaker IDs in a slice of [`SpeakerTurn`]s in-place.
+///
+/// { true }
+/// `fn remap_turns(turns: &mut [SpeakerTurn], remap: &SpeakerIdRemap)`
+/// { turns.iter().all(|t| remap.remap(t.speaker) == t.speaker) || !remap.is_empty() }
+pub fn remap_turns(turns: &mut [SpeakerTurn], remap: &SpeakerIdRemap) {
+    for turn in turns.iter_mut() {
+        turn.speaker = remap.remap(turn.speaker);
+    }
+}
+
 impl fmt::Display for SpeakerId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SPEAKER_{:02}", self.0)
@@ -20,16 +87,27 @@ impl fmt::Display for SpeakerId {
 pub struct SampleRate(u32);
 
 impl SampleRate {
-    /// { 8000 <= rate && rate <= 192000 }
-    /// `fn new(rate: u32) -> Option<SampleRate>`
-    /// { ret.is_some() => ret.unwrap().0 == rate }
+    /// Create a validated sample rate.
+    ///
+    /// Returns `None` if the rate is outside the supported range (8000–192000 Hz).
+    ///
+    /// ```rust
+    /// use polyvoice::SampleRate;
+    /// let sr = SampleRate::new(16000).expect("valid rate");
+    /// assert_eq!(sr.get(), 16000);
+    /// assert!(SampleRate::new(7000).is_none());
+    /// ```
     pub fn new(rate: u32) -> Option<Self> {
         (8000..=192000).contains(&rate).then_some(Self(rate))
     }
 
-    /// { true }
-    /// `fn get(&self) -> u32`
-    /// { ret == self.0 }
+    /// Return the raw sample rate value in Hz.
+    ///
+    /// ```rust
+    /// use polyvoice::SampleRate;
+    /// let sr = SampleRate::new(44100).unwrap();
+    /// assert_eq!(sr.get(), 44100);
+    /// ```
     pub fn get(&self) -> u32 {
         self.0
     }
@@ -48,16 +126,26 @@ impl Default for SampleRate {
 pub struct Confidence(f32);
 
 impl Confidence {
-    /// { 0.0 <= v && v <= 1.0 }
-    /// `fn new(v: f32) -> Option<Confidence>`
-    /// { ret.is_some() => ret.unwrap().0 == v }
+    /// Create a validated confidence score.
+    ///
+    /// Returns `None` if `v` is outside `[0.0, 1.0]`.
+    ///
+    /// ```rust
+    /// use polyvoice::Confidence;
+    /// assert!(Confidence::new(0.75).is_some());
+    /// assert!(Confidence::new(1.5).is_none());
+    /// ```
     pub fn new(v: f32) -> Option<Self> {
         (0.0..=1.0).contains(&v).then_some(Self(v))
     }
 
-    /// { true }
-    /// `fn get(&self) -> f32`
-    /// { ret == self.0 }
+    /// Return the raw confidence value.
+    ///
+    /// ```rust
+    /// use polyvoice::Confidence;
+    /// let c = Confidence::new(0.9).unwrap();
+    /// assert_eq!(c.get(), 0.9);
+    /// ```
     pub fn get(&self) -> f32 {
         self.0
     }
@@ -76,16 +164,26 @@ impl Default for Confidence {
 pub struct EmbeddingDim(usize);
 
 impl EmbeddingDim {
-    /// { dim > 0 }
-    /// `fn new(dim: usize) -> Option<EmbeddingDim>`
-    /// { ret.is_some() => ret.unwrap().0 == dim }
+    /// Create a validated embedding dimension.
+    ///
+    /// Returns `None` if `dim` is zero.
+    ///
+    /// ```rust
+    /// use polyvoice::EmbeddingDim;
+    /// assert!(EmbeddingDim::new(256).is_some());
+    /// assert!(EmbeddingDim::new(0).is_none());
+    /// ```
     pub fn new(dim: usize) -> Option<Self> {
         (dim > 0).then_some(Self(dim))
     }
 
-    /// { true }
-    /// `fn get(&self) -> usize`
-    /// { ret == self.0 }
+    /// Return the raw dimension value.
+    ///
+    /// ```rust
+    /// use polyvoice::EmbeddingDim;
+    /// let d = EmbeddingDim::new(192).unwrap();
+    /// assert_eq!(d.get(), 192);
+    /// ```
     pub fn get(&self) -> usize {
         self.0
     }
@@ -104,16 +202,26 @@ impl Default for EmbeddingDim {
 pub struct Seconds(f32);
 
 impl Seconds {
-    /// { v >= 0.0 }
-    /// `fn new(v: f32) -> Option<Seconds>`
-    /// { ret.is_some() => ret.unwrap().0 == v }
+    /// Create a validated non-negative duration in seconds.
+    ///
+    /// Returns `None` if `v` is negative.
+    ///
+    /// ```rust
+    /// use polyvoice::Seconds;
+    /// assert!(Seconds::new(3.5).is_some());
+    /// assert!(Seconds::new(-1.0).is_none());
+    /// ```
     pub fn new(v: f32) -> Option<Self> {
         (v >= 0.0).then_some(Self(v))
     }
 
-    /// { true }
-    /// `fn get(&self) -> f32`
-    /// { ret == self.0 }
+    /// Return the raw duration value in seconds.
+    ///
+    /// ```rust
+    /// use polyvoice::Seconds;
+    /// let s = Seconds::new(2.0).unwrap();
+    /// assert_eq!(s.get(), 2.0);
+    /// ```
     pub fn get(&self) -> f32 {
         self.0
     }
@@ -135,9 +243,13 @@ pub struct TimeRange {
 }
 
 impl TimeRange {
-    /// { self.end >= self.start }
-    /// `fn duration(&self) -> f64`
-    /// { ret >= 0.0 }
+    /// Return the duration of this time range in seconds.
+    ///
+    /// ```rust
+    /// use polyvoice::TimeRange;
+    /// let tr = TimeRange { start: 1.0, end: 3.5 };
+    /// assert_eq!(tr.duration(), 2.5);
+    /// ```
     pub fn duration(&self) -> f64 {
         self.end - self.start
     }

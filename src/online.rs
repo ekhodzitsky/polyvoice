@@ -19,9 +19,13 @@ pub struct OnlineDiarizer {
 }
 
 impl OnlineDiarizer {
-    /// { true }
-    /// `fn new(config: DiarizationConfig) -> Self`
-    /// { ret.cluster.num_speakers() == 0 }
+    /// Create a new streaming diarizer.
+    ///
+    /// ```rust
+    /// use polyvoice::{OnlineDiarizer, DiarizationConfig};
+    /// let diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// assert_eq!(diarizer.num_speakers(), 0);
+    /// ```
     pub fn new(config: DiarizationConfig) -> Self {
         Self {
             cluster: SpeakerCluster::new(config),
@@ -33,9 +37,19 @@ impl OnlineDiarizer {
         }
     }
 
-    /// { true }
-    /// `fn feed<E: EmbeddingExtractor>(&mut self, samples: &[f32], extractor: &E) -> Result<Vec<Segment>, EmbeddingError>`
-    /// { ret.iter().all(|s| s.speaker.is_some()) }
+    /// Feed audio samples into the streaming diarizer.
+    ///
+    /// Returns newly completed segments whenever enough audio has accumulated
+    /// for a full analysis window.
+    ///
+    /// ```rust
+    /// use polyvoice::{OnlineDiarizer, DiarizationConfig, DummyExtractor};
+    /// let mut diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// let extractor = DummyExtractor::new(256);
+    /// let samples = vec![0.0f32; 16000]; // 1 second
+    /// let segments = diarizer.feed(&samples, &extractor).unwrap();
+    /// // With default 1.5s window, 1s may not produce a segment yet.
+    /// ```
     pub fn feed<E: EmbeddingExtractor>(
         &mut self,
         samples: &[f32],
@@ -73,9 +87,24 @@ impl OnlineDiarizer {
         Ok(new_segments)
     }
 
-    /// { true }
-    /// `fn align_words(&self, words: &mut [WordAlignment])`
-    /// { words.iter().all(|w| w.speaker.is_some() || self.current_speaker.is_none()) }
+    /// Align transcript words to speakers based on diarization state.
+    ///
+    /// Each word's `speaker` field is updated to the most likely speaker
+    /// at the word's midpoint timestamp.
+    ///
+    /// ```rust
+    /// use polyvoice::{OnlineDiarizer, DiarizationConfig, DummyExtractor, WordAlignment, TimeRange};
+    /// let mut diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// let extractor = DummyExtractor::new(256);
+    /// let samples = vec![0.0f32; 16000 * 3];
+    /// let _ = diarizer.feed(&samples, &extractor).unwrap();
+    ///
+    /// let mut words = vec![
+    ///     WordAlignment { word: "hello".into(), time: TimeRange { start: 0.5, end: 1.0 }, speaker: None, confidence: 0.0 },
+    /// ];
+    /// diarizer.align_words(&mut words);
+    /// assert!(words[0].speaker.is_some());
+    /// ```
     pub fn align_words(&self, words: &mut [WordAlignment]) {
         for word in words.iter_mut() {
             let mid_sample = ((word.time.start + word.time.end) / 2.0
@@ -93,23 +122,42 @@ impl OnlineDiarizer {
         }
     }
 
-    /// { true }
-    /// `fn current_speaker(&self) -> Option<SpeakerId>`
-    /// { ret == self.current_speaker }
+    /// Return the most recently assigned speaker, if any.
+    ///
+    /// ```rust
+    /// use polyvoice::{OnlineDiarizer, DiarizationConfig};
+    /// let diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// assert!(diarizer.current_speaker().is_none());
+    /// ```
     pub fn current_speaker(&self) -> Option<SpeakerId> {
         self.current_speaker
     }
 
-    /// { true }
-    /// `fn num_speakers(&self) -> usize`
-    /// { ret == self.cluster.num_speakers() }
+    /// Return the number of distinct speakers detected so far.
+    ///
+    /// ```rust
+    /// use polyvoice::{OnlineDiarizer, DiarizationConfig};
+    /// let diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// assert_eq!(diarizer.num_speakers(), 0);
+    /// ```
     pub fn num_speakers(&self) -> usize {
         self.cluster.num_speakers()
     }
 
-    /// { true }
-    /// `fn flush<E: EmbeddingExtractor>(&mut self, extractor: &E) -> Result<Option<Segment>, EmbeddingError>`
-    /// { ret.is_none() => self.audio_buffer.is_empty() }
+    /// Flush any remaining audio and return the final segment.
+    ///
+    /// Pads the trailing audio with zeros to fill the analysis window.
+    /// Returns `Ok(None)` if the buffer is empty.
+    ///
+    /// ```rust
+    /// use polyvoice::{OnlineDiarizer, DiarizationConfig, DummyExtractor};
+    /// let mut diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// let extractor = DummyExtractor::new(256);
+    /// let samples = vec![0.0f32; 16000];
+    /// let _ = diarizer.feed(&samples, &extractor).unwrap();
+    /// let final_seg = diarizer.flush(&extractor).unwrap();
+    /// // May be Some or None depending on buffer state.
+    /// ```
     pub fn flush<E: EmbeddingExtractor>(
         &mut self,
         extractor: &E,

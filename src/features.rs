@@ -56,9 +56,12 @@ impl Default for FbankConfig {
     }
 }
 
-/// { samples.len() >= config.win_length }
-/// `fn compute_fbank(samples: &[f32], config: &FbankConfig) -> Result<Vec<Vec<f32>>, FbankError>`
-/// { ret.iter().all(|f| f.len() == config.n_mels) }
+/// Standalone log-mel filterbank computation.
+///
+/// ⚠️ **Deprecated since 0.4.0**: This function allocates an FFT planner, Hamming
+/// window, and mel-filterbank on every call. For repeated extraction use
+/// [`FbankExtractor::extract`] instead.
+#[deprecated(since = "0.4.0", note = "use FbankExtractor::extract for cached computation")]
 pub fn compute_fbank(
     samples: &[f32],
     config: &FbankConfig,
@@ -156,9 +159,16 @@ pub struct FbankExtractor {
 }
 
 impl FbankExtractor {
-    /// { config.n_fft > 0 && config.n_mels > 0 }
-    /// `fn new(config: FbankConfig) -> Self`
-    /// { ret.config == config }
+    /// Create a cached fbank extractor.
+    ///
+    /// The FFT planner, Hamming window, and mel-filterbank matrices are computed
+    /// once and reused across subsequent [`extract`](Self::extract) calls.
+    ///
+    /// ```rust
+    /// use polyvoice::features::{FbankExtractor, FbankConfig};
+    /// let config = FbankConfig::default();
+    /// let extractor = FbankExtractor::new(config);
+    /// ```
     pub fn new(config: FbankConfig) -> Self {
         let mut planner = RealFftPlanner::<f32>::new();
         let r2c = planner.plan_fft_forward(config.n_fft);
@@ -173,9 +183,19 @@ impl FbankExtractor {
         }
     }
 
-    /// { samples.len() >= self.config.win_length || ret.is_empty() }
-    /// `fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError>`
-    /// { ret.iter().all(|f| f.len() == self.config.n_mels) }
+    /// Extract log-mel filterbank features from audio samples.
+    ///
+    /// Returns an empty vector if `samples` is shorter than the window length.
+    ///
+    /// ```rust
+    /// use polyvoice::features::{FbankExtractor, FbankConfig};
+    /// let config = FbankConfig::default();
+    /// let extractor = FbankExtractor::new(config);
+    /// let samples = vec![0.0f32; 16000 * 2]; // 2 seconds @ 16 kHz
+    /// let fb = extractor.extract(&samples).unwrap();
+    /// assert!(!fb.is_empty());
+    /// assert!(fb.iter().all(|f| f.len() == config.n_mels));
+    /// ```
     pub fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError> {
         if samples.len() < self.config.win_length {
             return Ok(Vec::new());
@@ -282,7 +302,8 @@ mod tests {
     fn test_fbank_shape() {
         let config = FbankConfig::default();
         let samples = vec![0.0f32; 16000 * 2]; // 2 seconds
-        let fb = compute_fbank(&samples, &config).unwrap();
+        let extractor = FbankExtractor::new(config);
+        let fb = extractor.extract(&samples).unwrap();
         assert!(!fb.is_empty());
         assert!(fb.iter().all(|f| f.len() == config.n_mels));
     }
@@ -291,7 +312,8 @@ mod tests {
     fn test_fbank_short_audio() {
         let config = FbankConfig::default();
         let samples = vec![0.0f32; 100]; // less than win_length
-        let fb = compute_fbank(&samples, &config).unwrap();
+        let extractor = FbankExtractor::new(config);
+        let fb = extractor.extract(&samples).unwrap();
         assert!(fb.is_empty());
     }
 

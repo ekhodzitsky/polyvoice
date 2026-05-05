@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-05-05
+
+### Breaking Changes
+- `SpeakerCluster::merge()` now returns `Option<SpeakerIdRemap>` instead of invalidating `SpeakerId`s silently.
+- `compute_fbank()` deprecated in favor of `FbankExtractor::extract()`.
+- Removed `compute_fbank` from crate-root re-exports (still available via `polyvoice::features::compute_fbank`).
+
+### Added
+- Doc tests for all public APIs (`SampleRate`, `Confidence`, `SpeakerCluster`, `OfflineDiarizer`, `OnlineDiarizer`, `detect_overlaps`, `FbankExtractor`, `segment_speech`, etc.).
+- Loom model-checking for session-pool thread safety (`tests/loom_pool.rs`).
+- Fuzz targets: `fuzz_compute_fbank`, `fuzz_segment_speech`, `fuzz_detect_overlaps`, `fuzz_cluster_assign`.
+- DER (Diarization Error Rate) accuracy benchmark suite (`benches/der.rs`).
+- Cross-platform CI: macOS and Windows runners.
+- Miri CI job for unsafe memory verification.
+- cargo-semver-checks in CI.
+- Nightly fuzz workflow (`.github/workflows/fuzz.yml`).
+- FFI memory safety tests (`tests/ffi_memory.py`) covering lifecycle, NULL handling, and large-audio stress.
+- `examples/` directory: `offline.rs`, `online.rs`, `onnx.rs`, `ffi_usage.c`.
+- `docs/API.md` reference guide.
+- `include/polyvoice.h` C header.
+- `SpeakerIdRemap`, `remap_segments`, `remap_turns` for safe post-merge ID updates.
+
+### Fixed
+- `SpeakerCluster::merge()` now preserves `SpeakerId` validity via explicit remap table.
+- `detect_overlaps()` filters zero-length and unlabeled segments to prevent phantom overlaps.
+
 ## [0.3.0] - 2025-05-05
 
 ### Added

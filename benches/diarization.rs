@@ -6,7 +6,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use polyvoice::{DiarizationConfig, DummyExtractor, OfflineDiarizer};
-use polyvoice::features::{compute_fbank, FbankConfig};
+use polyvoice::features::{FbankConfig, FbankExtractor};
 
 /// Generate a 10-second synthetic waveform with two alternating speakers.
 ///
@@ -46,10 +46,11 @@ fn bench_offline_diarization(c: &mut Criterion) {
 fn bench_ecapa_fbank(c: &mut Criterion) {
     let samples = generate_two_speaker_audio(10);
     let config = FbankConfig::default();
+    let extractor = FbankExtractor::new(config);
 
     c.bench_function("ecapa_fbank_10s", |b| {
         b.iter(|| {
-            let fb = compute_fbank(black_box(&samples), &config).unwrap();
+            let fb = extractor.extract(black_box(&samples)).unwrap();
             black_box(fb);
         });
     });

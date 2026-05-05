@@ -17,6 +17,15 @@ pub enum EmbeddingError {
 ///
 /// Implementors are expected to be thread-safe (either internally synchronized
 /// or cheaply clonable), so that they can be shared across concurrent diarizers.
+///
+/// ```rust
+/// use polyvoice::{EmbeddingExtractor, DummyExtractor, DiarizationConfig};
+/// let extractor = DummyExtractor::new(256);
+/// let config = DiarizationConfig::default();
+/// let samples = vec![0.0f32; config.window_samples()];
+/// let emb = extractor.extract(&samples, &config).unwrap();
+/// assert_eq!(emb.len(), 256);
+/// ```
 pub trait EmbeddingExtractor: Send + Sync {
     /// Extract an embedding from raw 16 kHz (or `config.sample_rate`) mono f32 samples.
     ///
@@ -37,9 +46,15 @@ pub struct DummyExtractor {
 }
 
 impl DummyExtractor {
-    /// { dim > 0 }
-    /// `fn new(dim: usize) -> Self`
-    /// { ret.dim == dim }
+    /// Create a dummy extractor that returns deterministic pseudo-random embeddings.
+    ///
+    /// Useful for tests and benchmarks where a real ONNX model is not available.
+    ///
+    /// ```rust
+    /// use polyvoice::{DummyExtractor, EmbeddingExtractor};
+    /// let extractor = DummyExtractor::new(256);
+    /// assert_eq!(extractor.embedding_dim(), 256);
+    /// ```
     pub fn new(dim: usize) -> Self {
         Self {
             dim,

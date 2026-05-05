@@ -1,0 +1,26 @@
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "fuzz -> target"
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      - name: Fuzz compute_fbank
+        run: cargo fuzz run fuzz_compute_fbank -- -max_total_time=300
+      - name: Fuzz segment_speech
+        run: cargo fuzz run fuzz_segment_speech -- -max_total_time=300
+      - name: Fuzz detect_overlaps
+        run: cargo fuzz run fuzz_detect_overlaps -- -max_total_time=300
+      - name: Fuzz cluster_assign
+        run: cargo fuzz run fuzz_cluster_assign -- -max_total_time=300

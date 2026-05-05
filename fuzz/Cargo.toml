@@ -1,0 +1,42 @@
+[package]
+name = "polyvoice-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.polyvoice]
+path = ".."
+
+[[bin]]
+name = "fuzz_compute_fbank"
+path = "fuzz_targets/fuzz_compute_fbank.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_segment_speech"
+path = "fuzz_targets/fuzz_segment_speech.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_detect_overlaps"
+path = "fuzz_targets/fuzz_detect_overlaps.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_cluster_assign"
+path = "fuzz_targets/fuzz_cluster_assign.rs"
+test = false
+doc = false
+bench = false

@@ -1,12 +1,15 @@
 [package]
 name = "polyvoice"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "Speaker diarization library for Rust — online and offline, ONNX-powered, ecosystem-agnostic"
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "onnx", "stt", "voice"]
 categories = ["multimedia::audio", "science"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
@@ -43,10 +46,18 @@ tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 proptest = "1"
 criterion = "0.5"
+loom = "0.7.2"
 
 [[bench]]
 name = "diarization"
 harness = false
+
+[[bench]]
+name = "der"
+harness = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
 
 [profile.release]
 lto = true

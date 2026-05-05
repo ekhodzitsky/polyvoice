@@ -102,10 +102,11 @@ proptest! {
     /// Property: fbank output shape invariant.
     #[test]
     fn fbank_shape_invariant(extra_samples in 0usize..16000) {
-        use polyvoice::features::{compute_fbank, FbankConfig};
+        use polyvoice::features::{FbankConfig, FbankExtractor};
         let config = FbankConfig::default();
         let samples = vec![0.0f32; config.win_length + extra_samples];
-        let fb = compute_fbank(&samples, &config).unwrap();
+        let extractor = FbankExtractor::new(config);
+        let fb = extractor.extract(&samples).unwrap();
         if !fb.is_empty() {
             prop_assert!(
                 fb.iter().all(|f| f.len() == config.n_mels),

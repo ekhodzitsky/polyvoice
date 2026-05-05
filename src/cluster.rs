@@ -1,6 +1,6 @@
 //! Speaker clustering with online incremental centroid updates.
 
-use crate::types::{DiarizationConfig, SpeakerId};
+use crate::types::{DiarizationConfig, SpeakerId, SpeakerIdRemap};
 use crate::utils::{cosine_similarity, l2_normalize};
 
 /// State for a single speaker centroid.
@@ -25,9 +25,13 @@ pub struct SpeakerCluster {
 }
 
 impl SpeakerCluster {
-    /// { true }
-    /// `fn new(config: DiarizationConfig) -> Self`
-    /// { ret.centroids.is_empty() }
+    /// Create a new empty speaker clusterer.
+    ///
+    /// ```rust
+    /// use polyvoice::{SpeakerCluster, DiarizationConfig};
+    /// let cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// assert_eq!(cluster.num_speakers(), 0);
+    /// ```
     pub fn new(config: DiarizationConfig) -> Self {
         Self {
             centroids: Vec::new(),
@@ -35,9 +39,21 @@ impl SpeakerCluster {
         }
     }
 
-    /// { !embedding.is_empty() }
-    /// `fn assign(&mut self, embedding: &[f32]) -> (SpeakerId, f32)`
-    /// { ret.1 >= -1.0 && ret.1 <= 1.0 }
+    /// Assign an embedding to the closest speaker centroid.
+    ///
+    /// Returns the speaker ID and the cosine similarity score. If no existing
+    /// centroid is close enough (above threshold) and the speaker limit has not
+    /// been reached, a new speaker is created.
+    ///
+    /// ```rust
+    /// use polyvoice::{SpeakerCluster, DiarizationConfig};
+    /// let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// let mut emb = vec![0.0f32; 256];
+    /// emb[0] = 1.0;
+    /// let (id, conf) = cluster.assign(&emb);
+    /// assert_eq!(id.0, 0);
+    /// assert!(conf > 0.0);
+    /// ```
     pub fn assign(&mut self, embedding: &[f32]) -> (SpeakerId, f32) {
         let mut best_id: Option<usize> = None;
         let mut best_sim = f32::NEG_INFINITY;
@@ -74,16 +90,31 @@ impl SpeakerCluster {
         (SpeakerId(new_id as u32), 1.0)
     }
 
-    /// { true }
-    /// `fn num_speakers(&self) -> usize`
-    /// { ret == self.centroids.len() }
+    /// Return the current number of speaker centroids.
+    ///
+    /// ```rust
+    /// use polyvoice::{SpeakerCluster, DiarizationConfig};
+    /// let cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// assert_eq!(cluster.num_speakers(), 0);
+    /// ```
     pub fn num_speakers(&self) -> usize {
         self.centroids.len()
     }
 
-    /// { true }
-    /// `fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)>`
-    /// { ret.len() == self.centroids.len() }
+    /// Return a view of all current centroids.
+    ///
+    /// Each tuple contains `(SpeakerId, centroid_vector, average_confidence)`.
+    ///
+    /// ```rust
+    /// use polyvoice::{SpeakerCluster, DiarizationConfig};
+    /// let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// let mut emb = vec![0.0f32; 128];
+    /// emb[0] = 1.0;
+    /// cluster.assign(&emb);
+    /// let centroids = cluster.centroids();
+    /// assert_eq!(centroids.len(), 1);
+    /// assert_eq!(centroids[0].0.0, 0);
+    /// ```
     pub fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)> {
         self.centroids
             .iter()
@@ -99,22 +130,36 @@ impl SpeakerCluster {
             .collect()
     }
 
-    /// { from != into }
-    /// `fn merge(&mut self, from: SpeakerId, into: SpeakerId)`
-    /// { self.centroids.len() <= old(self.centroids.len()) }
-    pub fn merge(&mut self, from: SpeakerId, into: SpeakerId) {
+    /// Merge one speaker centroid into another.
+    ///
+    /// The `from` centroid is removed and its statistics are averaged into `into`.
+    /// Returns a [`SpeakerIdRemap`] describing how existing IDs changed, or `None`
+    /// if the indices are invalid or equal.
+    ///
+    /// ```rust
+    /// use polyvoice::{SpeakerCluster, DiarizationConfig, SpeakerId};
+    /// let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// let mut e0 = vec![0.0f32; 128]; e0[0] = 1.0;
+    /// let mut e1 = vec![0.0f32; 128]; e1[1] = 1.0;
+    /// let (id0, _) = cluster.assign(&e0);
+    /// let (id1, _) = cluster.assign(&e1);
+    /// let remap = cluster.merge(id1, id0).expect("valid merge");
+    /// assert_eq!(cluster.num_speakers(), 1);
+    /// assert_eq!(remap.remap(id1), id0);
+    /// ```
+    pub fn merge(&mut self, from: SpeakerId, into: SpeakerId) -> Option<SpeakerIdRemap> {
         let from_idx = from.0 as usize;
         let into_idx = into.0 as usize;
-        if from_idx >= self.centroids.len() || into_idx >= self.centroids.len() || from_idx == into_idx {
-            return;
+        let old_len = self.centroids.len();
+        if from_idx >= old_len || into_idx >= old_len || from_idx == into_idx {
+            return None;
         }
         let from_c = self.centroids.remove(from_idx);
         // After removal, if into_idx was after from_idx, it shifts left by one.
         let adjusted_into = if into_idx > from_idx { into_idx - 1 } else { into_idx };
         if adjusted_into >= self.centroids.len() {
-            return;
+            return None;
         }
-        // Note: this invalidates SpeakerIds. Use only in offline context where IDs are remapped.
         let into_c = &mut self.centroids[adjusted_into];
         let total_count = into_c.count + from_c.count;
         for (i, v) in into_c.vector.iter_mut().enumerate() {
@@ -123,6 +168,18 @@ impl SpeakerCluster {
         l2_normalize(&mut into_c.vector);
         into_c.count = total_count;
         into_c.confidence_sum += from_c.confidence_sum;
+
+        // Build remap: every index >= from_idx shifts left by 1.
+        let mut mapping = Vec::with_capacity(old_len - self.centroids.len());
+        for old_id in from_idx..old_len {
+            let new_id = if old_id == from_idx {
+                adjusted_into
+            } else {
+                old_id - 1
+            };
+            mapping.push((SpeakerId(old_id as u32), SpeakerId(new_id as u32)));
+        }
+        Some(SpeakerIdRemap::from_mapping(mapping))
     }
 
     fn update_centroid(&mut self, id: usize, embedding: &[f32], sim: f32) {
@@ -202,5 +259,72 @@ mod tests {
         let (id3, _) = cluster.assign(&e3);
         assert!(id3.0 < 2);
         assert_eq!(cluster.num_speakers(), 2);
+    }
+
+    #[test]
+    fn test_merge_remaps_speaker_ids() {
+        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        // Three orthogonal unit vectors to guarantee distinct speakers.
+        let mut e0 = vec![0.0f32; 256];
+        e0[0] = 1.0;
+        let mut e1 = vec![0.0f32; 256];
+        e1[1] = 1.0;
+        let mut e2 = vec![0.0f32; 256];
+        e2[2] = 1.0;
+
+        let (id0, _) = cluster.assign(&e0); // SpeakerId(0)
+        let (id1, _) = cluster.assign(&e1); // SpeakerId(1)
+        let (id2, _) = cluster.assign(&e2); // SpeakerId(2)
+        assert_eq!(cluster.num_speakers(), 3);
+
+        // Merge speaker 1 into speaker 0.
+        let remap = cluster.merge(id1, id0).expect("merge should succeed");
+        assert_eq!(cluster.num_speakers(), 2);
+
+        // id1 should now map to id0.
+        assert_eq!(remap.remap(id1), id0);
+        // id2 should shift from 2 to 1.
+        assert_eq!(remap.remap(id2), SpeakerId(1));
+        // id0 should remain unchanged.
+        assert_eq!(remap.remap(id0), id0);
+    }
+
+    #[test]
+    fn test_merge_into_higher_index() {
+        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        let mut e0 = vec![0.0f32; 256];
+        e0[0] = 1.0;
+        let mut e1 = vec![0.0f32; 256];
+        e1[1] = 1.0;
+        let mut e2 = vec![0.0f32; 256];
+        e2[2] = 1.0;
+
+        let (id0, _) = cluster.assign(&e0);
+        let (id1, _) = cluster.assign(&e1);
+        let (id2, _) = cluster.assign(&e2);
+
+        // Merge speaker 0 into speaker 2.
+        let remap = cluster.merge(id0, id2).expect("merge should succeed");
+        assert_eq!(cluster.num_speakers(), 2);
+
+        // id0 maps to id2 (adjusted to index 1 after removal).
+        assert_eq!(remap.remap(id0), SpeakerId(1));
+        // id1 stays at 0 (was before removed index).
+        assert_eq!(remap.remap(id1), SpeakerId(0));
+        // id2 shifts from 2 to 1.
+        assert_eq!(remap.remap(id2), SpeakerId(1));
+    }
+
+    #[test]
+    fn test_merge_invalid_returns_none() {
+        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        let e0 = emb(1.0, 256);
+        cluster.assign(&e0);
+
+        // Merge into self — invalid.
+        assert!(cluster.merge(SpeakerId(0), SpeakerId(0)).is_none());
+        // Merge out of range.
+        assert!(cluster.merge(SpeakerId(5), SpeakerId(0)).is_none());
+        assert!(cluster.merge(SpeakerId(0), SpeakerId(5)).is_none());
     }
 }

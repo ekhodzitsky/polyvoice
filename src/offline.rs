@@ -10,16 +10,29 @@ pub struct OfflineDiarizer {
 }
 
 impl OfflineDiarizer {
-    /// { true }
-    /// `fn new(config: DiarizationConfig) -> Self`
-    /// { ret.config == config }
+    /// Create an offline diarizer with the given configuration.
+    ///
+    /// ```rust
+    /// use polyvoice::{OfflineDiarizer, DiarizationConfig};
+    /// let diarizer = OfflineDiarizer::new(DiarizationConfig::default());
+    /// ```
     pub fn new(config: DiarizationConfig) -> Self {
         Self { config }
     }
 
-    /// { samples.len() >= self.config.window_samples() || ret.segments.is_empty() }
-    /// `fn run<E: EmbeddingExtractor>(&self, samples: &[f32], extractor: &E) -> Result<DiarizationResult, EmbeddingError>`
-    /// { ret.num_speakers <= self.config.max_speakers }
+    /// Run diarization on an entire audio buffer.
+    ///
+    /// Returns speaker segments and turns. If the audio is shorter than the
+    /// analysis window, the result will contain no segments.
+    ///
+    /// ```rust
+    /// use polyvoice::{OfflineDiarizer, DiarizationConfig, DummyExtractor};
+    /// let diarizer = OfflineDiarizer::new(DiarizationConfig::default());
+    /// let extractor = DummyExtractor::new(256);
+    /// let samples = vec![0.0f32; 16000 * 10]; // 10 seconds
+    /// let result = diarizer.run(&samples, &extractor).unwrap();
+    /// // Result structure is valid even if segments may be empty for silence.
+    /// ```
     pub fn run<E: EmbeddingExtractor>(
         &self,
         samples: &[f32],
