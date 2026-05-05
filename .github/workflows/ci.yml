@@ -17,9 +17,9 @@ jobs:
           - os: ubuntu-latest
             flags: --all-targets --all-features
           - os: macos-latest
-            flags: --all-targets --features ffi
+            flags: --all-targets --features onnx,ffi,cli
           - os: windows-latest
-            flags: --all-targets --features ffi
+            flags: --all-targets --features onnx,ffi,cli
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,9 +45,9 @@ jobs:
           - os: ubuntu-latest
             flags: --all-targets --all-features
           - os: macos-latest
-            flags: --all-targets --features ffi
+            flags: --all-targets --features onnx,ffi,cli
           - os: windows-latest
-            flags: --all-targets --features ffi
+            flags: --all-targets --features onnx,ffi,cli
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -65,9 +65,9 @@ jobs:
           - os: ubuntu-latest
             flags: --all-features
           - os: macos-latest
-            flags: --features ffi
+            flags: --features onnx,ffi,cli
           - os: windows-latest
-            flags: --features ffi
+            flags: --features onnx,ffi,cli
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
