@@ -4,7 +4,7 @@
 #[cfg(feature = "onnx")]
 mod e2e {
     use polyvoice::{
-        DiarizationConfig, EcapaTdnnExtractor, Pipeline, VadConfig,
+        DiarizationConfig, FbankOnnxExtractor, Pipeline, VadConfig,
         silero_vad::SileroVad,
         vad::VoiceActivityDetector,
     };
@@ -56,7 +56,7 @@ mod e2e {
         };
 
         let model_path = dir.join("wespeaker_resnet34.onnx");
-        let extractor = EcapaTdnnExtractor::new(&model_path, 256, 2)
+        let extractor = FbankOnnxExtractor::new(&model_path, 256, 2)
             .expect("load WeSpeaker");
 
         let config = DiarizationConfig::default();
@@ -87,7 +87,7 @@ mod e2e {
         let model_path = dir.join("wespeaker_resnet34.onnx");
         let vad_path = dir.join("silero_vad.onnx");
 
-        let extractor = EcapaTdnnExtractor::new(&model_path, 256, 4)
+        let extractor = FbankOnnxExtractor::new(&model_path, 256, 4)
             .expect("load WeSpeaker");
         let mut vad = SileroVad::new(&vad_path, 512)
             .expect("load Silero VAD");

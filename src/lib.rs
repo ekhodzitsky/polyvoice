@@ -71,6 +71,8 @@ pub use silero_vad::SileroVad;
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
 
 #[cfg(feature = "onnx")]
+#[allow(deprecated)]
 pub use ecapa::EcapaTdnnExtractor;
+pub use ecapa::FbankOnnxExtractor;
 #[cfg(feature = "onnx")]
 pub use onnx::OnnxEmbeddingExtractor;
