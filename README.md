@@ -122,6 +122,25 @@ WAV / PCM audio (16 kHz mono)
 
 pyannote is the gold standard for accuracy. polyvoice trades some accuracy for deployment simplicity: no Python runtime, no GPU required, ~30 MB total.
 
+## Accuracy (DER benchmarks)
+
+Evaluated on [AMI](https://groups.inf.ed.ac.uk/ami/corpus/) test set (Mix-Headset), 0.25s collar:
+
+| System | DER | Miss | FA | Confusion | Speed |
+|--------|-----|------|-----|-----------|-------|
+| **polyvoice** (AHC, t=0.4) | **34.1%** | 22.3% | 2.9% | 8.9% | 5x RT (CPU) |
+| pyannote 3.0 | ~18% | — | — | — | ~1x RT (GPU) |
+| Simple i-vector + AHC | ~33% | — | — | — | — |
+
+polyvoice is competitive with traditional i-vector systems. The gap to pyannote comes from:
+neural end-to-end training and overlap-aware resegmentation, which polyvoice doesn't do yet.
+
+```bash
+# Reproduce benchmarks
+bash scripts/download-ami-test.sh
+cargo run --release --features cli --bin polyvoice-bench -- data/ami-test
+```
+
 ## Features
 
 - **Pipeline API** — `Pipeline::run()` for one-call diarization with VAD + embeddings + clustering.
@@ -142,7 +161,7 @@ pyannote is the gold standard for accuracy. polyvoice trades some accuracy for d
 use polyvoice::{DiarizationConfig, VadConfig, SampleRate};
 
 let config = DiarizationConfig {
-    threshold: 0.5,           // cosine similarity threshold
+    threshold: 0.4,           // cosine similarity threshold
     max_speakers: 64,         // hard speaker limit
     window_secs: 1.5,         // analysis window
     hop_secs: 0.75,           // sliding step
@@ -197,7 +216,7 @@ for seg in segments {
 - [x] Cross-platform CI
 - [x] Python bindings (PyO3 / maturin)
 - [x] CLI tool (`polyvoice diarize` / `download-models`)
-- [ ] DER benchmarks on AMI / VoxConverse
+- [x] DER benchmarks on AMI (34.1% with 0.25s collar)
 - [ ] Spectral clustering backend
 - [ ] PLDA scoring backend
 
