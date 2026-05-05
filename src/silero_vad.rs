@@ -38,8 +38,8 @@ impl SileroVad {
             ort::value::TensorRef::from_array_view(([1_usize, chunk.len()], chunk))
                 .map_err(|e| VadError::Model(e.to_string()))?;
 
-        let sr_val = [self.sample_rate as i64];
-        let sr_tensor = ort::value::TensorRef::from_array_view(([1_usize], sr_val.as_slice()))
+        let sr_array = ndarray::arr0(self.sample_rate as i64);
+        let sr_tensor = ort::value::TensorRef::from_array_view(&sr_array)
             .map_err(|e| VadError::Model(e.to_string()))?;
 
         let state_array =
@@ -50,7 +50,7 @@ impl SileroVad {
 
         let outputs = self
             .session
-            .run(ort::inputs![input_tensor, sr_tensor, state_tensor])
+            .run(ort::inputs!["input" => input_tensor, "state" => state_tensor, "sr" => sr_tensor])
             .map_err(|e| VadError::Model(e.to_string()))?;
 
         let (_, prob_data) = outputs[0]

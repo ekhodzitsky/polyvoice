@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODEL_DIR="${SCRIPT_DIR}/../models"
 mkdir -p "$MODEL_DIR"
 
-WESPEAKER_URL="https://wespeaker-1256283475.cos.ap-shanghai.myqcloud.com/models/voxceleb/voxceleb_resnet34/voxceleb_resnet34.onnx"
+WESPEAKER_URL="https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/main/voxceleb_resnet34.onnx?download=true"
 SILERO_URL="https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx"
 
 echo "Downloading WeSpeaker ResNet34 (VoxCeleb)..."
