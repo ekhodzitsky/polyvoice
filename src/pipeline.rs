@@ -3,8 +3,11 @@
 //! Wires together VAD, embedding extraction, and AHC clustering into a
 //! single `run()` call that takes audio and returns `DiarizationResult`.
 
-use crate::ahc::agglomerative_cluster;
+use crate::ahc::{agglomerative_cluster, agglomerative_cluster_auto};
 use crate::embedding::EmbeddingExtractor;
+use crate::kmeans::kmeans_auto_k;
+use crate::spectral::spectral_cluster;
+use crate::types::ClusteringBackend;
 use crate::types::{
     DiarizationConfig, DiarizationResult, Segment, SpeakerId, SpeakerTurn, TimeRange,
 };
@@ -92,7 +95,12 @@ impl Pipeline {
             });
         }
 
-        let labels = agglomerative_cluster(&embeddings, self.config.threshold);
+        let labels = match self.config.clustering_backend {
+            ClusteringBackend::Ahc => agglomerative_cluster(&embeddings, self.config.threshold),
+            ClusteringBackend::KMeans => kmeans_auto_k(&embeddings, self.config.max_speakers, 100),
+            ClusteringBackend::Spectral => spectral_cluster(&embeddings, self.config.max_speakers),
+            ClusteringBackend::Auto => agglomerative_cluster_auto(&embeddings).0,
+        };
         let num_speakers = labels.iter().copied().max().map_or(0, |m| m + 1);
 
         let mut segments: Vec<Segment> = labels
@@ -105,8 +113,11 @@ impl Pipeline {
             })
             .collect();
 
-        segments = merge_segments(segments, self.config.max_gap_secs as f64);
+        segments = crate::utils::merge_segments(segments, self.config.max_gap_secs as f64);
         segments.retain(|s| s.time.duration() >= self.config.min_speech_secs as f64);
+        if self.config.min_turn_duration_secs > 0.0 {
+            segments.retain(|s| s.time.duration() >= self.config.min_turn_duration_secs as f64);
+        }
 
         let turns: Vec<SpeakerTurn> = segments
             .iter()
@@ -133,26 +144,16 @@ impl Pipeline {
         extractor: &E,
         vad: &mut V,
     ) -> Result<DiarizationResult, PipelineError> {
-        let (samples, _sample_rate) = wav::read_wav(path)?;
+        let (samples, sample_rate) = wav::read_wav(path)?;
+        if sample_rate != self.config.sample_rate.get() {
+            tracing::warn!(
+                "WAV sample rate {} Hz does not match config {} Hz",
+                sample_rate,
+                self.config.sample_rate.get()
+            );
+        }
         self.run(&samples, extractor, vad)
     }
 }
 
-fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment> {
-    if segments.is_empty() {
-        return segments;
-    }
-    let mut merged = Vec::new();
-    let mut current = segments[0].clone();
 
-    for next in segments.into_iter().skip(1) {
-        if current.speaker == next.speaker && next.time.start - current.time.end <= max_gap_secs {
-            current.time.end = next.time.end;
-        } else {
-            merged.push(current);
-            current = next;
-        }
-    }
-    merged.push(current);
-    merged
-}

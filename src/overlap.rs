@@ -34,11 +34,7 @@ pub fn detect_overlaps(segments: &[Segment]) -> Vec<OverlapRegion> {
         }
     }
 
-    events.sort_by(|a, b| {
-        // SAFETY: time values in diarization are always finite (f64 from usize division).
-        // We use partial_cmp with a fallback for the impossible NaN case.
-        a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
-    });
+    events.sort_by(|a, b| a.0.total_cmp(&b.0));
 
     let mut active: Vec<SpeakerId> = Vec::new();
     let mut overlaps = Vec::new();

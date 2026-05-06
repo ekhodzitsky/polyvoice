@@ -20,6 +20,9 @@ pub struct SileroVad {
 #[cfg(feature = "onnx")]
 impl SileroVad {
     const STATE_SIZE: usize = 2 * 128;
+    const LARGE_CHUNK_THRESHOLD: usize = 512;
+    const LARGE_CONTEXT_SIZE: usize = 64;
+    const SMALL_CONTEXT_SIZE: usize = 32;
 
     pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error> {
         let session = ort::session::Session::builder()
@@ -27,7 +30,11 @@ impl SileroVad {
             .commit_from_file(model_path)
             .map_err(|e| anyhow::anyhow!("load model: {e}"))?;
 
-        let context_size = if chunk_size >= 512 { 64 } else { 32 };
+        let context_size = if chunk_size >= Self::LARGE_CHUNK_THRESHOLD {
+            Self::LARGE_CONTEXT_SIZE
+        } else {
+            Self::SMALL_CONTEXT_SIZE
+        };
 
         Ok(Self {
             session,
@@ -88,7 +95,7 @@ impl SileroVad {
 #[cfg(feature = "onnx")]
 impl VoiceActivityDetector for SileroVad {
     fn reset(&mut self) {
-        self.state = vec![0.0f32; Self::STATE_SIZE];
+        self.state.fill(0.0);
         self.context.fill(0.0);
     }
 

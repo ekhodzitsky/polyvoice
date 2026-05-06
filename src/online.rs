@@ -61,12 +61,12 @@ impl OnlineDiarizer {
         let hop = self.config.hop_samples();
 
         while self.audio_buffer.len() >= window {
-            let window_samples: Vec<f32> = self.audio_buffer[..window].to_vec();
-            let embedding = extractor.extract(&window_samples, &self.config)?;
+            let window_start = self.total_samples;
+            let segment_end = window_start + window;
+            let embedding = extractor.extract(&self.audio_buffer[..window], &self.config)?;
             let (speaker, confidence) = self.cluster.assign(&embedding);
             self.current_speaker = Some(speaker);
 
-            let segment_end = self.total_samples + window;
             self.embedding_buffer
                 .push((segment_end, speaker, confidence));
 
@@ -76,9 +76,8 @@ impl OnlineDiarizer {
 
             new_segments.push(Segment {
                 time: TimeRange {
-                    start: (self.total_samples.saturating_sub(window) as f64)
-                        / self.config.sample_rate.get() as f64,
-                    end: (self.total_samples as f64) / self.config.sample_rate.get() as f64,
+                    start: window_start as f64 / self.config.sample_rate.get() as f64,
+                    end: segment_end as f64 / self.config.sample_rate.get() as f64,
                 },
                 speaker: Some(speaker),
                 confidence: Some(confidence),
@@ -108,7 +107,7 @@ impl OnlineDiarizer {
     /// ```
     pub fn align_words(&self, words: &mut [WordAlignment]) {
         for word in words.iter_mut() {
-            let mid_sample = ((word.time.start + word.time.end) / 2.0
+            let mid_sample = (((word.time.start + word.time.end) / 2.0)
                 * self.config.sample_rate.get() as f64) as usize;
 
             // Find the first window whose end_sample >= mid_sample.
@@ -167,6 +166,8 @@ impl OnlineDiarizer {
             return Ok(None);
         }
         let window = self.config.window_samples();
+        let window_start = self.total_samples;
+        let segment_end = window_start + window;
         let mut padded = vec![0.0f32; window];
         let copy_len = self.audio_buffer.len().min(window);
         padded[..copy_len].copy_from_slice(&self.audio_buffer[..copy_len]);
@@ -175,14 +176,13 @@ impl OnlineDiarizer {
         self.current_speaker = Some(speaker);
         self.total_samples += self.audio_buffer.len();
         self.embedding_buffer
-            .push((self.total_samples, speaker, confidence));
+            .push((segment_end, speaker, confidence));
         self.audio_buffer.clear();
 
         Ok(Some(Segment {
             time: TimeRange {
-                start: (self.total_samples.saturating_sub(window) as f64)
-                    / self.config.sample_rate.get() as f64,
-                end: (self.total_samples as f64) / self.config.sample_rate.get() as f64,
+                start: window_start as f64 / self.config.sample_rate.get() as f64,
+                end: segment_end as f64 / self.config.sample_rate.get() as f64,
             },
             speaker: Some(speaker),
             confidence: Some(confidence),

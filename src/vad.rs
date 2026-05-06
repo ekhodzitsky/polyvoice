@@ -146,7 +146,7 @@ pub fn segment_speech<V: VoiceActivityDetector>(
                 silence_count += 1;
                 if silence_count >= min_silence_frames {
                     let seg_end = (i + 1) * frame_size;
-                    let duration_frames = i + 1 - seg_start / frame_size;
+                    let duration_frames = (i + 1) - (seg_start / frame_size);
                     if duration_frames >= min_speech_frames {
                         segments.push((seg_start, seg_end));
                     }
@@ -165,7 +165,7 @@ pub fn segment_speech<V: VoiceActivityDetector>(
 
     if in_speech {
         let seg_end = num_frames * frame_size;
-        let duration_frames = num_frames - seg_start / frame_size;
+        let duration_frames = num_frames - (seg_start / frame_size);
         if duration_frames >= min_speech_frames {
             segments.push((seg_start, seg_end));
         }

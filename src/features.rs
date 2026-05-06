@@ -249,10 +249,7 @@ impl FbankExtractor {
                 .process(&mut buf, &mut spectrum)
                 .map_err(|e| FbankError::Fft(e.to_string()))?;
 
-            let mut power = vec![0.0f32; self.config.n_fft / 2 + 1];
-            for (i, c) in spectrum.iter().enumerate() {
-                power[i] = c.norm_sqr();
-            }
+            let power: Vec<f32> = spectrum.iter().map(|c| c.norm_sqr()).collect();
 
             let mut mel = vec![0.0f32; self.config.n_mels];
             for (i, filter) in self.mel_filters.iter().enumerate() {

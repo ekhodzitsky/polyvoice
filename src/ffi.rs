@@ -116,7 +116,7 @@ pub unsafe extern "C" fn polyvoice_diarizer_run(
         match d.extractor.extract(chunk, &d.config) {
             Ok(emb) => {
                 let (speaker, _conf) = d.cluster.assign(&emb);
-                let speaker_cstr = match CString::new(format!("SPEAKER_{:02}", speaker.0)) {
+                let speaker_cstr = match CString::new(speaker.to_string()) {
                     Ok(s) => s,
                     Err(_) => {
                         // Free already allocated strings before returning NULL.

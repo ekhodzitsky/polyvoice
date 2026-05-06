@@ -120,11 +120,7 @@ impl SpeakerCluster {
             .iter()
             .enumerate()
             .map(|(i, c)| {
-                let avg_conf = if c.count > 0 {
-                    c.confidence_sum / c.count as f32
-                } else {
-                    0.0
-                };
+                let avg_conf = c.confidence_sum / c.count as f32;
                 (SpeakerId(i as u32), c.vector.as_slice(), avg_conf)
             })
             .collect()
