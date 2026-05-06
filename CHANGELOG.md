@@ -9,12 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.2] - 2025-05-05
 
+### Added
+- PyPI package published: `pip install polyvoice` (macOS ARM64, Linux x86_64, Windows x86_64 wheels).
+- GitHub Release with prebuilt CLI binaries for Linux, macOS ARM64, Windows.
+
 ### Fixed
 - Clippy 1.95.0: `unnecessary_sort_by` fixed in `src/der.rs` and `benches/der_ami.rs`.
 - Miri CI: skip FFT-heavy `test_fbank_shape` under Miri; run only Miri-friendly test targets.
 - Python CI: replace `maturin develop` with `maturin build --release` + `pip install` for cross-platform stability.
-- Release workflow: added missing Rust toolchain to `python-wheels` job.
-- README: honest Python install instructions (`maturin develop` instead of non-existent `pip install`), added MSRV and Contributing links.
+- Release workflow: added missing Rust toolchain to `python-wheels` job; removed slow `macos-13` runner.
+- README: PyPI badge, honest Python install instructions, MSRV and Contributing links.
 
 ## [0.5.1] - 2025-05-05
 
