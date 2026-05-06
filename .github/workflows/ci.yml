@@ -59,7 +59,13 @@ jobs:
           key: clippy-${{ matrix.os }}-${{ hashFiles('Cargo.toml', '**/Cargo.toml', '**/Cargo.lock') }}
           cache-on-failure: false
       - name: cargo clippy
-        run: cargo clippy ${{ matrix.flags }} -- -D warnings
+        run: cargo clippy ${{ matrix.flags }} -- -D warnings 2>&1 | tee clippy.log
+      - name: upload clippy log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clippy-log-${{ matrix.os }}
+          path: clippy.log
 
   test:
     strategy:
