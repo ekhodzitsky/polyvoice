@@ -319,6 +319,9 @@ pub struct DiarizationConfig {
     pub max_gap_secs: f32,
     /// Minimum turn duration after merging, in seconds.
     pub min_turn_duration_secs: f32,
+    /// Minimum number of embeddings a speaker must have to be kept.
+    /// Speakers with fewer embeddings are merged into the nearest other speaker.
+    pub min_embeddings_per_speaker: usize,
     /// Sample rate expected by the embedding model (usually 16000).
     pub sample_rate: SampleRate,
     /// Clustering algorithm backend.
@@ -335,6 +338,7 @@ impl Default for DiarizationConfig {
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
             min_turn_duration_secs: 0.0,
+            min_embeddings_per_speaker: 2,
             sample_rate: SampleRate::default(),
             clustering_backend: ClusteringBackend::Ahc,
         }
