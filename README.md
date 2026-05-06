@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/polyvoice)](https://crates.io/crates/polyvoice)
+[![PyPI](https://img.shields.io/pypi/v/polyvoice)](https://pypi.org/project/polyvoice)
 [![Docs.rs](https://docs.rs/polyvoice/badge.svg)](https://docs.rs/polyvoice)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -67,11 +68,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Python
 
 ```bash
+pip install polyvoice
+```
+
+Or build from source:
+
+```bash
 cd python
 maturin develop --release
 ```
-
-PyPI package coming soon.
 
 ```python
 import polyvoice
