@@ -10,6 +10,8 @@
 >
 > Silero VAD + WeSpeaker embeddings + AHC clustering in a single `Pipeline::run()` call.
 
+![CLI Demo](docs/assets/demo.gif)
+
 ```
 Input:  14 seconds of two-speaker audio (16 kHz mono WAV)
 Output: SPEAKER_00: 0.10s -  7.60s
