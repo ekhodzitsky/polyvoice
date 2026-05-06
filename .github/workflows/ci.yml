@@ -55,6 +55,9 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy-${{ matrix.os }}-${{ hashFiles('Cargo.toml', '**/Cargo.toml', '**/Cargo.lock') }}
+          cache-on-failure: false
       - name: cargo clippy
         run: cargo clippy ${{ matrix.flags }} -- -D warnings
 
