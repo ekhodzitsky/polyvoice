@@ -67,8 +67,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Python
 
 ```bash
-pip install polyvoice  # or: cd python && maturin develop --release
+cd python
+maturin develop --release
 ```
+
+PyPI package coming soon.
 
 ```python
 import polyvoice
@@ -108,7 +111,7 @@ WAV / PCM audio (16 kHz mono)
 
 **VAD** detects speech regions, skipping silence. **WeSpeaker** extracts 256-dimensional speaker embeddings from log-mel filterbank features (80-bin, CMVN-normalized). **AHC** clusters embeddings by cosine similarity into speaker groups. The `Pipeline` wires it all together.
 
-## Why not pyannote?
+## Comparison with pyannote
 
 | | polyvoice | pyannote |
 |---|---|---|
@@ -121,6 +124,10 @@ WAV / PCM audio (16 kHz mono)
 | Streaming | `OnlineDiarizer` built-in | Third-party wrappers |
 
 pyannote is the gold standard for accuracy. polyvoice trades some accuracy for deployment simplicity: no Python runtime, no GPU required, ~30 MB total.
+
+## Minimum Supported Rust Version (MSRV)
+
+1.85 (Rust 2024 edition).
 
 ## Accuracy (DER benchmarks)
 
@@ -219,6 +226,14 @@ for seg in segments {
 - [x] DER benchmarks on AMI (27.5% on full test set, 0.25s collar)
 - [ ] Spectral clustering backend
 - [ ] PLDA scoring backend
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
