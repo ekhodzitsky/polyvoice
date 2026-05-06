@@ -106,7 +106,10 @@ jobs:
           components: miri
       - uses: Swatinem/rust-cache@v2
       - name: cargo miri test
-        run: cargo miri test --features ffi
+        run: |
+          cargo miri test --features ffi --lib
+          cargo miri test --features ffi --test integration
+          cargo miri test --features ffi --test test_ahc
         env:
           MIRIFLAGS: "-Zmiri-disable-isolation"
 
