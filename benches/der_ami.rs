@@ -12,11 +12,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 /// DER = (false_alarm + missed_speech + speaker_confusion) / total_reference_speech
 ///
 /// Uses a simplified frame-based approach at 100ms resolution.
-fn compute_der(
-    reference: &[(f64, f64, &str)],
-    hypothesis: &[(f64, f64, u32)],
-    collar: f64,
-) -> f64 {
+fn compute_der(reference: &[(f64, f64, &str)], hypothesis: &[(f64, f64, u32)], collar: f64) -> f64 {
     if reference.is_empty() {
         return 0.0;
     }
@@ -34,8 +30,8 @@ fn compute_der(
     for &(start, end, speaker) in reference {
         let s = ((start + collar) / resolution).ceil() as usize;
         let e = ((end - collar) / resolution).floor() as usize;
-        for i in s..e.min(n_frames) {
-            ref_frames[i] = Some(speaker);
+        for frame in ref_frames.iter_mut().take(e.min(n_frames)).skip(s) {
+            *frame = Some(speaker);
         }
     }
 
@@ -43,8 +39,8 @@ fn compute_der(
     for &(start, end, speaker) in hypothesis {
         let s = (start / resolution).ceil() as usize;
         let e = (end / resolution).floor() as usize;
-        for i in s..e.min(n_frames) {
-            hyp_frames[i] = Some(speaker);
+        for frame in hyp_frames.iter_mut().take(e.min(n_frames)).skip(s) {
+            *frame = Some(speaker);
         }
     }
 
@@ -100,17 +96,9 @@ fn compute_der(
 }
 
 fn bench_der_synthetic(c: &mut Criterion) {
-    let reference: Vec<(f64, f64, &str)> = vec![
-        (0.0, 3.0, "A"),
-        (3.5, 6.0, "B"),
-        (6.5, 10.0, "A"),
-    ];
+    let reference: Vec<(f64, f64, &str)> = vec![(0.0, 3.0, "A"), (3.5, 6.0, "B"), (6.5, 10.0, "A")];
 
-    let perfect_hyp: Vec<(f64, f64, u32)> = vec![
-        (0.0, 3.0, 0),
-        (3.5, 6.0, 1),
-        (6.5, 10.0, 0),
-    ];
+    let perfect_hyp: Vec<(f64, f64, u32)> = vec![(0.0, 3.0, 0), (3.5, 6.0, 1), (6.5, 10.0, 0)];
 
     let der = compute_der(&reference, &perfect_hyp, 0.0);
     eprintln!("Synthetic DER (perfect): {:.1}%", der * 100.0);
@@ -124,7 +112,10 @@ fn bench_der_synthetic(c: &mut Criterion) {
 
     let der2 = compute_der(&reference, &imperfect_hyp, 0.0);
     eprintln!("Synthetic DER (confused): {:.1}%", der2 * 100.0);
-    assert!(der2 > 0.1, "confused hypothesis should have significant DER");
+    assert!(
+        der2 > 0.1,
+        "confused hypothesis should have significant DER"
+    );
 
     c.bench_function("der_synthetic", |b| {
         b.iter(|| compute_der(&reference, &perfect_hyp, 0.25));

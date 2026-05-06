@@ -65,11 +65,11 @@ pub use offline::OfflineDiarizer;
 pub use online::OnlineDiarizer;
 pub use overlap::{OverlapRegion, detect_overlaps};
 pub use pipeline::{Pipeline, PipelineError};
+pub use silero_vad::SileroVad;
 pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate, Seconds, Segment,
     SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
 };
-pub use silero_vad::SileroVad;
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
 
 #[cfg(feature = "onnx")]

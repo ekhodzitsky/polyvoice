@@ -43,11 +43,7 @@ fn test_ahc_single_speaker() {
 
 #[test]
 fn test_ahc_all_different() {
-    let embeddings = vec![
-        unit_vec(256, 0),
-        unit_vec(256, 1),
-        unit_vec(256, 2),
-    ];
+    let embeddings = vec![unit_vec(256, 0), unit_vec(256, 1), unit_vec(256, 2)];
 
     let labels = agglomerative_cluster(&embeddings, 0.99);
     assert_ne!(labels[0], labels[1]);

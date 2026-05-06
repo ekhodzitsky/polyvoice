@@ -92,10 +92,10 @@ pub fn compute_der(
         // Count correctly matched pairs
         let mut n_correct = 0u64;
         for h in hyp_spk {
-            if let Some(&mapped_ref) = mapping.get(h) {
-                if ref_spk.contains(&mapped_ref) {
-                    n_correct += 1;
-                }
+            if let Some(&mapped_ref) = mapping.get(h)
+                && ref_spk.contains(&mapped_ref)
+            {
+                n_correct += 1;
             }
         }
         n_correct = n_correct.min(n_ref);
@@ -143,8 +143,12 @@ fn build_collar_mask(
         for boundary in [turn.time.start, turn.time.end] {
             let start_frame = ((boundary - collar).max(0.0) / resolution) as usize;
             let end_frame = ((boundary + collar) / resolution).ceil() as usize;
-            for i in start_frame..end_frame.min(n_frames) {
-                mask[i] = true;
+            for item in mask
+                .iter_mut()
+                .take(end_frame.min(n_frames))
+                .skip(start_frame)
+            {
+                *item = true;
             }
         }
     }
@@ -152,16 +156,16 @@ fn build_collar_mask(
     mask
 }
 
-fn build_speaker_frames(
-    turns: &[SpeakerTurn],
-    resolution: f64,
-    n_frames: usize,
-) -> Vec<Vec<u32>> {
+fn build_speaker_frames(turns: &[SpeakerTurn], resolution: f64, n_frames: usize) -> Vec<Vec<u32>> {
     let mut frames: Vec<Vec<u32>> = vec![Vec::new(); n_frames];
     for turn in turns {
         let start_frame = (turn.time.start / resolution) as usize;
         let end_frame = (turn.time.end / resolution).ceil() as usize;
-        for frame in frames.iter_mut().take(end_frame.min(n_frames)).skip(start_frame) {
+        for frame in frames
+            .iter_mut()
+            .take(end_frame.min(n_frames))
+            .skip(start_frame)
+        {
             if !frame.contains(&turn.speaker.0) {
                 frame.push(turn.speaker.0);
             }
@@ -251,7 +255,11 @@ mod tests {
         let reference = vec![turn(0, 0.0, 3.0), turn(1, 3.5, 6.0), turn(0, 6.5, 10.0)];
         let hypothesis = vec![turn(0, 0.0, 3.0), turn(1, 3.5, 6.0), turn(0, 6.5, 10.0)];
         let result = compute_der(&reference, &hypothesis, 0.0);
-        assert!(result.der < 0.01, "perfect match DER should be ~0, got {}", result.der);
+        assert!(
+            result.der < 0.01,
+            "perfect match DER should be ~0, got {}",
+            result.der
+        );
     }
 
     #[test]
@@ -259,7 +267,11 @@ mod tests {
         let reference = vec![turn(0, 0.0, 3.0), turn(1, 3.5, 6.0)];
         let hypothesis = vec![turn(5, 0.0, 3.0), turn(9, 3.5, 6.0)];
         let result = compute_der(&reference, &hypothesis, 0.0);
-        assert!(result.der < 0.01, "swapped IDs should map correctly, got DER={}", result.der);
+        assert!(
+            result.der < 0.01,
+            "swapped IDs should map correctly, got DER={}",
+            result.der
+        );
     }
 
     #[test]
@@ -285,7 +297,11 @@ mod tests {
         // Both segments attributed to same speaker
         let hypothesis = vec![turn(0, 0.0, 6.0)];
         let result = compute_der(&reference, &hypothesis, 0.0);
-        assert!(result.confusion_rate > 0.3, "should have confusion, got {}", result);
+        assert!(
+            result.confusion_rate > 0.3,
+            "should have confusion, got {}",
+            result
+        );
     }
 
     #[test]

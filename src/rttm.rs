@@ -88,7 +88,9 @@ pub fn group_by_file(segments: &[RttmSegment]) -> HashMap<&str, Vec<&RttmSegment
 }
 
 /// Convert RTTM segments to SpeakerTurns with string→SpeakerId mapping.
-pub fn to_speaker_turns(segments: &[RttmSegment]) -> (Vec<SpeakerTurn>, HashMap<String, SpeakerId>) {
+pub fn to_speaker_turns(
+    segments: &[RttmSegment],
+) -> (Vec<SpeakerTurn>, HashMap<String, SpeakerId>) {
     let mut speaker_map: HashMap<String, SpeakerId> = HashMap::new();
     let mut next_id = 0u32;
 
@@ -170,12 +172,18 @@ SPEAKER file1 1 2.0 1.0 <NA> <NA> B <NA> <NA>
         let turns = vec![
             SpeakerTurn {
                 speaker: SpeakerId(0),
-                time: TimeRange { start: 0.5, end: 2.8 },
+                time: TimeRange {
+                    start: 0.5,
+                    end: 2.8,
+                },
                 text: None,
             },
             SpeakerTurn {
                 speaker: SpeakerId(1),
-                time: TimeRange { start: 3.0, end: 4.5 },
+                time: TimeRange {
+                    start: 3.0,
+                    end: 4.5,
+                },
                 text: None,
             },
         ];
@@ -191,9 +199,24 @@ SPEAKER file1 1 2.0 1.0 <NA> <NA> B <NA> <NA>
     #[test]
     fn to_speaker_turns_mapping() {
         let segments = vec![
-            RttmSegment { file_id: "f".into(), start: 0.0, duration: 1.0, speaker: "Alice".into() },
-            RttmSegment { file_id: "f".into(), start: 1.5, duration: 2.0, speaker: "Bob".into() },
-            RttmSegment { file_id: "f".into(), start: 4.0, duration: 1.0, speaker: "Alice".into() },
+            RttmSegment {
+                file_id: "f".into(),
+                start: 0.0,
+                duration: 1.0,
+                speaker: "Alice".into(),
+            },
+            RttmSegment {
+                file_id: "f".into(),
+                start: 1.5,
+                duration: 2.0,
+                speaker: "Bob".into(),
+            },
+            RttmSegment {
+                file_id: "f".into(),
+                start: 4.0,
+                duration: 1.0,
+                speaker: "Alice".into(),
+            },
         ];
         let (turns, map) = to_speaker_turns(&segments);
         assert_eq!(turns.len(), 3);
