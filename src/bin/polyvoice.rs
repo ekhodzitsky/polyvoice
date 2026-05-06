@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use polyvoice::{
-    DiarizationConfig, FbankOnnxExtractor, Pipeline, SampleRate, SileroVad, VadConfig,
+    ClusteringBackend, DiarizationConfig, FbankOnnxExtractor, Pipeline, SampleRate, SileroVad, VadConfig,
 };
 use std::path::{Path, PathBuf};
 
@@ -37,6 +37,10 @@ enum Command {
         /// Output format
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+
+        /// Clustering backend (ahc | kmeans)
+        #[arg(long, default_value = "ahc")]
+        backend: String,
     },
     /// Download ONNX models (WeSpeaker + Silero VAD)
     DownloadModels {
@@ -70,9 +74,10 @@ fn main() {
             max_speakers,
             threshold,
             format,
+            backend,
         } => {
             let model_dir = model_dir.unwrap_or_else(default_model_dir);
-            if let Err(e) = run_diarize(&file, &model_dir, max_speakers, threshold, format) {
+            if let Err(e) = run_diarize(&file, &model_dir, max_speakers, threshold, format, backend) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }
@@ -93,6 +98,7 @@ fn run_diarize(
     max_speakers: usize,
     threshold: f32,
     format: OutputFormat,
+    backend: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wespeaker_path = model_dir.join("wespeaker_resnet34.onnx");
     let vad_path = model_dir.join("silero_vad.onnx");
@@ -110,10 +116,17 @@ fn run_diarize(
     let extractor = FbankOnnxExtractor::new(&wespeaker_path, 256, 4)?;
     let mut vad = SileroVad::new(&vad_path, 512)?;
 
+    let backend = match backend.as_str() {
+        "kmeans" => ClusteringBackend::KMeans,
+        "spectral" => ClusteringBackend::Spectral,
+        "auto" => ClusteringBackend::Auto,
+        _ => ClusteringBackend::Ahc,
+    };
     let config = DiarizationConfig {
         threshold,
         max_speakers,
-        sample_rate: SampleRate::new(16000).ok_or("invalid sample rate")?,
+        sample_rate: SampleRate::default(),
+        clustering_backend: backend,
         ..Default::default()
     };
     let vad_config = VadConfig::default();

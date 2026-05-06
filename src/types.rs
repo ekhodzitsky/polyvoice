@@ -251,6 +251,7 @@ impl TimeRange {
     /// assert_eq!(tr.duration(), 2.5);
     /// ```
     pub fn duration(&self) -> f64 {
+        debug_assert!(self.end >= self.start, "TimeRange invariant violated: end < start");
         self.end - self.start
     }
 }
@@ -294,6 +295,14 @@ pub struct DiarizationResult {
 }
 
 /// Configuration shared between online and offline diarizers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ClusteringBackend {
+    Ahc,
+    KMeans,
+    Spectral,
+    Auto,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct DiarizationConfig {
     /// Cosine similarity threshold for assigning to an existing speaker.
@@ -308,8 +317,12 @@ pub struct DiarizationConfig {
     pub min_speech_secs: f32,
     /// Maximum gap between same-speaker segments to merge, in seconds.
     pub max_gap_secs: f32,
+    /// Minimum turn duration after merging, in seconds.
+    pub min_turn_duration_secs: f32,
     /// Sample rate expected by the embedding model (usually 16000).
     pub sample_rate: SampleRate,
+    /// Clustering algorithm backend.
+    pub clustering_backend: ClusteringBackend,
 }
 
 impl Default for DiarizationConfig {
@@ -321,7 +334,9 @@ impl Default for DiarizationConfig {
             hop_secs: 0.75,
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
-            sample_rate: SampleRate(16000),
+            min_turn_duration_secs: 0.0,
+            sample_rate: SampleRate::default(),
+            clustering_backend: ClusteringBackend::Ahc,
         }
     }
 }

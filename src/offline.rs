@@ -109,7 +109,7 @@ impl OfflineDiarizer {
         }
 
         // Merge adjacent segments with the same speaker and small gaps.
-        segments = merge_segments(segments, self.config.max_gap_secs as f64);
+        segments = crate::utils::merge_segments(segments, self.config.max_gap_secs as f64);
 
         // Remove very short segments (< min_speech_secs).
         segments.retain(|s| s.time.duration() >= self.config.min_speech_secs as f64);
@@ -129,31 +129,6 @@ impl OfflineDiarizer {
             })
             .collect()
     }
-}
-
-/// Merge adjacent segments with the same speaker if the gap between them
-/// is less than `max_gap_secs`.
-fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment> {
-    if segments.is_empty() {
-        return segments;
-    }
-    let mut merged = Vec::new();
-    let mut current = segments[0].clone();
-
-    for next in segments.into_iter().skip(1) {
-        if current.speaker == next.speaker && next.time.start - current.time.end <= max_gap_secs {
-            current.time.end = next.time.end;
-            // Average confidence.
-            if let (Some(c1), Some(c2)) = (current.confidence, next.confidence) {
-                current.confidence = Some((c1 + c2) / 2.0);
-            }
-        } else {
-            merged.push(current);
-            current = next;
-        }
-    }
-    merged.push(current);
-    merged
 }
 
 #[cfg(test)]
@@ -227,7 +202,7 @@ mod tests {
                 confidence: Some(0.7),
             },
         ];
-        let merged = merge_segments(segs, 0.5);
+        let merged = crate::utils::merge_segments(segs, 0.5);
         assert_eq!(merged.len(), 2);
         assert!((merged[0].time.end - 2.0).abs() < 1e-5);
     }

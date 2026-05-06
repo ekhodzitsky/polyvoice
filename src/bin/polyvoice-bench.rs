@@ -8,7 +8,7 @@ use clap::Parser;
 use polyvoice::der::{DerResult, compute_der};
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
 use polyvoice::silero_vad::SileroVad;
-use polyvoice::vad::VadConfig;
+use polyvoice::vad::{VadConfig, VoiceActivityDetector};
 use polyvoice::{DiarizationConfig, FbankOnnxExtractor, Pipeline, SpeakerTurn};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -37,6 +37,26 @@ struct Args {
     /// Print per-file results
     #[arg(long, default_value = "true")]
     verbose: bool,
+
+    /// Clustering backend (ahc, kmeans, or spectral)
+    #[arg(long, default_value = "ahc")]
+    backend: String,
+
+    /// Minimum turn duration in seconds (filters short turns)
+    #[arg(long, default_value = "0.0")]
+    min_turn_duration: f32,
+
+    /// Maximum gap between same-speaker segments to merge (seconds)
+    #[arg(long, default_value = "0.5")]
+    max_gap: f32,
+
+    /// Window size for embedding extraction (seconds)
+    #[arg(long, default_value = "1.5")]
+    window_secs: f32,
+
+    /// Hop length between consecutive windows (seconds)
+    #[arg(long, default_value = "0.75")]
+    hop_secs: f32,
 }
 
 struct FileResult {
@@ -72,10 +92,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = DiarizationConfig {
         threshold: args.threshold,
+        clustering_backend: match args.backend.as_str() {
+            "kmeans" => polyvoice::ClusteringBackend::KMeans,
+            "spectral" => polyvoice::ClusteringBackend::Spectral,
+            "auto" => polyvoice::ClusteringBackend::Auto,
+            _ => polyvoice::ClusteringBackend::Ahc,
+        },
+        min_turn_duration_secs: args.min_turn_duration,
+        max_gap_secs: args.max_gap,
+        window_secs: args.window_secs,
+        hop_secs: args.hop_secs,
         ..Default::default()
     };
     let vad_config = VadConfig::default();
     let pipeline = Pipeline::new(config, vad_config);
+    let mut vad = SileroVad::new(&args.model_dir.join("silero_vad.onnx"), 512)?;
 
     eprintln!("Threshold: {}, Collar: {}s", args.threshold, args.collar);
     eprintln!("---");
@@ -105,7 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Load and process audio
         let start = Instant::now();
-        let (samples, _sr) = match polyvoice::wav::read_wav(&wav_path) {
+        let (samples, sr) = match polyvoice::wav::read_wav(&wav_path) {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("[error] {} — {}", file_id, e);
@@ -113,9 +144,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
-        let duration_secs = samples.len() as f64 / 16000.0;
+        let duration_secs = samples.len() as f64 / sr as f64;
 
-        let mut vad = SileroVad::new(&args.model_dir.join("silero_vad.onnx"), 512)?;
+        vad.reset();
         let result = match pipeline.run(&samples, &extractor, &mut vad) {
             Ok(r) => r,
             Err(e) => {
@@ -198,6 +229,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("Collar:      {:.2}s", args.collar);
     println!("Threshold:   {:.2}", args.threshold);
+    println!("Backend:     {}", args.backend);
+    println!("Min turn:    {:.2}s", args.min_turn_duration);
+    println!("Max gap:     {:.2}s", args.max_gap);
+    println!("Window:      {:.2}s", args.window_secs);
+    println!("Hop:         {:.2}s", args.hop_secs);
     println!();
     println!("  DER:           {:.1}%", avg_der * 100.0);
     println!(

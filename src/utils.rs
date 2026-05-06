@@ -56,6 +56,33 @@ pub fn l2_normalize(vec: &mut [f32]) {
     }
 }
 
+/// Compute cosine similarity between an f32 slice and an f64 slice.
+///
+/// Returns `0.0` for zero vectors or length mismatches.
+pub fn cosine_similarity_f32_f64(a: &[f32], b: &[f64]) -> f32 {
+    if a.len() != b.len() {
+        tracing::warn!(
+            "cosine_similarity_f32_f64 length mismatch: {} vs {}, returning 0.0",
+            a.len(),
+            b.len()
+        );
+        return 0.0;
+    }
+    let mut dot = 0.0f32;
+    let mut norm_a = 0.0f32;
+    let mut norm_b = 0.0f32;
+    for (&x, &y) in a.iter().zip(b.iter()) {
+        let y = y as f32;
+        dot += x * y;
+        norm_a += x * x;
+        norm_b += y * y;
+    }
+    if norm_a < 1e-8 || norm_b < 1e-8 {
+        return 0.0;
+    }
+    dot / (norm_a.sqrt() * norm_b.sqrt())
+}
+
 /// Compute the element-wise mean of a list of vectors.
 ///
 /// Returns `None` if the input slice is empty.
@@ -109,6 +136,45 @@ pub fn moving_average(data: &[f32], window: usize) -> Vec<f32> {
         result.push(avg);
     }
     result
+}
+
+use crate::types::Segment;
+
+/// Merge adjacent segments with the same speaker if the gap between them
+/// is less than `max_gap_secs`.
+///
+/// ```rust
+/// use polyvoice::{merge_segments, Segment, SpeakerId, TimeRange};
+/// let segs = vec![
+///     Segment { time: TimeRange { start: 0.0, end: 1.0 }, speaker: Some(SpeakerId(0)), confidence: Some(0.8) },
+///     Segment { time: TimeRange { start: 1.2, end: 2.0 }, speaker: Some(SpeakerId(0)), confidence: Some(0.9) },
+///     Segment { time: TimeRange { start: 2.5, end: 3.0 }, speaker: Some(SpeakerId(1)), confidence: None },
+/// ];
+/// let merged = merge_segments(segs, 0.5);
+/// assert_eq!(merged.len(), 2);
+/// assert!((merged[0].time.end - 2.0).abs() < 1e-5);
+/// ```
+pub fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment> {
+    if segments.is_empty() {
+        return segments;
+    }
+    let mut merged = Vec::new();
+    let mut current = segments[0].clone();
+
+    for next in segments.into_iter().skip(1) {
+        if current.speaker == next.speaker && next.time.start - current.time.end <= max_gap_secs {
+            current.time.end = next.time.end;
+            // Average confidence when both sides have it.
+            if let (Some(c1), Some(c2)) = (current.confidence, next.confidence) {
+                current.confidence = Some((c1 + c2) / 2.0);
+            }
+        } else {
+            merged.push(current);
+            current = next;
+        }
+    }
+    merged.push(current);
+    merged
 }
 
 #[cfg(test)]
