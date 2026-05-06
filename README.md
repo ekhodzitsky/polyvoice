@@ -144,14 +144,14 @@ Evaluated with 0.25s collar on standard diarization benchmarks:
 
 | System | DER | Miss | FA | Confusion | Speed |
 |--------|-----|------|-----|-----------|-------|
-| **polyvoice** (AHC, t=0.4) | **16.4%** | 3.9% | 3.2% | 9.3% | **10.6x RT (CPU)** |
+| **polyvoice** (AHC, t=0.45) | **16.4%** | 3.9% | 3.2% | 9.3% | **10.6x RT (CPU)** |
 | pyannote 3.0 | ~11% | — | — | — | ~1x RT (GPU) |
 
 ### AMI (16 meetings, 9 hours — meeting room recordings)
 
 | System | DER | Miss | FA | Confusion | Speed |
 |--------|-----|------|-----|-----------|-------|
-| **polyvoice** (AHC, t=0.4) | **27.5%** | 17.7% | 2.2% | 7.6% | 7x RT (CPU) |
+| **polyvoice** (AHC, t=0.45) | **~24.5%** | 15.4% | 3.5% | 5.6% | 7x RT (CPU) |
 | pyannote 3.0 | ~18% | — | — | — | ~1x RT (GPU) |
 | Simple i-vector + AHC | ~33% | — | — | — | — |
 
@@ -242,7 +242,7 @@ for seg in segments {
 - [x] Python bindings (PyO3 / maturin)
 - [x] CLI tool (`polyvoice diarize` / `download-models`)
 - [x] DER benchmarks on AMI (27.5%) and VoxConverse (16.4%), 0.25s collar
-- [ ] Spectral clustering backend
+- [x] Spectral clustering backend (experimental)
 - [ ] PLDA scoring backend
 
 ## Contributing

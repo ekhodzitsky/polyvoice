@@ -328,7 +328,7 @@ pub struct DiarizationConfig {
 impl Default for DiarizationConfig {
     fn default() -> Self {
         Self {
-            threshold: 0.4,
+            threshold: 0.45,
             max_speakers: 64,
             window_secs: 1.5,
             hop_secs: 0.75,
