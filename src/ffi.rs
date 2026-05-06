@@ -208,5 +208,5 @@ pub unsafe extern "C" fn polyvoice_result_free(
 pub extern "C" fn polyvoice_version() -> *const c_char {
     // SAFETY: C ABI entry point returning a static nul-terminated string.
     // SAFETY: c-string literal has static lifetime and is nul-terminated.
-    c"0.5.1".as_ptr() as *const c_char
+    c"0.5.2".as_ptr() as *const c_char
 }
