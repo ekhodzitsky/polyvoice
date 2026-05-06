@@ -75,6 +75,7 @@ pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_spe
 #[cfg(feature = "onnx")]
 #[allow(deprecated)]
 pub use ecapa::EcapaTdnnExtractor;
+#[cfg(feature = "onnx")]
 pub use ecapa::FbankOnnxExtractor;
 #[cfg(feature = "onnx")]
 pub use onnx::OnnxEmbeddingExtractor;

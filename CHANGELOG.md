@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-05-05
+
+### Fixed
+- `FbankOnnxExtractor` re-export now correctly guarded by `#[cfg(feature = "onnx")]` (fixes `cargo publish` verification failure).
+- Applied `cargo fmt` across entire codebase.
+- Fixed all clippy warnings (`collapsible_if`, `needless_range_loop`, `unnecessary_map_or`).
+
+## [0.5.0] - 2025-05-05
+
+### Added
+- DER (Diarization Error Rate) computation with collar support and optimal speaker mapping.
+- RTTM parser (`src/rttm.rs`) for ground-truth evaluation.
+- Agglomerative hierarchical clustering (`src/ahc.rs`) for offline re-clustering.
+- Silero VAD integration (`src/silero_vad.rs`) via ONNX.
+- `Pipeline` struct for end-to-end diarization (VAD → embed → cluster → turns).
+- `FbankOnnxExtractor` — unified fbank + ONNX extractor.
+- CLI binaries: `polyvoice` (main CLI) and `polyvoice-bench` (DER benchmark on datasets).
+- WAV reader with stereo downmix (`src/wav.rs`).
+- CMVN (Cepstral Mean and Variance Normalization) in fbank pipeline.
+- VoxConverse test set download scripts.
+
 ## [0.4.3] - 2025-05-05
 
 ### Fixed
