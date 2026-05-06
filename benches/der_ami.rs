@@ -56,7 +56,7 @@ fn compute_der(reference: &[(f64, f64, &str)], hypothesis: &[(f64, f64, u32)], c
     let mut mapping: std::collections::HashMap<u32, &str> = std::collections::HashMap::new();
     let mut used_ref: std::collections::HashSet<&str> = std::collections::HashSet::new();
     let mut pairs: Vec<((&str, u32), usize)> = overlap.into_iter().collect();
-    pairs.sort_by(|a, b| b.1.cmp(&a.1));
+    pairs.sort_by_key(|a| std::cmp::Reverse(a.1));
     for ((r, h), _) in pairs {
         if !mapping.contains_key(&h) && !used_ref.contains(r) {
             mapping.insert(h, r);
