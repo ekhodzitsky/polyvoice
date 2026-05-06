@@ -58,6 +58,10 @@ struct Args {
     #[arg(long, default_value = "0.75")]
     hop_secs: f32,
 
+    /// Minimum embeddings per speaker (speakers with fewer are merged)
+    #[arg(long, default_value = "2")]
+    min_embeddings: usize,
+
     /// VAD speech probability threshold
     #[arg(long, default_value = "0.5")]
     vad_threshold: f32,
@@ -110,6 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_gap_secs: args.max_gap,
         window_secs: args.window_secs,
         hop_secs: args.hop_secs,
+        min_embeddings_per_speaker: args.min_embeddings,
         ..Default::default()
     };
     let vad_config = VadConfig {

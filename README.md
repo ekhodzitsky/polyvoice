@@ -144,14 +144,14 @@ Evaluated with 0.25s collar on standard diarization benchmarks:
 
 | System | DER | Miss | FA | Confusion | Speed |
 |--------|-----|------|-----|-----------|-------|
-| **polyvoice** (AHC, t=0.45) | **16.4%** | 3.9% | 3.2% | 9.3% | **10.6x RT (CPU)** |
+| **polyvoice** (AHC, t=0.45, me=2) | **~15%** | 3.9% | 3.2% | 7.9% | **10.6x RT (CPU)** |
 | pyannote 3.0 | ~11% | — | — | — | ~1x RT (GPU) |
 
 ### AMI (16 meetings, 9 hours — meeting room recordings)
 
 | System | DER | Miss | FA | Confusion | Speed |
 |--------|-----|------|-----|-----------|-------|
-| **polyvoice** (AHC, t=0.45) | **~24.5%** | 15.4% | 3.5% | 5.6% | 7x RT (CPU) |
+| **polyvoice** (AHC, t=0.45, me=2) | **~23%** | 15.4% | 3.5% | 4.1% | 7x RT (CPU) |
 | pyannote 3.0 | ~18% | — | — | — | ~1x RT (GPU) |
 | Simple i-vector + AHC | ~33% | — | — | — | — |
 
@@ -186,12 +186,14 @@ cargo run --release --features cli --bin polyvoice-bench -- data/voxconverse-tes
 use polyvoice::{DiarizationConfig, VadConfig, SampleRate};
 
 let config = DiarizationConfig {
-    threshold: 0.4,           // cosine similarity threshold
+    threshold: 0.45,          // cosine similarity threshold
     max_speakers: 64,         // hard speaker limit
     window_secs: 1.5,         // analysis window
     hop_secs: 0.75,           // sliding step
     min_speech_secs: 0.25,    // discard shorter segments
     max_gap_secs: 0.5,        // merge same-speaker gaps under 500 ms
+    min_turn_duration_secs: 1.0,  // filter turns shorter than 1s
+    min_embeddings_per_speaker: 2, // merge speakers with <2 embeddings
     sample_rate: SampleRate::new(16000).unwrap(),
 };
 
@@ -241,8 +243,9 @@ for seg in segments {
 - [x] Cross-platform CI
 - [x] Python bindings (PyO3 / maturin)
 - [x] CLI tool (`polyvoice diarize` / `download-models`)
-- [x] DER benchmarks on AMI (27.5%) and VoxConverse (16.4%), 0.25s collar
+- [x] DER benchmarks on AMI (~23%) and VoxConverse (~15%), 0.25s collar
 - [x] Spectral clustering backend (experimental)
+- [x] Merge-small-speakers post-processing
 - [ ] PLDA scoring backend
 
 ## Contributing
