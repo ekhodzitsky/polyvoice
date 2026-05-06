@@ -194,7 +194,7 @@ fn greedy_speaker_mapping(
     }
 
     let mut pairs: Vec<((u32, u32), u64)> = cooccurrence.into_iter().collect();
-    pairs.sort_by(|a, b| b.1.cmp(&a.1));
+    pairs.sort_by_key(|a| std::cmp::Reverse(a.1));
 
     let mut mapping: HashMap<u32, u32> = HashMap::new();
     let mut used_ref: HashSet<u32> = HashSet::new();
