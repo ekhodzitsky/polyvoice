@@ -355,6 +355,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_fbank_shape() {
         let config = FbankConfig::default();
         let samples = vec![0.0f32; 16000 * 2]; // 2 seconds
