@@ -9,14 +9,15 @@ use polyvoice::der::{DerResult, compute_der};
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
 use polyvoice::silero_vad::SileroVad;
 use polyvoice::vad::VadConfig;
-use polyvoice::{
-    DiarizationConfig, FbankOnnxExtractor, Pipeline, SpeakerTurn,
-};
+use polyvoice::{DiarizationConfig, FbankOnnxExtractor, Pipeline, SpeakerTurn};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[derive(Parser)]
-#[command(name = "polyvoice-bench", about = "DER benchmark on annotated datasets")]
+#[command(
+    name = "polyvoice-bench",
+    about = "DER benchmark on annotated datasets"
+)]
 struct Args {
     /// Path to dataset directory (expects audio/ and rttm/ subdirs)
     data_dir: PathBuf,
@@ -59,22 +60,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    // Find RTTM file
-    let rttm_path = find_rttm(&rttm_dir)?;
-    eprintln!("RTTM: {}", rttm_path.display());
-
-    // Parse ground truth
-    let all_segments = parse_rttm_file(&rttm_path)?;
+    // Parse ground truth from all RTTM files in directory
+    let all_segments = load_all_rttm(&rttm_dir)?;
     let grouped = group_by_file(&all_segments);
     eprintln!("Files in RTTM: {}", grouped.len());
 
     // Load models
     eprintln!("Loading models from {}...", args.model_dir.display());
-    let extractor = FbankOnnxExtractor::new(
-        &args.model_dir.join("wespeaker_resnet34.onnx"),
-        256,
-        4,
-    )?;
+    let extractor =
+        FbankOnnxExtractor::new(&args.model_dir.join("wespeaker_resnet34.onnx"), 256, 4)?;
 
     let config = DiarizationConfig {
         threshold: args.threshold,
@@ -164,16 +158,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("---");
 
     if results.is_empty() {
-        eprintln!("No files processed. Download AMI test set first:");
+        eprintln!("No files processed. Download a test set first:");
         eprintln!("  bash scripts/download-ami-test.sh");
+        eprintln!("  bash scripts/download-voxconverse-test.sh");
         std::process::exit(1);
     }
 
     // Aggregate results
     let total_speech: f64 = results.iter().map(|r| r.der.total_speech).sum();
-    let total_miss: f64 = results.iter().map(|r| r.der.miss_rate * r.der.total_speech).sum();
-    let total_fa: f64 = results.iter().map(|r| r.der.false_alarm_rate * r.der.total_speech).sum();
-    let total_conf: f64 = results.iter().map(|r| r.der.confusion_rate * r.der.total_speech).sum();
+    let total_miss: f64 = results
+        .iter()
+        .map(|r| r.der.miss_rate * r.der.total_speech)
+        .sum();
+    let total_fa: f64 = results
+        .iter()
+        .map(|r| r.der.false_alarm_rate * r.der.total_speech)
+        .sum();
+    let total_conf: f64 = results
+        .iter()
+        .map(|r| r.der.confusion_rate * r.der.total_speech)
+        .sum();
 
     let avg_der = if total_speech > 0.0 {
         (total_miss + total_fa + total_conf) / total_speech
@@ -187,18 +191,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("=== DER Benchmark Results ===");
     println!("Dataset:     {}", args.data_dir.display());
-    println!("Files:       {} processed, {} skipped", results.len(), skipped);
+    println!(
+        "Files:       {} processed, {} skipped",
+        results.len(),
+        skipped
+    );
     println!("Collar:      {:.2}s", args.collar);
     println!("Threshold:   {:.2}", args.threshold);
     println!();
     println!("  DER:           {:.1}%", avg_der * 100.0);
-    println!("  Miss rate:     {:.1}%", (total_miss / total_speech) * 100.0);
+    println!(
+        "  Miss rate:     {:.1}%",
+        (total_miss / total_speech) * 100.0
+    );
     println!("  False alarm:   {:.1}%", (total_fa / total_speech) * 100.0);
-    println!("  Confusion:     {:.1}%", (total_conf / total_speech) * 100.0);
+    println!(
+        "  Confusion:     {:.1}%",
+        (total_conf / total_speech) * 100.0
+    );
     println!();
-    println!("  Total speech:  {:.0}s ({:.1} min)", total_speech, total_speech / 60.0);
-    println!("  Total audio:   {:.0}s ({:.1} min)", total_audio, total_audio / 60.0);
-    println!("  Processing:    {:.1}s ({:.1} min)", total_proc, total_proc / 60.0);
+    println!(
+        "  Total speech:  {:.0}s ({:.1} min)",
+        total_speech,
+        total_speech / 60.0
+    );
+    println!(
+        "  Total audio:   {:.0}s ({:.1} min)",
+        total_audio,
+        total_audio / 60.0
+    );
+    println!(
+        "  Processing:    {:.1}s ({:.1} min)",
+        total_proc,
+        total_proc / 60.0
+    );
     println!("  RTF:           {:.3}", total_proc / total_audio);
     println!();
 
@@ -216,18 +242,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn find_rttm(rttm_dir: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+fn load_all_rttm(
+    rttm_dir: &Path,
+) -> Result<Vec<polyvoice::rttm::RttmSegment>, Box<dyn std::error::Error>> {
+    let mut all_segments = Vec::new();
     if rttm_dir.is_file() {
-        return Ok(rttm_dir.to_path_buf());
+        eprintln!("RTTM: {}", rttm_dir.display());
+        return Ok(parse_rttm_file(rttm_dir)?);
     }
-    for entry in std::fs::read_dir(rttm_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension().map_or(false, |e| e == "rttm") {
-            return Ok(path);
-        }
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(rttm_dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "rttm"))
+        .collect();
+    paths.sort();
+    if paths.is_empty() {
+        return Err(format!("No .rttm files found in {}", rttm_dir.display()).into());
     }
-    Err(format!("No .rttm files found in {}", rttm_dir.display()).into())
+    if paths.len() == 1 {
+        eprintln!("RTTM: {}", paths[0].display());
+    } else {
+        eprintln!("RTTM: {} files in {}", paths.len(), rttm_dir.display());
+    }
+    for path in &paths {
+        all_segments.extend(parse_rttm_file(path)?);
+    }
+    Ok(all_segments)
 }
 
 fn find_audio(audio_dir: &Path, file_id: &str) -> Option<PathBuf> {

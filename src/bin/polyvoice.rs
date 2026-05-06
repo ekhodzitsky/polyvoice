@@ -5,7 +5,11 @@ use polyvoice::{
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "polyvoice", version, about = "Speaker diarization — who spoke when")]
+#[command(
+    name = "polyvoice",
+    version,
+    about = "Speaker diarization — who spoke when"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -156,10 +160,7 @@ fn run_diarize(
             println!("{}", serde_json::to_string_pretty(&entries)?);
         }
         OutputFormat::Rttm => {
-            let file_id = file
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("audio");
+            let file_id = file.file_stem().and_then(|s| s.to_str()).unwrap_or("audio");
             for turn in &result.turns {
                 let dur = turn.time.end - turn.time.start;
                 println!(

@@ -52,9 +52,8 @@ impl SileroVad {
         let sr_tensor = ort::value::TensorRef::from_array_view(&sr_array)
             .map_err(|e| VadError::Model(e.to_string()))?;
 
-        let state_array =
-            ndarray::Array3::from_shape_vec((2, 1, 128), self.state.clone())
-                .map_err(|e| VadError::Model(e.to_string()))?;
+        let state_array = ndarray::Array3::from_shape_vec((2, 1, 128), self.state.clone())
+            .map_err(|e| VadError::Model(e.to_string()))?;
         let state_tensor = ort::value::TensorRef::from_array_view(&state_array)
             .map_err(|e| VadError::Model(e.to_string()))?;
 
@@ -120,10 +119,7 @@ pub struct SileroVad;
 
 #[cfg(not(feature = "onnx"))]
 impl SileroVad {
-    pub fn new(
-        _model_path: &std::path::Path,
-        _chunk_size: usize,
-    ) -> Result<Self, anyhow::Error> {
+    pub fn new(_model_path: &std::path::Path, _chunk_size: usize) -> Result<Self, anyhow::Error> {
         anyhow::bail!("the `onnx` feature is not enabled")
     }
 }
