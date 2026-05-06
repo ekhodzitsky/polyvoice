@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.11", "3.12", "3.13"]
@@ -19,12 +20,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - name: Install maturin
         run: pip install maturin pytest
-      - name: Build and install
-        run: maturin develop --release
+      - name: Build wheel
+        run: maturin build --release --out dist
+      - name: Install wheel
+        run: pip install dist/*.whl
+        shell: bash
       - name: Run tests
         run: pytest tests/ -v
