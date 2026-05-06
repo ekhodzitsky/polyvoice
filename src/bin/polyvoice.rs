@@ -31,7 +31,7 @@ enum Command {
         max_speakers: usize,
 
         /// Cosine similarity threshold for clustering
-        #[arg(long, default_value = "0.5")]
+        #[arg(long, default_value = "0.45")]
         threshold: f32,
 
         /// Output format

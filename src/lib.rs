@@ -52,6 +52,7 @@ pub mod rttm;
 pub mod silero_vad;
 pub mod types;
 pub mod utils;
+pub use utils::merge_segments;
 pub mod vad;
 pub mod wav;
 
