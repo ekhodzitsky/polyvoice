@@ -63,9 +63,11 @@ jobs:
         working-directory: python
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: Swatinem/rust-cache@v2
       - name: Install maturin
         run: pip install maturin
       - name: Build wheel
