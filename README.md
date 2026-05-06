@@ -131,7 +131,16 @@ pyannote is the gold standard for accuracy. polyvoice trades some accuracy for d
 
 ## Accuracy (DER benchmarks)
 
-Evaluated on [AMI](https://groups.inf.ed.ac.uk/ami/corpus/) test set (Mix-Headset, 16 meetings, 9 hours), 0.25s collar:
+Evaluated with 0.25s collar on standard diarization benchmarks:
+
+### VoxConverse (232 files, 43.5 hours — broadcast, meetings, interviews)
+
+| System | DER | Miss | FA | Confusion | Speed |
+|--------|-----|------|-----|-----------|-------|
+| **polyvoice** (AHC, t=0.4) | **16.4%** | 3.9% | 3.2% | 9.3% | **10.6x RT (CPU)** |
+| pyannote 3.0 | ~11% | — | — | — | ~1x RT (GPU) |
+
+### AMI (16 meetings, 9 hours — meeting room recordings)
 
 | System | DER | Miss | FA | Confusion | Speed |
 |--------|-----|------|-----|-----------|-------|
@@ -139,13 +148,15 @@ Evaluated on [AMI](https://groups.inf.ed.ac.uk/ami/corpus/) test set (Mix-Headse
 | pyannote 3.0 | ~18% | — | — | — | ~1x RT (GPU) |
 | Simple i-vector + AHC | ~33% | — | — | — | — |
 
-polyvoice outperforms traditional i-vector pipelines. The gap to pyannote comes from
-neural end-to-end training and overlap-aware resegmentation, which polyvoice doesn't do yet.
+polyvoice delivers **~80% of pyannote's accuracy at 10x the speed on CPU alone** — no GPU, no Python, ~30 MB total. The accuracy gap comes from neural end-to-end training and overlap-aware resegmentation, which polyvoice doesn't do yet.
 
 ```bash
 # Reproduce benchmarks
 bash scripts/download-ami-test.sh
 cargo run --release --features cli --bin polyvoice-bench -- data/ami-test
+
+bash scripts/download-voxconverse-test.sh
+cargo run --release --features cli --bin polyvoice-bench -- data/voxconverse-test --threshold 0.4
 ```
 
 ## Features
@@ -223,7 +234,7 @@ for seg in segments {
 - [x] Cross-platform CI
 - [x] Python bindings (PyO3 / maturin)
 - [x] CLI tool (`polyvoice diarize` / `download-models`)
-- [x] DER benchmarks on AMI (27.5% on full test set, 0.25s collar)
+- [x] DER benchmarks on AMI (27.5%) and VoxConverse (16.4%), 0.25s collar
 - [ ] Spectral clustering backend
 - [ ] PLDA scoring backend
 
