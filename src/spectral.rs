@@ -4,8 +4,8 @@
 //! Auto-selects k via eigengap heuristic.
 
 use crate::utils::cosine_similarity;
-use faer::prelude::*;
 use faer::Side;
+use faer::prelude::*;
 
 /// Run spectral clustering with automatic k selection.
 pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {
@@ -39,9 +39,7 @@ pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {
     }
 
     // Degree matrix D.
-    let deg: Vec<f64> = (0..n)
-        .map(|i| aff[i * n..i * n + n].iter().sum())
-        .collect();
+    let deg: Vec<f64> = (0..n).map(|i| aff[i * n..i * n + n].iter().sum()).collect();
 
     // Normalized Laplacian: L = I - D^{-1/2} A D^{-1/2}
     let mut lap = Mat::zeros(n, n);
@@ -224,7 +222,11 @@ fn kmeans_on_features(features: &[Vec<f64>], k: usize, max_iter: usize) -> Vec<u
 }
 
 fn euclidean_distance(a: &[f64], b: &[f64]) -> f64 {
-    a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (x - y).powi(2))
+        .sum::<f64>()
+        .sqrt()
 }
 
 fn compute_bic(features: &[Vec<f64>], labels: &[usize], k: usize) -> f64 {

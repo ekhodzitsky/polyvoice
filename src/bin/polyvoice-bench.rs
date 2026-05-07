@@ -31,7 +31,7 @@ struct Args {
     collar: f64,
 
     /// Cosine similarity threshold for AHC
-    #[arg(long, default_value = "0.5")]
+    #[arg(long, default_value = "0.45")]
     threshold: f32,
 
     /// Print per-file results
@@ -57,6 +57,18 @@ struct Args {
     /// Hop length between consecutive windows (seconds)
     #[arg(long, default_value = "0.75")]
     hop_secs: f32,
+
+    /// Minimum embeddings per speaker (speakers with fewer are merged)
+    #[arg(long, default_value = "2")]
+    min_embeddings: usize,
+
+    /// VAD speech probability threshold
+    #[arg(long, default_value = "0.5")]
+    vad_threshold: f32,
+
+    /// VAD minimum silence to split segments (milliseconds)
+    #[arg(long, default_value = "300")]
+    vad_silence_ms: f32,
 }
 
 struct FileResult {
@@ -102,9 +114,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_gap_secs: args.max_gap,
         window_secs: args.window_secs,
         hop_secs: args.hop_secs,
+        min_embeddings_per_speaker: args.min_embeddings,
         ..Default::default()
     };
-    let vad_config = VadConfig::default();
+    let vad_config = VadConfig {
+        threshold: args.vad_threshold,
+        min_silence_ms: args.vad_silence_ms,
+        ..Default::default()
+    };
     let pipeline = Pipeline::new(config, vad_config);
     let mut vad = SileroVad::new(&args.model_dir.join("silero_vad.onnx"), 512)?;
 

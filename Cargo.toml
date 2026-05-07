@@ -1,6 +1,6 @@
 [package]
 name = "polyvoice"
-version = "0.5.2"
+version = "0.6.0-alpha.0"
 edition = "2024"
 description = "Speaker diarization library for Rust — online and offline, ONNX-powered, ecosystem-agnostic"
 license = "MIT"
@@ -12,13 +12,29 @@ categories = ["multimedia::audio", "science"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
-# Enable ONNX-based embedding extractors (pulls ort).
+default = ["spectral"]
+# ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
-# Enable C FFI bindings.
+# C FFI bindings.
 ffi = []
-# Enable CLI binary (polyvoice command).
-cli = ["onnx", "dep:clap", "dep:ureq", "dep:dirs"]
+# Library-level model registry with HTTP downloads + SHA-256 verification.
+download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2"]
+# CLI binary (polyvoice command).
+cli = ["onnx", "download", "dep:clap"]
+
+# Execution providers (forward `ort` features). Used by Pipeline implementations from M1+.
+coreml = ["onnx", "ort/coreml"]
+nnapi = ["onnx", "ort/nnapi"]
+xnnpack = ["onnx", "ort/xnnpack"]
+
+# Spectral clustering backend (pulls faer for SVD/eigendecomp).
+spectral = ["dep:faer"]
+
+# Model profile bundles. M0 only emits metadata; CLI uses these to pick which
+# manifest entries to ensure(). M5 will introduce INT8 model variants.
+profile-mobile = []
+profile-balanced = []
+profile-all = ["profile-mobile", "profile-balanced"]
 
 [dependencies]
 # ONNX Runtime — matches the ecosystem version.
@@ -50,8 +66,10 @@ num-complex = "0.4"
 clap = { version = "4", features = ["derive", "env"], optional = true }
 ureq = { version = "3", optional = true }
 dirs = { version = "6", optional = true }
-faer = { version = "0.24.0", features = ["std"] }
+faer = { version = "0.24.0", features = ["std"], optional = true }
 fastrand = "2.4.1"
+toml = { version = "0.8", optional = true }
+sha2 = { version = "0.10", optional = true }
 
 [dev-dependencies]
 hound = "3.5"
