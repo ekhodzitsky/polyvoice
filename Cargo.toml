@@ -12,7 +12,7 @@ categories = ["multimedia::audio", "science"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["spectral", "segmentation"]
+default = ["spectral", "segmentation", "embedder"]
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
 # C FFI bindings.
@@ -34,6 +34,12 @@ spectral = ["dep:faer"]
 # The pure-Rust algorithmic core (decoder, aggregator, hungarian) compiles to
 # wasm32-clean. The ONNX-backed `PowersetSegmenter` additionally requires `onnx`.
 segmentation = []
+
+# v1.0 Embedder trait + CAM++/ResNet34 adapters + EmbedderPool + overlap masking.
+# The pure-Rust algorithmic core (trait, overlap mask, pool with mock backend)
+# compiles to wasm32-clean. The ONNX-backed `CamPlusPlusExtractor` and
+# `ResNet34Adapter` additionally require `onnx`.
+embedder = []
 
 # Model profile bundles. M0 only emits metadata; CLI uses these to pick which
 # manifest entries to ensure(). M5 will introduce INT8 model variants.
