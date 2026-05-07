@@ -33,14 +33,14 @@
 //! ```
 
 pub mod ahc;
-pub mod kmeans;
-pub mod spectral;
 pub mod cluster;
 pub mod der;
 pub mod embedding;
 pub mod features;
 #[cfg(feature = "ffi")]
 pub mod ffi;
+pub mod kmeans;
+pub mod spectral;
 pub use features::{FbankConfig, FbankExtractor};
 // Deprecated: `compute_fbank` is still accessible via `polyvoice::features::compute_fbank`
 // but no longer re-exported at the crate root. Use `FbankExtractor::extract` instead.
@@ -55,6 +55,9 @@ pub mod utils;
 pub use utils::merge_segments;
 pub mod vad;
 pub mod wav;
+
+#[cfg(feature = "download")]
+pub mod models;
 
 #[cfg(feature = "onnx")]
 pub mod ecapa;
