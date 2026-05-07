@@ -27,6 +27,15 @@ Thumbs.db
 # ONNX model files (should be downloaded, not committed)
 *.onnx
 
+# M5 — quantization tooling artifacts (downloaded data + INT8 build outputs + venv)
+.venv-m5/
+data/voxconverse-dev/audio/
+data/voxconverse-dev/rttm/
+data/voxceleb1-subset/wav/
+data/voxceleb1-subset/lists/
+models/int8/*.onnx
+models/int8/*.onnx.data
+
 # Benchmark data and results
 /data/
 /bench-results/
