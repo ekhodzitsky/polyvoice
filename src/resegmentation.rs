@@ -36,6 +36,11 @@ pub trait Resegmenter: Send + Sync {
     /// embedding dimensions, `primary_speaker` presence) run before duration
     /// filtering. A short overlap region with an invalid primary speaker
     /// returns `MissingPrimaryCentroid`, not silent success.
+    ///
+    /// **Fast path:** when `inputs.speaker_centroids.len() < 2` or
+    /// `inputs.overlap_regions` is empty, `inputs.primary_turns` is returned
+    /// sorted without further validation; no error is produced even if a
+    /// would-be overlap region had an invalid primary or dim.
     fn resegment(&self, inputs: ResegmentInputs<'_>) -> Result<Vec<SpeakerTurn>, ResegmentError>;
 }
 
