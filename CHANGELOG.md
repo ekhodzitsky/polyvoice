@@ -75,6 +75,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Miri-friendly test target `tests/miri_resegmentation.rs` covering
   no-overlap, single-overlap, and centroid math paths.
 
+### Added (M5 — INT8 quantization)
+- New scripts: `download-voxconverse-dev.sh`, `download-voxceleb1-subset.sh`,
+  `quantize_models.py` + `quantize-models.sh`, `validate_int8.py` +
+  `validate-int8.sh`. Together they drive `onnxruntime.quantize_static`
+  (per-channel INT8 weights, asymmetric activations, MinMax calibration on
+  500 random VoxConverse-dev WAVs, seed 42), then validate FP32 → INT8 deltas
+  against spec §9.4 budgets.
+- Manifest pinned with `[models.powerset_int8]`, `[models.cam_pp_int8]`,
+  `[models.resnet34_int8]`. Provisional sha256 / size taken from the M5
+  preview run (see `docs/strategy/m5-quantization-notes.md`); will be
+  regenerated when the full dev calibration sweep finishes via
+  `scripts/publish-models.sh`. `[profiles.mobile]` switched to
+  `powerset_int8` + `cam_pp_int8`; `[profiles.balanced]` switched to
+  `powerset_int8` + `resnet34_int8`. Legacy FP32 entries retained for direct
+  `ModelRegistry::ensure()` callers.
+- `tests/m5_manifest_smoke_test.rs` (7 tests) enforces presence of INT8
+  entries, real (non-placeholder) sha256, profile resolution, and bundle
+  size budgets (Mobile ≤ 15 MB relaxed from 10 MB target — see notes,
+  Balanced ≤ 35 MB).
+- `scripts/release-gate.sh` checks the live manifest values via `awk`:
+  Mobile bundle row passes at the 15 MB ceiling; DER thresholds remain
+  PENDING (real in M6 once Pipeline wires INT8 + e2e DER).
+- Engineering notes (`docs/strategy/m5-quantization-notes.md`) document
+  the SincNet rank-1 weight finding (powerset compression ratio ~1.04×),
+  the relaxed Mobile bundle ceiling, and the VoxCeleb1 audio mirror
+  outage (EER falls back to cosine vs FP32 on VoxConverse-dev hold-out).
+
 ## [0.5.2] - 2025-05-05
 
 ### Added

@@ -243,14 +243,15 @@ mod tests {
     }
 
     #[test]
-    fn both_profiles_resolve_to_legacy_models_in_m0() {
-        // Documented assumption: until M2/M5, both profiles map to the same
-        // physical models. Remove this test when CAM++ lands in M2.
+    fn profiles_share_segmenter_diverge_on_embedder_in_m5() {
+        // M5+: Mobile and Balanced share the same INT8 segmenter (powerset)
+        // but diverge on the embedder (CAM++ for Mobile, ResNet34 for Balanced).
+        // Replaces the M0 stub `both_profiles_resolve_to_legacy_models_in_m0`.
         let m = default_manifest();
         let mob = m.profile("mobile").unwrap();
         let bal = m.profile("balanced").unwrap();
         assert_eq!(mob.segmenter, bal.segmenter);
-        assert_eq!(mob.embedder, bal.embedder);
+        assert_ne!(mob.embedder, bal.embedder);
     }
 
     #[test]

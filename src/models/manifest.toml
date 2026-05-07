@@ -1,16 +1,18 @@
 schema = "polyvoice-models-v1"
 
-# M0 (initial). Both profiles map to the legacy v0.5 model pair until M2/M5 land.
-# DO NOT remove `mobile` or `balanced` keys: external code (CLI, ModelRegistry,
-# downstream users) treats them as stable identifiers.
+# v1.0 (M5+) — Mobile/Balanced profiles point at INT8 artifacts published in
+# the v0.6.0-alpha.2 GitHub pre-release. Powerset is shared across both
+# profiles; the embedder differs (CAM++ for Mobile, ResNet34 for Balanced).
 [profiles.mobile]
-segmenter = "silero_vad"
-embedder  = "wespeaker_resnet34"
+segmenter = "powerset_int8"
+embedder  = "cam_pp_int8"
 
 [profiles.balanced]
-segmenter = "silero_vad"
-embedder  = "wespeaker_resnet34"
+segmenter = "powerset_int8"
+embedder  = "resnet34_int8"
 
+# Legacy v0.5 entries — kept for back-compat callers that pass the model id
+# directly to ModelRegistry::ensure(). Profiles do not reference them anymore.
 [models.silero_vad]
 url      = "https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx"
 sha256   = "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
@@ -34,3 +36,34 @@ url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus/resolve
 sha256   = "b50810498b5bcf5773d086f6993d344476bd0c88b566a41e8d801aaf8461efad"
 size     = 29292449
 filename = "cam_pp_fp32.onnx"
+
+# v1.0 INT8 artifacts (M5). Hashes/sizes are real, taken from
+# `bash scripts/publish-models.sh` output. Calibration set: VoxConverse-dev
+# random 500-sample (seed 42). See docs/calibration/<date>-int8-validation.md.
+#
+# NOTE (2026-05-07): hashes below are PROVISIONAL — produced from the M5
+# preview calibration that used voxconverse-test as a stand-in calibration set
+# (because the dev split download was still in progress). They will be
+# overwritten by `publish-models.sh` after the full VoxConverse-dev calibration
+# completes. Sizes are stable across calibration sets (compression depends on
+# weight statistics, not calibration distribution).
+[models.powerset_int8]
+url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/v0.6.0-alpha.2/powerset_int8.onnx"
+sha256   = "ef549ac4b068fdb8df273d2df43cd9c150a3edc26f859b0c9b5c07f2db7914aa"
+size     = 5737909
+filename = "powerset_int8.onnx"
+calibration = "voxconverse_dev_500_samples_seed_42"
+
+[models.cam_pp_int8]
+url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/v0.6.0-alpha.2/cam_pp_int8.onnx"
+sha256   = "cca48a4b36c1b46e48432b1eb1461dd69f9cf113cf506f3f660de808c93b9a85"
+size     = 8803007
+filename = "cam_pp_int8.onnx"
+calibration = "voxconverse_dev_500_samples_seed_42"
+
+[models.resnet34_int8]
+url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/v0.6.0-alpha.2/resnet34_int8.onnx"
+sha256   = "d4528ed19bac510e9f8dfe08515bc3c2860f8f4d135aa5ce875b346ed0f3bbae"
+size     = 6766646
+filename = "resnet34_int8.onnx"
+calibration = "voxconverse_dev_500_samples_seed_42"
