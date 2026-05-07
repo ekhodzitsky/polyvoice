@@ -40,7 +40,9 @@ fn ensure_for_profile_mobile_downloads_and_verifies() {
 fn ensure_for_profile_custom_returns_explicit_error() {
     let tmp = TempDir::new().unwrap();
     let r = ModelRegistry::with_cache_dir(tmp.path()).unwrap();
-    let err = r.ensure_for_profile(Profile::Custom).expect_err("must reject");
+    let err = r
+        .ensure_for_profile(Profile::Custom)
+        .expect_err("must reject");
     let msg = format!("{err}");
     assert!(msg.contains("custom"), "got: {msg}");
 }
