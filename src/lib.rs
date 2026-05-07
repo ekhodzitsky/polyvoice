@@ -40,6 +40,7 @@ pub mod features;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 pub mod kmeans;
+#[cfg(feature = "spectral")]
 pub mod spectral;
 pub use features::{FbankConfig, FbankExtractor};
 // Deprecated: `compute_fbank` is still accessible via `polyvoice::features::compute_fbank`

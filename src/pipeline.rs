@@ -6,6 +6,7 @@
 use crate::ahc::{agglomerative_cluster, agglomerative_cluster_auto};
 use crate::embedding::EmbeddingExtractor;
 use crate::kmeans::kmeans_auto_k;
+#[cfg(feature = "spectral")]
 use crate::spectral::spectral_cluster;
 use crate::types::ClusteringBackend;
 use crate::types::{
@@ -103,7 +104,13 @@ impl Pipeline {
         let raw_labels = match self.config.clustering_backend {
             ClusteringBackend::Ahc => agglomerative_cluster(&embeddings, self.config.threshold),
             ClusteringBackend::KMeans => kmeans_auto_k(&embeddings, self.config.max_speakers, 100),
+            #[cfg(feature = "spectral")]
             ClusteringBackend::Spectral => spectral_cluster(&embeddings, self.config.max_speakers),
+            #[cfg(not(feature = "spectral"))]
+            ClusteringBackend::Spectral => {
+                tracing::debug!("spectral feature disabled, falling back to AHC");
+                agglomerative_cluster(&embeddings, self.config.threshold)
+            }
             ClusteringBackend::Auto => agglomerative_cluster_auto(&embeddings).0,
         };
 
