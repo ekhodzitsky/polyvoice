@@ -12,7 +12,7 @@ categories = ["multimedia::audio", "science"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["spectral"]
+default = ["spectral", "segmentation"]
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
 # C FFI bindings.
@@ -29,6 +29,11 @@ xnnpack = ["onnx", "ort/xnnpack"]
 
 # Spectral clustering backend (pulls faer for SVD/eigendecomp).
 spectral = ["dep:faer"]
+
+# Powerset speaker segmentation (sherpa-onnx-pyannote-segmentation-3-0).
+# The pure-Rust algorithmic core (decoder, aggregator, hungarian) compiles to
+# wasm32-clean. The ONNX-backed `PowersetSegmenter` additionally requires `onnx`.
+segmentation = []
 
 # Model profile bundles. M0 only emits metadata; CLI uses these to pick which
 # manifest entries to ensure(). M5 will introduce INT8 model variants.
