@@ -51,6 +51,113 @@ pub enum EmbedderError {
     Legacy(String),
 }
 
+/// Zero-fill audio samples in regions where the segmenter flagged a 2-speaker
+/// overlap. The returned `Vec<f32>` is a copy of `audio` with zeros in the
+/// `(start_secs, end_secs)` ranges listed in `overlap_regions`.
+///
+/// Out-of-bounds and inverted (end < start) regions are silently clamped or
+/// skipped — never panics.
+///
+/// **Pure Rust, no allocations beyond the output Vec, wasm32-clean.**
+pub fn apply_overlap_mask(
+    audio: &[f32],
+    overlap_regions: &[(f32, f32)],
+    sample_rate: u32,
+) -> Vec<f32> {
+    let mut out = audio.to_vec();
+    if out.is_empty() {
+        return out;
+    }
+    let sr = sample_rate as f32;
+    for &(start_s, end_s) in overlap_regions {
+        if !end_s.is_finite() || !start_s.is_finite() || end_s <= start_s {
+            continue;
+        }
+        let start = (start_s * sr).max(0.0).floor() as usize;
+        let end = (end_s * sr).max(0.0).ceil() as usize;
+        let end = end.min(out.len());
+        if start >= end || start >= out.len() {
+            continue;
+        }
+        for v in &mut out[start..end] {
+            *v = 0.0;
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod overlap_mask_tests {
+    use super::*;
+
+    #[test]
+    fn no_overlap_regions_pass_through() {
+        let audio = vec![1.0_f32; 16_000];
+        let masked = apply_overlap_mask(&audio, &[], 16_000);
+        assert_eq!(masked, audio);
+    }
+
+    #[test]
+    fn single_overlap_region_is_zeroed() {
+        let audio = vec![1.0_f32; 16_000];
+        let masked = apply_overlap_mask(&audio, &[(0.5, 0.7)], 16_000);
+        for i in 0..audio.len() {
+            if (8000..11200).contains(&i) {
+                assert_eq!(masked[i], 0.0, "sample {i} should be zeroed");
+            } else {
+                assert_eq!(masked[i], 1.0, "sample {i} should pass through");
+            }
+        }
+    }
+
+    #[test]
+    fn empty_input_returns_empty() {
+        let masked = apply_overlap_mask(&[], &[(0.0, 1.0)], 16_000);
+        assert!(masked.is_empty());
+    }
+
+    #[test]
+    fn out_of_bounds_overlap_is_clamped() {
+        let audio = vec![1.0_f32; 100];
+        let masked = apply_overlap_mask(&audio, &[(0.5, 1.0)], 16_000);
+        assert_eq!(masked, audio, "out-of-bounds overlap is a no-op");
+    }
+
+    #[test]
+    fn negative_overlap_start_is_clamped_to_zero() {
+        let audio = vec![1.0_f32; 16_000];
+        let masked = apply_overlap_mask(&audio, &[(-1.0, 0.5)], 16_000);
+        for i in 0..8000 {
+            assert_eq!(masked[i], 0.0);
+        }
+        for i in 8000..16_000 {
+            assert_eq!(masked[i], 1.0);
+        }
+    }
+
+    #[test]
+    fn multiple_overlap_regions_all_zeroed() {
+        let audio = vec![1.0_f32; 16_000];
+        let masked = apply_overlap_mask(&audio, &[(0.1, 0.2), (0.5, 0.6), (0.9, 1.0)], 16_000);
+        let zero_ranges = [(1600..3200), (8000..9600), (14_400..16_000)];
+        for (i, &v) in masked.iter().enumerate() {
+            let in_zero = zero_ranges.iter().any(|r| r.contains(&i));
+            if in_zero {
+                assert_eq!(v, 0.0, "sample {i} should be zeroed");
+            } else {
+                assert_eq!(v, 1.0, "sample {i} should pass through");
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_overlap_with_end_before_start_is_no_op() {
+        let audio = vec![1.0_f32; 16_000];
+        let masked = apply_overlap_mask(&audio, &[(0.7, 0.5)], 16_000);
+        assert_eq!(masked, audio, "end<start is silently skipped");
+    }
+}
+
 #[cfg(test)]
 mod trait_tests {
     use super::*;
