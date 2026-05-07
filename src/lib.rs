@@ -72,6 +72,9 @@ pub use segmentation::{
 #[cfg(all(feature = "onnx", feature = "segmentation"))]
 pub use segmentation::{PowersetConfig, PowersetSegmenter};
 
+#[cfg(feature = "embedder")]
+pub mod embedder;
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]
