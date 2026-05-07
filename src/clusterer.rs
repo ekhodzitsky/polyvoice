@@ -39,6 +39,37 @@ pub enum ClustererError {
     AlgorithmFailed { detail: String },
 }
 
+/// AHC (agglomerative hierarchical clustering) wrapper exposing the legacy
+/// `crate::ahc::agglomerative_cluster_auto` through the v1.0 `Clusterer` trait.
+pub struct AhcClusterer {
+    max_clusters: usize,
+}
+
+impl AhcClusterer {
+    pub fn new(max_clusters: usize) -> Self {
+        Self { max_clusters: max_clusters.max(1) }
+    }
+}
+
+impl Default for AhcClusterer {
+    fn default() -> Self { Self::new(64) }
+}
+
+impl Clusterer for AhcClusterer {
+    fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
+        if embeddings.is_empty() {
+            return Err(ClustererError::TooFewEmbeddings { actual: 0, min: 1 });
+        }
+        if embeddings.len() == 1 {
+            return Ok(vec![0]);
+        }
+        let (labels, _threshold) = crate::ahc::agglomerative_cluster_auto(embeddings);
+        Ok(labels)
+    }
+
+    fn max_clusters(&self) -> usize { self.max_clusters }
+}
+
 #[cfg(test)]
 mod trait_tests {
     use super::*;
@@ -81,5 +112,54 @@ mod trait_tests {
         let err = ClustererError::TooFewEmbeddings { actual: 0, min: 1 };
         let msg = format!("{err}");
         assert!(msg.contains('0'));
+    }
+}
+
+#[cfg(test)]
+mod ahc_tests {
+    use super::*;
+
+    fn synth_two_clusters() -> Vec<Vec<f32>> {
+        vec![
+            vec![1.0, 0.05, 0.0], vec![0.95, 0.0, 0.05], vec![1.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0], vec![0.05, 0.95, 0.0], vec![0.0, 1.0, 0.05],
+        ]
+    }
+
+    fn synth_one_cluster() -> Vec<Vec<f32>> {
+        vec![vec![1.0, 0.0, 0.0]; 5]
+    }
+
+    #[test]
+    fn ahc_separates_two_well_separated_clusters() {
+        let c = AhcClusterer::default();
+        let labels = c.cluster(&synth_two_clusters()).unwrap();
+        assert_eq!(labels[0], labels[1]);
+        assert_eq!(labels[1], labels[2]);
+        assert_eq!(labels[3], labels[4]);
+        assert_eq!(labels[4], labels[5]);
+        assert_ne!(labels[0], labels[3]);
+    }
+
+    #[test]
+    fn ahc_collapses_one_cluster() {
+        let c = AhcClusterer::default();
+        let labels = c.cluster(&synth_one_cluster()).unwrap();
+        assert!(labels.iter().all(|&l| l == labels[0]));
+    }
+
+    #[test]
+    fn ahc_rejects_empty_input() {
+        let c = AhcClusterer::default();
+        let labels: &[Vec<f32>] = &[];
+        let err = c.cluster(labels).expect_err("empty must fail");
+        assert!(matches!(err, ClustererError::TooFewEmbeddings { .. }));
+    }
+
+    #[test]
+    fn ahc_handles_single_embedding() {
+        let c = AhcClusterer::default();
+        let labels = c.cluster(&[vec![1.0, 0.0, 0.0]]).unwrap();
+        assert_eq!(labels, vec![0]);
     }
 }
