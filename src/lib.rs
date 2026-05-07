@@ -60,6 +60,18 @@ pub mod wav;
 #[cfg(feature = "download")]
 pub mod models;
 
+#[cfg(feature = "segmentation")]
+pub mod segmentation;
+
+#[cfg(feature = "segmentation")]
+pub use segmentation::{
+    AggregationConfig, Aggregator, FrameLabel, MIN_AUDIO_SAMPLES, PowersetClass, PowersetDecoder,
+    RawSegment, SegmentationError, Segmenter, WindowOutput,
+};
+
+#[cfg(all(feature = "onnx", feature = "segmentation"))]
+pub use segmentation::{PowersetConfig, PowersetSegmenter};
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]

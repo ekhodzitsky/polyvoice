@@ -22,3 +22,9 @@ url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve
 sha256   = "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
 size     = 26534127
 filename = "wespeaker_resnet34.onnx"
+
+[models.powerset_fp32]
+url      = "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx"
+sha256   = "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
+size     = 5992913
+filename = "powerset_fp32.onnx"

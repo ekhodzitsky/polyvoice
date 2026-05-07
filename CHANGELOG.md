@@ -27,6 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (in `default`). Existing users see no behavior change; downstream consumers
   building with `--no-default-features` no longer pull `faer` (enables wasm32 builds).
 
+### Added (M1 — Powerset segmentation)
+- `polyvoice::segmentation` module: `Segmenter` trait, `RawSegment`, `SegmentationError`,
+  `PowersetSegmenter` (ONNX-backed), `PowersetDecoder`, `PowersetClass`, `FrameLabel`,
+  `Aggregator`, `WindowOutput`, `AggregationConfig`.
+- New Cargo feature `segmentation` (in default features). The pure-Rust algorithmic
+  core (decoder, aggregator, hungarian) is wasm32-clean; only `PowersetSegmenter`
+  additionally requires `onnx`.
+- In-tree Kuhn-Munkres minimum-cost assignment (~50 LOC) for sliding-window speaker
+  index alignment — no external dependency added.
+- New manifest entry `[models.powerset_fp32]` for sherpa-onnx-pyannote-segmentation-3-0.
+  Profiles still resolve to the legacy `silero_vad` segmenter; M6 swaps them.
+
 ## [0.5.2] - 2025-05-05
 
 ### Added
