@@ -9,6 +9,11 @@
 
 use crate::types::{SpeakerId, SpeakerTurn, TimeRange};
 
+/// Time-range equality tolerance (seconds) used by `extract_overlap_time_ranges`
+/// when matching pairs of `RawSegment`s that should occupy the same span.
+#[cfg(feature = "segmentation")]
+const TIME_RANGE_EPS_SECS: f64 = 1e-6;
+
 /// Speaker resegmenter — given primary single-speaker turns, cluster centroids,
 /// and per-overlap-region embeddings, returns a (possibly overlap-aware) flat
 /// list of `SpeakerTurn`s where overlap regions may produce two turns over the
@@ -87,10 +92,7 @@ pub enum ResegmentError {
 /// empty — never panics.
 ///
 /// **Pure Rust, wasm32-clean.**
-pub fn compute_centroids(
-    embeddings: &[Vec<f32>],
-    labels: &[usize],
-) -> Vec<SpeakerCentroid> {
+pub fn compute_centroids(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<SpeakerCentroid> {
     if embeddings.len() != labels.len() || embeddings.is_empty() {
         return Vec::new();
     }
@@ -105,7 +107,7 @@ pub fn compute_centroids(
         let owned: Vec<Vec<f32>> = members.iter().map(|e| (*e).clone()).collect();
         if let Some(mut mean) = crate::utils::mean_vector(&owned) {
             crate::utils::l2_normalize(&mut mean);
-            // SpeakerId is u32; clamp to its range conservatively.
+            // Truncating cast; cluster labels are well within u32 range in practice.
             let id = SpeakerId(lbl as u32);
             out.push(SpeakerCentroid {
                 speaker: id,
@@ -146,8 +148,8 @@ pub fn extract_overlap_time_ranges(
             if a.local_speaker_idx == b.local_speaker_idx {
                 continue;
             }
-            if (a.time.start - b.time.start).abs() > 1e-6
-                || (a.time.end - b.time.end).abs() > 1e-6
+            if (a.time.start - b.time.start).abs() > TIME_RANGE_EPS_SECS
+                || (a.time.end - b.time.end).abs() > TIME_RANGE_EPS_SECS
             {
                 continue;
             }
@@ -260,18 +262,16 @@ mod centroid_tests {
 
     #[test]
     fn compute_centroids_l2_normalized() {
-        let embeddings = vec![
-            unit(3, 0),
-            unit(3, 0),
-            unit(3, 1),
-            unit(3, 1),
-        ];
+        let embeddings = vec![unit(3, 0), unit(3, 0), unit(3, 1), unit(3, 1)];
         let labels = vec![0, 0, 1, 1];
         let centroids = compute_centroids(&embeddings, &labels);
         assert_eq!(centroids.len(), 2);
         for c in &centroids {
             let n: f32 = c.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-            assert!((n - 1.0).abs() < 1e-3, "centroid not L2-normalized: norm={n}");
+            assert!(
+                (n - 1.0).abs() < 1e-3,
+                "centroid not L2-normalized: norm={n}"
+            );
         }
     }
 
@@ -328,10 +328,7 @@ mod overlap_extract_tests {
     fn extract_returns_pairs_for_simultaneous_overlap_segments() {
         // Two RawSegments with the same time range and is_overlap = true:
         // aggregator's canonical overlap output.
-        let segs = vec![
-            raw(0.0, 1.0, 0, true),
-            raw(0.0, 1.0, 1, true),
-        ];
+        let segs = vec![raw(0.0, 1.0, 0, true), raw(0.0, 1.0, 1, true)];
         let pairs = extract_overlap_time_ranges(&segs);
         assert_eq!(pairs.len(), 1);
         assert!((pairs[0].0.start - 0.0).abs() < 1e-6);
@@ -343,10 +340,7 @@ mod overlap_extract_tests {
 
     #[test]
     fn extract_ignores_non_overlap_segments() {
-        let segs = vec![
-            raw(0.0, 1.0, 0, false),
-            raw(0.0, 1.0, 1, false),
-        ];
+        let segs = vec![raw(0.0, 1.0, 0, false), raw(0.0, 1.0, 1, false)];
         let pairs = extract_overlap_time_ranges(&segs);
         assert!(pairs.is_empty());
     }
@@ -373,5 +367,23 @@ mod overlap_extract_tests {
         assert_eq!(pairs[0].2, 1);
         assert_eq!(pairs[1].1, 1);
         assert_eq!(pairs[1].2, 2);
+    }
+
+    #[test]
+    fn extract_three_way_overlap_emits_all_three_pairs() {
+        // Three RawSegments at the same time range with distinct local indices.
+        // The O(N²) loop should emit all (0,1), (0,2), (1,2) pairs.
+        let segs = vec![
+            raw(0.0, 1.0, 0, true),
+            raw(0.0, 1.0, 1, true),
+            raw(0.0, 1.0, 2, true),
+        ];
+        let pairs = extract_overlap_time_ranges(&segs);
+        assert_eq!(pairs.len(), 3);
+        let local_pairs: std::collections::HashSet<(u8, u8)> =
+            pairs.iter().map(|p| (p.1, p.2)).collect();
+        assert!(local_pairs.contains(&(0, 1)));
+        assert!(local_pairs.contains(&(0, 2)));
+        assert!(local_pairs.contains(&(1, 2)));
     }
 }
