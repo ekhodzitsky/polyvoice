@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use polyvoice::{
-    ClusteringBackend, DiarizationConfig, FbankOnnxExtractor, Pipeline, SampleRate, SileroVad, VadConfig,
+    ClusteringBackend, DiarizationConfig, FbankOnnxExtractor, Pipeline, SampleRate, SileroVad,
+    VadConfig,
 };
 use std::path::{Path, PathBuf};
 
@@ -42,11 +43,19 @@ enum Command {
         #[arg(long, default_value = "ahc")]
         backend: String,
     },
-    /// Download ONNX models (WeSpeaker + Silero VAD)
+    /// Download ONNX models for a profile (or all profiles)
     DownloadModels {
         /// Target directory (default: ~/.cache/polyvoice/models)
         #[arg(long)]
         dir: Option<PathBuf>,
+
+        /// Profile to fetch models for.
+        ///
+        /// In M0 both `mobile` and `balanced` map to the legacy v0.5 model pair
+        /// (silero_vad + wespeaker_resnet34). Future milestones (M2/M5) will
+        /// diverge them. Use `all` to fetch every distinct model in the manifest.
+        #[arg(long, default_value = "all", value_parser = ["mobile", "balanced", "all"])]
+        profile: String,
     },
 }
 
@@ -77,14 +86,15 @@ fn main() {
             backend,
         } => {
             let model_dir = model_dir.unwrap_or_else(default_model_dir);
-            if let Err(e) = run_diarize(&file, &model_dir, max_speakers, threshold, format, backend) {
+            if let Err(e) = run_diarize(&file, &model_dir, max_speakers, threshold, format, backend)
+            {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }
         }
-        Command::DownloadModels { dir } => {
+        Command::DownloadModels { dir, profile } => {
             let dir = dir.unwrap_or_else(default_model_dir);
-            if let Err(e) = run_download(&dir) {
+            if let Err(e) = run_download(&dir, &profile) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }
@@ -187,32 +197,25 @@ fn run_diarize(
     Ok(())
 }
 
-fn run_download(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn run_download(dir: &Path, profile: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use polyvoice::ModelRegistry;
+    use polyvoice::Profile;
+
     std::fs::create_dir_all(dir)?;
+    let registry = ModelRegistry::with_cache_dir(dir)?;
 
-    let models = [
-        (
-            "wespeaker_resnet34.onnx",
-            "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/main/voxceleb_resnet34.onnx?download=true",
-        ),
-        (
-            "silero_vad.onnx",
-            "https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx",
-        ),
-    ];
+    let profiles_to_fetch: Vec<Profile> = match profile {
+        "mobile" => vec![Profile::Mobile],
+        "balanced" => vec![Profile::Balanced],
+        "all" => vec![Profile::Mobile, Profile::Balanced],
+        other => return Err(format!("unknown profile '{other}'").into()),
+    };
 
-    for (name, url) in &models {
-        let path = dir.join(name);
-        if path.exists() {
-            eprintln!("{name}: already exists, skipping");
-            continue;
-        }
-        eprintln!("{name}: downloading...");
-        let resp = ureq::get(*url).call()?;
-        let mut reader = resp.into_body().into_reader();
-        let mut file = std::fs::File::create(&path)?;
-        let bytes = std::io::copy(&mut reader, &mut file)?;
-        eprintln!("{name}: {:.1} MB", bytes as f64 / 1_048_576.0);
+    for prof in profiles_to_fetch {
+        eprintln!("Resolving profile '{}'…", prof.manifest_id());
+        let bundle = registry.ensure_for_profile(prof)?;
+        eprintln!("  segmenter: {}", bundle.segmenter_path.display());
+        eprintln!("  embedder : {}", bundle.embedder_path.display());
     }
 
     eprintln!("\nModels saved to {}", dir.display());
