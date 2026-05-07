@@ -3,4 +3,4 @@
 from polyvoice._polyvoice import Pipeline, Turn
 
 __all__ = ["Pipeline", "Turn"]
-__version__ = "0.5.2"
+__version__ = "0.6.0-alpha.0"

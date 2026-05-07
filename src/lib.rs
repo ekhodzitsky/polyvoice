@@ -33,14 +33,15 @@
 //! ```
 
 pub mod ahc;
-pub mod kmeans;
-pub mod spectral;
 pub mod cluster;
 pub mod der;
 pub mod embedding;
 pub mod features;
 #[cfg(feature = "ffi")]
 pub mod ffi;
+pub mod kmeans;
+#[cfg(feature = "spectral")]
+pub mod spectral;
 pub use features::{FbankConfig, FbankExtractor};
 // Deprecated: `compute_fbank` is still accessible via `polyvoice::features::compute_fbank`
 // but no longer re-exported at the crate root. Use `FbankExtractor::extract` instead.
@@ -52,8 +53,12 @@ pub mod rttm;
 pub mod silero_vad;
 pub mod types;
 pub mod utils;
+pub use utils::merge_segments;
 pub mod vad;
 pub mod wav;
+
+#[cfg(feature = "download")]
+pub mod models;
 
 #[cfg(feature = "onnx")]
 pub mod ecapa;
@@ -63,14 +68,16 @@ pub mod onnx;
 // Public re-exports for ergonomic use.
 pub use cluster::SpeakerCluster;
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
+#[cfg(feature = "download")]
+pub use models::{ModelRegistry, ProfileModels, RegistryError};
 pub use offline::OfflineDiarizer;
 pub use online::OnlineDiarizer;
 pub use overlap::{OverlapRegion, detect_overlaps};
 pub use pipeline::{Pipeline, PipelineError};
 pub use silero_vad::SileroVad;
 pub use types::{
-    ClusteringBackend, Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate,
-    Seconds, Segment, SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment,
+    ClusteringBackend, Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, Profile,
+    SampleRate, Seconds, Segment, SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment,
     remap_segments, remap_turns,
 };
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
