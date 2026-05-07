@@ -12,7 +12,7 @@ categories = ["multimedia::audio", "science"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["spectral", "segmentation", "embedder", "clusterer"]
+default = ["spectral", "segmentation", "embedder", "clusterer", "resegmentation"]
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
 # C FFI bindings.
@@ -45,6 +45,12 @@ embedder = []
 # AHC adapter is wasm32-clean. NME-SC additionally requires `spectral` (which
 # pulls `faer`).
 clusterer = []
+
+# v1.0 Overlap-aware post-clustering resegmentation pass.
+# Pure-Rust, wasm32-clean — does not require `onnx`. Operates on already-
+# computed speaker centroids and overlap-region embeddings supplied by the
+# caller (M6 Pipeline wires the embedder pool into this).
+resegmentation = []
 
 # Model profile bundles. M0 only emits metadata; CLI uses these to pick which
 # manifest entries to ensure(). M5 will introduce INT8 model variants.

@@ -90,6 +90,18 @@ pub use clusterer::{AhcClusterer, Clusterer, ClustererError};
 #[cfg(all(feature = "clusterer", feature = "spectral"))]
 pub use clusterer::NmeScClusterer;
 
+#[cfg(feature = "resegmentation")]
+pub mod resegmentation;
+
+#[cfg(feature = "resegmentation")]
+pub use resegmentation::{
+    OverlapRegionInput, OverlapResegmenter, ResegmentError, ResegmentInputs, Resegmenter,
+    SpeakerCentroid, compute_centroids,
+};
+
+#[cfg(all(feature = "resegmentation", feature = "segmentation"))]
+pub use resegmentation::extract_overlap_time_ranges;
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]

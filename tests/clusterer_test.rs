@@ -22,7 +22,9 @@ fn synth_clusters_4(d: usize) -> Vec<Vec<f32>> {
             let mut perturbed = c.clone();
             perturbed[0] += 0.01;
             let n: f32 = perturbed.iter().map(|x| x * x).sum::<f32>().sqrt();
-            for x in &mut perturbed { *x /= n; }
+            for x in &mut perturbed {
+                *x /= n;
+            }
             all.push(perturbed);
         }
     }
@@ -34,7 +36,12 @@ fn ahc_finds_four_clusters() {
     let c = AhcClusterer::default();
     let labels = c.cluster(&synth_clusters_4(8)).unwrap();
     let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
-    assert!((3..=5).contains(&unique.len()), "got {} clusters: {:?}", unique.len(), labels);
+    assert!(
+        (3..=5).contains(&unique.len()),
+        "got {} clusters: {:?}",
+        unique.len(),
+        labels
+    );
 }
 
 #[cfg(feature = "spectral")]
@@ -43,5 +50,10 @@ fn nme_sc_finds_four_clusters() {
     let c = NmeScClusterer::default();
     let labels = c.cluster(&synth_clusters_4(8)).unwrap();
     let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
-    assert!((3..=5).contains(&unique.len()), "got {} clusters: {:?}", unique.len(), labels);
+    assert!(
+        (3..=5).contains(&unique.len()),
+        "got {} clusters: {:?}",
+        unique.len(),
+        labels
+    );
 }
