@@ -47,12 +47,16 @@ pub struct AhcClusterer {
 
 impl AhcClusterer {
     pub fn new(max_clusters: usize) -> Self {
-        Self { max_clusters: max_clusters.max(1) }
+        Self {
+            max_clusters: max_clusters.max(1),
+        }
     }
 }
 
 impl Default for AhcClusterer {
-    fn default() -> Self { Self::new(64) }
+    fn default() -> Self {
+        Self::new(64)
+    }
 }
 
 impl Clusterer for AhcClusterer {
@@ -67,7 +71,9 @@ impl Clusterer for AhcClusterer {
         Ok(labels)
     }
 
-    fn max_clusters(&self) -> usize { self.max_clusters }
+    fn max_clusters(&self) -> usize {
+        self.max_clusters
+    }
 }
 
 #[cfg(test)]
@@ -121,8 +127,12 @@ mod ahc_tests {
 
     fn synth_two_clusters() -> Vec<Vec<f32>> {
         vec![
-            vec![1.0, 0.05, 0.0], vec![0.95, 0.0, 0.05], vec![1.0, 0.0, 0.0],
-            vec![0.0, 1.0, 0.0], vec![0.05, 0.95, 0.0], vec![0.0, 1.0, 0.05],
+            vec![1.0, 0.05, 0.0],
+            vec![0.95, 0.0, 0.05],
+            vec![1.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.05, 0.95, 0.0],
+            vec![0.0, 1.0, 0.05],
         ]
     }
 
@@ -180,13 +190,17 @@ pub struct NmeScClusterer {
 #[cfg(feature = "spectral")]
 impl NmeScClusterer {
     pub fn new(max_clusters: usize) -> Self {
-        Self { max_clusters: max_clusters.max(1) }
+        Self {
+            max_clusters: max_clusters.max(1),
+        }
     }
 }
 
 #[cfg(feature = "spectral")]
 impl Default for NmeScClusterer {
-    fn default() -> Self { Self::new(64) }
+    fn default() -> Self {
+        Self::new(64)
+    }
 }
 
 #[cfg(feature = "spectral")]
@@ -223,9 +237,7 @@ impl Clusterer for NmeScClusterer {
         }
 
         // Degree vector.
-        let deg: Vec<f64> = (0..n)
-            .map(|i| aff[i * n..i * n + n].iter().sum())
-            .collect();
+        let deg: Vec<f64> = (0..n).map(|i| aff[i * n..i * n + n].iter().sum()).collect();
 
         // Normalized Laplacian L = I - D^{-1/2} A D^{-1/2}.
         let mut lap = Mat::zeros(n, n);
@@ -294,7 +306,9 @@ impl Clusterer for NmeScClusterer {
         Ok(labels)
     }
 
-    fn max_clusters(&self) -> usize { self.max_clusters }
+    fn max_clusters(&self) -> usize {
+        self.max_clusters
+    }
 }
 
 #[cfg(all(test, feature = "spectral"))]
@@ -303,9 +317,15 @@ mod nme_sc_tests {
 
     fn synth_three_clusters() -> Vec<Vec<f32>> {
         vec![
-            vec![1.0, 0.0, 0.0], vec![0.98, 0.05, 0.0], vec![0.97, 0.0, 0.05],
-            vec![0.0, 1.0, 0.0], vec![0.05, 0.98, 0.0], vec![0.0, 0.97, 0.05],
-            vec![0.0, 0.0, 1.0], vec![0.05, 0.0, 0.98], vec![0.0, 0.05, 0.97],
+            vec![1.0, 0.0, 0.0],
+            vec![0.98, 0.05, 0.0],
+            vec![0.97, 0.0, 0.05],
+            vec![0.0, 1.0, 0.0],
+            vec![0.05, 0.98, 0.0],
+            vec![0.0, 0.97, 0.05],
+            vec![0.0, 0.0, 1.0],
+            vec![0.05, 0.0, 0.98],
+            vec![0.0, 0.05, 0.97],
         ]
     }
 
