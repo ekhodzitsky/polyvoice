@@ -73,10 +73,12 @@ pub use overlap::{OverlapRegion, detect_overlaps};
 pub use pipeline::{Pipeline, PipelineError};
 pub use silero_vad::SileroVad;
 pub use types::{
-    ClusteringBackend, Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, SampleRate,
-    Seconds, Segment, SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment,
-    remap_segments, remap_turns,
+    ClusteringBackend, Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim,
+    Profile, SampleRate, Seconds, Segment, SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange,
+    WordAlignment, remap_segments, remap_turns,
 };
+#[cfg(feature = "download")]
+pub use models::{ModelRegistry, ProfileModels, RegistryError};
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
 
 #[cfg(feature = "onnx")]
