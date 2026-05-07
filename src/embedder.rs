@@ -191,10 +191,47 @@ mod onnx_adapters {
                 .map_err(|e| EmbedderError::Legacy(format!("{e}")))
         }
     }
+
+    /// CAM++ embedder (Channel-Attentive Multi-scale Pooling, ~7M params, 192-d output).
+    ///
+    /// Targets the Mobile profile of v1.0. Uses the same 80-bin log-mel fbank
+    /// pipeline as ResNet34 (wraps `FbankOnnxExtractor` internally with dim=192).
+    /// Models with different fbank parameters or input shapes will produce
+    /// shape-mismatch errors at inference time.
+    pub struct CamPlusPlusExtractor {
+        inner: FbankOnnxExtractor,
+    }
+
+    impl CamPlusPlusExtractor {
+        /// Load a CAM++ ONNX model. Pool size controls the number of concurrent
+        /// ONNX sessions held internally (canonical: `num_cpus().min(4)`).
+        pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError> {
+            let inner = FbankOnnxExtractor::new(path.as_ref(), 192, pool_size).map_err(|e| {
+                EmbedderError::ModelIo {
+                    path: path.as_ref().to_path_buf(),
+                    detail: format!("{e}"),
+                }
+            })?;
+            Ok(Self { inner })
+        }
+    }
+
+    impl Embedder for CamPlusPlusExtractor {
+        fn dim(&self) -> usize {
+            192
+        }
+
+        fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            // Mirror ResNet34Adapter: extract takes (samples, &DiarizationConfig).
+            self.inner
+                .extract(audio, &DiarizationConfig::default())
+                .map_err(|e| EmbedderError::Legacy(format!("{e}")))
+        }
+    }
 }
 
 #[cfg(all(feature = "onnx", feature = "embedder"))]
-pub use onnx_adapters::ResNet34Adapter;
+pub use onnx_adapters::{CamPlusPlusExtractor, ResNet34Adapter};
 
 #[cfg(test)]
 mod overlap_mask_tests {
