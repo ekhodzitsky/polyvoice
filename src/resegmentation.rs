@@ -31,6 +31,11 @@ pub trait Resegmenter: Send + Sync {
     /// verbatim; secondary turns (if any) carry an existing `SpeakerId` from
     /// `inputs.speaker_centroids` and never repeat the primary speaker for the
     /// same region; output is sorted by `time.start`.
+    ///
+    /// **Validation order:** structural checks (centroid dimensions, overlap
+    /// embedding dimensions, `primary_speaker` presence) run before duration
+    /// filtering. A short overlap region with an invalid primary speaker
+    /// returns `MissingPrimaryCentroid`, not silent success.
     fn resegment(&self, inputs: ResegmentInputs<'_>) -> Result<Vec<SpeakerTurn>, ResegmentError>;
 }
 
@@ -178,6 +183,7 @@ pub fn extract_overlap_time_ranges(
 ///     overlap_regions: &regions,
 /// })?;
 /// ```
+#[derive(Debug, Clone, Copy)]
 pub struct OverlapResegmenter {
     threshold: f32,
     min_overlap_secs: f32,
@@ -212,10 +218,7 @@ impl Default for OverlapResegmenter {
 }
 
 impl Resegmenter for OverlapResegmenter {
-    fn resegment(
-        &self,
-        inputs: ResegmentInputs<'_>,
-    ) -> Result<Vec<SpeakerTurn>, ResegmentError> {
+    fn resegment(&self, inputs: ResegmentInputs<'_>) -> Result<Vec<SpeakerTurn>, ResegmentError> {
         let mut out: Vec<SpeakerTurn> = inputs.primary_turns.to_vec();
 
         // Fast paths.
@@ -256,8 +259,8 @@ impl Resegmenter for OverlapResegmenter {
                     primary: region.primary_speaker,
                 });
             }
-            // Skip too-short regions.
-            if (region.time.duration() as f32) < self.min_overlap_secs {
+            // Skip too-short regions. Compare in f64 to avoid f32 boundary truncation.
+            if region.time.duration() < f64::from(self.min_overlap_secs) {
                 continue;
             }
             // Find best non-primary cluster.
@@ -663,7 +666,10 @@ mod resegmenter_tests {
         let err = r.resegment(inputs).expect_err("missing primary must error");
         assert!(matches!(
             err,
-            ResegmentError::MissingPrimaryCentroid { primary: SpeakerId(0), .. }
+            ResegmentError::MissingPrimaryCentroid {
+                primary: SpeakerId(0),
+                ..
+            }
         ));
     }
 
@@ -694,7 +700,10 @@ mod resegmenter_tests {
         let primary = vec![turn(0.0, 1.0, 0)];
         let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
         let regions = vec![OverlapRegionInput {
-            time: TimeRange { start: 0.0, end: 1.0 },
+            time: TimeRange {
+                start: 0.0,
+                end: 1.0,
+            },
             primary_speaker: SpeakerId(0),
             embedding: vec![1.0, 0.0], // dim 2, not 3
         }];
