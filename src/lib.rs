@@ -60,6 +60,9 @@ pub mod wav;
 #[cfg(feature = "download")]
 pub mod models;
 
+#[cfg(feature = "segmentation")]
+pub mod segmentation;
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]
