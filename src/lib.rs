@@ -125,13 +125,9 @@ pub use types::{
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
 
 #[cfg(feature = "onnx")]
-pub use ecapa::EcapaMelOnnxExtractor;
-#[cfg(feature = "onnx")]
 #[allow(deprecated)]
 pub use ecapa::EcapaTdnnExtractor;
 #[cfg(feature = "onnx")]
 pub use ecapa::FbankOnnxExtractor;
-#[cfg(feature = "onnx")]
-pub use ecapa::RawAudioOnnxExtractor;
 #[cfg(feature = "onnx")]
 pub use onnx::OnnxEmbeddingExtractor;
