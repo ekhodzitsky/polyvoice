@@ -20,9 +20,7 @@ pub enum DownloadError {
         #[source]
         source: Box<ureq::Error>,
     },
-    #[error(
-        "checksum mismatch for {path}: expected {expected:.16}…, computed {actual:.16}…"
-    )]
+    #[error("checksum mismatch for {path}: expected {expected:.16}…, computed {actual:.16}…")]
     ChecksumMismatch {
         path: PathBuf,
         expected: String,
@@ -55,12 +53,10 @@ pub fn download_with_checksum(
     let mut tmp = dest.to_path_buf();
     let original_name = dest.file_name().and_then(|s| s.to_str()).unwrap_or("model");
     tmp.set_file_name(format!(".{original_name}.partial"));
-    let resp = ureq::get(url)
-        .call()
-        .map_err(|e| DownloadError::Network {
-            url: url.to_owned(),
-            source: Box::new(e),
-        })?;
+    let resp = ureq::get(url).call().map_err(|e| DownloadError::Network {
+        url: url.to_owned(),
+        source: Box::new(e),
+    })?;
     let reader = resp.into_body().into_reader();
     let mut reader = BufReader::new(reader);
     let mut file = fs::File::create(&tmp).map_err(|e| DownloadError::Io {
