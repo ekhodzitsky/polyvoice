@@ -65,8 +65,8 @@ pub mod segmentation;
 
 #[cfg(feature = "segmentation")]
 pub use segmentation::{
-    Aggregator, AggregationConfig, FrameLabel, PowersetClass, PowersetDecoder,
-    RawSegment, Segmenter, SegmentationError, WindowOutput, MIN_AUDIO_SAMPLES,
+    AggregationConfig, Aggregator, FrameLabel, MIN_AUDIO_SAMPLES, PowersetClass, PowersetDecoder,
+    RawSegment, SegmentationError, Segmenter, WindowOutput,
 };
 
 #[cfg(all(feature = "onnx", feature = "segmentation"))]
