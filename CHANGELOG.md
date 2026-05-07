@@ -53,6 +53,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New manifest entry `[models.cam_pp_fp32]`. Profiles still resolve to
   `wespeaker_resnet34` until M6 swaps them.
 
+### Added (M3 — Clusterer trait + NME-SC)
+- `polyvoice::clusterer` module: `Clusterer` trait, `ClustererError`,
+  `AhcClusterer` (wraps legacy `agglomerative_cluster_auto`), `NmeScClusterer`
+  (NME-SC with eigengap auto-K, gated `spectral`+`clusterer`).
+- New Cargo feature `clusterer` (in default features). The AHC adapter is
+  wasm32-clean; NME-SC additionally requires the `spectral` feature.
+- Integration test on synthetic 4-cluster data (no model required) — runs in
+  every PR's normal `cargo test` (not `--ignored`).
+
 ## [0.5.2] - 2025-05-05
 
 ### Added

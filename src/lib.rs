@@ -81,6 +81,15 @@ pub use embedder::{Embedder, EmbedderError, EmbedderPool, apply_overlap_mask};
 #[cfg(all(feature = "onnx", feature = "embedder"))]
 pub use embedder::{CamPlusPlusExtractor, ResNet34Adapter};
 
+#[cfg(feature = "clusterer")]
+pub mod clusterer;
+
+#[cfg(feature = "clusterer")]
+pub use clusterer::{AhcClusterer, Clusterer, ClustererError};
+
+#[cfg(all(feature = "clusterer", feature = "spectral"))]
+pub use clusterer::NmeScClusterer;
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]
