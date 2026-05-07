@@ -164,6 +164,133 @@ pub fn extract_overlap_time_ranges(
     pairs
 }
 
+/// Default-constructible overlap-aware resegmenter that picks the nearest
+/// non-primary cluster centroid (by cosine similarity) for each overlap region
+/// above a configurable threshold and minimum duration.
+///
+/// Typical usage (from `Pipeline` in M6):
+///
+/// ```rust,ignore
+/// let r = OverlapResegmenter::default();
+/// let out = r.resegment(ResegmentInputs {
+///     primary_turns: &turns,
+///     speaker_centroids: &centroids,
+///     overlap_regions: &regions,
+/// })?;
+/// ```
+pub struct OverlapResegmenter {
+    threshold: f32,
+    min_overlap_secs: f32,
+}
+
+impl OverlapResegmenter {
+    /// `threshold` — minimum cosine similarity required to attach a secondary
+    /// speaker to an overlap region. Default `0.0` (always attach the nearest
+    /// non-primary cluster).
+    /// `min_overlap_secs` — overlap regions shorter than this are skipped.
+    /// Default `0.1`.
+    pub fn new(threshold: f32, min_overlap_secs: f32) -> Self {
+        Self {
+            threshold,
+            min_overlap_secs: min_overlap_secs.max(0.0),
+        }
+    }
+
+    pub fn threshold(&self) -> f32 {
+        self.threshold
+    }
+
+    pub fn min_overlap_secs(&self) -> f32 {
+        self.min_overlap_secs
+    }
+}
+
+impl Default for OverlapResegmenter {
+    fn default() -> Self {
+        Self::new(0.0, 0.1)
+    }
+}
+
+impl Resegmenter for OverlapResegmenter {
+    fn resegment(
+        &self,
+        inputs: ResegmentInputs<'_>,
+    ) -> Result<Vec<SpeakerTurn>, ResegmentError> {
+        let mut out: Vec<SpeakerTurn> = inputs.primary_turns.to_vec();
+
+        // Fast paths.
+        if inputs.speaker_centroids.len() < 2 || inputs.overlap_regions.is_empty() {
+            out.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
+            return Ok(out);
+        }
+
+        // Validate centroid dimensionality first (single-pass).
+        let expected_dim = inputs.speaker_centroids[0].embedding.len();
+        for (i, c) in inputs.speaker_centroids.iter().enumerate() {
+            if c.embedding.len() != expected_dim {
+                return Err(ResegmentError::CentroidDimMismatch {
+                    index: i,
+                    expected: expected_dim,
+                    actual: c.embedding.len(),
+                });
+            }
+        }
+
+        for (i, region) in inputs.overlap_regions.iter().enumerate() {
+            // Validate dim.
+            if region.embedding.len() != expected_dim {
+                return Err(ResegmentError::OverlapDimMismatch {
+                    index: i,
+                    expected: expected_dim,
+                    actual: region.embedding.len(),
+                });
+            }
+            // Validate primary present.
+            if !inputs
+                .speaker_centroids
+                .iter()
+                .any(|c| c.speaker == region.primary_speaker)
+            {
+                return Err(ResegmentError::MissingPrimaryCentroid {
+                    index: i,
+                    primary: region.primary_speaker,
+                });
+            }
+            // Skip too-short regions.
+            if (region.time.duration() as f32) < self.min_overlap_secs {
+                continue;
+            }
+            // Find best non-primary cluster.
+            let mut best: Option<(SpeakerId, f32)> = None;
+            for c in inputs.speaker_centroids.iter() {
+                if c.speaker == region.primary_speaker {
+                    continue;
+                }
+                let s = crate::utils::cosine_similarity(&region.embedding, &c.embedding);
+                let take = match best {
+                    None => true,
+                    Some((_, b)) => s > b,
+                };
+                if take {
+                    best = Some((c.speaker, s));
+                }
+            }
+            if let Some((id, score)) = best
+                && score > self.threshold
+            {
+                out.push(SpeakerTurn {
+                    speaker: id,
+                    time: region.time,
+                    text: None,
+                });
+            }
+        }
+
+        out.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod trait_tests {
     use super::*;
@@ -385,5 +512,211 @@ mod overlap_extract_tests {
         assert!(local_pairs.contains(&(0, 1)));
         assert!(local_pairs.contains(&(0, 2)));
         assert!(local_pairs.contains(&(1, 2)));
+    }
+}
+
+#[cfg(test)]
+mod resegmenter_tests {
+    use super::*;
+    use crate::types::{SpeakerId, SpeakerTurn, TimeRange};
+
+    fn unit(dim: usize, axis: usize) -> Vec<f32> {
+        let mut v = vec![0.0_f32; dim];
+        v[axis] = 1.0;
+        v
+    }
+
+    fn turn(start: f64, end: f64, spk: u32) -> SpeakerTurn {
+        SpeakerTurn {
+            speaker: SpeakerId(spk),
+            time: TimeRange { start, end },
+            text: None,
+        }
+    }
+
+    fn centroid(spk: u32, dim: usize, axis: usize) -> SpeakerCentroid {
+        SpeakerCentroid {
+            speaker: SpeakerId(spk),
+            embedding: unit(dim, axis),
+        }
+    }
+
+    fn region(start: f64, end: f64, primary: u32, dim: usize, axis: usize) -> OverlapRegionInput {
+        OverlapRegionInput {
+            time: TimeRange { start, end },
+            primary_speaker: SpeakerId(primary),
+            embedding: unit(dim, axis),
+        }
+    }
+
+    #[test]
+    fn no_overlap_passes_primary_through() {
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 1.0, 0), turn(2.0, 3.0, 1)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &[],
+        };
+        let out = r.resegment(inputs).unwrap();
+        assert_eq!(out, primary);
+    }
+
+    #[test]
+    fn single_cluster_passes_through() {
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 1.0, 0)];
+        let centroids = vec![centroid(0, 3, 0)];
+        let regions = vec![region(0.5, 0.9, 0, 3, 0)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &regions,
+        };
+        let out = r.resegment(inputs).unwrap();
+        assert_eq!(out, primary);
+    }
+
+    #[test]
+    fn picks_secondary_excluding_primary() {
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 1.0, 0)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1), centroid(2, 3, 2)];
+        // Overlap region embedding lies along axis 1 → nearest to centroid id=1.
+        let regions = vec![region(0.0, 1.0, 0, 3, 1)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &regions,
+        };
+        let out = r.resegment(inputs).unwrap();
+        assert_eq!(out.len(), 2);
+        // Both turns cover (0.0, 1.0); one is primary (id=0), other is secondary (id=1).
+        let speakers: Vec<u32> = out.iter().map(|t| t.speaker.0).collect();
+        assert!(speakers.contains(&0));
+        assert!(speakers.contains(&1));
+        assert!(!speakers.contains(&2));
+    }
+
+    #[test]
+    fn threshold_blocks_low_cosine() {
+        // Threshold 0.99 — only near-perfect matches allowed.
+        let r = OverlapResegmenter::new(0.99, 0.0);
+        let primary = vec![turn(0.0, 1.0, 0)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
+        // Overlap embedding along axis 0 (matches primary); cosine to centroid 1 = 0.
+        let regions = vec![region(0.0, 1.0, 0, 3, 0)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &regions,
+        };
+        let out = r.resegment(inputs).unwrap();
+        assert_eq!(out, primary, "no secondary should be appended");
+    }
+
+    #[test]
+    fn min_duration_blocks_short_region() {
+        // Region duration 0.05s < default 0.1s → skipped.
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 1.0, 0)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
+        let regions = vec![region(0.10, 0.15, 0, 3, 1)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &regions,
+        };
+        let out = r.resegment(inputs).unwrap();
+        assert_eq!(out, primary);
+    }
+
+    #[test]
+    fn output_is_sorted_by_start() {
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(2.0, 3.0, 0), turn(0.0, 1.0, 0)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
+        let regions = vec![region(2.0, 3.0, 0, 3, 1)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &regions,
+        };
+        let out = r.resegment(inputs).unwrap();
+        for w in out.windows(2) {
+            assert!(w[0].time.start <= w[1].time.start);
+        }
+    }
+
+    #[test]
+    fn missing_primary_centroid_errors() {
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 1.0, 0)];
+        let centroids = vec![centroid(1, 3, 1), centroid(2, 3, 2)];
+        let regions = vec![region(0.0, 1.0, 0, 3, 1)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &regions,
+        };
+        let err = r.resegment(inputs).expect_err("missing primary must error");
+        assert!(matches!(
+            err,
+            ResegmentError::MissingPrimaryCentroid { primary: SpeakerId(0), .. }
+        ));
+    }
+
+    #[test]
+    fn centroid_dim_mismatch_errors() {
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 1.0, 0)];
+        let centroids = vec![
+            centroid(0, 3, 0),
+            SpeakerCentroid {
+                speaker: SpeakerId(1),
+                embedding: vec![1.0, 0.0], // dim 2, not 3
+            },
+        ];
+        let regions = vec![region(0.0, 1.0, 0, 3, 1)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &regions,
+        };
+        let err = r.resegment(inputs).expect_err("dim mismatch must error");
+        assert!(matches!(err, ResegmentError::CentroidDimMismatch { .. }));
+    }
+
+    #[test]
+    fn overlap_dim_mismatch_errors() {
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 1.0, 0)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
+        let regions = vec![OverlapRegionInput {
+            time: TimeRange { start: 0.0, end: 1.0 },
+            primary_speaker: SpeakerId(0),
+            embedding: vec![1.0, 0.0], // dim 2, not 3
+        }];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &centroids,
+            overlap_regions: &regions,
+        };
+        let err = r.resegment(inputs).expect_err("dim mismatch must error");
+        assert!(matches!(err, ResegmentError::OverlapDimMismatch { .. }));
+    }
+
+    #[test]
+    fn empty_centroids_passes_through() {
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 1.0, 0)];
+        let inputs = ResegmentInputs {
+            primary_turns: &primary,
+            speaker_centroids: &[],
+            overlap_regions: &[],
+        };
+        let out = r.resegment(inputs).unwrap();
+        assert_eq!(out, primary);
     }
 }
