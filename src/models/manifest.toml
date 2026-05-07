@@ -13,12 +13,12 @@ embedder  = "wespeaker_resnet34"
 
 [models.silero_vad]
 url      = "https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx"
-sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
+sha256   = "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
 size     = 2327524
 filename = "silero_vad.onnx"
 
 [models.wespeaker_resnet34]
 url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/main/voxceleb_resnet34.onnx?download=true"
-sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
-size     = 26219527
+sha256   = "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
+size     = 26534127
 filename = "wespeaker_resnet34.onnx"
