@@ -28,3 +28,9 @@ url      = "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-
 sha256   = "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
 size     = 5992913
 filename = "powerset_fp32.onnx"
+
+[models.cam_pp_fp32]
+url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus/resolve/main/voxceleb_CAM%2B%2B.onnx?download=true"
+sha256   = "b50810498b5bcf5773d086f6993d344476bd0c88b566a41e8d801aaf8461efad"
+size     = 29292449
+filename = "cam_pp_fp32.onnx"
