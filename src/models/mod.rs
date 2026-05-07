@@ -8,6 +8,11 @@ pub const DEFAULT_MANIFEST_TOML: &str = include_str!("manifest.toml");
 
 /// Parse the bundled default manifest. Panics in debug if the embedded TOML is
 /// malformed — that's a static asset bug caught by `cargo test`.
+///
+/// This is the *only* place the project allows `expect` on the embedded manifest:
+/// the asset is shipped with the crate, and `embedded_manifest_parses` test
+/// verifies it parses on every build.
+#[allow(clippy::expect_used)]
 pub fn default_manifest() -> Manifest {
     Manifest::from_toml_str(DEFAULT_MANIFEST_TOML)
         .expect("embedded manifest.toml must parse — this is a static-asset bug")
