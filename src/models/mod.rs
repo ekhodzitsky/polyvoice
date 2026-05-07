@@ -1,6 +1,8 @@
 //! Model registry — manifest-driven downloads with SHA-256 verification.
 
+pub mod download;
 pub mod manifest;
+pub use download::{download_with_checksum, verify_sha256, DownloadError};
 pub use manifest::{Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1};
 
 /// The default manifest shipped with the crate. Embedded at compile time.
