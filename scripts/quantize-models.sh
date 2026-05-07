@@ -76,18 +76,19 @@ quantize_one "powerset" \
     "1,1,160000" \
     ""
 
-# CAM++: 80-mel × 300 frames (typical wespeaker fbank pipeline)
+# CAM++: WeSpeaker fbank input shape is [B, T, 80] (T frames × 80 mel bins).
+# 300 frames @ 10ms hop ≈ 3 seconds.
 quantize_one "cam_pp" \
     "$MODELS_DIR/cam_pp_fp32.onnx" \
     "$INT8_DIR/cam_pp_int8.onnx" \
-    "1,80,300" \
+    "1,300,80" \
     ""
 
-# WeSpeaker ResNet34: 80-mel × 300 frames
+# WeSpeaker ResNet34: same fbank pipeline, shape [B, T, 80].
 quantize_one "resnet34" \
     "$MODELS_DIR/wespeaker_resnet34.onnx" \
     "$INT8_DIR/resnet34_int8.onnx" \
-    "1,80,300" \
+    "1,300,80" \
     ""
 
 echo ""

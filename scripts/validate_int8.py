@@ -222,10 +222,17 @@ def _embedder_compare(
 
 
 def _audio_to_input(audio: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
-    """Convert (T,) audio to embedder input. fbank for 80-mel embedders, raw for 1-channel."""
+    """Convert (T,) audio to embedder input.
+
+    Two layouts are recognised based on the shape:
+    - `(1, 1, T)` — raw audio (powerset segmenter input).
+    - `(1, T_frames, n_mels)` — log-mel fbank with mel bins last (WeSpeaker
+      CAM++/ResNet34 ONNX exports use this layout: input name "feats",
+      shape `[B, T, 80]`).
+    """
     import librosa
 
-    if shape[1] == 1:
+    if len(shape) == 3 and shape[1] == 1:
         target_t = shape[-1]
         if audio.shape[0] < target_t:
             audio = np.concatenate(
@@ -233,8 +240,9 @@ def _audio_to_input(audio: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
             )
         return audio[:target_t].astype(np.float32).reshape(*shape)
 
-    target_t = shape[-1]
-    n_mels = shape[-2]
+    # fbank layout (1, T_frames, n_mels)
+    target_frames = shape[1]
+    n_mels = shape[2]
     if audio.shape[0] < 16000:
         audio = np.concatenate([audio, np.zeros(16000 - audio.shape[0])])
     mel = librosa.feature.melspectrogram(
@@ -246,11 +254,12 @@ def _audio_to_input(audio: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
         fmin=20.0,
         fmax=7600.0,
     )
-    log_mel = np.log(mel + 1e-6)
-    if log_mel.shape[1] < target_t:
-        pad = np.zeros((n_mels, target_t - log_mel.shape[1]), dtype=np.float32)
-        log_mel = np.concatenate([log_mel, pad], axis=1)
-    log_mel = log_mel[:, :target_t]
+    log_mel = np.log(mel + 1e-6)  # (n_mels, frames)
+    log_mel = log_mel.T  # (frames, n_mels)
+    if log_mel.shape[0] < target_frames:
+        pad = np.zeros((target_frames - log_mel.shape[0], n_mels), dtype=np.float32)
+        log_mel = np.concatenate([log_mel, pad], axis=0)
+    log_mel = log_mel[:target_frames, :]
     return log_mel.reshape(*shape).astype(np.float32)
 
 

@@ -57,14 +57,16 @@ validate_one "embedder" \
     "$INT8_DIR/cam_pp_int8.onnx" \
     --hold-out "$DEV_AUDIO" \
     --voxceleb-audio "$VC_AUDIO" \
-    --voxceleb-trials "$VC_TRIALS"
+    --voxceleb-trials "$VC_TRIALS" \
+    --embed-input-shape "1,300,80"
 
 validate_one "embedder" \
     "$MODELS_DIR/wespeaker_resnet34.onnx" \
     "$INT8_DIR/resnet34_int8.onnx" \
     --hold-out "$DEV_AUDIO" \
     --voxceleb-audio "$VC_AUDIO" \
-    --voxceleb-trials "$VC_TRIALS"
+    --voxceleb-trials "$VC_TRIALS" \
+    --embed-input-shape "1,300,80"
 
 {
     echo "# M5 INT8 validation aggregate"
