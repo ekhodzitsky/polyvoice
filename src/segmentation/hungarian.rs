@@ -112,8 +112,8 @@ mod tests {
     fn diagonal_zero_matrix_returns_identity() {
         let n = 3;
         let mut cost = vec![vec![10.0_f32; n]; n];
-        for i in 0..n {
-            cost[i][i] = 0.0;
+        for (i, row) in cost.iter_mut().enumerate() {
+            row[i] = 0.0;
         }
         let assignment = solve(&cost).expect("3x3 valid");
         assert_eq!(assignment, vec![0, 1, 2]);
