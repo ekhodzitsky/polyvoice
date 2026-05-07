@@ -115,7 +115,11 @@ impl Pipeline {
         };
 
         // Post-process: merge speakers with very few embeddings (outliers).
-        let labels = merge_small_speakers(&embeddings, &raw_labels, self.config.min_embeddings_per_speaker);
+        let labels = merge_small_speakers(
+            &embeddings,
+            &raw_labels,
+            self.config.min_embeddings_per_speaker,
+        );
 
         let num_speakers = labels.iter().copied().max().map_or(0, |m| m + 1);
 
@@ -171,8 +175,6 @@ impl Pipeline {
         self.run(&samples, extractor, vad)
     }
 }
-
-
 
 /// Temporal smoothing of cluster labels using centroid similarities.
 ///
@@ -265,7 +267,11 @@ fn smooth_embeddings(embeddings: &[Vec<f32>], window: usize) -> Vec<Vec<f32>> {
     for i in 0..n {
         let mut avg = vec![0.0f32; dim];
         let mut count = 0usize;
-        for emb in embeddings.iter().take((i + window).min(n - 1) + 1).skip(i.saturating_sub(window)) {
+        for emb in embeddings
+            .iter()
+            .take((i + window).min(n - 1) + 1)
+            .skip(i.saturating_sub(window))
+        {
             for (a, &v) in avg.iter_mut().zip(emb.iter()) {
                 *a += v;
             }
@@ -283,7 +289,11 @@ fn smooth_embeddings(embeddings: &[Vec<f32>], window: usize) -> Vec<Vec<f32>> {
 ///
 /// Reassigns all embeddings of a "small" speaker to the nearest other speaker
 /// centroid.  This removes spurious outlier clusters created by AHC.
-fn merge_small_speakers(embeddings: &[Vec<f32>], labels: &[usize], min_embeddings: usize) -> Vec<usize> {
+fn merge_small_speakers(
+    embeddings: &[Vec<f32>],
+    labels: &[usize],
+    min_embeddings: usize,
+) -> Vec<usize> {
     let n = embeddings.len();
     if n == 0 {
         return Vec::new();
