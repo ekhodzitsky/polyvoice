@@ -30,7 +30,9 @@ fn synthetic_audio_1s() -> Vec<f32> {
 fn cam_plus_plus_extractor_produces_192d_normalized_embedding() {
     let tmp = TempDir::new().expect("temp dir");
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
-    let model_path = registry.ensure("cam_pp_fp32").expect("download must succeed");
+    let model_path = registry
+        .ensure("cam_pp_fp32")
+        .expect("download must succeed");
 
     let extractor = CamPlusPlusExtractor::new(&model_path, 1).expect("loads");
     assert_eq!(extractor.dim(), 192);

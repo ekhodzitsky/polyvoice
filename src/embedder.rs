@@ -169,13 +169,12 @@ mod onnx_adapters {
     impl ResNet34Adapter {
         /// Load the WeSpeaker ResNet34 ONNX model.
         pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError> {
-            let inner =
-                FbankOnnxExtractor::new(path.as_ref(), 256, pool_size).map_err(|e| {
-                    EmbedderError::ModelIo {
-                        path: path.as_ref().to_path_buf(),
-                        detail: format!("{e}"),
-                    }
-                })?;
+            let inner = FbankOnnxExtractor::new(path.as_ref(), 256, pool_size).map_err(|e| {
+                EmbedderError::ModelIo {
+                    path: path.as_ref().to_path_buf(),
+                    detail: format!("{e}"),
+                }
+            })?;
             Ok(Self { inner, dim: 256 })
         }
     }
@@ -248,11 +247,11 @@ mod overlap_mask_tests {
     fn single_overlap_region_is_zeroed() {
         let audio = vec![1.0_f32; 16_000];
         let masked = apply_overlap_mask(&audio, &[(0.5, 0.7)], 16_000);
-        for i in 0..audio.len() {
+        for (i, &v) in masked.iter().enumerate() {
             if (8000..11200).contains(&i) {
-                assert_eq!(masked[i], 0.0, "sample {i} should be zeroed");
+                assert_eq!(v, 0.0, "sample {i} should be zeroed");
             } else {
-                assert_eq!(masked[i], 1.0, "sample {i} should pass through");
+                assert_eq!(v, 1.0, "sample {i} should pass through");
             }
         }
     }
@@ -274,11 +273,11 @@ mod overlap_mask_tests {
     fn negative_overlap_start_is_clamped_to_zero() {
         let audio = vec![1.0_f32; 16_000];
         let masked = apply_overlap_mask(&audio, &[(-1.0, 0.5)], 16_000);
-        for i in 0..8000 {
-            assert_eq!(masked[i], 0.0);
+        for &v in masked.iter().take(8000) {
+            assert_eq!(v, 0.0);
         }
-        for i in 8000..16_000 {
-            assert_eq!(masked[i], 1.0);
+        for &v in masked.iter().skip(8000) {
+            assert_eq!(v, 1.0);
         }
     }
 
