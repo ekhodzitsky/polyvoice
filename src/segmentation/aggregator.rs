@@ -186,8 +186,16 @@ impl Aggregator {
 
         // Build cost matrix: C[a][b] = -IoU(a_mask, b_mask).
         let mut cost: Vec<Vec<f32>> = vec![vec![0.0_f32; n]; n];
-        let a_active_count = a_masks.iter().take(n).filter(|m| m.iter().any(|&x| x)).count();
-        let b_active_count = b_masks.iter().take(n).filter(|m| m.iter().any(|&x| x)).count();
+        let a_active_count = a_masks
+            .iter()
+            .take(n)
+            .filter(|m| m.iter().any(|&x| x))
+            .count();
+        let b_active_count = b_masks
+            .iter()
+            .take(n)
+            .filter(|m| m.iter().any(|&x| x))
+            .count();
 
         for ai in 0..n {
             for bi in 0..n {
@@ -576,8 +584,10 @@ mod tests {
             v[50] = 1;
             v
         });
-        let mut config = AggregationConfig::default();
-        config.min_segment_secs = 0.1;
+        let config = AggregationConfig {
+            min_segment_secs: 0.1,
+            ..AggregationConfig::default()
+        };
         let agg = Aggregator::new(config);
         let segs = agg.stitch(&[w]).unwrap();
         assert!(segs.is_empty());
@@ -586,11 +596,11 @@ mod tests {
     #[test]
     fn output_segments_are_sorted_by_start_time() {
         let mut classes = vec![0; 100];
-        for i in 10..20 {
-            classes[i] = 1;
+        for c in &mut classes[10..20] {
+            *c = 1;
         }
-        for i in 50..60 {
-            classes[i] = 1;
+        for c in &mut classes[50..60] {
+            *c = 1;
         }
         let w = synthetic_window(0.0, 1.0, 100, &classes);
         let agg = Aggregator::new(AggregationConfig::default());
