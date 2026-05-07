@@ -1,0 +1,24 @@
+schema = "polyvoice-models-v1"
+
+# M0 (initial). Both profiles map to the legacy v0.5 model pair until M2/M5 land.
+# DO NOT remove `mobile` or `balanced` keys: external code (CLI, ModelRegistry,
+# downstream users) treats them as stable identifiers.
+[profiles.mobile]
+segmenter = "silero_vad"
+embedder  = "wespeaker_resnet34"
+
+[profiles.balanced]
+segmenter = "silero_vad"
+embedder  = "wespeaker_resnet34"
+
+[models.silero_vad]
+url      = "https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx"
+sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
+size     = 2327524
+filename = "silero_vad.onnx"
+
+[models.wespeaker_resnet34]
+url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/main/voxceleb_resnet34.onnx?download=true"
+sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
+size     = 26219527
+filename = "wespeaker_resnet34.onnx"
