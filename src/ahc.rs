@@ -158,6 +158,57 @@ fn estimate_threshold_from_similarities(embeddings: &[Vec<f32>]) -> f32 {
     th.clamp(0.2, 0.7)
 }
 
+/// Refine cluster assignments by reassigning each embedding to the nearest centroid.
+///
+/// After AHC, some embeddings may be misassigned due to greedy merging.
+/// This function recomputes centroids and reassigns embeddings in a k-means-like
+/// refinement step (single iteration).  Returns a new label vector.
+pub fn refine_clusters(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<usize> {
+    let n = embeddings.len();
+    if n == 0 {
+        return Vec::new();
+    }
+
+    let num_clusters = labels.iter().copied().max().unwrap_or(0) + 1;
+    let dim = embeddings[0].len();
+
+    // Compute centroids.
+    let mut centroids = vec![vec![0.0f32; dim]; num_clusters];
+    let mut counts = vec![0usize; num_clusters];
+    for (i, emb) in embeddings.iter().enumerate() {
+        let c = labels[i];
+        for (centroid, &v) in centroids[c].iter_mut().zip(emb.iter()) {
+            *centroid += v;
+        }
+        counts[c] += 1;
+    }
+    for (c, centroid) in centroids.iter_mut().enumerate() {
+        if counts[c] > 0 {
+            for v in centroid.iter_mut() {
+                *v /= counts[c] as f32;
+            }
+            l2_normalize(centroid);
+        }
+    }
+
+    // Reassign each embedding to the nearest centroid.
+    let mut new_labels = vec![0usize; n];
+    for (i, emb) in embeddings.iter().enumerate() {
+        let mut best = 0usize;
+        let mut best_sim = f32::NEG_INFINITY;
+        for (c_idx, centroid) in centroids.iter().enumerate() {
+            let sim = cosine_similarity(emb, centroid);
+            if sim > best_sim {
+                best_sim = sim;
+                best = c_idx;
+            }
+        }
+        new_labels[i] = best;
+    }
+
+    new_labels
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
