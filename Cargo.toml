@@ -12,7 +12,7 @@ categories = ["multimedia::audio", "science"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+default = ["spectral"]
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
 # C FFI bindings.
@@ -26,6 +26,9 @@ cli = ["onnx", "download", "dep:clap"]
 coreml = ["onnx", "ort/coreml"]
 nnapi = ["onnx", "ort/nnapi"]
 xnnpack = ["onnx", "ort/xnnpack"]
+
+# Spectral clustering backend (pulls faer for SVD/eigendecomp).
+spectral = ["dep:faer"]
 
 # Model profile bundles. M0 only emits metadata; CLI uses these to pick which
 # manifest entries to ensure(). M5 will introduce INT8 model variants.
@@ -63,7 +66,7 @@ num-complex = "0.4"
 clap = { version = "4", features = ["derive", "env"], optional = true }
 ureq = { version = "3", optional = true }
 dirs = { version = "6", optional = true }
-faer = { version = "0.24.0", features = ["std"] }
+faer = { version = "0.24.0", features = ["std"], optional = true }
 fastrand = "2.4.1"
 toml = { version = "0.8", optional = true }
 sha2 = { version = "0.10", optional = true }
