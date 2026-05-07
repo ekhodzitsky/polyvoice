@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (M0 — v1.0 plumbing)
+- `Profile` enum (`Mobile`/`Balanced`/`Custom`) in `polyvoice::types`.
+- `polyvoice::models` module: `ModelRegistry`, `Manifest`, `ModelEntry`, `ProfileEntry`, `ProfileModels`.
+  Provides manifest-driven, SHA-256-verified, idempotent ONNX model downloads.
+- New Cargo features: `download`, `coreml`, `nnapi`, `xnnpack`, `profile-mobile`,
+  `profile-balanced`, `profile-all`, and `spectral` (now in default features). The
+  `cli` feature now depends on `download` (no behavioral change for existing users).
+- CLI: `polyvoice download-models --profile mobile|balanced|all`. Both `mobile`
+  and `balanced` resolve to the existing v0.5.x model pair until later milestones
+  ship CAM++ (M2) and INT8 versions (M5).
+- CI: aarch64-unknown-linux-gnu cross-compile job and wasm32-unknown-unknown smoke
+  compile job.
+- `scripts/release-gate.sh` — stub release-gate script aligned with §9.10 of the
+  v1.0 design.
+
+### Changed
+- `faer` is now an optional dependency gated behind the `spectral` Cargo feature
+  (in `default`). Existing users see no behavior change; downstream consumers
+  building with `--no-default-features` no longer pull `faer` (enables wasm32 builds).
+
 ## [0.5.2] - 2025-05-05
 
 ### Added
