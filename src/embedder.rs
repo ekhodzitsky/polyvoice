@@ -148,6 +148,54 @@ impl<E: Embedder> EmbedderPool<E> {
     }
 }
 
+#[cfg(all(feature = "onnx", feature = "embedder"))]
+mod onnx_adapters {
+    use super::*;
+    use crate::ecapa::FbankOnnxExtractor;
+    use crate::embedding::EmbeddingExtractor;
+    use crate::types::DiarizationConfig;
+    use std::path::Path;
+
+    /// New-trait adapter for the existing `FbankOnnxExtractor` (WeSpeaker ResNet34, 256-d).
+    ///
+    /// The legacy `FbankOnnxExtractor` already implements the v0.5.x
+    /// `EmbeddingExtractor`; this adapter exposes the same model through the
+    /// v1.0 `Embedder` trait. M6 will fold this into a unified type.
+    pub struct ResNet34Adapter {
+        inner: FbankOnnxExtractor,
+        dim: usize,
+    }
+
+    impl ResNet34Adapter {
+        /// Load the WeSpeaker ResNet34 ONNX model.
+        pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError> {
+            let inner =
+                FbankOnnxExtractor::new(path.as_ref(), 256, pool_size).map_err(|e| {
+                    EmbedderError::ModelIo {
+                        path: path.as_ref().to_path_buf(),
+                        detail: format!("{e}"),
+                    }
+                })?;
+            Ok(Self { inner, dim: 256 })
+        }
+    }
+
+    impl Embedder for ResNet34Adapter {
+        fn dim(&self) -> usize {
+            self.dim
+        }
+
+        fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            self.inner
+                .extract(audio, &DiarizationConfig::default())
+                .map_err(|e| EmbedderError::Legacy(format!("{e}")))
+        }
+    }
+}
+
+#[cfg(all(feature = "onnx", feature = "embedder"))]
+pub use onnx_adapters::ResNet34Adapter;
+
 #[cfg(test)]
 mod overlap_mask_tests {
     use super::*;
