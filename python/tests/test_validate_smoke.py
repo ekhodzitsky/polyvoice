@@ -5,6 +5,14 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
+# scripts/validate_int8.py imports numpy/onnxruntime at module top-level, so
+# skip cleanly when those aren't installed (e.g. in the polyvoice-wheel CI
+# workflow that only installs the wheel itself).
+pytest.importorskip("numpy")
+pytest.importorskip("onnxruntime")
+
 ROOT = Path(__file__).resolve().parents[2]
 
 

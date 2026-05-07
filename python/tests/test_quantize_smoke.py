@@ -14,7 +14,14 @@ import sys
 import wave
 from pathlib import Path
 
-import numpy as np
+import pytest
+
+# These M5 smoke tests need the dev tooling — onnxruntime, numpy, librosa.
+# In the python wheel CI workflow only the polyvoice wheel is installed, so
+# skip cleanly when the deps are absent.
+np = pytest.importorskip("numpy")
+pytest.importorskip("onnx")
+pytest.importorskip("onnxruntime")
 
 ROOT = Path(__file__).resolve().parents[2]
 
