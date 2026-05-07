@@ -77,6 +77,13 @@ fn miri_resegment_single_overlap() {
         })
         .unwrap();
     assert_eq!(out.len(), 2);
+    // Secondary turn must be SpeakerId(1) — its centroid is the unit vector
+    // along axis 1, which exactly matches the overlap embedding.
+    assert!(
+        out.iter().any(|t| t.speaker == SpeakerId(1)),
+        "expected secondary SpeakerId(1) appended, got speakers {:?}",
+        out.iter().map(|t| t.speaker.0).collect::<Vec<_>>()
+    );
 }
 
 #[test]
