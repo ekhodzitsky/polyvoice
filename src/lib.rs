@@ -75,6 +75,12 @@ pub use segmentation::{PowersetConfig, PowersetSegmenter};
 #[cfg(feature = "embedder")]
 pub mod embedder;
 
+#[cfg(feature = "embedder")]
+pub use embedder::{Embedder, EmbedderError, EmbedderPool, apply_overlap_mask};
+
+#[cfg(all(feature = "onnx", feature = "embedder"))]
+pub use embedder::{CamPlusPlusExtractor, ResNet34Adapter};
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]

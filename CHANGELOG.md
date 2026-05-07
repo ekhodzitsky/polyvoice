@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New manifest entry `[models.powerset_fp32]` for sherpa-onnx-pyannote-segmentation-3-0.
   Profiles still resolve to the legacy `silero_vad` segmenter; M6 swaps them.
 
+### Added (M2 — Embedder trait + CAM++)
+- `polyvoice::embedder` module: `Embedder` trait, `EmbedderError`, `EmbedderPool`,
+  `apply_overlap_mask` helper.
+- `CamPlusPlusExtractor` (192-d output, gated `onnx`+`embedder`) — wraps the
+  same fbank pipeline as ResNet34 with the CAM++ ONNX model.
+- `ResNet34Adapter` — bridges existing `FbankOnnxExtractor` (256-d, WeSpeaker)
+  to the new `Embedder` trait. Legacy `EmbeddingExtractor` trait is unchanged.
+- New Cargo feature `embedder` (in default features). Pure-Rust core (trait,
+  `apply_overlap_mask`, `EmbedderPool` over a generic `E: Embedder`) is
+  wasm32-clean; `CamPlusPlusExtractor` and `ResNet34Adapter` additionally
+  require `onnx`.
+- New manifest entry `[models.cam_pp_fp32]`. Profiles still resolve to
+  `wespeaker_resnet34` until M6 swaps them.
+
 ## [0.5.2] - 2025-05-05
 
 ### Added
