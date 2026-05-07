@@ -63,7 +63,10 @@ impl Manifest {
         }
         // Check dangling profile references before sha256 so that a missing model
         // is reported as DanglingModelRef even when other models have invalid sha256.
-        for (name, prof) in &m.profiles {
+        let mut sorted_profile_ids: Vec<&String> = m.profiles.keys().collect();
+        sorted_profile_ids.sort();
+        for name in sorted_profile_ids {
+            let prof = &m.profiles[name];
             if !m.models.contains_key(&prof.segmenter) {
                 return Err(ManifestError::DanglingModelRef {
                     profile: name.clone(),
@@ -77,11 +80,14 @@ impl Manifest {
                 });
             }
         }
-        for (model_id, entry) in &m.models {
+        let mut sorted_model_ids: Vec<&String> = m.models.keys().collect();
+        sorted_model_ids.sort();
+        for model_id in sorted_model_ids {
+            let entry = &m.models[model_id];
             if !is_valid_sha256_hex(&entry.sha256) {
                 return Err(ManifestError::InvalidSha256 {
                     model: model_id.clone(),
-                    sha: entry.sha256.clone(),
+                    sha: truncate_for_display(&entry.sha256),
                 });
             }
         }
@@ -101,6 +107,16 @@ fn is_valid_sha256_hex(s: &str) -> bool {
     s.len() == 64
         && s.chars()
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+}
+
+/// Truncate a string for inclusion in error messages. SHA-256 is 64 chars;
+/// anything past 80 is almost certainly garbage and bloating the message hurts.
+fn truncate_for_display(s: &str) -> String {
+    if s.len() <= 80 {
+        s.to_owned()
+    } else {
+        format!("{}…[{} more chars]", &s[..72], s.len() - 72)
+    }
 }
 
 #[cfg(test)]
