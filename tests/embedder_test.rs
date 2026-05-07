@@ -27,18 +27,19 @@ fn synthetic_audio_1s() -> Vec<f32> {
 
 #[test]
 #[ignore = "real network — run with --ignored"]
-fn cam_plus_plus_extractor_produces_192d_normalized_embedding() {
+fn cam_plus_plus_extractor_produces_512d_normalized_embedding() {
     let tmp = TempDir::new().expect("temp dir");
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
     let model_path = registry
         .ensure("cam_pp_fp32")
         .expect("download must succeed");
 
-    let extractor = CamPlusPlusExtractor::new(&model_path, 1).expect("loads");
-    assert_eq!(extractor.dim(), 192);
+    // The WeSpeaker voxceleb_CAM++ ONNX outputs 512-d.
+    let extractor = CamPlusPlusExtractor::new(&model_path, 512, 1).expect("loads");
+    assert_eq!(extractor.dim(), 512);
 
     let embedding = extractor.embed(&synthetic_audio_1s()).expect("embed runs");
-    assert_eq!(embedding.len(), 192);
+    assert_eq!(embedding.len(), 512);
 
     // L2 norm should be ~1.0 (the underlying FbankOnnxExtractor L2-normalizes).
     let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();

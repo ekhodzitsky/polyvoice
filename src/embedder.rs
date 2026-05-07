@@ -191,37 +191,42 @@ mod onnx_adapters {
         }
     }
 
-    /// CAM++ embedder (Channel-Attentive Multi-scale Pooling, ~7M params, 192-d output).
-    ///
-    /// Targets the Mobile profile of v1.0. Uses the same 80-bin log-mel fbank
-    /// pipeline as ResNet34 (wraps `FbankOnnxExtractor` internally with dim=192).
-    /// Models with different fbank parameters or input shapes will produce
-    /// shape-mismatch errors at inference time.
+    /// CAM++ embedder (Channel-Attentive Multi-scale Pooling). Dim is supplied
+    /// explicitly because WeSpeaker ships several CAM++ variants:
+    /// `voxceleb_CAM++.onnx` is 512-d; smaller variants exist at 192-d.
+    /// Targets the Mobile profile of v1.0; M5 may swap to INT8 + smaller dim.
+    /// Uses the same 80-bin log-mel fbank pipeline as ResNet34.
     pub struct CamPlusPlusExtractor {
         inner: FbankOnnxExtractor,
+        dim: usize,
     }
 
     impl CamPlusPlusExtractor {
-        /// Load a CAM++ ONNX model. Pool size controls the number of concurrent
-        /// ONNX sessions held internally (canonical: `num_cpus().min(4)`).
-        pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError> {
-            let inner = FbankOnnxExtractor::new(path.as_ref(), 192, pool_size).map_err(|e| {
+        /// Load a CAM++ ONNX model. `dim` must match the model's output
+        /// dimension (e.g. 192 or 512 depending on the variant). Pool size
+        /// controls the number of concurrent ONNX sessions held internally
+        /// (canonical: `num_cpus().min(4)`).
+        pub fn new(
+            path: impl AsRef<Path>,
+            dim: usize,
+            pool_size: usize,
+        ) -> Result<Self, EmbedderError> {
+            let inner = FbankOnnxExtractor::new(path.as_ref(), dim, pool_size).map_err(|e| {
                 EmbedderError::ModelIo {
                     path: path.as_ref().to_path_buf(),
                     detail: format!("{e}"),
                 }
             })?;
-            Ok(Self { inner })
+            Ok(Self { inner, dim })
         }
     }
 
     impl Embedder for CamPlusPlusExtractor {
         fn dim(&self) -> usize {
-            192
+            self.dim
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-            // Mirror ResNet34Adapter: extract takes (samples, &DiarizationConfig).
             self.inner
                 .extract(audio, &DiarizationConfig::default())
                 .map_err(|e| EmbedderError::Legacy(format!("{e}")))
