@@ -63,6 +63,15 @@ pub mod models;
 #[cfg(feature = "segmentation")]
 pub mod segmentation;
 
+#[cfg(feature = "segmentation")]
+pub use segmentation::{
+    Aggregator, AggregationConfig, FrameLabel, PowersetClass, PowersetDecoder,
+    RawSegment, Segmenter, SegmentationError, WindowOutput, MIN_AUDIO_SAMPLES,
+};
+
+#[cfg(all(feature = "onnx", feature = "segmentation"))]
+pub use segmentation::{PowersetConfig, PowersetSegmenter};
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]
