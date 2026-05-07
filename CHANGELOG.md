@@ -62,6 +62,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration test on synthetic 4-cluster data (no model required) — runs in
   every PR's normal `cargo test` (not `--ignored`).
 
+### Added (M4 — Overlap resegmenter)
+- `polyvoice::resegmentation` module: `Resegmenter` trait, `ResegmentError`,
+  `OverlapResegmenter` (pure-Rust post-clustering pass that attaches a second
+  speaker to overlap regions via nearest-cosine cluster), `ResegmentInputs`,
+  `OverlapRegionInput`, `SpeakerCentroid`, helpers `compute_centroids` and
+  `extract_overlap_time_ranges` (gated `segmentation`).
+- New Cargo feature `resegmentation` (in default features). Pure-Rust core,
+  wasm32-clean, no `onnx` requirement.
+- Integration test on synthetic two-speaker / three-speaker data + RTTM
+  round-trip — runs in every PR's normal `cargo test`.
+- Miri-friendly test target `tests/miri_resegmentation.rs` covering
+  no-overlap, single-overlap, and centroid math paths.
+
 ## [0.5.2] - 2025-05-05
 
 ### Added
