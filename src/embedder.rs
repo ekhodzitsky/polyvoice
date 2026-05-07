@@ -86,6 +86,68 @@ pub fn apply_overlap_mask(
     out
 }
 
+use crossbeam_queue::ArrayQueue;
+use std::sync::Arc;
+
+/// Lock-free pool of `Embedder` instances for concurrent extraction.
+///
+/// Generic over `E: Embedder` so the same pool implementation works for
+/// `CamPlusPlusExtractor`, `ResNet34Adapter`, or any user-provided embedder.
+/// All embedders in a pool must share the same output dimension.
+pub struct EmbedderPool<E: Embedder> {
+    queue: Arc<ArrayQueue<E>>,
+    dim: usize,
+    capacity: usize,
+}
+
+impl<E: Embedder> EmbedderPool<E> {
+    /// Build a pool from a list of embedders. All must share the same `dim()`.
+    /// An empty list constructs a pool that fails on every call (returns
+    /// `EmbedderError::Legacy("empty pool")`).
+    pub fn new(embedders: Vec<E>) -> Self {
+        let dim = embedders.first().map(|e| e.dim()).unwrap_or(0);
+        let capacity = embedders.len().max(1);
+        let queue = Arc::new(ArrayQueue::new(capacity));
+        for e in embedders {
+            // ArrayQueue::push only fails if full; capacity == count, so push always succeeds.
+            let _ = queue.push(e);
+        }
+        Self {
+            queue,
+            dim,
+            capacity,
+        }
+    }
+
+    pub fn dim(&self) -> usize {
+        self.dim
+    }
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Extract a single embedding using the next-available pooled embedder.
+    /// Blocks (busy-spins) until one is free.
+    pub fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        if self.dim == 0 {
+            // Empty-construction case.
+            return Err(EmbedderError::Legacy("empty pool".to_owned()));
+        }
+        // Acquire (busy-wait fallback for simplicity; real Pipeline use is
+        // through `rayon::par_iter` which already throttles concurrency).
+        let embedder = loop {
+            if let Some(e) = self.queue.pop() {
+                break e;
+            }
+            std::hint::spin_loop();
+        };
+        let result = embedder.embed(audio);
+        // Always return the embedder.
+        let _ = self.queue.push(embedder);
+        result
+    }
+}
+
 #[cfg(test)]
 mod overlap_mask_tests {
     use super::*;
@@ -213,5 +275,73 @@ mod trait_tests {
         let msg = format!("{err}");
         assert!(msg.contains("0.05"));
         assert!(msg.contains("0.25"));
+    }
+}
+
+#[cfg(test)]
+mod pool_tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Counts how many times `embed` was called.
+    struct CountingEmbedder {
+        counter: Arc<AtomicUsize>,
+        dim: usize,
+    }
+
+    impl Embedder for CountingEmbedder {
+        fn dim(&self) -> usize {
+            self.dim
+        }
+        fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            self.counter.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![0.0; self.dim])
+        }
+    }
+
+    fn make_pool(n: usize) -> (EmbedderPool<CountingEmbedder>, Arc<AtomicUsize>) {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut embedders = Vec::with_capacity(n);
+        for _ in 0..n {
+            embedders.push(CountingEmbedder {
+                counter: counter.clone(),
+                dim: 192,
+            });
+        }
+        let pool = EmbedderPool::new(embedders);
+        (pool, counter)
+    }
+
+    #[test]
+    fn pool_with_single_embedder_round_trip() {
+        let (pool, counter) = make_pool(1);
+        let result = pool.embed(&[0.0_f32; 100]).unwrap();
+        assert_eq!(result.len(), 192);
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn pool_dim_is_consistent() {
+        let (pool, _) = make_pool(4);
+        assert_eq!(pool.dim(), 192);
+    }
+
+    #[test]
+    fn pool_serial_embed_increments_counter_per_call() {
+        let (pool, counter) = make_pool(2);
+        for _ in 0..5 {
+            pool.embed(&[0.0_f32; 100]).unwrap();
+        }
+        assert_eq!(counter.load(Ordering::SeqCst), 5);
+    }
+
+    #[test]
+    fn pool_with_zero_embedders_errors() {
+        let pool: EmbedderPool<CountingEmbedder> = EmbedderPool::new(Vec::new());
+        let err = pool
+            .embed(&[0.0_f32; 100])
+            .expect_err("empty pool must fail");
+        assert!(matches!(err, EmbedderError::Legacy(_)));
     }
 }
