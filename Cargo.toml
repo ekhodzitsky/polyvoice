@@ -13,12 +13,25 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-# Enable ONNX-based embedding extractors (pulls ort).
+# ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
-# Enable C FFI bindings.
+# C FFI bindings.
 ffi = []
-# Enable CLI binary (polyvoice command).
-cli = ["onnx", "dep:clap", "dep:ureq", "dep:dirs"]
+# Library-level model registry with HTTP downloads + SHA-256 verification.
+download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2"]
+# CLI binary (polyvoice command).
+cli = ["onnx", "download", "dep:clap"]
+
+# Execution providers (forward `ort` features). Used by Pipeline implementations from M1+.
+coreml = ["onnx", "ort/coreml"]
+nnapi = ["onnx", "ort/nnapi"]
+xnnpack = ["onnx", "ort/xnnpack"]
+
+# Model profile bundles. M0 only emits metadata; CLI uses these to pick which
+# manifest entries to ensure(). M5 will introduce INT8 model variants.
+profile-mobile = []
+profile-balanced = []
+profile-all = ["profile-mobile", "profile-balanced"]
 
 [dependencies]
 # ONNX Runtime — matches the ecosystem version.
@@ -52,6 +65,8 @@ ureq = { version = "3", optional = true }
 dirs = { version = "6", optional = true }
 faer = { version = "0.24.0", features = ["std"] }
 fastrand = "2.4.1"
+toml = { version = "0.8", optional = true }
+sha2 = { version = "0.10", optional = true }
 
 [dev-dependencies]
 hound = "3.5"
