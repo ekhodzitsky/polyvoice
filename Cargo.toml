@@ -15,8 +15,8 @@ crate-type = ["cdylib", "rlib"]
 default = ["spectral", "segmentation", "embedder", "clusterer", "resegmentation", "pipeline"]
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
-# C FFI bindings.
-ffi = []
+# C FFI bindings (ABI v2). Requires the full pipeline stack.
+ffi = ["onnx", "pipeline", "segmentation", "embedder", "clusterer", "resegmentation"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
 download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2"]
 # CLI binary (polyvoice command).
