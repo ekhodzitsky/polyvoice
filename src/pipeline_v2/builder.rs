@@ -15,17 +15,13 @@ pub enum ConfigError {
     #[error("profile {profile:?} requires .with_models_from() call")]
     MissingRegistry { profile: Profile },
 
-    #[error(
-        "profile {profile:?} cannot accept .with_{offending}() — Custom only"
-    )]
+    #[error("profile {profile:?} cannot accept .with_{offending}() — Custom only")]
     CustomComponentInProfile {
         profile: Profile,
         offending: &'static str,
     },
 
-    #[error(
-        "Custom profile cannot accept .with_models_from() — supply components individually"
-    )]
+    #[error("Custom profile cannot accept .with_models_from() — supply components individually")]
     RegistryInCustomProfile,
 
     #[error("Custom profile missing required components: {missing:?}")]
@@ -160,6 +156,101 @@ impl PipelineBuilder {
     }
 }
 
+use crate::pipeline_v2::Pipeline;
+use crate::pipeline_v2::config::ClustererKind;
+use crate::resegmentation::OverlapResegmenter;
+
+impl PipelineBuilder {
+    /// Validate + construct the inner `Pipeline`.
+    pub fn build(self) -> Result<Pipeline, ConfigError> {
+        self.validate()?;
+        let resegmenter = self
+            .custom_resegmenter
+            .unwrap_or_else(|| Box::new(OverlapResegmenter::default()));
+
+        match self.config.profile {
+            Profile::Custom => {
+                let segmenter =
+                    self.custom_segmenter
+                        .ok_or_else(|| ConfigError::MissingCustomComponent {
+                            missing: vec!["segmenter"],
+                        })?;
+                let embedder =
+                    self.custom_embedder
+                        .ok_or_else(|| ConfigError::MissingCustomComponent {
+                            missing: vec!["embedder"],
+                        })?;
+                let clusterer =
+                    self.custom_clusterer
+                        .ok_or_else(|| ConfigError::MissingCustomComponent {
+                            missing: vec!["clusterer"],
+                        })?;
+                Ok(Pipeline::from_components(
+                    self.config,
+                    segmenter,
+                    embedder,
+                    clusterer,
+                    resegmenter,
+                ))
+            }
+            Profile::Mobile | Profile::Balanced => {
+                let registry = self.registry.ok_or(ConfigError::MissingRegistry {
+                    profile: self.config.profile,
+                })?;
+                let profile_models = registry.ensure_for_profile(self.config.profile)?;
+                let segmenter: Box<dyn Segmenter> = Box::new(
+                    crate::segmentation::PowersetSegmenter::new(&profile_models.segmenter_path)
+                        .map_err(|e| ConfigError::UnknownModel {
+                            model_id: format!("powerset (cause: {e})"),
+                        })?,
+                );
+                let embedder: Box<dyn Embedder> = match self.config.profile {
+                    Profile::Mobile => Box::new(
+                        crate::embedder::CamPlusPlusExtractor::new(
+                            &profile_models.embedder_path,
+                            self.config.profile.embedding_dim(),
+                            self.config.embedder_pool_size,
+                        )
+                        .map_err(|e| ConfigError::UnknownModel {
+                            model_id: format!("cam_pp (cause: {e})"),
+                        })?,
+                    ),
+                    Profile::Balanced => Box::new(
+                        crate::embedder::ResNet34Adapter::new(
+                            &profile_models.embedder_path,
+                            self.config.embedder_pool_size,
+                        )
+                        .map_err(|e| ConfigError::UnknownModel {
+                            model_id: format!("resnet34 (cause: {e})"),
+                        })?,
+                    ),
+                    Profile::Custom => unreachable!("Profile::Custom handled above"),
+                };
+                let clusterer: Box<dyn Clusterer> = match self.config.clusterer {
+                    ClustererKind::Ahc { .. } => Box::new(crate::clusterer::AhcClusterer::new(
+                        self.config.max_speakers as usize,
+                    )),
+                    #[cfg(feature = "spectral")]
+                    ClustererKind::NmeSc => Box::new(crate::clusterer::NmeScClusterer::new(
+                        self.config.max_speakers as usize,
+                    )),
+                    #[cfg(not(feature = "spectral"))]
+                    ClustererKind::NmeSc => Box::new(crate::clusterer::AhcClusterer::new(
+                        self.config.max_speakers as usize,
+                    )),
+                };
+                Ok(Pipeline::from_components(
+                    self.config,
+                    segmenter,
+                    embedder,
+                    clusterer,
+                    resegmenter,
+                ))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,7 +275,12 @@ mod tests {
     #[test]
     fn validate_mobile_without_registry_errors() {
         let err = fresh().profile(Profile::Mobile).validate().unwrap_err();
-        assert!(matches!(err, ConfigError::MissingRegistry { profile: Profile::Mobile }));
+        assert!(matches!(
+            err,
+            ConfigError::MissingRegistry {
+                profile: Profile::Mobile
+            }
+        ));
     }
 
     #[test]
