@@ -21,7 +21,7 @@ pub mod config;
 pub mod mocks;
 
 use crate::clusterer::{Clusterer, ClustererError};
-use crate::embedder::{Embedder, EmbedderError};
+use crate::embedder::{Embedder, EmbedderError, apply_overlap_mask};
 use crate::models::RegistryError;
 use crate::resegmentation::{
     OverlapRegionInput, ResegmentError, ResegmentInputs, Resegmenter, SpeakerCentroid,
@@ -110,6 +110,7 @@ impl Pipeline {
 
         let sample_rate = self.config.sample_rate.get() as f64;
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(primary_segments.len());
+        let mut valid_segments: Vec<_> = Vec::with_capacity(primary_segments.len());
         for seg in &primary_segments {
             let start_idx = (seg.time.start * sample_rate) as usize;
             let end_idx = ((seg.time.end * sample_rate) as usize).min(samples.len());
@@ -117,9 +118,26 @@ impl Pipeline {
                 continue;
             }
             let chunk = &samples[start_idx..end_idx];
-            let mut emb = self.embedder.embed(chunk)?;
+            // Fix 2: zero-fill any overlap regions inside this primary chunk before embedding.
+            let seg_start = seg.time.start;
+            let seg_end = seg.time.end;
+            let local_overlaps: Vec<(f32, f32)> = overlap_ranges
+                .iter()
+                .filter_map(|(ot, _, _)| {
+                    let lo = ot.start.max(seg_start);
+                    let hi = ot.end.min(seg_end);
+                    if hi > lo {
+                        Some(((lo - seg_start) as f32, (hi - seg_start) as f32))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let masked = apply_overlap_mask(chunk, &local_overlaps, self.config.sample_rate.get());
+            let mut emb = self.embedder.embed(&masked)?;
             l2_normalize(&mut emb);
             embeddings.push(emb);
+            valid_segments.push(seg);
         }
 
         if embeddings.is_empty() {
@@ -132,7 +150,8 @@ impl Pipeline {
 
         let labels = self.clusterer.cluster(&embeddings)?;
 
-        let mut primary_turns: Vec<SpeakerTurn> = primary_segments
+        // Fix 1: zip valid_segments (survivors only) with labels — not primary_segments.
+        let mut primary_turns: Vec<SpeakerTurn> = valid_segments
             .iter()
             .zip(labels.iter())
             .map(|(seg, &lbl)| SpeakerTurn {
@@ -159,6 +178,9 @@ impl Pipeline {
             primary_turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
             primary_turns
         };
+
+        // Fix 4: guarantee sorted order regardless of which Resegmenter impl ran.
+        all_turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
 
         let min_secs = self.config.min_speech_secs as f64;
         all_turns.retain(|t| t.time.duration() >= min_secs);
@@ -211,13 +233,12 @@ impl Pipeline {
                 .find(|t| t.time.start <= time.start && time.end <= t.time.end)
                 .map(|t| t.speaker)
                 .unwrap_or_else(|| {
+                    // Fix 3: nearest by midpoint distance, not start-time distance.
+                    let mid = (time.start + time.end) / 2.0;
+                    let tmid = |t: &SpeakerTurn| (t.time.start + t.time.end) / 2.0;
                     primary_turns
                         .iter()
-                        .min_by(|a, b| {
-                            (a.time.start - time.start)
-                                .abs()
-                                .total_cmp(&(b.time.start - time.start).abs())
-                        })
+                        .min_by(|a, b| (tmid(a) - mid).abs().total_cmp(&(tmid(b) - mid).abs()))
                         .map(|t| t.speaker)
                         .unwrap_or(SpeakerId(0))
                 });
