@@ -95,6 +95,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   7 tests) + `#[ignore]` E2E test on Balanced profile via `ModelRegistry`
   (`tests/pipeline_v2_e2e_test.rs`).
 
+### Changed (M6b — Legacy cleanup + CLI/FFI/Python migration)
+- **BREAKING**: removed legacy `Pipeline::new(DiarizationConfig, VadConfig)`,
+  `OfflineDiarizer`, `DiarizationConfig`, `VadConfig`, `VoiceActivityDetector`,
+  `EnergyVad`, `segment_speech`, `DummyExtractor`, `OnnxEmbeddingExtractor`,
+  `EcapaTdnnExtractor`, `EcapaMelOnnxExtractor`, `RawAudioOnnxExtractor`,
+  `ClusteringBackend`, `EmbeddingDim`. `compute_fbank` is now private.
+- Renamed `pipeline_v2 → pipeline`. The Cargo feature is `pipeline`
+  (default-on, requires `download + onnx + segmentation + embedder + clusterer + resegmentation`).
+  Public surface: `polyvoice::Pipeline::builder()` is the only Pipeline API.
+- CLI rewritten: `polyvoice diarize <wav> --profile mobile|balanced` replaces
+  the legacy threshold-based interface. New: `polyvoice models list/info`.
+- `polyvoice-bench` rewritten on `Pipeline::builder()`. JSON output schema
+  `polyvoice-bench-v1`.
+- C FFI ABI v2 (`polyvoice_pipeline_*` family) replaces the legacy
+  `polyvoice_diarizer_*` ABI. See `include/polyvoice.h`.
+- Python pyo3 bindings rewritten: `polyvoice.Pipeline.mobile()` /
+  `Pipeline.balanced()` / `Pipeline.run(samples, sample_rate)`.
+
+### Added (M6b)
+- `docs/MIGRATING-FROM-0.5.md`: migration guide for Rust / Python / CLI / C FFI.
+- `tests/der_baseline.json`: schema for the v1.0 DER baseline. Numbers are
+  deferred to an operational follow-up after M5 INT8 publish closes.
+- `scripts/run-der-baseline.sh`: helper that runs `polyvoice-bench` on
+  VoxConverse-test and prints the values to paste into the baseline JSON.
+
+### Deprecated
+- `polyvoice::OnlineDiarizer` — streaming redesign coming in v1.1; use
+  `Pipeline` for offline.
+
 ### Added (M5 — INT8 quantization)
 - New scripts: `download-voxconverse-dev.sh`, `download-voxceleb1-subset.sh`,
   `quantize_models.py` + `quantize-models.sh`, `validate_int8.py` +

@@ -1,0 +1,16 @@
+{
+  "schema": "polyvoice-der-baseline-v1",
+  "voxconverse_test": {
+    "files": null,
+    "profile": "balanced",
+    "der_collar_0_25": null,
+    "der_no_collar": null,
+    "tolerance": 1.0,
+    "model_versions": {
+      "powerset_int8": null,
+      "resnet34_int8": null
+    },
+    "_status": "schema-only — real numbers after M5 INT8 publish + M6b CLI rewrite",
+    "_filled_by": "scripts/run-der-baseline.sh"
+  }
+}

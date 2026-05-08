@@ -99,27 +99,27 @@ pub mod pipeline;
     feature = "resegmentation",
 ))]
 pub use pipeline::{
-    ClustererKind, ConfigError, ExecutionProvider, Pipeline, PipelineBuilder,
-    PipelineConfig, PipelineError,
+    ClustererKind, ConfigError, ExecutionProvider, Pipeline, PipelineBuilder, PipelineConfig,
+    PipelineError,
 };
 
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 
 // Public re-exports for ergonomic use.
+pub use cluster::ClusterConfig;
 pub use cluster::SpeakerCluster;
 pub use embedding::{EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
+pub use online::OnlineConfig;
+#[allow(deprecated)]
 pub use online::OnlineDiarizer;
 pub use overlap::{OverlapRegion, detect_overlaps};
 pub use types::{
-    Confidence, DiarizationResult, Profile,
-    SampleRate, Seconds, Segment, SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment,
-    remap_segments, remap_turns,
+    Confidence, DiarizationResult, Profile, SampleRate, Seconds, Segment, SpeakerId,
+    SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
 };
-pub use cluster::ClusterConfig;
-pub use online::OnlineConfig;
 
 #[cfg(feature = "onnx")]
 pub use ecapa::FbankOnnxExtractor;
