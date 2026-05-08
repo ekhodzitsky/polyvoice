@@ -9,7 +9,6 @@
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
 use crate::features::{FbankExtractor, apply_cmvn};
-use crate::types::DiarizationConfig;
 use crate::utils::l2_normalize;
 use std::path::Path;
 
@@ -52,11 +51,7 @@ impl FbankOnnxExtractor {
 
 #[cfg(feature = "onnx")]
 impl EmbeddingExtractor for FbankOnnxExtractor {
-    fn extract(
-        &self,
-        samples: &[f32],
-        _config: &DiarizationConfig,
-    ) -> Result<Vec<f32>, EmbeddingError> {
+    fn extract(&self, samples: &[f32]) -> Result<Vec<f32>, EmbeddingError> {
         let mut guard = self.checkout().ok_or_else(|| {
             EmbeddingError::InferenceFailed("ONNX session pool exhausted".to_string())
         })?;

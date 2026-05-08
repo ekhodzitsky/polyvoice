@@ -1,7 +1,5 @@
 //! Speaker embedding extraction trait.
 
-use crate::types::DiarizationConfig;
-
 /// Error type for embedding extraction failures.
 #[derive(thiserror::Error, Debug)]
 pub enum EmbeddingError {
@@ -18,16 +16,12 @@ pub enum EmbeddingError {
 /// Implementors are expected to be thread-safe (either internally synchronized
 /// or cheaply clonable), so that they can be shared across concurrent diarizers.
 pub trait EmbeddingExtractor: Send + Sync {
-    /// Extract an embedding from raw 16 kHz (or `config.sample_rate`) mono f32 samples.
+    /// Extract an embedding from raw 16 kHz mono f32 samples.
     ///
     /// The caller is responsible for ensuring the buffer length matches the model
-    /// expectations (usually `config.window_samples()`). Implementations may pad
-    /// or truncate, but should prefer returning an error when the input is unusable.
-    fn extract(
-        &self,
-        samples: &[f32],
-        config: &DiarizationConfig,
-    ) -> Result<Vec<f32>, EmbeddingError>;
+    /// expectations. Implementations may pad or truncate, but should prefer
+    /// returning an error when the input is unusable.
+    fn extract(&self, samples: &[f32]) -> Result<Vec<f32>, EmbeddingError>;
 
     /// Dimensionality of the produced embedding vectors.
     fn embedding_dim(&self) -> usize;
