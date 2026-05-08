@@ -151,6 +151,3 @@ impl FbankOnnxExtractor {
         anyhow::bail!("the `onnx` feature is not enabled")
     }
 }
-
-#[deprecated(since = "0.5.0", note = "renamed to FbankOnnxExtractor")]
-pub type EcapaTdnnExtractor = FbankOnnxExtractor;
