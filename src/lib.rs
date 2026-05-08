@@ -102,6 +102,16 @@ pub use resegmentation::{
 #[cfg(all(feature = "resegmentation", feature = "segmentation"))]
 pub use resegmentation::extract_overlap_time_ranges;
 
+#[cfg(all(
+    feature = "pipeline_v2",
+    feature = "onnx",
+    feature = "segmentation",
+    feature = "embedder",
+    feature = "clusterer",
+    feature = "resegmentation",
+))]
+pub mod pipeline_v2;
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]
