@@ -56,7 +56,6 @@ impl Default for FbankConfig {
     }
 }
 
-
 fn pre_emphasis(samples: &[f32], coeff: f32) -> Vec<f32> {
     let mut out = Vec::with_capacity(samples.len());
     if let Some(&first) = samples.first() {

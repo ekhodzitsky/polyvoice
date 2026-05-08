@@ -44,39 +44,45 @@ pub unsafe extern "C" fn polyvoice_pipeline_create(
     models_cache_dir: *const c_char,
     out_handle: *mut *mut PolyvoicePipeline,
 ) -> c_int {
-    let r = catch_unwind(AssertUnwindSafe(|| -> Result<*mut PolyvoicePipeline, c_int> {
-        if out_handle.is_null() {
-            return Err(PolyvoiceStatus::InvalidArg as c_int);
-        }
-        let prof = match profile {
-            PolyvoiceProfile::Mobile => Profile::Mobile,
-            PolyvoiceProfile::Balanced => Profile::Balanced,
-        };
-        let registry = if models_cache_dir.is_null() {
-            ModelRegistry::default()
-        } else {
-            // SAFETY: caller guarantees models_cache_dir is a valid nul-terminated string.
-            let s = unsafe { CStr::from_ptr(models_cache_dir) }
-                .to_str()
-                .map_err(|_| PolyvoiceStatus::InvalidArg as c_int)?;
-            ModelRegistry::with_cache_dir(s)
-        }
-        .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
-        let cfg = PipelineConfig {
-            profile: prof,
-            ..PipelineConfig::default()
-        };
-        let pipeline = Pipeline::builder()
-            .config(cfg)
-            .with_models_from(registry)
-            .build()
-            .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
-        Ok(Box::into_raw(Box::new(PolyvoicePipeline { inner: pipeline })))
-    }));
+    let r = catch_unwind(AssertUnwindSafe(
+        || -> Result<*mut PolyvoicePipeline, c_int> {
+            if out_handle.is_null() {
+                return Err(PolyvoiceStatus::InvalidArg as c_int);
+            }
+            let prof = match profile {
+                PolyvoiceProfile::Mobile => Profile::Mobile,
+                PolyvoiceProfile::Balanced => Profile::Balanced,
+            };
+            let registry = if models_cache_dir.is_null() {
+                ModelRegistry::default()
+            } else {
+                // SAFETY: caller guarantees models_cache_dir is a valid nul-terminated string.
+                let s = unsafe { CStr::from_ptr(models_cache_dir) }
+                    .to_str()
+                    .map_err(|_| PolyvoiceStatus::InvalidArg as c_int)?;
+                ModelRegistry::with_cache_dir(s)
+            }
+            .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
+            let cfg = PipelineConfig {
+                profile: prof,
+                ..PipelineConfig::default()
+            };
+            let pipeline = Pipeline::builder()
+                .config(cfg)
+                .with_models_from(registry)
+                .build()
+                .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
+            Ok(Box::into_raw(Box::new(PolyvoicePipeline {
+                inner: pipeline,
+            })))
+        },
+    ));
     match r {
         Ok(Ok(handle)) => {
             // SAFETY: out_handle was checked non-null inside the closure above.
-            unsafe { *out_handle = handle; }
+            unsafe {
+                *out_handle = handle;
+            }
             PolyvoiceStatus::Ok as c_int
         }
         Ok(Err(code)) => code,
@@ -113,8 +119,8 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
             .inner
             .run(samples, sr)
             .map_err(|_| PolyvoiceStatus::Inference as c_int)?;
-        let json = serde_json::to_string(&result)
-            .map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+        let json =
+            serde_json::to_string(&result).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
         let len = json.len();
         let cstr = CString::new(json).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
         let ptr_out = cstr.into_raw();
@@ -142,7 +148,9 @@ pub unsafe extern "C" fn polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipe
     if !pipeline.is_null() {
         let _ = catch_unwind(AssertUnwindSafe(|| {
             // SAFETY: pipeline is non-null and was created by Box::into_raw; caller destroys exactly once.
-            unsafe { drop(Box::from_raw(pipeline)); }
+            unsafe {
+                drop(Box::from_raw(pipeline));
+            }
         }));
     }
 }
@@ -156,7 +164,9 @@ pub unsafe extern "C" fn polyvoice_free_string(p: *mut c_char, _n: usize) {
     if !p.is_null() {
         let _ = catch_unwind(AssertUnwindSafe(|| {
             // SAFETY: p is non-null and was created by CString::into_raw in polyvoice_pipeline_run.
-            unsafe { drop(CString::from_raw(p)); }
+            unsafe {
+                drop(CString::from_raw(p));
+            }
         }));
     }
 }

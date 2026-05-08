@@ -26,4 +26,3 @@ pub trait EmbeddingExtractor: Send + Sync {
     /// Dimensionality of the produced embedding vectors.
     fn embedding_dim(&self) -> usize;
 }
-

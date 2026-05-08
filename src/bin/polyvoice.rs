@@ -127,15 +127,22 @@ fn cmd_diarize(
         eprintln!("Reading {}...", wav.display());
     }
     let (samples, sr_hz) = read_wav(&wav).with_context(|| format!("read WAV {}", wav.display()))?;
-    let sr = SampleRate::new(sr_hz)
-        .with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
+    let sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
 
     if !quiet {
-        eprintln!("Running diarization on {} samples ({} Hz)...", samples.len(), sr_hz);
+        eprintln!(
+            "Running diarization on {} samples ({} Hz)...",
+            samples.len(),
+            sr_hz
+        );
     }
     let result = pipeline.run(&samples, sr).context("pipeline.run failed")?;
     if !quiet {
-        eprintln!("Done — {} turns, {} speakers", result.turns.len(), result.num_speakers);
+        eprintln!(
+            "Done — {} turns, {} speakers",
+            result.turns.len(),
+            result.num_speakers
+        );
     }
 
     match format {
@@ -193,8 +200,8 @@ fn cmd_models_list() -> Result<()> {
     for (name, prof) in &manifest.profiles {
         let seg = manifest.models.get(&prof.segmenter);
         let emb = manifest.models.get(&prof.embedder);
-        let total: u64 = seg.and_then(|m| m.size).unwrap_or(0)
-            + emb.and_then(|m| m.size).unwrap_or(0);
+        let total: u64 =
+            seg.and_then(|m| m.size).unwrap_or(0) + emb.and_then(|m| m.size).unwrap_or(0);
         println!(
             "  {name}: segmenter={} embedder={} total={} bytes",
             prof.segmenter, prof.embedder, total
