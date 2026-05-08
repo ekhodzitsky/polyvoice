@@ -5,7 +5,7 @@
 use crate::clusterer::Clusterer;
 use crate::embedder::Embedder;
 use crate::models::{ModelRegistry, RegistryError};
-use crate::pipeline_v2::config::PipelineConfig;
+use crate::pipeline::config::PipelineConfig;
 use crate::resegmentation::Resegmenter;
 use crate::segmentation::Segmenter;
 use crate::types::Profile;
@@ -156,8 +156,8 @@ impl PipelineBuilder {
     }
 }
 
-use crate::pipeline_v2::Pipeline;
-use crate::pipeline_v2::config::ClustererKind;
+use crate::pipeline::Pipeline;
+use crate::pipeline::config::ClustererKind;
 use crate::resegmentation::OverlapResegmenter;
 
 impl PipelineBuilder {
@@ -254,7 +254,7 @@ impl PipelineBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline_v2::mocks::{MockClusterer, MockEmbedder, MockSegmenter};
+    use crate::pipeline::mocks::{MockClusterer, MockEmbedder, MockSegmenter};
 
     fn fresh() -> PipelineBuilder {
         PipelineBuilder::new()

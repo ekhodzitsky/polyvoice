@@ -48,7 +48,6 @@ pub use features::{FbankConfig, FbankExtractor};
 pub mod offline;
 pub mod online;
 pub mod overlap;
-pub mod pipeline;
 pub mod rttm;
 pub mod silero_vad;
 pub mod types;
@@ -103,26 +102,26 @@ pub use resegmentation::{
 pub use resegmentation::extract_overlap_time_ranges;
 
 #[cfg(all(
-    feature = "pipeline_v2",
+    feature = "pipeline",
     feature = "onnx",
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",
     feature = "resegmentation",
 ))]
-pub mod pipeline_v2;
+pub mod pipeline;
 
 #[cfg(all(
-    feature = "pipeline_v2",
+    feature = "pipeline",
     feature = "onnx",
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",
     feature = "resegmentation",
 ))]
-pub use pipeline_v2::{
-    ClustererKind, ConfigError, ExecutionProvider, Pipeline as PipelineV2, PipelineBuilder,
-    PipelineConfig, PipelineError as PipelineV2Error,
+pub use pipeline::{
+    ClustererKind, ConfigError, ExecutionProvider, Pipeline, PipelineBuilder,
+    PipelineConfig, PipelineError,
 };
 
 #[cfg(feature = "onnx")]
@@ -138,7 +137,6 @@ pub use models::{ModelRegistry, ProfileModels, RegistryError};
 pub use offline::OfflineDiarizer;
 pub use online::OnlineDiarizer;
 pub use overlap::{OverlapRegion, detect_overlaps};
-pub use pipeline::{Pipeline, PipelineError};
 pub use silero_vad::SileroVad;
 pub use types::{
     ClusteringBackend, Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, Profile,

@@ -1,9 +1,9 @@
-//! M6a — additive `polyvoice::pipeline_v2` module.
+//! M6b — `polyvoice::pipeline` module (renamed from pipeline).
 //!
 //! Spec: `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md`.
 
 #[cfg(not(all(
-    feature = "pipeline_v2",
+    feature = "pipeline",
     feature = "onnx",
     feature = "segmentation",
     feature = "embedder",
@@ -11,7 +11,7 @@
     feature = "resegmentation",
 )))]
 compile_error!(
-    "pipeline_v2 requires onnx + segmentation + embedder + clusterer + resegmentation features"
+    "pipeline requires onnx + segmentation + embedder + clusterer + resegmentation features"
 );
 
 pub mod builder;
@@ -263,7 +263,7 @@ impl Pipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline_v2::mocks::{MockClusterer, MockEmbedder, MockSegmenter, raw_segment};
+    use crate::pipeline::mocks::{MockClusterer, MockEmbedder, MockSegmenter, raw_segment};
     use crate::resegmentation::OverlapResegmenter;
     use crate::types::Profile;
 

@@ -12,7 +12,7 @@ categories = ["multimedia::audio", "science"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["spectral", "segmentation", "embedder", "clusterer", "resegmentation", "pipeline_v2"]
+default = ["spectral", "segmentation", "embedder", "clusterer", "resegmentation", "pipeline"]
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
 # C FFI bindings.
@@ -52,12 +52,12 @@ clusterer = []
 # caller (M6 Pipeline wires the embedder pool into this).
 resegmentation = []
 
-# v1.0 Pipeline + Profile builder API (additive in M6a; replaces legacy in M6b).
-# Requires the full M1–M5 stack — the builder loads ONNX through ModelRegistry
-# (download feature) for Mobile/Balanced profiles. The module gates itself
-# with a `compile_error!` if onnx/segmentation/embedder/clusterer/resegmentation
-# are missing, so half-wired feature combos cannot ship.
-pipeline_v2 = ["download"]
+# v1.0 Pipeline + Profile builder API. Requires the full M1–M5 stack — the
+# builder loads ONNX through ModelRegistry (download feature) for
+# Mobile/Balanced profiles. The module gates itself with a `compile_error!`
+# if onnx/segmentation/embedder/clusterer/resegmentation are missing, so
+# half-wired feature combos cannot ship.
+pipeline = ["download"]
 
 # Model profile bundles. M0 only emits metadata; CLI uses these to pick which
 # manifest entries to ensure(). M5 will introduce INT8 model variants.

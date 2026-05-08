@@ -1,6 +1,6 @@
 //! M6a — test-only `Mock{Segmenter,Embedder,Clusterer}` for the
-//! `pipeline_v2` builder validation tests and the synthetic integration
-//! test in `tests/pipeline_v2_synthetic_test.rs`.
+//! `pipeline` builder validation tests and the synthetic integration
+//! test in `tests/pipeline_synthetic_test.rs`.
 
 use crate::clusterer::{Clusterer, ClustererError};
 use crate::embedder::{Embedder, EmbedderError};
