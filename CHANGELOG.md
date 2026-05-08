@@ -75,6 +75,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Miri-friendly test target `tests/miri_resegmentation.rs` covering
   no-overlap, single-overlap, and centroid math paths.
 
+### Added (M6a — Pipeline + Profile API, additive)
+- `polyvoice::pipeline_v2` module: `Pipeline::builder()` returning
+  `PipelineBuilder` with `.profile(Profile::Mobile|Balanced|Custom)`,
+  `.with_models_from(ModelRegistry)`, `.with_segmenter/embedder/clusterer/resegmenter()`,
+  and a validated `.build()`. `PipelineConfig`, `ClustererKind`,
+  `ExecutionProvider`, and `ConfigError` all per spec §5.2/§5.4.
+- `Pipeline::run(&samples, SampleRate)` orchestrates M1 segmenter → M2
+  embedder (with `apply_overlap_mask` per primary chunk) → M3 clusterer →
+  M4 resegmenter → legacy `merge_segments` → `DiarizationResult`.
+- New Cargo feature `pipeline_v2` (in default features). Requires
+  `onnx + segmentation + embedder + clusterer + resegmentation`; missing
+  any of these triggers a `compile_error!` with an actionable message.
+- Public re-exports `polyvoice::PipelineV2`, `PipelineBuilder`,
+  `PipelineConfig`, `ClustererKind`, `ExecutionProvider`, `ConfigError`,
+  `PipelineV2Error`. Legacy `polyvoice::Pipeline` is unchanged; M6b will
+  rename `pipeline_v2 → pipeline` and remove the legacy code path.
+- Synthetic integration test on Custom profile (`tests/pipeline_v2_synthetic_test.rs`,
+  7 tests) + `#[ignore]` E2E test on Balanced profile via `ModelRegistry`
+  (`tests/pipeline_v2_e2e_test.rs`).
+
 ### Added (M5 — INT8 quantization)
 - New scripts: `download-voxconverse-dev.sh`, `download-voxceleb1-subset.sh`,
   `quantize_models.py` + `quantize-models.sh`, `validate_int8.py` +
