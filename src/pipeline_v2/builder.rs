@@ -113,11 +113,6 @@ impl PipelineBuilder {
     pub fn validate(&self) -> Result<(), ConfigError> {
         match self.config.profile {
             Profile::Mobile | Profile::Balanced => {
-                if self.registry.is_none() {
-                    return Err(ConfigError::MissingRegistry {
-                        profile: self.config.profile,
-                    });
-                }
                 if self.custom_segmenter.is_some() {
                     return Err(ConfigError::CustomComponentInProfile {
                         profile: self.config.profile,
@@ -134,6 +129,11 @@ impl PipelineBuilder {
                     return Err(ConfigError::CustomComponentInProfile {
                         profile: self.config.profile,
                         offending: "clusterer",
+                    });
+                }
+                if self.registry.is_none() {
+                    return Err(ConfigError::MissingRegistry {
+                        profile: self.config.profile,
                     });
                 }
             }
