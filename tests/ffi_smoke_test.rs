@@ -3,8 +3,7 @@
 #![cfg(feature = "ffi")]
 
 use polyvoice::ffi::{
-    PolyvoicePipeline, PolyvoiceProfile, polyvoice_pipeline_create,
-    polyvoice_pipeline_destroy,
+    PolyvoicePipeline, PolyvoiceProfile, polyvoice_pipeline_create, polyvoice_pipeline_destroy,
 };
 use std::ptr;
 
@@ -13,9 +12,8 @@ use std::ptr;
 fn ffi_create_destroy_balanced_round_trip() {
     let mut handle: *mut PolyvoicePipeline = ptr::null_mut();
     // SAFETY: handle is non-null, null cache dir uses default registry path.
-    let rc = unsafe {
-        polyvoice_pipeline_create(PolyvoiceProfile::Balanced, ptr::null(), &mut handle)
-    };
+    let rc =
+        unsafe { polyvoice_pipeline_create(PolyvoiceProfile::Balanced, ptr::null(), &mut handle) };
     assert_eq!(rc, 0, "create should succeed when ONNX is cached");
     assert!(!handle.is_null());
     // SAFETY: handle was returned by polyvoice_pipeline_create and is non-null.

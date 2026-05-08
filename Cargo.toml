@@ -109,14 +109,6 @@ criterion = "0.5"
 loom = "0.7.2"
 
 [[bench]]
-name = "diarization"
-harness = false
-
-[[bench]]
-name = "der"
-harness = false
-
-[[bench]]
 name = "der_ami"
 harness = false
 

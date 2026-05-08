@@ -15,8 +15,14 @@ fn help_top_level() {
     let out = cli().arg("--help").output().expect("spawn polyvoice");
     assert!(out.status.success());
     let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains("diarize"), "help missing 'diarize' subcommand: {s}");
-    assert!(s.contains("download-models"), "help missing 'download-models': {s}");
+    assert!(
+        s.contains("diarize"),
+        "help missing 'diarize' subcommand: {s}"
+    );
+    assert!(
+        s.contains("download-models"),
+        "help missing 'download-models': {s}"
+    );
     assert!(s.contains("models"), "help missing 'models': {s}");
 }
 
@@ -38,7 +44,10 @@ fn diarize_invalid_profile_errors() {
         .expect("spawn");
     assert!(!out.status.success(), "expected non-zero exit");
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("invalid profile") || stderr.contains("garbage"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("invalid profile") || stderr.contains("garbage"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]

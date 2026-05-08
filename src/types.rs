@@ -334,7 +334,6 @@ pub struct DiarizationResult {
     pub num_speakers: usize,
 }
 
-
 #[cfg(test)]
 mod profile_tests {
     use super::*;
