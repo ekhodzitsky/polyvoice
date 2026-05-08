@@ -2,4 +2,8 @@
 //!
 //! Spec: `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md`.
 
+pub mod builder;
 pub mod config;
+
+#[cfg(test)]
+pub mod mocks;
