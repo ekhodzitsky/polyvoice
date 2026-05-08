@@ -25,17 +25,31 @@
 //! ```
 
 use crate::cluster::SpeakerCluster;
-use crate::embedding::{DummyExtractor, EmbeddingExtractor};
+use crate::embedding::{EmbeddingError, EmbeddingExtractor};
 use crate::types::DiarizationConfig;
 use std::ffi::{CString, c_char, c_float};
 use std::os::raw::c_int;
 use std::ptr;
 
+/// Minimal stub extractor used by the FFI layer until Tasks 6-9 wire in a real model.
+struct FfiStubExtractor {
+    dim: usize,
+}
+
+impl EmbeddingExtractor for FfiStubExtractor {
+    fn extract(&self, _samples: &[f32], _config: &DiarizationConfig) -> Result<Vec<f32>, EmbeddingError> {
+        Ok(vec![0.0f32; self.dim])
+    }
+    fn embedding_dim(&self) -> usize {
+        self.dim
+    }
+}
+
 /// Opaque handle to a diarizer instance.
 pub struct PolyvoiceDiarizer {
     config: DiarizationConfig,
     cluster: SpeakerCluster,
-    extractor: DummyExtractor,
+    extractor: FfiStubExtractor,
 }
 
 /// A single speaker turn returned to C.
@@ -71,7 +85,7 @@ pub unsafe extern "C" fn polyvoice_diarizer_new(
     let diarizer = PolyvoiceDiarizer {
         config,
         cluster: SpeakerCluster::new(config),
-        extractor: DummyExtractor::new(256),
+        extractor: FfiStubExtractor { dim: 256 },
     };
     Box::into_raw(Box::new(diarizer))
 }
