@@ -102,6 +102,29 @@ pub use resegmentation::{
 #[cfg(all(feature = "resegmentation", feature = "segmentation"))]
 pub use resegmentation::extract_overlap_time_ranges;
 
+#[cfg(all(
+    feature = "pipeline_v2",
+    feature = "onnx",
+    feature = "segmentation",
+    feature = "embedder",
+    feature = "clusterer",
+    feature = "resegmentation",
+))]
+pub mod pipeline_v2;
+
+#[cfg(all(
+    feature = "pipeline_v2",
+    feature = "onnx",
+    feature = "segmentation",
+    feature = "embedder",
+    feature = "clusterer",
+    feature = "resegmentation",
+))]
+pub use pipeline_v2::{
+    ClustererKind, ConfigError, ExecutionProvider, Pipeline as PipelineV2, PipelineBuilder,
+    PipelineConfig, PipelineError as PipelineV2Error,
+};
+
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 #[cfg(feature = "onnx")]
