@@ -24,9 +24,9 @@
 //! polyvoice_diarizer_free(d);
 //! ```
 
-use crate::cluster::SpeakerCluster;
+use crate::cluster::{ClusterConfig, SpeakerCluster};
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
-use crate::types::DiarizationConfig;
+use crate::types::SampleRate;
 use std::ffi::{CString, c_char, c_float};
 use std::os::raw::c_int;
 use std::ptr;
@@ -37,7 +37,7 @@ struct FfiStubExtractor {
 }
 
 impl EmbeddingExtractor for FfiStubExtractor {
-    fn extract(&self, _samples: &[f32], _config: &DiarizationConfig) -> Result<Vec<f32>, EmbeddingError> {
+    fn extract(&self, _samples: &[f32]) -> Result<Vec<f32>, EmbeddingError> {
         Ok(vec![0.0f32; self.dim])
     }
     fn embedding_dim(&self) -> usize {
@@ -45,9 +45,35 @@ impl EmbeddingExtractor for FfiStubExtractor {
     }
 }
 
+/// Minimal FFI-layer config (window/hop/sample_rate). Not part of the public API.
+struct FfiConfig {
+    window_secs: f32,
+    hop_secs: f32,
+    sample_rate: SampleRate,
+}
+
+impl FfiConfig {
+    fn window_samples(&self) -> usize {
+        (self.window_secs * self.sample_rate.get() as f32) as usize
+    }
+    fn hop_samples(&self) -> usize {
+        (self.hop_secs * self.sample_rate.get() as f32) as usize
+    }
+}
+
+impl Default for FfiConfig {
+    fn default() -> Self {
+        Self {
+            window_secs: 1.5,
+            hop_secs: 0.75,
+            sample_rate: SampleRate::default(),
+        }
+    }
+}
+
 /// Opaque handle to a diarizer instance.
 pub struct PolyvoiceDiarizer {
-    config: DiarizationConfig,
+    config: FfiConfig,
     cluster: SpeakerCluster,
     extractor: FfiStubExtractor,
 }
@@ -77,14 +103,13 @@ pub unsafe extern "C" fn polyvoice_diarizer_new(
     threshold: c_float,
     max_speakers: c_int,
 ) -> *mut PolyvoiceDiarizer {
-    let config = DiarizationConfig {
+    let cluster_cfg = ClusterConfig {
         threshold,
         max_speakers: max_speakers as usize,
-        ..Default::default()
     };
     let diarizer = PolyvoiceDiarizer {
-        config,
-        cluster: SpeakerCluster::new(config),
+        config: FfiConfig::default(),
+        cluster: SpeakerCluster::new(cluster_cfg),
         extractor: FfiStubExtractor { dim: 256 },
     };
     Box::into_raw(Box::new(diarizer))
@@ -127,7 +152,7 @@ pub unsafe extern "C" fn polyvoice_diarizer_run(
     let mut start = 0usize;
     while start + window <= audio.len() {
         let chunk = &audio[start..start + window];
-        match d.extractor.extract(chunk, &d.config) {
+        match d.extractor.extract(chunk) {
             Ok(emb) => {
                 let (speaker, _conf) = d.cluster.assign(&emb);
                 let speaker_cstr = match CString::new(speaker.to_string()) {

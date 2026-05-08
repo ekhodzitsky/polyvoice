@@ -232,44 +232,6 @@ impl Default for Confidence {
     }
 }
 
-/// A validated embedding dimension (> 0).
-///
-/// Invariant: inner > 0.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct EmbeddingDim(usize);
-
-impl EmbeddingDim {
-    /// Create a validated embedding dimension.
-    ///
-    /// Returns `None` if `dim` is zero.
-    ///
-    /// ```rust
-    /// use polyvoice::EmbeddingDim;
-    /// assert!(EmbeddingDim::new(256).is_some());
-    /// assert!(EmbeddingDim::new(0).is_none());
-    /// ```
-    pub fn new(dim: usize) -> Option<Self> {
-        (dim > 0).then_some(Self(dim))
-    }
-
-    /// Return the raw dimension value.
-    ///
-    /// ```rust
-    /// use polyvoice::EmbeddingDim;
-    /// let d = EmbeddingDim::new(192).unwrap();
-    /// assert_eq!(d.get(), 192);
-    /// ```
-    pub fn get(&self) -> usize {
-        self.0
-    }
-}
-
-impl Default for EmbeddingDim {
-    fn default() -> Self {
-        Self(256)
-    }
-}
-
 /// A non-negative duration in seconds.
 ///
 /// Invariant: inner >= 0.0.
@@ -372,79 +334,6 @@ pub struct DiarizationResult {
     pub num_speakers: usize,
 }
 
-/// Configuration shared between online and offline diarizers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum ClusteringBackend {
-    Ahc,
-    KMeans,
-    Spectral,
-    Auto,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct DiarizationConfig {
-    /// Cosine similarity threshold for assigning to an existing speaker.
-    pub threshold: f32,
-    /// Maximum number of speakers to track.
-    pub max_speakers: usize,
-    /// Window size for embedding extraction, in seconds.
-    pub window_secs: f32,
-    /// Hop length between consecutive windows, in seconds.
-    pub hop_secs: f32,
-    /// Minimum speech duration to consider for clustering, in seconds.
-    pub min_speech_secs: f32,
-    /// Maximum gap between same-speaker segments to merge, in seconds.
-    pub max_gap_secs: f32,
-    /// Minimum turn duration after merging, in seconds.
-    pub min_turn_duration_secs: f32,
-    /// Minimum number of embeddings a speaker must have to be kept.
-    /// Speakers with fewer embeddings are merged into the nearest other speaker.
-    pub min_embeddings_per_speaker: usize,
-    /// Sample rate expected by the embedding model (usually 16000).
-    pub sample_rate: SampleRate,
-    /// Clustering algorithm backend.
-    pub clustering_backend: ClusteringBackend,
-}
-
-impl Default for DiarizationConfig {
-    fn default() -> Self {
-        Self {
-            threshold: 0.45,
-            max_speakers: 64,
-            window_secs: 1.5,
-            hop_secs: 0.75,
-            min_speech_secs: 0.25,
-            max_gap_secs: 0.5,
-            min_turn_duration_secs: 0.0,
-            min_embeddings_per_speaker: 2,
-            sample_rate: SampleRate::default(),
-            clustering_backend: ClusteringBackend::Ahc,
-        }
-    }
-}
-
-impl DiarizationConfig {
-    /// { self.window_secs >= 0.0 }
-    /// `fn window_samples(&self) -> usize`
-    /// { ret == (self.window_secs * self.sample_rate as f32) as usize }
-    pub fn window_samples(&self) -> usize {
-        (self.window_secs * self.sample_rate.get() as f32) as usize
-    }
-
-    /// { self.hop_secs >= 0.0 }
-    /// `fn hop_samples(&self) -> usize`
-    /// { ret == (self.hop_secs * self.sample_rate as f32) as usize }
-    pub fn hop_samples(&self) -> usize {
-        (self.hop_secs * self.sample_rate.get() as f32) as usize
-    }
-
-    /// { self.min_speech_secs >= 0.0 }
-    /// `fn min_speech_samples(&self) -> usize`
-    /// { ret == (self.min_speech_secs * self.sample_rate as f32) as usize }
-    pub fn min_speech_samples(&self) -> usize {
-        (self.min_speech_secs * self.sample_rate.get() as f32) as usize
-    }
-}
 
 #[cfg(test)]
 mod profile_tests {

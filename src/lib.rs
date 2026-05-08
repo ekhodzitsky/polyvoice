@@ -114,10 +114,12 @@ pub use models::{ModelRegistry, ProfileModels, RegistryError};
 pub use online::OnlineDiarizer;
 pub use overlap::{OverlapRegion, detect_overlaps};
 pub use types::{
-    ClusteringBackend, Confidence, DiarizationConfig, DiarizationResult, EmbeddingDim, Profile,
+    Confidence, DiarizationResult, Profile,
     SampleRate, Seconds, Segment, SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment,
     remap_segments, remap_turns,
 };
+pub use cluster::ClusterConfig;
+pub use online::OnlineConfig;
 
 #[cfg(feature = "onnx")]
 pub use ecapa::FbankOnnxExtractor;
