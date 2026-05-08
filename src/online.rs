@@ -47,6 +47,10 @@ impl OnlineConfig {
 }
 
 /// Per-connection state for streaming diarization.
+#[deprecated(
+    since = "0.6.0-alpha.3",
+    note = "streaming pipeline redesigned in v1.1; use Pipeline for offline use"
+)]
 pub struct OnlineDiarizer {
     config: OnlineConfig,
     cluster: SpeakerCluster,
@@ -60,6 +64,7 @@ pub struct OnlineDiarizer {
     total_samples: usize,
 }
 
+#[allow(deprecated)]
 impl OnlineDiarizer {
     /// Create a new streaming diarizer.
     ///
