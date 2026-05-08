@@ -1,10 +1,10 @@
-//! M6a — synthetic-data integration tests for `polyvoice::pipeline_v2`.
+//! M6a — synthetic-data integration tests for `polyvoice::pipeline`.
 //!
 //! Pure-CPU; no ONNX. Covers builder validation paths, end-to-end
 //! Custom-profile run, and overlap-resegmentation toggling.
 
 #![cfg(all(
-    feature = "pipeline_v2",
+    feature = "pipeline",
     feature = "onnx",
     feature = "segmentation",
     feature = "embedder",
@@ -14,7 +14,7 @@
 
 use polyvoice::clusterer::{Clusterer, ClustererError};
 use polyvoice::embedder::{Embedder, EmbedderError};
-use polyvoice::pipeline_v2::{ClustererKind, ConfigError, Pipeline, PipelineConfig, PipelineError};
+use polyvoice::pipeline::{ClustererKind, ConfigError, Pipeline, PipelineConfig, PipelineError};
 use polyvoice::segmentation::{RawSegment, SegmentationError, Segmenter};
 use polyvoice::types::{Confidence, Profile, SampleRate, TimeRange};
 

@@ -1,4 +1,4 @@
-//! M6a — `#[ignore]` end-to-end test for `polyvoice::pipeline_v2`.
+//! M6a — `#[ignore]` end-to-end test for `polyvoice::pipeline`.
 //!
 //! Requires the Balanced ONNX bundle to be cached (run
 //! `cargo run --features cli --bin polyvoice -- download-models --profile balanced`
@@ -7,7 +7,7 @@
 //! at least one turn with valid speaker IDs.
 
 #![cfg(all(
-    feature = "pipeline_v2",
+    feature = "pipeline",
     feature = "download",
     feature = "onnx",
     feature = "segmentation",
@@ -17,7 +17,7 @@
 ))]
 
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::Pipeline;
+use polyvoice::pipeline::Pipeline;
 use polyvoice::types::{Profile, SampleRate};
 use polyvoice::wav::read_wav;
 use std::path::Path;
