@@ -153,7 +153,6 @@ mod onnx_adapters {
     use super::*;
     use crate::ecapa::FbankOnnxExtractor;
     use crate::embedding::EmbeddingExtractor;
-    use crate::types::DiarizationConfig;
     use std::path::Path;
 
     /// New-trait adapter for the existing `FbankOnnxExtractor` (WeSpeaker ResNet34, 256-d).
@@ -185,8 +184,9 @@ mod onnx_adapters {
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            let config = crate::types::DiarizationConfig::default();
             self.inner
-                .extract(audio, &DiarizationConfig::default())
+                .extract(audio, &config)
                 .map_err(|e| EmbedderError::Legacy(format!("{e}")))
         }
     }
@@ -227,8 +227,9 @@ mod onnx_adapters {
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            let config = crate::types::DiarizationConfig::default();
             self.inner
-                .extract(audio, &DiarizationConfig::default())
+                .extract(audio, &config)
                 .map_err(|e| EmbedderError::Legacy(format!("{e}")))
         }
     }

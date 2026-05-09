@@ -1,7 +1,25 @@
 //! Speaker clustering with online incremental centroid updates.
 
-use crate::types::{DiarizationConfig, SpeakerId, SpeakerIdRemap};
+use crate::types::{SpeakerId, SpeakerIdRemap};
 use crate::utils::{cosine_similarity, l2_normalize};
+
+/// Configuration for `SpeakerCluster`.
+#[derive(Debug, Clone, Copy)]
+pub struct ClusterConfig {
+    /// Cosine similarity threshold for assigning to an existing speaker.
+    pub threshold: f32,
+    /// Maximum number of speakers to track.
+    pub max_speakers: usize,
+}
+
+impl Default for ClusterConfig {
+    fn default() -> Self {
+        Self {
+            threshold: 0.45,
+            max_speakers: 64,
+        }
+    }
+}
 
 /// State for a single speaker centroid.
 #[derive(Debug, Clone)]
@@ -21,18 +39,18 @@ struct Centroid {
 /// Otherwise creates a new speaker identity.
 pub struct SpeakerCluster {
     centroids: Vec<Centroid>,
-    config: DiarizationConfig,
+    config: ClusterConfig,
 }
 
 impl SpeakerCluster {
     /// Create a new empty speaker clusterer.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, DiarizationConfig};
-    /// let cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// use polyvoice::{SpeakerCluster, ClusterConfig};
+    /// let cluster = SpeakerCluster::new(ClusterConfig::default());
     /// assert_eq!(cluster.num_speakers(), 0);
     /// ```
-    pub fn new(config: DiarizationConfig) -> Self {
+    pub fn new(config: ClusterConfig) -> Self {
         Self {
             centroids: Vec::new(),
             config,
@@ -46,8 +64,8 @@ impl SpeakerCluster {
     /// been reached, a new speaker is created.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, DiarizationConfig};
-    /// let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// use polyvoice::{SpeakerCluster, ClusterConfig};
+    /// let mut cluster = SpeakerCluster::new(ClusterConfig::default());
     /// let mut emb = vec![0.0f32; 256];
     /// emb[0] = 1.0;
     /// let (id, conf) = cluster.assign(&emb);
@@ -93,8 +111,8 @@ impl SpeakerCluster {
     /// Return the current number of speaker centroids.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, DiarizationConfig};
-    /// let cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// use polyvoice::{SpeakerCluster, ClusterConfig};
+    /// let cluster = SpeakerCluster::new(ClusterConfig::default());
     /// assert_eq!(cluster.num_speakers(), 0);
     /// ```
     pub fn num_speakers(&self) -> usize {
@@ -106,8 +124,8 @@ impl SpeakerCluster {
     /// Each tuple contains `(SpeakerId, centroid_vector, average_confidence)`.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, DiarizationConfig};
-    /// let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// use polyvoice::{SpeakerCluster, ClusterConfig};
+    /// let mut cluster = SpeakerCluster::new(ClusterConfig::default());
     /// let mut emb = vec![0.0f32; 128];
     /// emb[0] = 1.0;
     /// cluster.assign(&emb);
@@ -133,8 +151,8 @@ impl SpeakerCluster {
     /// if the indices are invalid or equal.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, DiarizationConfig, SpeakerId};
-    /// let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+    /// use polyvoice::{SpeakerCluster, ClusterConfig, SpeakerId};
+    /// let mut cluster = SpeakerCluster::new(ClusterConfig::default());
     /// let mut e0 = vec![0.0f32; 128]; e0[0] = 1.0;
     /// let mut e1 = vec![0.0f32; 128]; e1[1] = 1.0;
     /// let (id0, _) = cluster.assign(&e0);
@@ -207,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_new_speaker() {
-        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
         let e = emb(1.0, 256);
         let (id, conf) = cluster.assign(&e);
         assert_eq!(id.0, 0);
@@ -217,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_same_speaker() {
-        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
         let e1 = emb(1.0, 256);
         let mut e2 = e1.clone();
         e2[0] += 0.001;
@@ -231,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_different_speakers() {
-        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
         let mut e1 = vec![0.0f32; 256];
         e1[0] = 1.0;
         let mut e2 = vec![0.0f32; 256];
@@ -245,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_max_speakers_limit() {
-        let config = DiarizationConfig {
+        let config = ClusterConfig {
             max_speakers: 2,
             ..Default::default()
         };
@@ -264,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_merge_remaps_speaker_ids() {
-        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
         // Three orthogonal unit vectors to guarantee distinct speakers.
         let mut e0 = vec![0.0f32; 256];
         e0[0] = 1.0;
@@ -292,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_merge_into_higher_index() {
-        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
         let mut e0 = vec![0.0f32; 256];
         e0[0] = 1.0;
         let mut e1 = vec![0.0f32; 256];
@@ -318,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_merge_invalid_returns_none() {
-        let mut cluster = SpeakerCluster::new(DiarizationConfig::default());
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
         let e0 = emb(1.0, 256);
         cluster.assign(&e0);
 

@@ -9,5 +9,5 @@ name = "_polyvoice"
 crate-type = ["cdylib"]
 
 [dependencies]
-polyvoice = { path = "..", features = ["onnx"] }
+polyvoice = { path = "..", features = ["onnx", "pipeline", "segmentation", "embedder", "clusterer", "resegmentation"] }
 pyo3 = { version = "0.28", features = ["extension-module"] }

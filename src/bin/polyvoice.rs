@@ -1,195 +1,158 @@
-use clap::{Parser, Subcommand, ValueEnum};
-use polyvoice::{
-    ClusteringBackend, DiarizationConfig, FbankOnnxExtractor, Pipeline, SampleRate, SileroVad,
-    VadConfig,
-};
-use std::path::{Path, PathBuf};
+//! polyvoice — speaker diarization CLI (legacy v0.5 pipeline).
 
-#[derive(Parser)]
-#[command(
-    name = "polyvoice",
-    version,
-    about = "Speaker diarization — who spoke when"
-)]
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use polyvoice::models::ModelRegistry;
+use polyvoice::pipeline::Pipeline;
+use polyvoice::rttm::write_rttm;
+use polyvoice::types::{DiarizationConfig, Profile, SampleRate};
+use polyvoice::vad::VadConfig;
+use polyvoice::wav::read_wav;
+use polyvoice::{FbankOnnxExtractor, SileroVad};
+use std::path::PathBuf;
+
+#[derive(Parser, Debug)]
+#[command(name = "polyvoice", version, about = "Speaker diarization toolkit")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 enum Command {
-    /// Run speaker diarization on a WAV file
+    /// Run diarization on a WAV file.
     Diarize {
-        /// Path to 16 kHz mono WAV file
-        file: PathBuf,
-
-        /// Model directory (default: ~/.cache/polyvoice/models)
-        #[arg(long, env = "POLYVOICE_MODEL_DIR")]
-        model_dir: Option<PathBuf>,
-
-        /// Maximum number of speakers
-        #[arg(long, default_value = "64")]
-        max_speakers: usize,
-
-        /// Cosine similarity threshold for clustering
+        wav: PathBuf,
+        #[arg(long, default_value = "balanced")]
+        profile: String,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long, default_value = "rttm")]
+        format: OutputFormat,
+        #[arg(long)]
+        models_cache: Option<PathBuf>,
         #[arg(long, default_value = "0.45")]
         threshold: f32,
-
-        /// Output format
-        #[arg(long, default_value = "text")]
-        format: OutputFormat,
-
-        /// Clustering backend (ahc | kmeans)
-        #[arg(long, default_value = "ahc")]
-        backend: String,
-    },
-    /// Download ONNX models for a profile (or all profiles)
-    DownloadModels {
-        /// Target directory (default: ~/.cache/polyvoice/models)
         #[arg(long)]
-        dir: Option<PathBuf>,
-
-        /// Profile to fetch models for.
-        ///
-        /// In M0 both `mobile` and `balanced` map to the legacy v0.5 model pair
-        /// (silero_vad + wespeaker_resnet34). Future milestones (M2/M5) will
-        /// diverge them. Use `all` to fetch every distinct model in the manifest.
-        #[arg(long, default_value = "all", value_parser = ["mobile", "balanced", "all"])]
+        quiet: bool,
+    },
+    /// Download Mobile/Balanced ONNX models.
+    DownloadModels {
+        #[arg(long, default_value = "balanced")]
         profile: String,
     },
+    /// Inspect models registry.
+    Models {
+        #[command(subcommand)]
+        sub: ModelsCommand,
+    },
 }
 
-#[derive(Clone, ValueEnum)]
+#[derive(Subcommand, Debug)]
+enum ModelsCommand {
+    /// Print available profiles + model bundle sizes.
+    List,
+    /// Print URL/sha256/calibration metadata for a single model.
+    Info { name: String },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 enum OutputFormat {
-    Text,
-    Json,
     Rttm,
+    Json,
 }
 
-fn default_model_dir() -> PathBuf {
-    dirs::cache_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("polyvoice")
-        .join("models")
-}
-
-fn main() {
-    let cli = Cli::parse();
-
-    match cli.command {
-        Command::Diarize {
-            file,
-            model_dir,
-            max_speakers,
-            threshold,
-            format,
-            backend,
-        } => {
-            let model_dir = model_dir.unwrap_or_else(default_model_dir);
-            if let Err(e) = run_diarize(&file, &model_dir, max_speakers, threshold, format, backend)
-            {
-                eprintln!("error: {e}");
-                std::process::exit(1);
-            }
-        }
-        Command::DownloadModels { dir, profile } => {
-            let dir = dir.unwrap_or_else(default_model_dir);
-            if let Err(e) = run_download(&dir, &profile) {
-                eprintln!("error: {e}");
-                std::process::exit(1);
-            }
-        }
+fn parse_profile(name: &str) -> Result<Profile> {
+    match name {
+        "mobile" => Ok(Profile::Mobile),
+        "balanced" => Ok(Profile::Balanced),
+        other => anyhow::bail!("invalid profile: {other} (expected mobile|balanced)"),
     }
 }
 
-fn run_diarize(
-    file: &Path,
-    model_dir: &Path,
-    max_speakers: usize,
-    threshold: f32,
+fn cmd_diarize(
+    wav: PathBuf,
+    profile: String,
+    output: Option<PathBuf>,
     format: OutputFormat,
-    backend: String,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let wespeaker_path = model_dir.join("wespeaker_resnet34.onnx");
-    let vad_path = model_dir.join("silero_vad.onnx");
+    models_cache: Option<PathBuf>,
+    threshold: f32,
+    quiet: bool,
+) -> Result<()> {
+    let profile = parse_profile(&profile)?;
+    let registry = match models_cache {
+        Some(p) => ModelRegistry::with_cache_dir(&p).context("failed to open models cache")?,
+        None => ModelRegistry::default().context("failed to resolve default models cache")?,
+    };
 
-    if !wespeaker_path.exists() || !vad_path.exists() {
-        return Err(format!(
-            "models not found in {}\nRun: polyvoice download-models --dir {}",
-            model_dir.display(),
-            model_dir.display()
-        )
-        .into());
+    if !quiet {
+        eprintln!("Loading {profile:?} profile from registry...");
     }
 
-    eprintln!("Loading models...");
-    let extractor = FbankOnnxExtractor::new(&wespeaker_path, 256, 4)?;
-    let mut vad = SileroVad::new(&vad_path, 512)?;
+    let models = registry
+        .ensure_for_profile(profile)
+        .context("ensure models")?;
+    let embedding_dim = profile.embedding_dim();
+    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
+        .context("load embedder")?;
+    let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
 
-    let backend = match backend.as_str() {
-        "kmeans" => ClusteringBackend::KMeans,
-        "spectral" => ClusteringBackend::Spectral,
-        "auto" => ClusteringBackend::Auto,
-        _ => ClusteringBackend::Ahc,
-    };
     let config = DiarizationConfig {
         threshold,
-        max_speakers,
-        sample_rate: SampleRate::default(),
-        clustering_backend: backend,
-        ..Default::default()
+        ..DiarizationConfig::default()
     };
     let vad_config = VadConfig::default();
     let pipeline = Pipeline::new(config, vad_config);
 
-    eprintln!("Reading {}...", file.display());
-    let (samples, sr) = polyvoice::wav::read_wav(file)?;
-    eprintln!(
-        "Audio: {:.1}s, {} Hz, {} samples",
-        samples.len() as f64 / sr as f64,
-        sr,
-        samples.len()
-    );
+    if !quiet {
+        eprintln!("Reading {}...", wav.display());
+    }
+    let (samples, sr_hz) = read_wav(&wav).with_context(|| format!("read WAV {}", wav.display()))?;
+    let _sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
 
-    eprintln!("Running diarization...");
-    let result = pipeline.run(&samples, &extractor, &mut vad)?;
-    eprintln!(
-        "Found {} speaker(s), {} turn(s)\n",
-        result.num_speakers,
-        result.turns.len()
-    );
+    if !quiet {
+        eprintln!(
+            "Running diarization on {} samples ({} Hz)...",
+            samples.len(),
+            sr_hz
+        );
+    }
+    let result = pipeline
+        .run(&samples, &extractor, &mut vad)
+        .context("pipeline.run failed")?;
+    if !quiet {
+        eprintln!(
+            "Done — {} turns, {} speakers",
+            result.turns.len(),
+            result.num_speakers
+        );
+    }
 
     match format {
-        OutputFormat::Text => {
-            for turn in &result.turns {
-                println!(
-                    "{}\t{:.2}s\t{:.2}s",
-                    turn.speaker, turn.time.start, turn.time.end
-                );
+        OutputFormat::Rttm => {
+            let file_id = wav
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("audio")
+                .to_string();
+            match output {
+                Some(path) => {
+                    let mut f = std::fs::File::create(&path)
+                        .with_context(|| format!("create {}", path.display()))?;
+                    write_rttm(&mut f, &file_id, &result.turns).context("rttm write")?;
+                }
+                None => {
+                    let mut stdout = std::io::stdout().lock();
+                    write_rttm(&mut stdout, &file_id, &result.turns).context("rttm write")?;
+                }
             }
         }
         OutputFormat::Json => {
-            let entries: Vec<serde_json::Value> = result
-                .turns
-                .iter()
-                .map(|t| {
-                    serde_json::json!({
-                        "speaker": format!("{}", t.speaker),
-                        "start": (t.time.start * 100.0).round() / 100.0,
-                        "end": (t.time.end * 100.0).round() / 100.0,
-                    })
-                })
-                .collect();
-            println!("{}", serde_json::to_string_pretty(&entries)?);
-        }
-        OutputFormat::Rttm => {
-            let file_id = file.file_stem().and_then(|s| s.to_str()).unwrap_or("audio");
-            for turn in &result.turns {
-                let dur = turn.time.end - turn.time.start;
-                println!(
-                    "SPEAKER {} 1 {:.3} {:.3} <NA> <NA> {} <NA> <NA>",
-                    file_id, turn.time.start, dur, turn.speaker
-                );
+            let json = serde_json::to_string_pretty(&result).context("serialize JSON")?;
+            match output {
+                Some(path) => std::fs::write(&path, json)
+                    .with_context(|| format!("write JSON to {}", path.display()))?,
+                None => println!("{json}"),
             }
         }
     }
@@ -197,27 +160,94 @@ fn run_diarize(
     Ok(())
 }
 
-fn run_download(dir: &Path, profile: &str) -> Result<(), Box<dyn std::error::Error>> {
-    use polyvoice::ModelRegistry;
-    use polyvoice::Profile;
-
-    std::fs::create_dir_all(dir)?;
-    let registry = ModelRegistry::with_cache_dir(dir)?;
-
-    let profiles_to_fetch: Vec<Profile> = match profile {
-        "mobile" => vec![Profile::Mobile],
-        "balanced" => vec![Profile::Balanced],
-        "all" => vec![Profile::Mobile, Profile::Balanced],
-        other => return Err(format!("unknown profile '{other}'").into()),
-    };
-
-    for prof in profiles_to_fetch {
-        eprintln!("Resolving profile '{}'…", prof.manifest_id());
-        let bundle = registry.ensure_for_profile(prof)?;
-        eprintln!("  segmenter: {}", bundle.segmenter_path.display());
-        eprintln!("  embedder : {}", bundle.embedder_path.display());
+fn cmd_download_models(profile: String) -> Result<()> {
+    let registry = ModelRegistry::default()?;
+    match profile.as_str() {
+        "all" => {
+            let _ = registry.ensure_for_profile(Profile::Mobile)?;
+            let _ = registry.ensure_for_profile(Profile::Balanced)?;
+        }
+        other => {
+            let p = parse_profile(other)?;
+            let _ = registry.ensure_for_profile(p)?;
+        }
     }
-
-    eprintln!("\nModels saved to {}", dir.display());
+    eprintln!("Models cached at {}", registry.cache_dir().display());
     Ok(())
+}
+
+fn cmd_models_list() -> Result<()> {
+    let registry = ModelRegistry::default()?;
+    let manifest = registry.manifest();
+    println!("Profiles:");
+    for (name, prof) in &manifest.profiles {
+        let seg = manifest
+            .model(&prof.segmenter)
+            .map(|m| {
+                format!(
+                    "{} ({:.1} MB)",
+                    m.filename,
+                    m.size.unwrap_or(0) as f64 / 1_048_576.0
+                )
+            })
+            .unwrap_or_else(|| "(missing)".to_string());
+        let emb = manifest
+            .model(&prof.embedder)
+            .map(|m| {
+                format!(
+                    "{} ({:.1} MB)",
+                    m.filename,
+                    m.size.unwrap_or(0) as f64 / 1_048_576.0
+                )
+            })
+            .unwrap_or_else(|| "(missing)".to_string());
+        println!("  {name}: segmenter={seg}, embedder={emb}");
+    }
+    println!("\nModels:");
+    for (id, entry) in &manifest.models {
+        let size_mb = entry.size.unwrap_or(0) as f64 / 1_048_576.0;
+        println!(
+            "  {id}: {} ({size_mb:.1} MB) sha256={}",
+            entry.filename, entry.sha256
+        );
+    }
+    Ok(())
+}
+
+fn cmd_models_info(name: String) -> Result<()> {
+    let registry = ModelRegistry::default()?;
+    let manifest = registry.manifest();
+    if let Some(entry) = manifest.model(&name) {
+        println!("{name}:");
+        println!("  filename: {}", entry.filename);
+        println!("  url: {}", entry.url);
+        println!("  sha256: {}", entry.sha256);
+        println!("  size: {} bytes", entry.size.unwrap_or(0));
+        if let Some(cal) = &entry.calibration {
+            println!("  calibration: {cal}");
+        }
+    } else {
+        anyhow::bail!("model '{name}' not found in manifest");
+    }
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    match cli.command {
+        Command::Diarize {
+            wav,
+            profile,
+            output,
+            format,
+            models_cache,
+            threshold,
+            quiet,
+        } => cmd_diarize(wav, profile, output, format, models_cache, threshold, quiet),
+        Command::DownloadModels { profile } => cmd_download_models(profile),
+        Command::Models { sub } => match sub {
+            ModelsCommand::List => cmd_models_list(),
+            ModelsCommand::Info { name } => cmd_models_info(name),
+        },
+    }
 }

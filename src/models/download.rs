@@ -1,5 +1,6 @@
-//! HTTP download with streamed SHA-256 verification.
+//! HTTP download with streamed SHA-256 and optional Minisign verification.
 
+use crate::models::verify::{SignatureError, verify_minisign};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, BufReader, Read, Write};
@@ -26,6 +27,21 @@ pub enum DownloadError {
         expected: String,
         actual: String,
     },
+    #[error("signature invalid for {path}: {source}")]
+    SignatureInvalid {
+        path: PathBuf,
+        #[source]
+        source: SignatureError,
+    },
+}
+
+impl From<SignatureError> for DownloadError {
+    fn from(source: SignatureError) -> Self {
+        DownloadError::SignatureInvalid {
+            path: PathBuf::from("(unknown)"),
+            source,
+        }
+    }
 }
 
 /// Stream `url` to `dest` and verify the SHA-256 matches `expected_sha256`.
@@ -34,25 +50,88 @@ pub enum DownloadError {
 /// immediately. Otherwise downloads, hashes while streaming (so 200+ MB files
 /// don't blow up RAM), and on hash mismatch deletes the partial file and returns
 /// an error. Returns `Ok(true)` if a download happened, `Ok(false)` if cached.
+///
+/// Backwards-compatibility wrapper: delegates to [`download_with_checksum_and_signature`]
+/// with `signature: None`.
 pub fn download_with_checksum(
     url: &str,
     expected_sha256: &str,
     dest: &Path,
 ) -> Result<bool, DownloadError> {
+    download_with_checksum_and_signature(url, expected_sha256, None, dest)
+}
+
+/// Stream `url` to `dest`, verify SHA-256, and optionally verify a Minisign signature.
+///
+/// When `signature` is `Some(sig_text)`, the signature is verified both on cache
+/// hits and after fresh downloads. If verification fails, the temp file is deleted
+/// and `DownloadError::SignatureInvalid` is returned.
+///
+/// Streams everything in 64 KiB chunks; does not load the whole model into memory.
+pub fn download_with_checksum_and_signature(
+    url: &str,
+    expected_sha256: &str,
+    signature: Option<&str>,
+    dest: &Path,
+) -> Result<bool, DownloadError> {
+    // Cache hit: verify SHA-256, then signature if present.
     if dest.exists() && verify_sha256(dest, expected_sha256).is_ok() {
+        if let Some(sig) = signature {
+            verify_minisign(dest, sig).map_err(|e| DownloadError::SignatureInvalid {
+                path: dest.to_path_buf(),
+                source: e,
+            })?;
+        }
         return Ok(false);
     }
+
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| DownloadError::Io {
             path: parent.to_path_buf(),
             source: e,
         })?;
     }
+
     // Download to a sibling .partial file, then rename — gives atomic on-success
     // semantics so a partial file is never seen as cached.
     let mut tmp = dest.to_path_buf();
     let original_name = dest.file_name().and_then(|s| s.to_str()).unwrap_or("model");
     tmp.set_file_name(format!(".{original_name}.partial"));
+
+    // Pre-parse Minisign public key and signature so we fail fast before the network.
+    let public_key = if signature.is_some() {
+        Some(
+            minisign_verify::PublicKey::from_base64(crate::models::verify::SIGNING_PUBKEY_BASE64)
+                .map_err(|e| DownloadError::SignatureInvalid {
+                path: dest.to_path_buf(),
+                source: SignatureError::BadPublicKey(format!("{e:?}")),
+            })?,
+        )
+    } else {
+        None
+    };
+    let sig = if let Some(sig_text) = signature {
+        Some(minisign_verify::Signature::decode(sig_text).map_err(|e| {
+            DownloadError::SignatureInvalid {
+                path: dest.to_path_buf(),
+                source: SignatureError::BadSignature(format!("{e:?}")),
+            }
+        })?)
+    } else {
+        None
+    };
+    let mut verifier = if let (Some(pk), Some(s)) = (&public_key, &sig) {
+        Some(
+            pk.verify_stream(s)
+                .map_err(|e| DownloadError::SignatureInvalid {
+                    path: dest.to_path_buf(),
+                    source: SignatureError::VerificationFailed(format!("{e:?}")),
+                })?,
+        )
+    } else {
+        None
+    };
+
     let resp = ureq::get(url).call().map_err(|e| DownloadError::Network {
         url: url.to_owned(),
         source: Box::new(e),
@@ -65,6 +144,7 @@ pub fn download_with_checksum(
     })?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 64 * 1024];
+
     loop {
         let n = reader.read(&mut buf).map_err(|e| DownloadError::Io {
             path: tmp.clone(),
@@ -78,12 +158,16 @@ pub fn download_with_checksum(
             path: tmp.clone(),
             source: e,
         })?;
+        if let Some(ref mut v) = verifier {
+            v.update(&buf[..n]);
+        }
     }
     file.flush().map_err(|e| DownloadError::Io {
         path: tmp.clone(),
         source: e,
     })?;
     drop(file);
+
     let actual = format!("{:x}", hasher.finalize());
     if actual != expected_sha256 {
         let _ = fs::remove_file(&tmp);
@@ -93,6 +177,17 @@ pub fn download_with_checksum(
             actual,
         });
     }
+
+    if let Some(mut v) = verifier {
+        v.finalize().map_err(|e| {
+            let _ = fs::remove_file(&tmp);
+            DownloadError::SignatureInvalid {
+                path: dest.to_path_buf(),
+                source: SignatureError::VerificationFailed(format!("{e:?}")),
+            }
+        })?;
+    }
+
     fs::rename(&tmp, dest).map_err(|e| DownloadError::Io {
         path: tmp.clone(),
         source: e,
@@ -190,5 +285,40 @@ mod tests {
             h.update([0u8; 1024]);
         }
         format!("{:x}", h.finalize())
+    }
+
+    #[test]
+    fn download_with_checksum_no_signature_fallback() {
+        // When signature is None and the file is already cached with a matching
+        // hash, download_with_checksum_and_signature must take the cache-hit
+        // path and return Ok(false) without touching the network.
+        let dir = TempDir::new().unwrap();
+        let dest = dir.path().join("cached.bin");
+        fs::write(&dest, TEST_BYTES).unwrap();
+        let sha = test_bytes_sha256();
+
+        // A completely invalid URL proves we never reach the download path.
+        let result = download_with_checksum_and_signature(
+            "http://[invalid:definitely:not:a:real:url]",
+            &sha,
+            None,
+            &dest,
+        );
+        assert!(
+            result.is_ok(),
+            "fallback should succeed: {:?}",
+            result.err()
+        );
+        assert!(!result.unwrap(), "should be cached (no download)");
+
+        // Calling the old wrapper should behave identically.
+        let result2 =
+            download_with_checksum("http://[invalid:definitely:not:a:real:url]", &sha, &dest);
+        assert!(
+            result2.is_ok(),
+            "wrapper should succeed: {:?}",
+            result2.err()
+        );
+        assert!(!result2.unwrap(), "wrapper should also be cached");
     }
 }

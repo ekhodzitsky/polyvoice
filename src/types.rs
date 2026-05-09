@@ -101,7 +101,7 @@ impl Profile {
     /// Returns 0 for `Custom` (caller must resolve dimension explicitly).
     pub const fn embedding_dim(self) -> usize {
         match self {
-            Profile::Mobile => 192,   // CAM++ output dim (lands in M2)
+            Profile::Mobile => 512,   // CAM++ output dim (voxceleb_CAM++.onnx)
             Profile::Balanced => 256, // WeSpeaker ResNet34 output dim
             Profile::Custom => 0,
         }
@@ -232,44 +232,6 @@ impl Default for Confidence {
     }
 }
 
-/// A validated embedding dimension (> 0).
-///
-/// Invariant: inner > 0.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct EmbeddingDim(usize);
-
-impl EmbeddingDim {
-    /// Create a validated embedding dimension.
-    ///
-    /// Returns `None` if `dim` is zero.
-    ///
-    /// ```rust
-    /// use polyvoice::EmbeddingDim;
-    /// assert!(EmbeddingDim::new(256).is_some());
-    /// assert!(EmbeddingDim::new(0).is_none());
-    /// ```
-    pub fn new(dim: usize) -> Option<Self> {
-        (dim > 0).then_some(Self(dim))
-    }
-
-    /// Return the raw dimension value.
-    ///
-    /// ```rust
-    /// use polyvoice::EmbeddingDim;
-    /// let d = EmbeddingDim::new(192).unwrap();
-    /// assert_eq!(d.get(), 192);
-    /// ```
-    pub fn get(&self) -> usize {
-        self.0
-    }
-}
-
-impl Default for EmbeddingDim {
-    fn default() -> Self {
-        Self(256)
-    }
-}
-
 /// A non-negative duration in seconds.
 ///
 /// Invariant: inner >= 0.0.
@@ -373,14 +335,6 @@ pub struct DiarizationResult {
 }
 
 /// Configuration shared between online and offline diarizers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum ClusteringBackend {
-    Ahc,
-    KMeans,
-    Spectral,
-    Auto,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct DiarizationConfig {
     /// Cosine similarity threshold for assigning to an existing speaker.
@@ -395,30 +349,23 @@ pub struct DiarizationConfig {
     pub min_speech_secs: f32,
     /// Maximum gap between same-speaker segments to merge, in seconds.
     pub max_gap_secs: f32,
-    /// Minimum turn duration after merging, in seconds.
-    pub min_turn_duration_secs: f32,
-    /// Minimum number of embeddings a speaker must have to be kept.
-    /// Speakers with fewer embeddings are merged into the nearest other speaker.
-    pub min_embeddings_per_speaker: usize,
+    /// Maximum allowed audio duration in seconds (DoS guard).
+    pub max_duration_secs: f32,
     /// Sample rate expected by the embedding model (usually 16000).
     pub sample_rate: SampleRate,
-    /// Clustering algorithm backend.
-    pub clustering_backend: ClusteringBackend,
 }
 
 impl Default for DiarizationConfig {
     fn default() -> Self {
         Self {
-            threshold: 0.45,
+            threshold: 0.4,
             max_speakers: 64,
             window_secs: 1.5,
             hop_secs: 0.75,
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
-            min_turn_duration_secs: 0.0,
-            min_embeddings_per_speaker: 2,
-            sample_rate: SampleRate::default(),
-            clustering_backend: ClusteringBackend::Ahc,
+            max_duration_secs: 3600.0,
+            sample_rate: SampleRate(16000),
         }
     }
 }
@@ -452,7 +399,7 @@ mod profile_tests {
 
     #[test]
     fn mobile_profile_uses_cam_pp_dim() {
-        assert_eq!(Profile::Mobile.embedding_dim(), 192);
+        assert_eq!(Profile::Mobile.embedding_dim(), 512);
     }
 
     #[test]

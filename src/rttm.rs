@@ -54,11 +54,23 @@ pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError> 
             line: idx + 1,
             reason: format!("invalid start time: {}", fields[3]),
         })?;
+        if !start.is_finite() || start < 0.0 {
+            return Err(RttmError::Parse {
+                line: idx + 1,
+                reason: format!("invalid start time: {}", start),
+            });
+        }
 
         let duration: f64 = fields[4].parse().map_err(|_| RttmError::Parse {
             line: idx + 1,
             reason: format!("invalid duration: {}", fields[4]),
         })?;
+        if !duration.is_finite() || duration < 0.0 {
+            return Err(RttmError::Parse {
+                line: idx + 1,
+                reason: format!("invalid duration: {}", duration),
+            });
+        }
 
         segments.push(RttmSegment {
             file_id: fields[1].to_string(),

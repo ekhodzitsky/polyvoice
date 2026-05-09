@@ -1,12 +1,59 @@
 //! Online (streaming) speaker diarization.
 
-use crate::cluster::SpeakerCluster;
+use crate::cluster::{ClusterConfig, SpeakerCluster};
 use crate::embedding::EmbeddingExtractor;
-use crate::types::{DiarizationConfig, Segment, SpeakerId, TimeRange, WordAlignment};
+use crate::types::{DiarizationConfig, SampleRate, Segment, SpeakerId, TimeRange, WordAlignment};
+
+/// Configuration for `OnlineDiarizer`.
+#[derive(Debug, Clone, Copy)]
+pub struct OnlineConfig {
+    /// Cosine similarity threshold for assigning to an existing speaker.
+    pub threshold: f32,
+    /// Maximum number of speakers to track.
+    pub max_speakers: usize,
+    /// Window size for embedding extraction, in seconds.
+    pub window_secs: f32,
+    /// Hop length between consecutive windows, in seconds.
+    pub hop_secs: f32,
+    /// Sample rate expected by the embedding model (usually 16000).
+    pub sample_rate: SampleRate,
+}
+
+impl Default for OnlineConfig {
+    fn default() -> Self {
+        Self {
+            threshold: 0.45,
+            max_speakers: 64,
+            window_secs: 1.5,
+            hop_secs: 0.75,
+            sample_rate: SampleRate::default(),
+        }
+    }
+}
+
+impl OnlineConfig {
+    fn window_samples(&self) -> usize {
+        (self.window_secs * self.sample_rate.get() as f32) as usize
+    }
+    fn hop_samples(&self) -> usize {
+        (self.hop_secs * self.sample_rate.get() as f32) as usize
+    }
+    fn cluster_config(&self) -> ClusterConfig {
+        ClusterConfig {
+            threshold: self.threshold,
+            max_speakers: self.max_speakers,
+        }
+    }
+}
 
 /// Per-connection state for streaming diarization.
+#[deprecated(
+    since = "0.6.0-alpha.3",
+    note = "streaming pipeline redesigned in v1.1; use Pipeline for offline use"
+)]
 pub struct OnlineDiarizer {
-    config: DiarizationConfig,
+    config: OnlineConfig,
+    diarization_config: DiarizationConfig,
     cluster: SpeakerCluster,
     /// Accumulated raw samples since last extraction.
     audio_buffer: Vec<f32>,
@@ -18,22 +65,34 @@ pub struct OnlineDiarizer {
     total_samples: usize,
 }
 
+#[allow(deprecated)]
 impl OnlineDiarizer {
     /// Create a new streaming diarizer.
     ///
     /// ```rust
-    /// use polyvoice::{OnlineDiarizer, DiarizationConfig};
-    /// let diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// use polyvoice::{OnlineDiarizer, OnlineConfig};
+    /// let diarizer = OnlineDiarizer::new(OnlineConfig::default());
     /// assert_eq!(diarizer.num_speakers(), 0);
     /// ```
-    pub fn new(config: DiarizationConfig) -> Self {
+    pub fn new(config: OnlineConfig) -> Self {
+        let diarization_config = DiarizationConfig {
+            threshold: config.threshold,
+            max_speakers: config.max_speakers,
+            window_secs: config.window_secs,
+            hop_secs: config.hop_secs,
+            min_speech_secs: 0.25,
+            max_gap_secs: 0.5,
+            max_duration_secs: 3600.0,
+            sample_rate: config.sample_rate,
+        };
         Self {
-            cluster: SpeakerCluster::new(config),
+            cluster: SpeakerCluster::new(config.cluster_config()),
             audio_buffer: Vec::new(),
             embedding_buffer: Vec::new(),
             current_speaker: None,
             total_samples: 0,
             config,
+            diarization_config,
         }
     }
 
@@ -43,8 +102,8 @@ impl OnlineDiarizer {
     /// for a full analysis window.
     ///
     /// ```rust
-    /// use polyvoice::{OnlineDiarizer, DiarizationConfig, DummyExtractor};
-    /// let mut diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// use polyvoice::{OnlineDiarizer, OnlineConfig, DummyExtractor};
+    /// let mut diarizer = OnlineDiarizer::new(OnlineConfig::default());
     /// let extractor = DummyExtractor::new(256);
     /// let samples = vec![0.0f32; 16000]; // 1 second
     /// let segments = diarizer.feed(&samples, &extractor).unwrap();
@@ -63,7 +122,8 @@ impl OnlineDiarizer {
         while self.audio_buffer.len() >= window {
             let window_start = self.total_samples;
             let segment_end = window_start + window;
-            let embedding = extractor.extract(&self.audio_buffer[..window], &self.config)?;
+            let embedding =
+                extractor.extract(&self.audio_buffer[..window], &self.diarization_config)?;
             let (speaker, confidence) = self.cluster.assign(&embedding);
             self.current_speaker = Some(speaker);
 
@@ -93,8 +153,8 @@ impl OnlineDiarizer {
     /// at the word's midpoint timestamp.
     ///
     /// ```rust
-    /// use polyvoice::{OnlineDiarizer, DiarizationConfig, DummyExtractor, WordAlignment, TimeRange};
-    /// let mut diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// use polyvoice::{OnlineDiarizer, OnlineConfig, DummyExtractor, WordAlignment, TimeRange};
+    /// let mut diarizer = OnlineDiarizer::new(OnlineConfig::default());
     /// let extractor = DummyExtractor::new(256);
     /// let samples = vec![0.0f32; 16000 * 3];
     /// let _ = diarizer.feed(&samples, &extractor).unwrap();
@@ -125,8 +185,8 @@ impl OnlineDiarizer {
     /// Return the most recently assigned speaker, if any.
     ///
     /// ```rust
-    /// use polyvoice::{OnlineDiarizer, DiarizationConfig};
-    /// let diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// use polyvoice::{OnlineDiarizer, OnlineConfig};
+    /// let diarizer = OnlineDiarizer::new(OnlineConfig::default());
     /// assert!(diarizer.current_speaker().is_none());
     /// ```
     pub fn current_speaker(&self) -> Option<SpeakerId> {
@@ -136,8 +196,8 @@ impl OnlineDiarizer {
     /// Return the number of distinct speakers detected so far.
     ///
     /// ```rust
-    /// use polyvoice::{OnlineDiarizer, DiarizationConfig};
-    /// let diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// use polyvoice::{OnlineDiarizer, OnlineConfig};
+    /// let diarizer = OnlineDiarizer::new(OnlineConfig::default());
     /// assert_eq!(diarizer.num_speakers(), 0);
     /// ```
     pub fn num_speakers(&self) -> usize {
@@ -150,8 +210,8 @@ impl OnlineDiarizer {
     /// Returns `Ok(None)` if the buffer is empty.
     ///
     /// ```rust
-    /// use polyvoice::{OnlineDiarizer, DiarizationConfig, DummyExtractor};
-    /// let mut diarizer = OnlineDiarizer::new(DiarizationConfig::default());
+    /// use polyvoice::{OnlineDiarizer, OnlineConfig, DummyExtractor};
+    /// let mut diarizer = OnlineDiarizer::new(OnlineConfig::default());
     /// let extractor = DummyExtractor::new(256);
     /// let samples = vec![0.0f32; 16000];
     /// let _ = diarizer.feed(&samples, &extractor).unwrap();
@@ -171,7 +231,7 @@ impl OnlineDiarizer {
         let mut padded = vec![0.0f32; window];
         let copy_len = self.audio_buffer.len().min(window);
         padded[..copy_len].copy_from_slice(&self.audio_buffer[..copy_len]);
-        let embedding = extractor.extract(&padded, &self.config)?;
+        let embedding = extractor.extract(&padded, &self.diarization_config)?;
         let (speaker, confidence) = self.cluster.assign(&embedding);
         self.current_speaker = Some(speaker);
         self.total_samples += self.audio_buffer.len();

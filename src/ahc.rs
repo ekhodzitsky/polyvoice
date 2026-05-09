@@ -153,6 +153,9 @@ fn estimate_threshold_from_similarities(embeddings: &[Vec<f32>]) -> f32 {
     }
 
     // Threshold is the similarity value after the gap.
+    if sims.len() <= 1 {
+        return 0.5;
+    }
     let th = sims[best_idx + 1];
     // Clamp to a reasonable range.
     th.clamp(0.2, 0.7)
