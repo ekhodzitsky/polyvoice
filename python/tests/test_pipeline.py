@@ -95,8 +95,12 @@ def test_diarize_wav(pipeline, tmp_path):
         assert turn["end"] > turn["start"]
 
 
-def test_missing_models():
+def test_missing_models(tmp_path):
     import polyvoice
 
+    # Create a file — passing it as cache_dir must fail because
+    # create_dir_all on a file path returns "Not a directory".
+    fake_dir = tmp_path / "not_a_dir"
+    fake_dir.write_text("i am a file")
     with pytest.raises(RuntimeError):
-        polyvoice.Pipeline.balanced("/nonexistent/path")
+        polyvoice.Pipeline.balanced(str(fake_dir))
