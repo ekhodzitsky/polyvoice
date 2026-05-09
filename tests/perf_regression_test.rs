@@ -48,11 +48,12 @@ fn peak_rss_mb() -> f64 {
     {
         if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
             for line in status.lines() {
-                if line.starts_with("VmHWM:") {
-                    if let Some(kb_str) = line.split_whitespace().nth(1) {
-                        if let Ok(kb) = kb_str.parse::<f64>() {
-                            return kb / 1024.0;
-                        }
+                if let Some(kb_str) = line
+                    .strip_prefix("VmHWM:")
+                    .and_then(|s| s.split_whitespace().next())
+                {
+                    if let Ok(kb) = kb_str.parse::<f64>() {
+                        return kb / 1024.0;
                     }
                 }
             }
