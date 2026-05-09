@@ -54,6 +54,11 @@ impl PowersetSegmenter {
         config: PowersetConfig,
     ) -> Result<Self, SegmentationError> {
         let path = model_path.as_ref().to_path_buf();
+        crate::onnx::validate_onnx_header(&path)
+            .map_err(|e| SegmentationError::ModelIo {
+                path: path.clone(),
+                detail: e.to_string(),
+            })?;
         let session = Session::builder()
             .map_err(|e| SegmentationError::ModelIo {
                 path: path.clone(),

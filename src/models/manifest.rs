@@ -36,6 +36,9 @@ pub struct ModelEntry {
     /// Optional calibration descriptor (filled in M5 for INT8 entries).
     #[serde(default)]
     pub calibration: Option<String>,
+    /// Minisign signature (raw .minisig text) — optional during transition.
+    #[serde(default)]
+    pub signature: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -7,6 +7,17 @@ license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "onnx", "stt", "voice"]
 categories = ["multimedia::audio", "science"]
+exclude = [
+  "models/*.onnx",
+  "models/*.onnx.data",
+  "models/int8/*.onnx",
+  "models/int8/*.onnx.data",
+  "data/",
+  "fuzz/",
+  "python/",
+  "docs/superpowers/",
+  "scripts/__pycache__/",
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -18,7 +29,7 @@ onnx = ["dep:ort"]
 # C FFI bindings (ABI v2). Requires the full pipeline stack.
 ffi = ["onnx", "download"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
-download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2"]
+download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
 # CLI binary (polyvoice command).
 cli = ["onnx", "download", "dep:clap"]
 
@@ -93,12 +104,13 @@ num-complex = "0.4"
 
 # CLI (optional)
 clap = { version = "4", features = ["derive", "env"], optional = true }
-ureq = { version = "3", optional = true }
+ureq = { version = "3", default-features = false, features = ["rustls"], optional = true }
 dirs = { version = "6", optional = true }
 faer = { version = "0.24.0", features = ["std"], optional = true }
 fastrand = "2.4.1"
 toml = { version = "0.8", optional = true }
 sha2 = { version = "0.10", optional = true }
+minisign-verify = { version = "0.2.5", optional = true }
 
 [dev-dependencies]
 hound = "3.5"

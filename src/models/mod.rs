@@ -2,7 +2,8 @@
 
 pub mod download;
 pub mod manifest;
-pub use download::{DownloadError, download_with_checksum, verify_sha256};
+pub mod verify;
+pub use download::{DownloadError, download_with_checksum, download_with_checksum_and_signature, verify_sha256};
 pub use manifest::{Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1};
 
 use crate::types::Profile;
@@ -134,10 +135,12 @@ impl ModelRegistry {
                 model_id: model_id.to_owned(),
             })?;
         let dest = self.cache_dir.join(&entry.filename);
-        download_with_checksum(&entry.url, &entry.sha256, &dest)?;
+        download_with_checksum_and_signature(&entry.url, &entry.sha256, entry.signature.as_deref(), &dest)?;
         Ok(dest)
     }
 
+    /// Test-only helper that bypasses SHA-256 verification.
+    #[doc(hidden)]
     /// Same as `ensure` but never makes a network call. Returns `OfflineMissing`
     /// if the file is not in cache or has a wrong hash.
     pub fn ensure_in_cache_only(&self, model_id: &str) -> Result<PathBuf, RegistryError> {

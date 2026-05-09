@@ -28,6 +28,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   232-file VoxConverse-test run: DER 13.83% (miss 3.82%, FA 3.68%,
   confusion 6.34%) at threshold 0.45, collar 0.25.
 
+### Security & Hardening (2026-05-09)
+- **SUPPLY-002 — Model signing (Minisign):** All official ONNX models are now
+  signed with Ed25519 via `minisign`. The project public key is baked into the
+  binary; per-model signatures live inline in `manifest.toml`. Downloads are
+  verified with streaming Minisign verification alongside SHA-256 in the same
+  64 KiB loop. `scripts/sign-models.sh` automates release signing.
+- **SUPPLY-003 — TLS hardening:** `ureq` is now pinned to `rustls`, removing
+  `native-tls` from the dependency tree entirely.
+- **DOS-002 — WAV DoS guards:** `read_wav` rejects files > 1 GiB and headers
+  declaring > 1 hour duration before reading samples.
+- **DOS-003 — ONNX header validation:** `validate_onnx_header()` checks the
+  first 64 bytes for ONNX magic / protobuf header before any model reaches
+  `ort::commit_from_file`.
+- **FFI-001/FFI-002/FFI-003:** `MAX_SAMPLES` guard, path-traversal rejection,
+  and panic observability in C FFI entry points.
+- **CACHE-001:** `ensure_in_cache_only` marked `#[doc(hidden)]` as test-only.
+- **SERIAL-001:** RTTM parser validates `is_finite() && >= 0.0` for timestamps.
+- Security audit updated: all MEDIUM and HIGH findings resolved.
+  See `docs/security/audit-2026-05-08.md`.
+
 ### Added (M0 — v1.0 plumbing)
 - `Profile` enum (`Mobile`/`Balanced`/`Custom`) in `polyvoice::types`.
 - `polyvoice::models` module: `ModelRegistry`, `Manifest`, `ModelEntry`, `ProfileEntry`, `ProfileModels`.

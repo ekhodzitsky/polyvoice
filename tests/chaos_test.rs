@@ -12,7 +12,7 @@ use polyvoice::{
     pipeline::Pipeline,
     types::{DiarizationConfig, SampleRate},
     vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech},
-    wav::read_wav,
+    wav::{read_wav, WavError},
 };
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -114,7 +114,64 @@ fn read_wav_on_truncated_file_returns_error() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. AHC clustering with empty embeddings
+// 6. Crafted WAV header declaring huge duration
+// ---------------------------------------------------------------------------
+
+#[test]
+fn read_wav_on_oversized_duration_header_returns_error() {
+    let mut temp = NamedTempFile::new().expect("failed to create temp file");
+
+    // Build a minimal WAV header declaring 2 hours of 16-bit mono @ 16 kHz
+    // but only write a few bytes of actual data.
+    let sample_rate = 16000u32;
+    let channels = 1u16;
+    let bits_per_sample = 16u16;
+    let bytes_per_sample = (bits_per_sample / 8) as u32;
+    let block_align = channels * bits_per_sample / 8;
+    let byte_rate = sample_rate * bytes_per_sample;
+
+    let declared_samples = 2u64 * 3600 * sample_rate as u64;
+    let data_chunk_size = (declared_samples * bytes_per_sample as u64) as u32;
+    let riff_chunk_size = 36u32 + data_chunk_size;
+
+    let mut header = Vec::new();
+    header.extend_from_slice(b"RIFF");
+    header.extend_from_slice(&riff_chunk_size.to_le_bytes());
+    header.extend_from_slice(b"WAVE");
+    header.extend_from_slice(b"fmt ");
+    header.extend_from_slice(&16u32.to_le_bytes());
+    header.extend_from_slice(&1u16.to_le_bytes());
+    header.extend_from_slice(&channels.to_le_bytes());
+    header.extend_from_slice(&sample_rate.to_le_bytes());
+    header.extend_from_slice(&byte_rate.to_le_bytes());
+    header.extend_from_slice(&block_align.to_le_bytes());
+    header.extend_from_slice(&bits_per_sample.to_le_bytes());
+    header.extend_from_slice(b"data");
+    header.extend_from_slice(&data_chunk_size.to_le_bytes());
+    header.extend_from_slice(&[0u8; 4]);
+
+    temp.write_all(&header).expect("failed to write temp file");
+
+    let result = read_wav(temp.path());
+    match result {
+        Err(WavError::DurationTooLong { duration_secs, max_secs }) => {
+            assert!(
+                duration_secs > 3600.0,
+                "expected duration > 3600, got {}",
+                duration_secs
+            );
+            assert!(
+                (max_secs - 3600.0).abs() < 0.01,
+                "expected max_secs = 3600.0, got {}",
+                max_secs
+            );
+        }
+        other => panic!("expected DurationTooLong error, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 7. AHC clustering with empty embeddings
 // ---------------------------------------------------------------------------
 
 #[test]

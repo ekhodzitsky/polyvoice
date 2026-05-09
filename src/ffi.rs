@@ -65,6 +65,11 @@ pub unsafe extern "C" fn polyvoice_pipeline_create(
                 let s = unsafe { CStr::from_ptr(models_cache_dir) }
                     .to_str()
                     .map_err(|_| PolyvoiceStatus::InvalidArg as c_int)?;
+                // Reject path-traversal attempts (e.g. "../../evil") before the
+                // path is passed to ModelRegistry::with_cache_dir.  FFI-002.
+                if s.contains("..") {
+                    return Err(PolyvoiceStatus::InvalidArg as c_int);
+                }
                 ModelRegistry::with_cache_dir(s)
             }
             .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
@@ -165,13 +170,15 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
 /// Must be called exactly once per handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipeline) {
-    if !pipeline.is_null() {
-        let _ = catch_unwind(AssertUnwindSafe(|| {
+    if !pipeline.is_null()
+        && catch_unwind(AssertUnwindSafe(|| {
             // SAFETY: pipeline is non-null and was created by Box::into_raw; caller destroys exactly once.
             unsafe {
                 drop(Box::from_raw(pipeline));
             }
-        }));
+        })).is_err()
+    {
+        eprintln!("polyvoice: panic during cleanup (foreign thread?)");
     }
 }
 
@@ -181,12 +188,14 @@ pub unsafe extern "C" fn polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipe
 /// `p` must be a pointer returned by `polyvoice_pipeline_run`, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn polyvoice_free_string(p: *mut c_char, _n: usize) {
-    if !p.is_null() {
-        let _ = catch_unwind(AssertUnwindSafe(|| {
+    if !p.is_null()
+        && catch_unwind(AssertUnwindSafe(|| {
             // SAFETY: p is non-null and was created by CString::into_raw in polyvoice_pipeline_run.
             unsafe {
                 drop(CString::from_raw(p));
             }
-        }));
+        })).is_err()
+    {
+        eprintln!("polyvoice: panic during cleanup (foreign thread?)");
     }
 }

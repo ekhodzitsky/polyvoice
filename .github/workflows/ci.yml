@@ -212,3 +212,34 @@ jobs:
         with:
           name: der-regression-log
           path: der-regression.log
+
+  sign-manifest-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install minisign
+        run: |
+          sudo apt-get update && sudo apt-get install -y minisign
+      - name: Run sign-models.sh --dry-run
+        run: ./scripts/sign-models.sh --dry-run
+
+  perf-regression:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Download VoxConverse test data
+        run: bash scripts/download-voxconverse-test.sh
+      - name: Download ONNX models
+        run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
+      - name: Run perf regression test
+        run: cargo test --test perf_regression_test --features "onnx download" -- --ignored --nocapture 2>&1 | tee perf-regression.log
+      - name: Upload perf regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-regression-log
+          path: perf-regression.log
