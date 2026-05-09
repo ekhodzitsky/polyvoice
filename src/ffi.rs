@@ -5,7 +5,7 @@
 //! All entry points are wrapped in `catch_unwind` per spec §8.4.
 
 use crate::models::ModelRegistry;
-use crate::pipeline::{Pipeline, PipelineConfig};
+use crate::pipeline_v1::{Pipeline, PipelineConfig};
 use crate::types::{Profile, SampleRate};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int};

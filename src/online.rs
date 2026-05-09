@@ -2,7 +2,7 @@
 
 use crate::cluster::{ClusterConfig, SpeakerCluster};
 use crate::embedding::EmbeddingExtractor;
-use crate::types::{SampleRate, Segment, SpeakerId, TimeRange, WordAlignment};
+use crate::types::{DiarizationConfig, SampleRate, Segment, SpeakerId, TimeRange, WordAlignment};
 
 /// Configuration for `OnlineDiarizer`.
 #[derive(Debug, Clone, Copy)]
@@ -53,6 +53,7 @@ impl OnlineConfig {
 )]
 pub struct OnlineDiarizer {
     config: OnlineConfig,
+    diarization_config: DiarizationConfig,
     cluster: SpeakerCluster,
     /// Accumulated raw samples since last extraction.
     audio_buffer: Vec<f32>,
@@ -74,6 +75,15 @@ impl OnlineDiarizer {
     /// assert_eq!(diarizer.num_speakers(), 0);
     /// ```
     pub fn new(config: OnlineConfig) -> Self {
+        let diarization_config = DiarizationConfig {
+            threshold: config.threshold,
+            max_speakers: config.max_speakers,
+            window_secs: config.window_secs,
+            hop_secs: config.hop_secs,
+            min_speech_secs: 0.25,
+            max_gap_secs: 0.5,
+            sample_rate: config.sample_rate,
+        };
         Self {
             cluster: SpeakerCluster::new(config.cluster_config()),
             audio_buffer: Vec::new(),
@@ -81,6 +91,7 @@ impl OnlineDiarizer {
             current_speaker: None,
             total_samples: 0,
             config,
+            diarization_config,
         }
     }
 
@@ -110,7 +121,7 @@ impl OnlineDiarizer {
         while self.audio_buffer.len() >= window {
             let window_start = self.total_samples;
             let segment_end = window_start + window;
-            let embedding = extractor.extract(&self.audio_buffer[..window])?;
+            let embedding = extractor.extract(&self.audio_buffer[..window], &self.diarization_config)?;
             let (speaker, confidence) = self.cluster.assign(&embedding);
             self.current_speaker = Some(speaker);
 
@@ -218,7 +229,7 @@ impl OnlineDiarizer {
         let mut padded = vec![0.0f32; window];
         let copy_len = self.audio_buffer.len().min(window);
         padded[..copy_len].copy_from_slice(&self.audio_buffer[..copy_len]);
-        let embedding = extractor.extract(&padded)?;
+        let embedding = extractor.extract(&padded, &self.diarization_config)?;
         let (speaker, confidence) = self.cluster.assign(&embedding);
         self.current_speaker = Some(speaker);
         self.total_samples += self.audio_buffer.len();

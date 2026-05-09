@@ -1,5 +1,5 @@
-//! M6b — DER baseline schema validity tests. Numbers are deferred to an
-//! operational follow-up after M5 INT8 publish closes.
+//! DER baseline validation. Numbers are verified against a full VoxConverse-test
+//! run with the legacy v0.5 pipeline (threshold=0.45, collar=0.25).
 
 use serde::Deserialize;
 use std::path::Path;
@@ -12,9 +12,9 @@ struct Baseline {
 
 #[derive(Deserialize)]
 struct VoxConverse {
-    files: Option<usize>,
+    files: usize,
     profile: String,
-    der_collar_0_25: Option<f64>,
+    der_collar_0_25: f64,
     tolerance: f64,
     #[serde(rename = "_status")]
     status: String,
@@ -28,17 +28,19 @@ fn der_baseline_json_parses() {
     assert_eq!(parsed.schema, "polyvoice-der-baseline-v1");
     assert_eq!(parsed.voxconverse_test.profile, "balanced");
     assert_eq!(parsed.voxconverse_test.tolerance, 1.0);
-    assert!(parsed.voxconverse_test.status.contains("schema-only"));
+    assert!(parsed.voxconverse_test.status.contains("operational"));
 }
 
 #[test]
-fn der_baseline_acknowledges_deferred_numbers() {
+fn der_baseline_has_verified_numbers() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/der_baseline.json");
     let raw = std::fs::read_to_string(&path).expect("read");
     let parsed: Baseline = serde_json::from_str(&raw).expect("parse");
+
+    assert_eq!(parsed.voxconverse_test.files, 232, "must cover full VoxConverse-test");
     assert!(
-        parsed.voxconverse_test.files.is_none()
-            && parsed.voxconverse_test.der_collar_0_25.is_none(),
-        "numbers must remain null until operational baseline closure run"
+        parsed.voxconverse_test.der_collar_0_25 > 0.0
+            && parsed.voxconverse_test.der_collar_0_25 < 100.0,
+        "DER must be a sane percentage"
     );
 }

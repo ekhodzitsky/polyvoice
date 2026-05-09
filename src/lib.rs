@@ -88,7 +88,7 @@ pub use resegmentation::extract_overlap_time_ranges;
     feature = "clusterer",
     feature = "resegmentation",
 ))]
-pub mod pipeline;
+pub mod pipeline_v1;
 
 #[cfg(all(
     feature = "pipeline",
@@ -98,10 +98,26 @@ pub mod pipeline;
     feature = "clusterer",
     feature = "resegmentation",
 ))]
-pub use pipeline::{
-    ClustererKind, ConfigError, ExecutionProvider, Pipeline, PipelineBuilder, PipelineConfig,
-    PipelineError,
+pub use pipeline_v1::{
+    ClustererKind, ConfigError, ExecutionProvider, Pipeline as PipelineV1, PipelineBuilder,
+    PipelineConfig, PipelineError as PipelineV1Error,
 };
+
+pub mod pipeline;
+pub use pipeline::{Pipeline, PipelineError as LegacyPipelineError};
+
+pub mod vad;
+pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
+
+#[cfg(feature = "onnx")]
+pub mod silero_vad;
+#[cfg(feature = "onnx")]
+pub use silero_vad::SileroVad;
+
+#[cfg(feature = "onnx")]
+pub mod onnx;
+#[cfg(feature = "onnx")]
+pub use onnx::OnnxEmbeddingExtractor;
 
 #[cfg(feature = "onnx")]
 pub mod ecapa;
@@ -109,7 +125,7 @@ pub mod ecapa;
 // Public re-exports for ergonomic use.
 pub use cluster::ClusterConfig;
 pub use cluster::SpeakerCluster;
-pub use embedding::{EmbeddingError, EmbeddingExtractor};
+pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
 pub use online::OnlineConfig;
@@ -117,8 +133,8 @@ pub use online::OnlineConfig;
 pub use online::OnlineDiarizer;
 pub use overlap::{OverlapRegion, detect_overlaps};
 pub use types::{
-    Confidence, DiarizationResult, Profile, SampleRate, Seconds, Segment, SpeakerId,
-    SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
+    Confidence, DiarizationConfig, DiarizationResult, Profile, SampleRate, Seconds, Segment,
+    SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
 };
 
 #[cfg(feature = "onnx")]

@@ -1,15 +1,15 @@
 schema = "polyvoice-models-v1"
 
-# v1.0 (M5+) — Mobile/Balanced profiles point at INT8 artifacts published in
-# the v0.6.0-alpha.2 GitHub pre-release. Powerset is shared across both
-# profiles; the embedder differs (CAM++ for Mobile, ResNet34 for Balanced).
+# v0.5 legacy profiles — point at proven FP32 models until v1.0 components
+# are validated. Mobile uses CAM++ (512-dim), Balanced uses WeSpeaker ResNet34
+# (256-dim). Both share Silero VAD for speech segmentation.
 [profiles.mobile]
-segmenter = "powerset_int8"
-embedder  = "cam_pp_int8"
+segmenter = "silero_vad"
+embedder  = "cam_pp_fp32"
 
 [profiles.balanced]
-segmenter = "powerset_int8"
-embedder  = "resnet34_int8"
+segmenter = "silero_vad"
+embedder  = "wespeaker_resnet34"
 
 # Legacy v0.5 entries — kept for back-compat callers that pass the model id
 # directly to ModelRegistry::ensure(). Profiles do not reference them anymore.

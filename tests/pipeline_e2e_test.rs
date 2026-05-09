@@ -17,7 +17,7 @@
 ))]
 
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::Pipeline;
+use polyvoice::pipeline_v1::Pipeline;
 use polyvoice::types::{Profile, SampleRate};
 use polyvoice::wav::read_wav;
 use std::path::Path;

@@ -184,8 +184,9 @@ mod onnx_adapters {
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            let config = crate::types::DiarizationConfig::default();
             self.inner
-                .extract(audio)
+                .extract(audio, &config)
                 .map_err(|e| EmbedderError::Legacy(format!("{e}")))
         }
     }
@@ -226,8 +227,9 @@ mod onnx_adapters {
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            let config = crate::types::DiarizationConfig::default();
             self.inner
-                .extract(audio)
+                .extract(audio, &config)
                 .map_err(|e| EmbedderError::Legacy(format!("{e}")))
         }
     }

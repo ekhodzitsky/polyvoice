@@ -1,31 +1,32 @@
-//! ONNX speaker embedding extractor (WeSpeaker, ECAPA-TDNN, etc.).
-//!
-//! Loads an ONNX model and runs log-mel filterbank + CMVN preprocessing
-//! before inference.
-//!
-//! Expected ONNX I/O:
-//! - Input: `[batch, time, n_mels]` f32 (typically `n_mels = 80`)
-//! - Output: `[batch, embedding_dim]` f32
+//! ONNX-based speaker embedding extractor with a session pool.
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
-use crate::features::{FbankExtractor, apply_cmvn};
 use crate::types::DiarizationConfig;
 use crate::utils::l2_normalize;
 use std::path::Path;
 
+/// A pooled ONNX session for speaker embedding extraction.
+///
+/// Wraps `ort::session::Session` in a [`crossbeam_queue::ArrayQueue`]
+/// so that multiple threads can extract embeddings concurrently without lock contention.
 #[cfg(feature = "onnx")]
-pub struct FbankOnnxExtractor {
+pub struct OnnxEmbeddingExtractor {
     pool: crossbeam_queue::ArrayQueue<ort::session::Session>,
     embedding_dim: usize,
-    fbank: FbankExtractor,
+    window_samples: usize,
 }
 
 #[cfg(feature = "onnx")]
-impl FbankOnnxExtractor {
+impl OnnxEmbeddingExtractor {
     /// { pool_size > 0 }
-    /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> Result<Self, anyhow::Error>`
+    /// `fn new(model_path: &Path, embedding_dim: usize, window_samples: usize, pool_size: usize) -> Result<Self, anyhow::Error>`
     /// { ret.pool.len() == pool_size }
-    pub fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> anyhow::Result<Self> {
+    pub fn new(
+        model_path: &Path,
+        embedding_dim: usize,
+        window_samples: usize,
+        pool_size: usize,
+    ) -> anyhow::Result<Self> {
         let pool = crossbeam_queue::ArrayQueue::new(pool_size);
         for i in 0..pool_size {
             let session = ort::session::Session::builder()
@@ -38,7 +39,7 @@ impl FbankOnnxExtractor {
         Ok(Self {
             pool,
             embedding_dim,
-            fbank: FbankExtractor::new(crate::features::FbankConfig::default()),
+            window_samples,
         })
     }
 
@@ -51,7 +52,7 @@ impl FbankOnnxExtractor {
 }
 
 #[cfg(feature = "onnx")]
-impl EmbeddingExtractor for FbankOnnxExtractor {
+impl EmbeddingExtractor for OnnxEmbeddingExtractor {
     fn extract(
         &self,
         samples: &[f32],
@@ -61,35 +62,23 @@ impl EmbeddingExtractor for FbankOnnxExtractor {
             EmbeddingError::InferenceFailed("ONNX session pool exhausted".to_string())
         })?;
 
-        let fbank = self
-            .fbank
-            .extract(samples)
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
-
-        if fbank.is_empty() {
+        if samples.len() != self.window_samples {
             return Err(EmbeddingError::InvalidInput {
-                expected: self.fbank.config.win_length,
+                expected: self.window_samples,
                 got: samples.len(),
             });
         }
 
-        let fbank = apply_cmvn(&fbank);
-
-        let n_frames = fbank.len();
-        let n_mels = fbank[0].len();
-        let flat: Vec<f32> = fbank.into_iter().flatten().collect();
-
-        let array = ndarray::Array3::from_shape_vec((1, n_frames, n_mels), flat)
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
-        let tensor = ort::value::TensorRef::from_array_view(&array)
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
+        let input_tensor =
+            ort::value::TensorRef::from_array_view(([1_usize, self.window_samples], samples))
+                .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
         let session = guard
             .session
             .as_mut()
             .ok_or_else(|| EmbeddingError::InferenceFailed("session not available".to_string()))?;
         let outputs = session
-            .run(ort::inputs![tensor])
+            .run(ort::inputs![input_tensor])
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
         if outputs.iter().next().is_none() {
@@ -135,17 +124,19 @@ impl Drop for PooledSession<'_> {
     }
 }
 
+/// Stub when the `onnx` feature is disabled.
 #[cfg(not(feature = "onnx"))]
-pub struct FbankOnnxExtractor;
+pub struct OnnxEmbeddingExtractor;
 
 #[cfg(not(feature = "onnx"))]
-impl FbankOnnxExtractor {
-    /// { false }
-    /// `fn new(_model_path: &Path, _embedding_dim: usize, _pool_size: usize) -> Result<Self, anyhow::Error>`
+impl OnnxEmbeddingExtractor {
+    /// { false } // Always fails because onnx feature is disabled.
+    /// `fn new(_model_path: &Path, _embedding_dim: usize, _window_samples: usize, _pool_size: usize) -> Result<Self, anyhow::Error>`
     /// { false }
     pub fn new(
         _model_path: &Path,
         _embedding_dim: usize,
+        _window_samples: usize,
         _pool_size: usize,
     ) -> anyhow::Result<Self> {
         anyhow::bail!("the `onnx` feature is not enabled")

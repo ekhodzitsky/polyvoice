@@ -1,7 +1,7 @@
 //! M6b — pyo3 bindings for the v1.0 Pipeline.
 
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::{Pipeline as RustPipeline, PipelineConfig};
+use polyvoice::pipeline_v1::{Pipeline as RustPipeline, PipelineConfig};
 use polyvoice::types::{Profile, SampleRate};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;

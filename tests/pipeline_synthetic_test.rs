@@ -14,7 +14,7 @@
 
 use polyvoice::clusterer::{Clusterer, ClustererError};
 use polyvoice::embedder::{Embedder, EmbedderError};
-use polyvoice::pipeline::{ClustererKind, ConfigError, Pipeline, PipelineConfig, PipelineError};
+use polyvoice::pipeline_v1::{ClustererKind, ConfigError, Pipeline, PipelineConfig, PipelineError};
 use polyvoice::segmentation::{RawSegment, SegmentationError, Segmenter};
 use polyvoice::types::{Confidence, Profile, SampleRate, TimeRange};
 

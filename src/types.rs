@@ -101,7 +101,7 @@ impl Profile {
     /// Returns 0 for `Custom` (caller must resolve dimension explicitly).
     pub const fn embedding_dim(self) -> usize {
         match self {
-            Profile::Mobile => 192,   // CAM++ output dim (lands in M2)
+            Profile::Mobile => 512,   // CAM++ output dim (voxceleb_CAM++.onnx)
             Profile::Balanced => 256, // WeSpeaker ResNet34 output dim
             Profile::Custom => 0,
         }
@@ -334,13 +334,69 @@ pub struct DiarizationResult {
     pub num_speakers: usize,
 }
 
+/// Configuration shared between online and offline diarizers.
+#[derive(Debug, Clone, Copy)]
+pub struct DiarizationConfig {
+    /// Cosine similarity threshold for assigning to an existing speaker.
+    pub threshold: f32,
+    /// Maximum number of speakers to track.
+    pub max_speakers: usize,
+    /// Window size for embedding extraction, in seconds.
+    pub window_secs: f32,
+    /// Hop length between consecutive windows, in seconds.
+    pub hop_secs: f32,
+    /// Minimum speech duration to consider for clustering, in seconds.
+    pub min_speech_secs: f32,
+    /// Maximum gap between same-speaker segments to merge, in seconds.
+    pub max_gap_secs: f32,
+    /// Sample rate expected by the embedding model (usually 16000).
+    pub sample_rate: SampleRate,
+}
+
+impl Default for DiarizationConfig {
+    fn default() -> Self {
+        Self {
+            threshold: 0.4,
+            max_speakers: 64,
+            window_secs: 1.5,
+            hop_secs: 0.75,
+            min_speech_secs: 0.25,
+            max_gap_secs: 0.5,
+            sample_rate: SampleRate(16000),
+        }
+    }
+}
+
+impl DiarizationConfig {
+    /// { self.window_secs >= 0.0 }
+    /// `fn window_samples(&self) -> usize`
+    /// { ret == (self.window_secs * self.sample_rate as f32) as usize }
+    pub fn window_samples(&self) -> usize {
+        (self.window_secs * self.sample_rate.get() as f32) as usize
+    }
+
+    /// { self.hop_secs >= 0.0 }
+    /// `fn hop_samples(&self) -> usize`
+    /// { ret == (self.hop_secs * self.sample_rate as f32) as usize }
+    pub fn hop_samples(&self) -> usize {
+        (self.hop_secs * self.sample_rate.get() as f32) as usize
+    }
+
+    /// { self.min_speech_secs >= 0.0 }
+    /// `fn min_speech_samples(&self) -> usize`
+    /// { ret == (self.min_speech_secs * self.sample_rate as f32) as usize }
+    pub fn min_speech_samples(&self) -> usize {
+        (self.min_speech_secs * self.sample_rate.get() as f32) as usize
+    }
+}
+
 #[cfg(test)]
 mod profile_tests {
     use super::*;
 
     #[test]
     fn mobile_profile_uses_cam_pp_dim() {
-        assert_eq!(Profile::Mobile.embedding_dim(), 192);
+        assert_eq!(Profile::Mobile.embedding_dim(), 512);
     }
 
     #[test]

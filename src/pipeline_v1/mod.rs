@@ -263,7 +263,7 @@ impl Pipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::mocks::{MockClusterer, MockEmbedder, MockSegmenter, raw_segment};
+    use crate::pipeline_v1::mocks::{MockClusterer, MockEmbedder, MockSegmenter, raw_segment};
     use crate::resegmentation::OverlapResegmenter;
     use crate::types::Profile;
 

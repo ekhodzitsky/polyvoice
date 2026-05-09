@@ -1,12 +1,14 @@
-//! polyvoice — speaker diarization CLI.
+//! polyvoice — speaker diarization CLI (legacy v0.5 pipeline).
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::{ExecutionProvider, Pipeline, PipelineConfig};
+use polyvoice::pipeline::Pipeline;
 use polyvoice::rttm::write_rttm;
-use polyvoice::types::{Profile, SampleRate};
+use polyvoice::types::{DiarizationConfig, Profile, SampleRate};
+use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
+use polyvoice::{FbankOnnxExtractor, SileroVad};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -29,12 +31,8 @@ enum Command {
         format: OutputFormat,
         #[arg(long)]
         models_cache: Option<PathBuf>,
-        #[arg(long, default_value = "auto")]
-        execution_provider: String,
-        #[arg(long, default_value = "true")]
-        resegment_overlap: bool,
-        #[arg(long, default_value = "20")]
-        max_speakers: u8,
+        #[arg(long, default_value = "0.45")]
+        threshold: f32,
         #[arg(long)]
         quiet: bool,
     },
@@ -72,34 +70,16 @@ fn parse_profile(name: &str) -> Result<Profile> {
     }
 }
 
-fn parse_execution_provider(name: &str) -> Result<ExecutionProvider> {
-    match name {
-        "auto" => Ok(ExecutionProvider::auto()),
-        "cpu" => Ok(ExecutionProvider::Cpu),
-        "coreml" => Ok(ExecutionProvider::CoreMl),
-        "nnapi" => Ok(ExecutionProvider::Nnapi),
-        "cuda" => Ok(ExecutionProvider::Cuda),
-        "xnnpack" => Ok(ExecutionProvider::XnnPack),
-        other => anyhow::bail!(
-            "invalid --execution-provider: {other} (expected auto|cpu|coreml|nnapi|cuda|xnnpack)"
-        ),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
 fn cmd_diarize(
     wav: PathBuf,
     profile: String,
     output: Option<PathBuf>,
     format: OutputFormat,
     models_cache: Option<PathBuf>,
-    execution_provider: String,
-    resegment_overlap: bool,
-    max_speakers: u8,
+    threshold: f32,
     quiet: bool,
 ) -> Result<()> {
     let profile = parse_profile(&profile)?;
-    let ep = parse_execution_provider(&execution_provider)?;
     let registry = match models_cache {
         Some(p) => ModelRegistry::with_cache_dir(&p).context("failed to open models cache")?,
         None => ModelRegistry::default().context("failed to resolve default models cache")?,
@@ -109,25 +89,26 @@ fn cmd_diarize(
         eprintln!("Loading {profile:?} profile from registry...");
     }
 
-    let cfg = PipelineConfig {
-        profile,
-        execution_provider: ep,
-        resegment_overlap,
-        max_speakers,
-        ..PipelineConfig::default()
-    };
+    let models = registry
+        .ensure_for_profile(profile)
+        .context("ensure models")?;
+    let embedding_dim = profile.embedding_dim();
+    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
+        .context("load embedder")?;
+    let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
 
-    let pipeline = Pipeline::builder()
-        .config(cfg)
-        .with_models_from(registry)
-        .build()
-        .context("failed to build pipeline")?;
+    let config = DiarizationConfig {
+        threshold,
+        ..DiarizationConfig::default()
+    };
+    let vad_config = VadConfig::default();
+    let pipeline = Pipeline::new(config, vad_config);
 
     if !quiet {
         eprintln!("Reading {}...", wav.display());
     }
     let (samples, sr_hz) = read_wav(&wav).with_context(|| format!("read WAV {}", wav.display()))?;
-    let sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
+    let _sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
 
     if !quiet {
         eprintln!(
@@ -136,7 +117,9 @@ fn cmd_diarize(
             sr_hz
         );
     }
-    let result = pipeline.run(&samples, sr).context("pipeline.run failed")?;
+    let result = pipeline
+        .run(&samples, &extractor, &mut vad)
+        .context("pipeline.run failed")?;
     if !quiet {
         eprintln!(
             "Done — {} turns, {} speakers",
@@ -198,13 +181,22 @@ fn cmd_models_list() -> Result<()> {
     let manifest = registry.manifest();
     println!("Profiles:");
     for (name, prof) in &manifest.profiles {
-        let seg = manifest.models.get(&prof.segmenter);
-        let emb = manifest.models.get(&prof.embedder);
-        let total: u64 =
-            seg.and_then(|m| m.size).unwrap_or(0) + emb.and_then(|m| m.size).unwrap_or(0);
+        let seg = manifest
+            .model(&prof.segmenter)
+            .map(|m| format!("{} ({:.1} MB)", m.filename, m.size.unwrap_or(0) as f64 / 1_048_576.0))
+            .unwrap_or_else(|| "(missing)".to_string());
+        let emb = manifest
+            .model(&prof.embedder)
+            .map(|m| format!("{} ({:.1} MB)", m.filename, m.size.unwrap_or(0) as f64 / 1_048_576.0))
+            .unwrap_or_else(|| "(missing)".to_string());
+        println!("  {name}: segmenter={seg}, embedder={emb}");
+    }
+    println!("\nModels:");
+    for (id, entry) in &manifest.models {
+        let size_mb = entry.size.unwrap_or(0) as f64 / 1_048_576.0;
         println!(
-            "  {name}: segmenter={} embedder={} total={} bytes",
-            prof.segmenter, prof.embedder, total
+            "  {id}: {} ({size_mb:.1} MB) sha256={}",
+            entry.filename, entry.sha256
         );
     }
     Ok(())
@@ -213,21 +205,19 @@ fn cmd_models_list() -> Result<()> {
 fn cmd_models_info(name: String) -> Result<()> {
     let registry = ModelRegistry::default()?;
     let manifest = registry.manifest();
-    match manifest.models.get(&name) {
-        Some(m) => {
-            println!("name: {name}");
-            println!("url: {}", m.url);
-            println!("sha256: {}", m.sha256);
-            if let Some(size) = m.size {
-                println!("size: {size}");
-            }
-            if let Some(calib) = &m.calibration {
-                println!("calibration: {calib}");
-            }
-            Ok(())
+    if let Some(entry) = manifest.model(&name) {
+        println!("{name}:");
+        println!("  filename: {}", entry.filename);
+        println!("  url: {}", entry.url);
+        println!("  sha256: {}", entry.sha256);
+        println!("  size: {} bytes", entry.size.unwrap_or(0));
+        if let Some(cal) = &entry.calibration {
+            println!("  calibration: {cal}");
         }
-        None => anyhow::bail!("unknown model: {name}"),
+    } else {
+        anyhow::bail!("model '{name}' not found in manifest");
     }
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -239,21 +229,9 @@ fn main() -> Result<()> {
             output,
             format,
             models_cache,
-            execution_provider,
-            resegment_overlap,
-            max_speakers,
+            threshold,
             quiet,
-        } => cmd_diarize(
-            wav,
-            profile,
-            output,
-            format,
-            models_cache,
-            execution_provider,
-            resegment_overlap,
-            max_speakers,
-            quiet,
-        ),
+        } => cmd_diarize(wav, profile, output, format, models_cache, threshold, quiet),
         Command::DownloadModels { profile } => cmd_download_models(profile),
         Command::Models { sub } => match sub {
             ModelsCommand::List => cmd_models_list(),

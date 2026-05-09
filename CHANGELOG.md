@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Reverted (M6b rollback — Path A)
+
+- **Default pipeline restored to v0.5.2 legacy.** The M6b new pipeline
+  (`PowersetSegmenter` + INT8/FP32 embedders + AHC/NME-SC) was benchmarked
+  and found non-functional (DER 52–64% on VoxConverse-test vs. legacy
+  ~13.8%). The new pipeline is preserved as `polyvoice::pipeline_v1`
+  (experimental, gated behind the `pipeline` feature) but is no longer the
+  default.
+- Restored deleted modules from v0.5.2 (`cb764ff`): `src/pipeline.rs`,
+  `src/vad.rs`, `src/silero_vad.rs`, `src/onnx.rs`.
+- Restored `DiarizationConfig`, `DummyExtractor`, and
+  `EmbeddingExtractor::extract(samples, config)` API.
+- CLI (`polyvoice`) and benchmark (`polyvoice-bench`) rewritten back to
+  legacy pipeline: `SileroVad` → `FbankOnnxExtractor` → AHC.
+- Manifest profiles (`mobile`, `balanced`) now resolve to proven FP32
+  legacy models (`silero_vad` + `cam_pp_fp32` / `wespeaker_resnet34`).
+  INT8 entries remain in manifest but are no longer used by default.
+- `tests/der_baseline.json` filled with operational numbers from full
+  232-file VoxConverse-test run: DER 13.83% (miss 3.82%, FA 3.68%,
+  confusion 6.34%) at threshold 0.45, collar 0.25.
+
 ### Added (M0 — v1.0 plumbing)
 - `Profile` enum (`Mobile`/`Balanced`/`Custom`) in `polyvoice::types`.
 - `polyvoice::models` module: `ModelRegistry`, `Manifest`, `ModelEntry`, `ProfileEntry`, `ProfileModels`.

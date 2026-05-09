@@ -1,13 +1,15 @@
-//! polyvoice-bench — DER on a {audio,rttm} dataset directory using the v1.0 Pipeline.
+//! polyvoice-bench — DER on a {audio,rttm} dataset directory using the legacy v0.5 Pipeline.
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use polyvoice::der::compute_der;
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::{Pipeline, PipelineConfig};
+use polyvoice::pipeline::Pipeline;
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
-use polyvoice::types::{Profile, SampleRate};
+use polyvoice::types::{DiarizationConfig, Profile, SampleRate};
+use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
+use polyvoice::{FbankOnnxExtractor, SileroVad};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -26,6 +28,8 @@ struct Args {
     skip_overlap: bool,
     #[arg(long)]
     max_files: Option<usize>,
+    #[arg(long, default_value = "0.45")]
+    threshold: f32,
 }
 
 #[derive(Serialize)]
@@ -54,16 +58,21 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let profile = parse_profile(&args.profile)?;
     let registry = ModelRegistry::default().context("registry")?;
+    let models = registry
+        .ensure_for_profile(profile)
+        .context("ensure models")?;
 
-    let cfg = PipelineConfig {
-        profile,
-        ..PipelineConfig::default()
+    let embedding_dim = profile.embedding_dim();
+    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
+        .context("load embedder")?;
+    let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
+
+    let config = DiarizationConfig {
+        threshold: args.threshold,
+        ..DiarizationConfig::default()
     };
-    let pipeline = Pipeline::builder()
-        .config(cfg)
-        .with_models_from(registry)
-        .build()
-        .context("build pipeline")?;
+    let vad_config = VadConfig::default();
+    let pipeline = Pipeline::new(config, vad_config);
 
     let audio_dir = args.dataset.join("audio");
     let rttm_dir = args.dataset.join("rttm");
@@ -90,12 +99,12 @@ fn main() -> Result<()> {
             continue;
         }
         let (samples, sr_hz) = read_wav(wav)?;
-        let sr = SampleRate::new(sr_hz)
+        let _sr = SampleRate::new(sr_hz)
             .ok_or_else(|| anyhow::anyhow!("invalid sample rate: {sr_hz}"))?;
         let audio_secs = samples.len() as f64 / sr_hz as f64;
 
         let t0 = Instant::now();
-        let result = pipeline.run(&samples, sr)?;
+        let result = pipeline.run(&samples, &extractor, &mut vad)?;
         let runtime_secs = t0.elapsed().as_secs_f64();
 
         let ref_turns = {
@@ -119,18 +128,20 @@ fn main() -> Result<()> {
         total_runtime_secs += runtime_secs;
 
         println!(
-            "{stem}\t DER={:.3}%\t miss={:.3}%\t fa={:.3}%\t conf={:.3}%\t rt={:.1}x",
+            "{stem}\t DER={:.3}%\t miss={:.3}%\t fa={:.3}%\t conf={:.3}%\t rt={:.1}x\t spk={}\t turns={}",
             der.der * 100.0,
             der.miss_rate * 100.0,
             der.false_alarm_rate * 100.0,
             der.confusion_rate * 100.0,
             audio_secs / runtime_secs.max(1e-6),
+            result.num_speakers,
+            result.turns.len(),
         );
     }
 
     let n = totals.count.max(1) as f64;
     let report = BenchReport {
-        schema: "polyvoice-bench-v1",
+        schema: "polyvoice-bench-v0.5",
         profile: args.profile.clone(),
         files: totals.count,
         der_collar_0_25_skip_overlap: (totals.der_total / n) * 100.0,
