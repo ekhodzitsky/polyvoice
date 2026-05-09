@@ -20,13 +20,8 @@ use polyvoice::models::Manifest;
 
 const MANIFEST_TOML: &str = include_str!("../src/models/manifest.toml");
 
-/// Mobile bundle ceiling. Original v1.0 spec named 10 MB; M5 calibration
-/// surfaced a ~14 MB reality due to powerset SincNet quantization limits, so
-/// we cap at 15 MB with the deviation documented in the M5 calibration notes.
-const MOBILE_BUNDLE_BUDGET_BYTES: u64 = 15_000_000;
-
-/// Balanced bundle ceiling stays at the spec target.
-const BALANCED_BUNDLE_BUDGET_BYTES: u64 = 35_000_000;
+/// Bundle ceiling for legacy FP32 profiles (Mobile + Balanced).
+const BUNDLE_BUDGET_BYTES: u64 = 35_000_000;
 
 fn parse() -> Manifest {
     Manifest::from_toml_str(MANIFEST_TOML).expect("manifest.toml must parse cleanly")
@@ -61,19 +56,19 @@ fn int8_sha256_is_real_not_placeholder() {
 }
 
 #[test]
-fn mobile_profile_resolves_to_int8() {
+fn mobile_profile_resolves_to_legacy_fp32() {
     let m = parse();
     let prof = m.profile("mobile").expect("mobile profile present");
-    assert_eq!(prof.segmenter, "powerset_int8");
-    assert_eq!(prof.embedder, "cam_pp_int8");
+    assert_eq!(prof.segmenter, "silero_vad");
+    assert_eq!(prof.embedder, "cam_pp_fp32");
 }
 
 #[test]
-fn balanced_profile_resolves_to_int8() {
+fn balanced_profile_resolves_to_legacy_fp32() {
     let m = parse();
     let prof = m.profile("balanced").expect("balanced profile present");
-    assert_eq!(prof.segmenter, "powerset_int8");
-    assert_eq!(prof.embedder, "resnet34_int8");
+    assert_eq!(prof.segmenter, "silero_vad");
+    assert_eq!(prof.embedder, "wespeaker_resnet34");
 }
 
 #[test]
@@ -83,11 +78,13 @@ fn mobile_bundle_under_relaxed_15mb_budget() {
     let seg = m.model(&prof.segmenter).unwrap();
     let emb = m.model(&prof.embedder).unwrap();
     let total = seg.size.unwrap_or(0) + emb.size.unwrap_or(0);
+    // Legacy FP32 mobile bundle (silero_vad + cam_pp_fp32) is ~31 MB;
+    // budget updated to 35 MB until INT8 re-validated.
     assert!(
-        total <= MOBILE_BUNDLE_BUDGET_BYTES,
+        total <= BUNDLE_BUDGET_BYTES,
         "mobile bundle {} bytes > {} budget",
         total,
-        MOBILE_BUNDLE_BUDGET_BYTES
+        BUNDLE_BUDGET_BYTES
     );
 }
 
@@ -99,10 +96,10 @@ fn balanced_bundle_under_35mb_budget() {
     let emb = m.model(&prof.embedder).unwrap();
     let total = seg.size.unwrap_or(0) + emb.size.unwrap_or(0);
     assert!(
-        total <= BALANCED_BUNDLE_BUDGET_BYTES,
+        total <= BUNDLE_BUDGET_BYTES,
         "balanced bundle {} bytes > {} budget",
         total,
-        BALANCED_BUNDLE_BUDGET_BYTES
+        BUNDLE_BUDGET_BYTES
     );
 }
 

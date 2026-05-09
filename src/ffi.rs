@@ -1,212 +1,201 @@
-//! C FFI bindings for polyvoice.
+//! Legacy v0.5.2 — C FFI ABI for the legacy Pipeline.
 //!
-//! This module provides a C API so that polyvoice can be called from other
-//! languages (C, C++, Python via ctypes, etc.).
-//!
-//! # Safety
-//!
-//! All functions in this module use raw pointers. Callers must ensure:
-//! - Pointers are valid and properly aligned
-//! - Buffers have the claimed lengths
-//! - Returned pointers are freed with the corresponding free function
-//!
-//! # Example (C)
-//!
-//! ```c
-//! #include <polyvoice.h>
-//!
-//! PolyvoiceDiarizer* d = polyvoice_diarizer_new(0.5f, 64);
-//! PolyvoiceResult* r = polyvoice_diarizer_run(d, samples, sample_count);
-//! for (size_t i = 0; i < r->num_turns; i++) {
-//!     printf("%s: %.2f - %.2f\n", r->turns[i].speaker, r->turns[i].start, r->turns[i].end);
-//! }
-//! polyvoice_result_free(r);
-//! polyvoice_diarizer_free(d);
-//! ```
+//! Threading model: `PolyvoicePipeline` is `Send`. Each `*mut PolyvoicePipeline`
+//! owns its data; callers must call `polyvoice_pipeline_destroy` exactly once.
+//! All entry points are wrapped in `catch_unwind` per spec §8.4.
 
-use crate::cluster::SpeakerCluster;
-use crate::embedding::{DummyExtractor, EmbeddingExtractor};
-use crate::types::DiarizationConfig;
-use std::ffi::{CString, c_char, c_float};
-use std::os::raw::c_int;
-use std::ptr;
+use crate::VadConfig;
+use crate::models::ModelRegistry;
+use crate::pipeline::Pipeline;
+use crate::types::{DiarizationConfig, Profile};
+use crate::{FbankOnnxExtractor, SileroVad};
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_float, c_int};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
-/// Opaque handle to a diarizer instance.
-pub struct PolyvoiceDiarizer {
-    config: DiarizationConfig,
-    cluster: SpeakerCluster,
-    extractor: DummyExtractor,
-}
-
-/// A single speaker turn returned to C.
 #[repr(C)]
-pub struct PolyvoiceTurn {
-    pub speaker: *mut c_char,
-    pub start: c_float,
-    pub end: c_float,
+pub enum PolyvoiceProfile {
+    Mobile = 0,
+    Balanced = 1,
 }
 
-/// Result of diarization returned to C.
 #[repr(C)]
-pub struct PolyvoiceResult {
-    pub turns: *mut PolyvoiceTurn,
-    pub num_turns: usize,
+pub enum PolyvoiceStatus {
+    Ok = 0,
+    InvalidArg = 1,
+    AudioTooShort = 2,
+    AudioTooLong = 3,
+    ModelLoad = 10,
+    Inference = 11,
+    OutOfMemory = 20,
+    Registry = 30,
+    Internal = 99,
 }
 
-/// Create a new diarizer with the given threshold and max speakers.
-///
-/// # Safety
-/// Returns a pointer that must be freed with `polyvoice_diarizer_free`.
-#[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub unsafe extern "C" fn polyvoice_diarizer_new(
-    // SAFETY: C ABI entry point with raw pointer return; caller must free result.
-    threshold: c_float,
-    max_speakers: c_int,
-) -> *mut PolyvoiceDiarizer {
-    let config = DiarizationConfig {
-        threshold,
-        max_speakers: max_speakers as usize,
-        ..Default::default()
-    };
-    let diarizer = PolyvoiceDiarizer {
-        config,
-        cluster: SpeakerCluster::new(config),
-        extractor: DummyExtractor::new(256),
-    };
-    Box::into_raw(Box::new(diarizer))
+pub struct PolyvoicePipeline {
+    inner: Pipeline,
+    extractor: FbankOnnxExtractor,
+    vad: SileroVad,
 }
 
-/// Run diarization on a buffer of mono f32 samples at 16 kHz.
+/// Create a new pipeline from a profile.
 ///
 /// # Safety
-/// - `diarizer` must be a valid pointer returned by `polyvoice_diarizer_new`.
-/// - `samples` must point to at least `sample_count` valid f32 values.
-///
-/// Returns a `PolyvoiceResult` that must be freed with `polyvoice_result_free`.
-/// Returns NULL on error.
-#[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub unsafe extern "C" fn polyvoice_diarizer_run(
-    // SAFETY: C ABI entry point dereferencing raw pointers from caller.
-    diarizer: *mut PolyvoiceDiarizer,
-    samples: *const c_float,
-    sample_count: usize,
-) -> *mut PolyvoiceResult {
-    if diarizer.is_null() || samples.is_null() || sample_count == 0 {
-        return ptr::null_mut();
-    }
-    let d = unsafe {
-        // SAFETY: we checked diarizer is non-null above.
-        &mut *diarizer
-    };
-    let audio = unsafe {
-        // SAFETY: we checked samples is non-null and sample_count > 0.
-        std::slice::from_raw_parts(samples, sample_count)
-    };
-
-    let window = d.config.window_samples();
-    let hop = d.config.hop_samples();
-    if audio.len() < window {
-        return ptr::null_mut();
-    }
-
-    let mut turns: Vec<PolyvoiceTurn> = Vec::new();
-    let mut start = 0usize;
-    while start + window <= audio.len() {
-        let chunk = &audio[start..start + window];
-        match d.extractor.extract(chunk, &d.config) {
-            Ok(emb) => {
-                let (speaker, _conf) = d.cluster.assign(&emb);
-                let speaker_cstr = match CString::new(speaker.to_string()) {
-                    Ok(s) => s,
-                    Err(_) => {
-                        // Free already allocated strings before returning NULL.
-                        for turn in &turns {
-                            if !turn.speaker.is_null() {
-                                unsafe {
-                                    // SAFETY: speaker was created by CString::into_raw.
-                                    let _ = CString::from_raw(turn.speaker);
-                                }
-                            }
-                        }
-                        return ptr::null_mut();
-                    }
-                };
-                turns.push(PolyvoiceTurn {
-                    speaker: speaker_cstr.into_raw(),
-                    start: (start as f32 / d.config.sample_rate.get() as f32),
-                    end: ((start + window) as f32 / d.config.sample_rate.get() as f32),
-                });
+/// - `models_cache_dir`, if non-null, must point to a valid nul-terminated UTF-8 string.
+/// - `out_handle` must be a valid non-null pointer to a `*mut PolyvoicePipeline`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn polyvoice_pipeline_create(
+    profile: PolyvoiceProfile,
+    models_cache_dir: *const c_char,
+    out_handle: *mut *mut PolyvoicePipeline,
+) -> c_int {
+    let r = catch_unwind(AssertUnwindSafe(
+        || -> Result<*mut PolyvoicePipeline, c_int> {
+            if out_handle.is_null() {
+                return Err(PolyvoiceStatus::InvalidArg as c_int);
             }
-            Err(_) => {
-                // Skip window on error.
-            }
-        }
-        start += hop;
-    }
-
-    let num_turns = turns.len();
-    let mut boxed = turns.into_boxed_slice();
-    let turns_ptr = boxed.as_mut_ptr();
-    std::mem::forget(boxed); // Ownership transferred to C.
-
-    let result = PolyvoiceResult {
-        turns: turns_ptr,
-        num_turns,
-    };
-    Box::into_raw(Box::new(result))
-}
-
-/// Free a diarizer instance.
-///
-/// # Safety
-/// `diarizer` must be a valid pointer returned by `polyvoice_diarizer_new` or NULL.
-#[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub unsafe extern "C" fn polyvoice_diarizer_free(
-    // SAFETY: C ABI entry point freeing raw pointer previously created by Box::into_raw.
-    diarizer: *mut PolyvoiceDiarizer,
-) {
-    if !diarizer.is_null() {
-        unsafe {
-            // SAFETY: we checked diarizer is non-null; it was created by Box::into_raw.
-            let _ = Box::from_raw(diarizer);
-        }
-    }
-}
-
-/// Free a result returned by `polyvoice_diarizer_run`.
-///
-/// # Safety
-/// `result` must be a valid pointer returned by `polyvoice_diarizer_run` or NULL.
-#[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub unsafe extern "C" fn polyvoice_result_free(
-    // SAFETY: C ABI entry point freeing raw pointer and its nested allocations.
-    result: *mut PolyvoiceResult,
-) {
-    if result.is_null() {
-        return;
-    }
-    unsafe {
-        // SAFETY: we checked result is non-null; it was created by Box::into_raw.
-        let r = &mut *result;
-        if !r.turns.is_null() {
-            // SAFETY: turns was created by Vec::into_boxed_slice + forget.
-            let slice_ptr = std::ptr::slice_from_raw_parts_mut(r.turns, r.num_turns);
-            let turns = Box::from_raw(slice_ptr);
-            for turn in turns.iter() {
-                if !turn.speaker.is_null() {
-                    // SAFETY: speaker was created by CString::into_raw.
-                    let _ = CString::from_raw(turn.speaker);
+            let prof = match profile {
+                PolyvoiceProfile::Mobile => Profile::Mobile,
+                PolyvoiceProfile::Balanced => Profile::Balanced,
+            };
+            let registry = if models_cache_dir.is_null() {
+                ModelRegistry::default()
+            } else {
+                // SAFETY: caller guarantees models_cache_dir is a valid nul-terminated string.
+                let s = unsafe { CStr::from_ptr(models_cache_dir) }
+                    .to_str()
+                    .map_err(|_| PolyvoiceStatus::InvalidArg as c_int)?;
+                // Reject path-traversal attempts (e.g. "../../evil") before the
+                // path is passed to ModelRegistry::with_cache_dir.  FFI-002.
+                if s.contains("..") {
+                    return Err(PolyvoiceStatus::InvalidArg as c_int);
                 }
+                ModelRegistry::with_cache_dir(s)
             }
+            .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
+            let models = registry
+                .ensure_for_profile(prof)
+                .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
+            let extractor = FbankOnnxExtractor::new(&models.embedder_path, prof.embedding_dim(), 1)
+                .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
+            let vad = SileroVad::new(&models.segmenter_path, 512)
+                .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
+            let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
+            Ok(Box::into_raw(Box::new(PolyvoicePipeline {
+                inner: pipeline,
+                extractor,
+                vad,
+            })))
+        },
+    ));
+    match r {
+        Ok(Ok(handle)) => {
+            // SAFETY: out_handle was checked non-null inside the closure above.
+            unsafe {
+                *out_handle = handle;
+            }
+            PolyvoiceStatus::Ok as c_int
         }
-        let _ = Box::from_raw(result);
+        Ok(Err(code)) => code,
+        Err(_) => PolyvoiceStatus::Internal as c_int,
     }
 }
 
-/// Return the library version as a static C string.
-#[unsafe(no_mangle)] // SAFETY: C ABI symbol export required for FFI linkage.
-pub extern "C" fn polyvoice_version() -> *const c_char {
-    // SAFETY: C ABI entry point returning a static nul-terminated string.
-    // SAFETY: c-string literal has static lifetime and is nul-terminated.
-    c"0.5.2".as_ptr() as *const c_char
+/// Run diarization on a buffer of f32 samples and return JSON.
+///
+/// # Safety
+/// - `pipeline` must be a valid pointer returned by `polyvoice_pipeline_create`.
+/// - `samples` must point to at least `n_samples` valid f32 values.
+/// - `out_json` and `out_json_len` must be valid non-null pointers.
+/// - The returned `*out_json` string must be freed with `polyvoice_free_string`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn polyvoice_pipeline_run(
+    pipeline: *mut PolyvoicePipeline,
+    samples: *const c_float,
+    n_samples: usize,
+    sample_rate: u32,
+    out_json: *mut *mut c_char,
+    out_json_len: *mut usize,
+) -> c_int {
+    let r = catch_unwind(AssertUnwindSafe(|| -> Result<(), c_int> {
+        if pipeline.is_null() || samples.is_null() || out_json.is_null() || out_json_len.is_null() {
+            return Err(PolyvoiceStatus::InvalidArg as c_int);
+        }
+        // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
+        let pipeline = unsafe { &mut *pipeline };
+        // SAFETY: samples was checked non-null; n_samples is caller-provided length.
+        const MAX_SAMPLES: usize = 16000 * 3600; // 1 hour at 16 kHz
+        if n_samples > MAX_SAMPLES {
+            return Err(PolyvoiceStatus::AudioTooLong as c_int);
+        }
+        let samples = unsafe { std::slice::from_raw_parts(samples, n_samples) };
+        // Legacy pipeline expects 16 kHz audio.
+        if sample_rate != 16000 {
+            return Err(PolyvoiceStatus::InvalidArg as c_int);
+        }
+        let result = pipeline
+            .inner
+            .run(samples, &pipeline.extractor, &mut pipeline.vad)
+            .map_err(|e| match e {
+                crate::pipeline::PipelineError::AudioTooLong { .. } => {
+                    PolyvoiceStatus::AudioTooLong as c_int
+                }
+                _ => PolyvoiceStatus::Inference as c_int,
+            })?;
+        let json =
+            serde_json::to_string(&result).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+        let len = json.len();
+        let cstr = CString::new(json).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+        let ptr_out = cstr.into_raw();
+        // SAFETY: out_json and out_json_len were checked non-null above.
+        unsafe {
+            *out_json = ptr_out;
+            *out_json_len = len;
+        }
+        Ok(())
+    }));
+    match r {
+        Ok(Ok(())) => PolyvoiceStatus::Ok as c_int,
+        Ok(Err(code)) => code,
+        Err(_) => PolyvoiceStatus::Internal as c_int,
+    }
+}
+
+/// Destroy a pipeline created by `polyvoice_pipeline_create`.
+///
+/// # Safety
+/// `pipeline` must be a valid pointer returned by `polyvoice_pipeline_create`, or null.
+/// Must be called exactly once per handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipeline) {
+    if !pipeline.is_null()
+        && catch_unwind(AssertUnwindSafe(|| {
+            // SAFETY: pipeline is non-null and was created by Box::into_raw; caller destroys exactly once.
+            unsafe {
+                drop(Box::from_raw(pipeline));
+            }
+        }))
+        .is_err()
+    {
+        eprintln!("polyvoice: panic during cleanup (foreign thread?)");
+    }
+}
+
+/// Free a JSON string returned by `polyvoice_pipeline_run`.
+///
+/// # Safety
+/// `p` must be a pointer returned by `polyvoice_pipeline_run`, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn polyvoice_free_string(p: *mut c_char, _n: usize) {
+    if !p.is_null()
+        && catch_unwind(AssertUnwindSafe(|| {
+            // SAFETY: p is non-null and was created by CString::into_raw in polyvoice_pipeline_run.
+            unsafe {
+                drop(CString::from_raw(p));
+            }
+        }))
+        .is_err()
+    {
+        eprintln!("polyvoice: panic during cleanup (foreign thread?)");
+    }
 }

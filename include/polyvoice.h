@@ -1,48 +1,53 @@
+/* polyvoice.h — C FFI for the legacy v0.5.2 Pipeline.
+ * Architecture: SileroVAD + WeSpeaker embeddings + AHC clustering.
+ * Threading: PolyvoicePipeline is Send. Each handle must be destroyed exactly once.
+ */
 #ifndef POLYVOICE_H
 #define POLYVOICE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/// Opaque handle to a diarizer instance.
-typedef struct PolyvoiceDiarizer PolyvoiceDiarizer;
+typedef struct PolyvoicePipeline PolyvoicePipeline;
 
-/// A single speaker turn.
-typedef struct {
-    char* speaker;
-    float start;
-    float end;
-} PolyvoiceTurn;
+typedef enum {
+    POLYVOICE_PROFILE_MOBILE = 0,
+    POLYVOICE_PROFILE_BALANCED = 1
+} polyvoice_profile_t;
 
-/// Result of diarization.
-typedef struct {
-    PolyvoiceTurn* turns;
-    size_t num_turns;
-} PolyvoiceResult;
+typedef enum {
+    POLYVOICE_OK = 0,
+    POLYVOICE_ERR_INVALID_ARG = 1,
+    POLYVOICE_ERR_AUDIO_TOO_SHORT = 2,
+    POLYVOICE_ERR_MODEL_LOAD = 10,
+    POLYVOICE_ERR_INFERENCE = 11,
+    POLYVOICE_ERR_OUT_OF_MEMORY = 20,
+    POLYVOICE_ERR_REGISTRY = 30,
+    POLYVOICE_ERR_INTERNAL = 99
+} polyvoice_status_t;
 
-/// Create a new diarizer.
-/// Returns NULL on failure. Must be freed with `polyvoice_diarizer_free`.
-PolyvoiceDiarizer* polyvoice_diarizer_new(float threshold, int max_speakers);
+/** Create a pipeline from a profile. */
+int polyvoice_pipeline_create(polyvoice_profile_t profile,
+                              const char* models_cache_dir,
+                              PolyvoicePipeline** out_handle);
 
-/// Run diarization on mono f32 samples at 16 kHz.
-/// Returns NULL on error. Must be freed with `polyvoice_result_free`.
-PolyvoiceResult* polyvoice_diarizer_run(PolyvoiceDiarizer* diarizer,
-                                        const float* samples,
-                                        size_t sample_count);
+/** Run diarization on f32 samples. Returns JSON via out_json. */
+int polyvoice_pipeline_run(PolyvoicePipeline* pipeline,
+                           const float* samples,
+                           size_t n_samples,
+                           uint32_t sample_rate,
+                           char** out_json,
+                           size_t* out_json_len);
 
-/// Free a diarizer instance.
-/// Passing NULL is a no-op. Double-free is undefined behaviour.
-void polyvoice_diarizer_free(PolyvoiceDiarizer* diarizer);
+/** Destroy a pipeline. Must be called exactly once per handle. */
+void polyvoice_pipeline_destroy(PolyvoicePipeline* pipeline);
 
-/// Free a result returned by `polyvoice_diarizer_run`.
-/// Passing NULL is a no-op. Double-free is undefined behaviour.
-void polyvoice_result_free(PolyvoiceResult* result);
-
-/// Return the library version as a static C string.
-const char* polyvoice_version(void);
+/** Free a JSON string returned by polyvoice_pipeline_run. */
+void polyvoice_free_string(char* p, size_t n);
 
 #ifdef __cplusplus
 }

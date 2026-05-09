@@ -1,15 +1,15 @@
 schema = "polyvoice-models-v1"
 
-# v1.0 (M5+) — Mobile/Balanced profiles point at INT8 artifacts published in
-# the v0.6.0-alpha.2 GitHub pre-release. Powerset is shared across both
-# profiles; the embedder differs (CAM++ for Mobile, ResNet34 for Balanced).
+# v0.5 legacy profiles — point at proven FP32 models until v1.0 components
+# are validated. Mobile uses CAM++ (512-dim), Balanced uses WeSpeaker ResNet34
+# (256-dim). Both share Silero VAD for speech segmentation.
 [profiles.mobile]
-segmenter = "powerset_int8"
-embedder  = "cam_pp_int8"
+segmenter = "silero_vad"
+embedder  = "cam_pp_fp32"
 
 [profiles.balanced]
-segmenter = "powerset_int8"
-embedder  = "resnet34_int8"
+segmenter = "silero_vad"
+embedder  = "wespeaker_resnet34"
 
 # Legacy v0.5 entries — kept for back-compat callers that pass the model id
 # directly to ModelRegistry::ensure(). Profiles do not reference them anymore.
@@ -18,24 +18,48 @@ url      = "https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/dat
 sha256   = "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
 size     = 2327524
 filename = "silero_vad.onnx"
+signature = '''
+untrusted comment: signature from minisign secret key
+RUQGu9FvZMmIhZU2jujLiO9QWKC7WPSGEE1crTXcP/4t+FGlbFrJ9+JLTVuj7Om/zXdAo1Aak/nvQo3/7xXev41Qn10+VSda/wE=
+trusted comment: polyvoice v0.6.0-alpha.3 | silero_vad.onnx
+ECe8pg8lcsO5MxlmAjaLRUIFC2t5TRt8gGrl3boQO7PiVJFZkzgFlgI74YH9T1Dp0bKgaMBJ0kSBIJpmyZVmDw==
+'''
 
 [models.wespeaker_resnet34]
 url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/main/voxceleb_resnet34.onnx?download=true"
 sha256   = "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
 size     = 26534127
 filename = "wespeaker_resnet34.onnx"
+signature = '''
+untrusted comment: signature from minisign secret key
+RUQGu9FvZMmIhf99QhdU+yew+XOYA3tx+dixo9cqxxz0Y7xlIOiiLhFTFKbsKeiH5OkiGn9GPbzP8TwGGLjKGLVRsOdFHSueOAs=
+trusted comment: polyvoice v0.6.0-alpha.3 | wespeaker_resnet34.onnx
+BzPwRAu4i4ABLmMMqmgv++OWy+3tbmdf9FrCIgXtB/zfdXXwckWIQE7vcCIfpuLPS0BUWDbkbbV6n3mugnlCBw==
+'''
 
 [models.powerset_fp32]
 url      = "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx"
 sha256   = "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
 size     = 5992913
 filename = "powerset_fp32.onnx"
+signature = '''
+untrusted comment: signature from minisign secret key
+RUQGu9FvZMmIhQ10AL95cKcDAXudXyE1DdH7VfQpci6E/PZHNlI6W19DEjsqPi8tZ7GC8PZkaHeRJ4ZnjAKTQCvkRWYoByTjuAk=
+trusted comment: polyvoice v0.6.0-alpha.3 | powerset_fp32.onnx
+e33pe01miZQKvp1AoCQcv6Oa3vVmxOBcxNiOkasmsCxhRq5ix1uqMWjah8IB6YieUjvHYj4hd9j1OH6wPAm/AA==
+'''
 
 [models.cam_pp_fp32]
 url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus/resolve/main/voxceleb_CAM%2B%2B.onnx?download=true"
 sha256   = "b50810498b5bcf5773d086f6993d344476bd0c88b566a41e8d801aaf8461efad"
 size     = 29292449
 filename = "cam_pp_fp32.onnx"
+signature = '''
+untrusted comment: signature from minisign secret key
+RUQGu9FvZMmIhZxjhT1+WXcKvuaszc4e4LHkeeySB9tzOhQLjB23OeDyBKfzQWQdfp1JfLylKJ3fvlH92eix78kBHpFruwFCFAc=
+trusted comment: polyvoice v0.6.0-alpha.3 | cam_pp_fp32.onnx
+pnLedo8TIV+K14fAyL54r1d9mWm1rN18C50BA/QQclyfP01tOaJVbxcJB+GZ4+AA/fluvTDJewlPn1gMo33wBA==
+'''
 
 # v1.0 INT8 artifacts (M5). Hashes/sizes are real, taken from
 # `bash scripts/publish-models.sh` output. Calibration set: VoxConverse-dev
@@ -53,6 +77,12 @@ sha256   = "ef549ac4b068fdb8df273d2df43cd9c150a3edc26f859b0c9b5c07f2db7914aa"
 size     = 5737909
 filename = "powerset_int8.onnx"
 calibration = "voxconverse_dev_500_samples_seed_42"
+signature = '''
+untrusted comment: signature from minisign secret key
+RUQGu9FvZMmIhU/BRu4ryq+ErSzXtl11bOOsOU0N43fBlBw5PlG0CcAVg1tcdHocfuTBfslpnb1igiBfkQBU9ZGFaf/Ec2Yu3go=
+trusted comment: polyvoice v0.6.0-alpha.3 | powerset_int8.onnx
+WCgtdOCkchC7LjeKxisHOzcAS3+84kMP9F2so0dd2vs1WLP0r2sv0rCzKPYovV+l/Nk2EG+RYbh1eisAj1knAw==
+'''
 
 [models.cam_pp_int8]
 url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/v0.6.0-alpha.2/cam_pp_int8.onnx"
@@ -60,6 +90,12 @@ sha256   = "cca48a4b36c1b46e48432b1eb1461dd69f9cf113cf506f3f660de808c93b9a85"
 size     = 8803007
 filename = "cam_pp_int8.onnx"
 calibration = "voxconverse_dev_500_samples_seed_42"
+signature = '''
+untrusted comment: signature from minisign secret key
+RUQGu9FvZMmIhRQLqEqyoP/TNkcz2seLIK19JzqgIbPWHKFDVHMTA4+2hdmwZA5t0M6msDTE8LPEQXVpmqlb+jC4IzfAm518JgE=
+trusted comment: polyvoice v0.6.0-alpha.3 | cam_pp_int8.onnx
+XHIN9IgSVAhMFVb0TazR7NjXwO/ba2iCHQzrXsJEJ6hM4KpnrpjUgFaxTHkH4nVxlq8/5Pp4ODUc4qku3cKDAA==
+'''
 
 [models.resnet34_int8]
 url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/v0.6.0-alpha.2/resnet34_int8.onnx"
@@ -67,3 +103,9 @@ sha256   = "d4528ed19bac510e9f8dfe08515bc3c2860f8f4d135aa5ce875b346ed0f3bbae"
 size     = 6766646
 filename = "resnet34_int8.onnx"
 calibration = "voxconverse_dev_500_samples_seed_42"
+signature = '''
+untrusted comment: signature from minisign secret key
+RUQGu9FvZMmIhfT3/3pshTKu6WUH1VBohHK2UjcgjH77Gd6GHqQJJXp74rJtfoiEUx6e3jfPsfAIt6N7NmpjyL4xmPugQ+d9uAs=
+trusted comment: polyvoice v0.6.0-alpha.3 | resnet34_int8.onnx
+OdzDgAbIm1wmfjPhvZFqPYFl5dvBTlquEGjx1ZCJ10xpvY2IVP1xFvOtzGPT4hrzuf9h94KFUuya8/yvcSN/DQ==
+'''

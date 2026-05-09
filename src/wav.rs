@@ -2,23 +2,56 @@
 
 use std::path::Path;
 
+const MAX_WAV_FILE_SIZE: u64 = 1_073_741_824; // 1 GiB
+
 #[derive(thiserror::Error, Debug)]
 pub enum WavError {
     #[error("failed to read WAV: {0}")]
     Read(#[from] hound::Error),
     #[error("unsupported sample format: {0}")]
     UnsupportedFormat(String),
+    #[error("WAV file too large: {size} bytes (max {max} bytes)")]
+    FileTooLarge { size: u64, max: u64 },
+    #[error("WAV duration too long: {duration_secs:.1}s (max {max_secs:.1}s)")]
+    DurationTooLong { duration_secs: f64, max_secs: f64 },
+    #[error("failed to get file metadata: {0}")]
+    Metadata(#[from] std::io::Error),
 }
 
 /// Read a WAV file and return mono f32 samples normalized to [-1.0, 1.0] and its sample rate.
 ///
 /// Stereo files are downmixed by averaging channels. 16-bit and 32-bit float
 /// formats are supported.
+///
+/// # Guards
+///
+/// - If the file size exceeds 1 GiB, returns [`WavError::FileTooLarge`].
+/// - If the declared duration in the WAV header exceeds 1 hour, returns
+///   [`WavError::DurationTooLong`] before reading any samples.
 pub fn read_wav(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
+    let metadata = std::fs::metadata(path)?;
+    let file_size = metadata.len();
+    if file_size > MAX_WAV_FILE_SIZE {
+        return Err(WavError::FileTooLarge {
+            size: file_size,
+            max: MAX_WAV_FILE_SIZE,
+        });
+    }
+
     let reader = hound::WavReader::open(path)?;
     let spec = reader.spec();
     let channels = spec.channels as usize;
     let sample_rate = spec.sample_rate;
+
+    let duration = reader.duration();
+    let duration_secs = duration as f64 / sample_rate as f64;
+    const MAX_DURATION_SECS: f64 = 3600.0;
+    if duration_secs > MAX_DURATION_SECS {
+        return Err(WavError::DurationTooLong {
+            duration_secs,
+            max_secs: MAX_DURATION_SECS,
+        });
+    }
 
     let interleaved: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Int => {
