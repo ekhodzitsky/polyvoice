@@ -27,16 +27,14 @@ const SUBSET_10: &[&str] = &[
 fn der_regression_10_file_subset_below_25_percent() {
     let registry = ModelRegistry::default()
         .expect("default ModelRegistry should resolve a writable cache dir");
-    let models = registry
-        .ensure_for_profile(Profile::Balanced)
-        .expect(
-            "Balanced profile models should be available — \
+    let models = registry.ensure_for_profile(Profile::Balanced).expect(
+        "Balanced profile models should be available — \
              run `polyvoice download-models --profile balanced` first",
-        );
+    );
 
     let embedding_dim = Profile::Balanced.embedding_dim();
-    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
-        .expect("load embedder");
+    let extractor =
+        FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("load embedder");
     let mut vad = SileroVad::new(&models.segmenter_path, 512).expect("load vad");
 
     let config = DiarizationConfig::default();

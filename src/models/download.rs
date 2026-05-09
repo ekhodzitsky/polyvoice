@@ -1,6 +1,6 @@
 //! HTTP download with streamed SHA-256 and optional Minisign verification.
 
-use crate::models::verify::{verify_minisign, SignatureError};
+use crate::models::verify::{SignatureError, verify_minisign};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, BufReader, Read, Write};
@@ -103,34 +103,34 @@ pub fn download_with_checksum_and_signature(
         Some(
             minisign_verify::PublicKey::from_base64(crate::models::verify::SIGNING_PUBKEY_BASE64)
                 .map_err(|e| DownloadError::SignatureInvalid {
-                    path: dest.to_path_buf(),
-                    source: SignatureError::BadPublicKey(format!("{e:?}")),
-                })?,
-        )
-    } else {
-        None
-    };
-    let sig = if let Some(sig_text) = signature {
-        Some(
-            minisign_verify::Signature::decode(sig_text).map_err(|e| {
-                DownloadError::SignatureInvalid {
-                    path: dest.to_path_buf(),
-                    source: SignatureError::BadSignature(format!("{e:?}")),
-                }
+                path: dest.to_path_buf(),
+                source: SignatureError::BadPublicKey(format!("{e:?}")),
             })?,
         )
     } else {
         None
     };
-    let mut verifier =
-        if let (Some(pk), Some(s)) = (&public_key, &sig) {
-            Some(pk.verify_stream(s).map_err(|e| DownloadError::SignatureInvalid {
+    let sig = if let Some(sig_text) = signature {
+        Some(minisign_verify::Signature::decode(sig_text).map_err(|e| {
+            DownloadError::SignatureInvalid {
                 path: dest.to_path_buf(),
-                source: SignatureError::VerificationFailed(format!("{e:?}")),
-            })?)
-        } else {
-            None
-        };
+                source: SignatureError::BadSignature(format!("{e:?}")),
+            }
+        })?)
+    } else {
+        None
+    };
+    let mut verifier = if let (Some(pk), Some(s)) = (&public_key, &sig) {
+        Some(
+            pk.verify_stream(s)
+                .map_err(|e| DownloadError::SignatureInvalid {
+                    path: dest.to_path_buf(),
+                    source: SignatureError::VerificationFailed(format!("{e:?}")),
+                })?,
+        )
+    } else {
+        None
+    };
 
     let resp = ureq::get(url).call().map_err(|e| DownloadError::Network {
         url: url.to_owned(),
@@ -312,11 +312,8 @@ mod tests {
         assert!(!result.unwrap(), "should be cached (no download)");
 
         // Calling the old wrapper should behave identically.
-        let result2 = download_with_checksum(
-            "http://[invalid:definitely:not:a:real:url]",
-            &sha,
-            &dest,
-        );
+        let result2 =
+            download_with_checksum("http://[invalid:definitely:not:a:real:url]", &sha, &dest);
         assert!(
             result2.is_ok(),
             "wrapper should succeed: {:?}",

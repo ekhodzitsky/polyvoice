@@ -183,11 +183,23 @@ fn cmd_models_list() -> Result<()> {
     for (name, prof) in &manifest.profiles {
         let seg = manifest
             .model(&prof.segmenter)
-            .map(|m| format!("{} ({:.1} MB)", m.filename, m.size.unwrap_or(0) as f64 / 1_048_576.0))
+            .map(|m| {
+                format!(
+                    "{} ({:.1} MB)",
+                    m.filename,
+                    m.size.unwrap_or(0) as f64 / 1_048_576.0
+                )
+            })
             .unwrap_or_else(|| "(missing)".to_string());
         let emb = manifest
             .model(&prof.embedder)
-            .map(|m| format!("{} ({:.1} MB)", m.filename, m.size.unwrap_or(0) as f64 / 1_048_576.0))
+            .map(|m| {
+                format!(
+                    "{} ({:.1} MB)",
+                    m.filename,
+                    m.size.unwrap_or(0) as f64 / 1_048_576.0
+                )
+            })
             .unwrap_or_else(|| "(missing)".to_string());
         println!("  {name}: segmenter={seg}, embedder={emb}");
     }

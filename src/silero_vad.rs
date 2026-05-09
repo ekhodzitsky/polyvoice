@@ -22,8 +22,7 @@ impl SileroVad {
     const STATE_SIZE: usize = 2 * 128;
 
     pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error> {
-        crate::onnx::validate_onnx_header(model_path)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        crate::onnx::validate_onnx_header(model_path).map_err(|e| anyhow::anyhow!("{e}"))?;
         let session = ort::session::Session::builder()
             .map_err(|e| anyhow::anyhow!("session builder: {e}"))?
             .commit_from_file(model_path)

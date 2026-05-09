@@ -3,7 +3,9 @@
 pub mod download;
 pub mod manifest;
 pub mod verify;
-pub use download::{DownloadError, download_with_checksum, download_with_checksum_and_signature, verify_sha256};
+pub use download::{
+    DownloadError, download_with_checksum, download_with_checksum_and_signature, verify_sha256,
+};
 pub use manifest::{Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1};
 
 use crate::types::Profile;
@@ -135,7 +137,12 @@ impl ModelRegistry {
                 model_id: model_id.to_owned(),
             })?;
         let dest = self.cache_dir.join(&entry.filename);
-        download_with_checksum_and_signature(&entry.url, &entry.sha256, entry.signature.as_deref(), &dest)?;
+        download_with_checksum_and_signature(
+            &entry.url,
+            &entry.sha256,
+            entry.signature.as_deref(),
+            &dest,
+        )?;
         Ok(dest)
     }
 

@@ -122,7 +122,8 @@ impl OnlineDiarizer {
         while self.audio_buffer.len() >= window {
             let window_start = self.total_samples;
             let segment_end = window_start + window;
-            let embedding = extractor.extract(&self.audio_buffer[..window], &self.diarization_config)?;
+            let embedding =
+                extractor.extract(&self.audio_buffer[..window], &self.diarization_config)?;
             let (speaker, confidence) = self.cluster.assign(&embedding);
             self.current_speaker = Some(speaker);
 

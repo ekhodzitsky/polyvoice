@@ -12,7 +12,7 @@ use polyvoice::{
     pipeline::Pipeline,
     types::{DiarizationConfig, SampleRate},
     vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech},
-    wav::{read_wav, WavError},
+    wav::{WavError, read_wav},
 };
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -104,7 +104,8 @@ fn pipeline_run_with_very_loud_audio_returns_at_least_one_speaker() {
 #[test]
 fn read_wav_on_truncated_file_returns_error() {
     let mut temp = NamedTempFile::new().expect("failed to create temp file");
-    temp.write_all(b"RIFFxxxxxx").expect("failed to write temp file");
+    temp.write_all(b"RIFFxxxxxx")
+        .expect("failed to write temp file");
     let result = read_wav(temp.path());
     assert!(
         result.is_err(),
@@ -154,7 +155,10 @@ fn read_wav_on_oversized_duration_header_returns_error() {
 
     let result = read_wav(temp.path());
     match result {
-        Err(WavError::DurationTooLong { duration_secs, max_secs }) => {
+        Err(WavError::DurationTooLong {
+            duration_secs,
+            max_secs,
+        }) => {
             assert!(
                 duration_secs > 3600.0,
                 "expected duration > 3600, got {}",
@@ -177,7 +181,10 @@ fn read_wav_on_oversized_duration_header_returns_error() {
 #[test]
 fn ahc_cluster_empty_embeddings_returns_empty() {
     let labels = agglomerative_cluster(&[], 0.45);
-    assert!(labels.is_empty(), "expected empty labels for empty embeddings");
+    assert!(
+        labels.is_empty(),
+        "expected empty labels for empty embeddings"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -240,9 +247,20 @@ fn pipeline_run_with_audio_too_long_returns_audio_too_long_error() {
     let samples = vec![0.0f32; 32000];
     let result = pipeline.run(&samples, &extractor, &mut vad);
     match result {
-        Err(polyvoice::pipeline::PipelineError::AudioTooLong { actual_secs, max_secs }) => {
-            assert!((actual_secs - 2.0).abs() < 0.01, "expected actual_secs ≈ 2.0, got {}", actual_secs);
-            assert!((max_secs - 1.0).abs() < 0.01, "expected max_secs = 1.0, got {}", max_secs);
+        Err(polyvoice::pipeline::PipelineError::AudioTooLong {
+            actual_secs,
+            max_secs,
+        }) => {
+            assert!(
+                (actual_secs - 2.0).abs() < 0.01,
+                "expected actual_secs ≈ 2.0, got {}",
+                actual_secs
+            );
+            assert!(
+                (max_secs - 1.0).abs() < 0.01,
+                "expected max_secs = 1.0, got {}",
+                max_secs
+            );
         }
         other => panic!("expected AudioTooLong error, got {:?}", other),
     }

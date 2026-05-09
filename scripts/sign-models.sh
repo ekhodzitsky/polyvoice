@@ -20,14 +20,14 @@ if [[ "${1:-}" == "--dry-run" ]]; then
     echo "[DRY RUN] No files will be modified."
 fi
 
-if [[ ! -f "$SECRET_KEY" ]]; then
-    echo "ERROR: Secret key not found at $SECRET_KEY" >&2
-    echo "Set MINISIGN_SECRET_KEY or ensure models/signing.key exists." >&2
+if ! command -v minisign &>/dev/null; then
+    echo "ERROR: minisign CLI not found in PATH" >&2
     exit 1
 fi
 
-if ! command -v minisign &>/dev/null; then
-    echo "ERROR: minisign CLI not found in PATH" >&2
+if [[ "$DRY_RUN" == "false" && ! -f "$SECRET_KEY" ]]; then
+    echo "ERROR: Secret key not found at $SECRET_KEY" >&2
+    echo "Set MINISIGN_SECRET_KEY or ensure models/signing.key exists." >&2
     exit 1
 fi
 

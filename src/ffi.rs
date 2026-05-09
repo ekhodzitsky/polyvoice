@@ -4,10 +4,10 @@
 //! owns its data; callers must call `polyvoice_pipeline_destroy` exactly once.
 //! All entry points are wrapped in `catch_unwind` per spec §8.4.
 
+use crate::VadConfig;
 use crate::models::ModelRegistry;
 use crate::pipeline::Pipeline;
 use crate::types::{DiarizationConfig, Profile};
-use crate::VadConfig;
 use crate::{FbankOnnxExtractor, SileroVad};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int};
@@ -76,12 +76,8 @@ pub unsafe extern "C" fn polyvoice_pipeline_create(
             let models = registry
                 .ensure_for_profile(prof)
                 .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
-            let extractor = FbankOnnxExtractor::new(
-                &models.embedder_path,
-                prof.embedding_dim(),
-                1,
-            )
-            .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
+            let extractor = FbankOnnxExtractor::new(&models.embedder_path, prof.embedding_dim(), 1)
+                .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
             let vad = SileroVad::new(&models.segmenter_path, 512)
                 .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
             let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
@@ -141,7 +137,9 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
             .inner
             .run(samples, &pipeline.extractor, &mut pipeline.vad)
             .map_err(|e| match e {
-                crate::pipeline::PipelineError::AudioTooLong { .. } => PolyvoiceStatus::AudioTooLong as c_int,
+                crate::pipeline::PipelineError::AudioTooLong { .. } => {
+                    PolyvoiceStatus::AudioTooLong as c_int
+                }
                 _ => PolyvoiceStatus::Inference as c_int,
             })?;
         let json =
@@ -176,7 +174,8 @@ pub unsafe extern "C" fn polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipe
             unsafe {
                 drop(Box::from_raw(pipeline));
             }
-        })).is_err()
+        }))
+        .is_err()
     {
         eprintln!("polyvoice: panic during cleanup (foreign thread?)");
     }
@@ -194,7 +193,8 @@ pub unsafe extern "C" fn polyvoice_free_string(p: *mut c_char, _n: usize) {
             unsafe {
                 drop(CString::from_raw(p));
             }
-        })).is_err()
+        }))
+        .is_err()
     {
         eprintln!("polyvoice: panic during cleanup (foreign thread?)");
     }

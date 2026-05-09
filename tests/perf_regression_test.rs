@@ -94,16 +94,14 @@ fn perf_regression_legacy_pipeline() {
 
     let registry = ModelRegistry::default()
         .expect("default ModelRegistry should resolve a writable cache dir");
-    let models = registry
-        .ensure_for_profile(Profile::Balanced)
-        .expect(
-            "Balanced profile models should be available — \
+    let models = registry.ensure_for_profile(Profile::Balanced).expect(
+        "Balanced profile models should be available — \
              run `polyvoice download-models --profile balanced` first",
-        );
+    );
 
     let embedding_dim = Profile::Balanced.embedding_dim();
-    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
-        .expect("load embedder");
+    let extractor =
+        FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("load embedder");
     let mut vad = SileroVad::new(&models.segmenter_path, 512).expect("load vad");
 
     let config = DiarizationConfig::default();
@@ -142,7 +140,10 @@ fn perf_regression_legacy_pipeline() {
     }
 
     let avg_rtf = file_results.iter().map(|r| r.rtf).sum::<f64>() / file_results.len() as f64;
-    let max_rss_mb = file_results.iter().map(|r| r.peak_rss_mb).fold(0.0, f64::max);
+    let max_rss_mb = file_results
+        .iter()
+        .map(|r| r.peak_rss_mb)
+        .fold(0.0, f64::max);
 
     let report = PerfReport {
         files: file_results,
