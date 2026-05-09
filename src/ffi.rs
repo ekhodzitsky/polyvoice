@@ -123,6 +123,10 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
         // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
         let pipeline = unsafe { &mut *pipeline };
         // SAFETY: samples was checked non-null; n_samples is caller-provided length.
+        const MAX_SAMPLES: usize = 16000 * 3600; // 1 hour at 16 kHz
+        if n_samples > MAX_SAMPLES {
+            return Err(PolyvoiceStatus::AudioTooLong as c_int);
+        }
         let samples = unsafe { std::slice::from_raw_parts(samples, n_samples) };
         // Legacy pipeline expects 16 kHz audio.
         if sample_rate != 16000 {

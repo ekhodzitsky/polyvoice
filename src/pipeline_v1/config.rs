@@ -18,6 +18,7 @@ pub struct PipelineConfig {
     pub resegment_min_overlap_secs: f32,
     pub min_speech_secs: f32,
     pub max_gap_secs: f32,
+    pub max_duration_secs: f32,
     pub embedder_pool_size: usize,
     pub execution_provider: ExecutionProvider,
 }
@@ -36,6 +37,7 @@ impl Default for PipelineConfig {
             resegment_min_overlap_secs: 0.1,
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
+            max_duration_secs: 3600.0,
             embedder_pool_size: default_pool_size(),
             execution_provider: ExecutionProvider::auto(),
         }

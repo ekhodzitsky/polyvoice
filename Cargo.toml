@@ -12,7 +12,7 @@ categories = ["multimedia::audio", "science"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["spectral"]
+default = []
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
 # C FFI bindings (ABI v2). Requires the full pipeline stack.

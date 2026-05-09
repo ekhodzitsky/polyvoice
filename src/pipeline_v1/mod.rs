@@ -52,6 +52,8 @@ pub enum PipelineError {
     Registry(#[from] RegistryError),
     #[error("model load error: {detail}")]
     ModelLoad { detail: String },
+    #[error("audio too long: {actual_secs:.1}s > max {max_secs:.1}s")]
+    AudioTooLong { actual_secs: f32, max_secs: f32 },
 }
 
 pub struct Pipeline {
@@ -90,6 +92,13 @@ impl Pipeline {
     pub fn run(&self, samples: &[f32], sr: SampleRate) -> Result<DiarizationResult, PipelineError> {
         if sr.get() != self.config.sample_rate.get() {
             return Err(PipelineError::UnsupportedSampleRate { actual: sr.get() });
+        }
+        let actual_secs = samples.len() as f32 / sr.get() as f32;
+        if actual_secs > self.config.max_duration_secs {
+            return Err(PipelineError::AudioTooLong {
+                actual_secs,
+                max_secs: self.config.max_duration_secs,
+            });
         }
 
         let raw_segments = self.segmenter.segment(samples)?;
