@@ -1,24 +1,35 @@
 [package]
 name = "polyvoice"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.3"
 edition = "2024"
 description = "Speaker diarization library for Rust — online and offline, ONNX-powered, ecosystem-agnostic"
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "onnx", "stt", "voice"]
 categories = ["multimedia::audio", "science"]
+exclude = [
+  "models/*.onnx",
+  "models/*.onnx.data",
+  "models/int8/*.onnx",
+  "models/int8/*.onnx.data",
+  "data/",
+  "fuzz/",
+  "python/",
+  "docs/superpowers/",
+  "scripts/__pycache__/",
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["spectral", "segmentation", "embedder", "clusterer", "resegmentation", "pipeline_v2"]
+default = []
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
-# C FFI bindings.
-ffi = []
+# C FFI bindings (ABI v2). Requires the full pipeline stack.
+ffi = ["onnx", "download"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
-download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2"]
+download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
 # CLI binary (polyvoice command).
 cli = ["onnx", "download", "dep:clap"]
 
@@ -52,12 +63,12 @@ clusterer = []
 # caller (M6 Pipeline wires the embedder pool into this).
 resegmentation = []
 
-# v1.0 Pipeline + Profile builder API (additive in M6a; replaces legacy in M6b).
-# Requires the full M1–M5 stack — the builder loads ONNX through ModelRegistry
-# (download feature) for Mobile/Balanced profiles. The module gates itself
-# with a `compile_error!` if onnx/segmentation/embedder/clusterer/resegmentation
-# are missing, so half-wired feature combos cannot ship.
-pipeline_v2 = ["download"]
+# v1.0 Pipeline + Profile builder API. Requires the full M1–M5 stack — the
+# builder loads ONNX through ModelRegistry (download feature) for
+# Mobile/Balanced profiles. The module gates itself with a `compile_error!`
+# if onnx/segmentation/embedder/clusterer/resegmentation are missing, so
+# half-wired feature combos cannot ship.
+pipeline = ["download"]
 
 # Model profile bundles. M0 only emits metadata; CLI uses these to pick which
 # manifest entries to ensure(). M5 will introduce INT8 model variants.
@@ -93,12 +104,13 @@ num-complex = "0.4"
 
 # CLI (optional)
 clap = { version = "4", features = ["derive", "env"], optional = true }
-ureq = { version = "3", optional = true }
+ureq = { version = "3", default-features = false, features = ["rustls"], optional = true }
 dirs = { version = "6", optional = true }
 faer = { version = "0.24.0", features = ["std"], optional = true }
 fastrand = "2.4.1"
 toml = { version = "0.8", optional = true }
 sha2 = { version = "0.10", optional = true }
+minisign-verify = { version = "0.2.5", optional = true }
 
 [dev-dependencies]
 hound = "3.5"
@@ -107,14 +119,6 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 proptest = "1"
 criterion = "0.5"
 loom = "0.7.2"
-
-[[bench]]
-name = "diarization"
-harness = false
-
-[[bench]]
-name = "der"
-harness = false
 
 [[bench]]
 name = "der_ami"

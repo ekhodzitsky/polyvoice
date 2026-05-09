@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Reverted (M6b rollback — Path A)
+
+- **Default pipeline restored to v0.5.2 legacy.** The M6b new pipeline
+  (`PowersetSegmenter` + INT8/FP32 embedders + AHC/NME-SC) was benchmarked
+  and found non-functional (DER 52–64% on VoxConverse-test vs. legacy
+  ~13.8%). The new pipeline is preserved as `polyvoice::pipeline_v1`
+  (experimental, gated behind the `pipeline` feature) but is no longer the
+  default.
+- Restored deleted modules from v0.5.2 (`cb764ff`): `src/pipeline.rs`,
+  `src/vad.rs`, `src/silero_vad.rs`, `src/onnx.rs`.
+- Restored `DiarizationConfig`, `DummyExtractor`, and
+  `EmbeddingExtractor::extract(samples, config)` API.
+- CLI (`polyvoice`) and benchmark (`polyvoice-bench`) rewritten back to
+  legacy pipeline: `SileroVad` → `FbankOnnxExtractor` → AHC.
+- Manifest profiles (`mobile`, `balanced`) now resolve to proven FP32
+  legacy models (`silero_vad` + `cam_pp_fp32` / `wespeaker_resnet34`).
+  INT8 entries remain in manifest but are no longer used by default.
+- `tests/der_baseline.json` filled with operational numbers from full
+  232-file VoxConverse-test run: DER 13.83% (miss 3.82%, FA 3.68%,
+  confusion 6.34%) at threshold 0.45, collar 0.25.
+
+### Security & Hardening (2026-05-09)
+- **SUPPLY-002 — Model signing (Minisign):** All official ONNX models are now
+  signed with Ed25519 via `minisign`. The project public key is baked into the
+  binary; per-model signatures live inline in `manifest.toml`. Downloads are
+  verified with streaming Minisign verification alongside SHA-256 in the same
+  64 KiB loop. `scripts/sign-models.sh` automates release signing.
+- **SUPPLY-003 — TLS hardening:** `ureq` is now pinned to `rustls`, removing
+  `native-tls` from the dependency tree entirely.
+- **DOS-002 — WAV DoS guards:** `read_wav` rejects files > 1 GiB and headers
+  declaring > 1 hour duration before reading samples.
+- **DOS-003 — ONNX header validation:** `validate_onnx_header()` checks the
+  first 64 bytes for ONNX magic / protobuf header before any model reaches
+  `ort::commit_from_file`.
+- **FFI-001/FFI-002/FFI-003:** `MAX_SAMPLES` guard, path-traversal rejection,
+  and panic observability in C FFI entry points.
+- **CACHE-001:** `ensure_in_cache_only` marked `#[doc(hidden)]` as test-only.
+- **SERIAL-001:** RTTM parser validates `is_finite() && >= 0.0` for timestamps.
+- Security audit updated: all MEDIUM and HIGH findings resolved.
+  See `docs/security/audit-2026-05-08.md`.
+
 ### Added (M0 — v1.0 plumbing)
 - `Profile` enum (`Mobile`/`Balanced`/`Custom`) in `polyvoice::types`.
 - `polyvoice::models` module: `ModelRegistry`, `Manifest`, `ModelEntry`, `ProfileEntry`, `ProfileModels`.
@@ -94,6 +135,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Synthetic integration test on Custom profile (`tests/pipeline_v2_synthetic_test.rs`,
   7 tests) + `#[ignore]` E2E test on Balanced profile via `ModelRegistry`
   (`tests/pipeline_v2_e2e_test.rs`).
+
+### Changed (M6b — Legacy cleanup + CLI/FFI/Python migration)
+- **BREAKING**: removed legacy `Pipeline::new(DiarizationConfig, VadConfig)`,
+  `OfflineDiarizer`, `DiarizationConfig`, `VadConfig`, `VoiceActivityDetector`,
+  `EnergyVad`, `segment_speech`, `DummyExtractor`, `OnnxEmbeddingExtractor`,
+  `EcapaTdnnExtractor`, `EcapaMelOnnxExtractor`, `RawAudioOnnxExtractor`,
+  `ClusteringBackend`, `EmbeddingDim`. `compute_fbank` is now private.
+- Renamed `pipeline_v2 → pipeline`. The Cargo feature is `pipeline`
+  (default-on, requires `download + onnx + segmentation + embedder + clusterer + resegmentation`).
+  Public surface: `polyvoice::Pipeline::builder()` is the only Pipeline API.
+- CLI rewritten: `polyvoice diarize <wav> --profile mobile|balanced` replaces
+  the legacy threshold-based interface. New: `polyvoice models list/info`.
+- `polyvoice-bench` rewritten on `Pipeline::builder()`. JSON output schema
+  `polyvoice-bench-v1`.
+- C FFI ABI v2 (`polyvoice_pipeline_*` family) replaces the legacy
+  `polyvoice_diarizer_*` ABI. See `include/polyvoice.h`.
+- Python pyo3 bindings rewritten: `polyvoice.Pipeline.mobile()` /
+  `Pipeline.balanced()` / `Pipeline.run(samples, sample_rate)`.
+
+### Added (M6b)
+- `docs/MIGRATING-FROM-0.5.md`: migration guide for Rust / Python / CLI / C FFI.
+- `tests/der_baseline.json`: schema for the v1.0 DER baseline. Numbers are
+  deferred to an operational follow-up after M5 INT8 publish closes.
+- `scripts/run-der-baseline.sh`: helper that runs `polyvoice-bench` on
+  VoxConverse-test and prints the values to paste into the baseline JSON.
+
+### Deprecated
+- `polyvoice::OnlineDiarizer` — streaming redesign coming in v1.1; use
+  `Pipeline` for offline.
 
 ### Added (M5 — INT8 quantization)
 - New scripts: `download-voxconverse-dev.sh`, `download-voxceleb1-subset.sh`,

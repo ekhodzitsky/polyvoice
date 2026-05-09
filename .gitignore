@@ -40,6 +40,21 @@ models/int8/*.onnx.data
 /data/
 /bench-results/
 
+# Secrets / credentials
+.env
+.env.*
+*.pem
+*.key
+*.p8
+*.p12
+id_rsa
+id_rsa.pub
+
+# Python stale native extensions
+python/polyvoice/_polyvoice.cpython-*.so
+python/polyvoice/_polyvoice.cpython-*.dylib
+python/polyvoice/_polyvoice.cpython-*.dll
+
 # cargo-kimi artifacts
 .kimi/
 kimi-score.svg

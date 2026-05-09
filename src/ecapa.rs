@@ -26,6 +26,8 @@ impl FbankOnnxExtractor {
     /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> Result<Self, anyhow::Error>`
     /// { ret.pool.len() == pool_size }
     pub fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> anyhow::Result<Self> {
+        crate::onnx::validate_onnx_header(model_path)
+            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
         let pool = crossbeam_queue::ArrayQueue::new(pool_size);
         for i in 0..pool_size {
             let session = ort::session::Session::builder()
@@ -151,6 +153,3 @@ impl FbankOnnxExtractor {
         anyhow::bail!("the `onnx` feature is not enabled")
     }
 }
-
-#[deprecated(since = "0.5.0", note = "renamed to FbankOnnxExtractor")]
-pub type EcapaTdnnExtractor = FbankOnnxExtractor;
