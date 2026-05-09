@@ -12,15 +12,15 @@ categories = ["multimedia::audio", "science"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["spectral", "segmentation", "embedder", "clusterer", "resegmentation", "pipeline"]
+default = ["spectral"]
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
 # C FFI bindings (ABI v2). Requires the full pipeline stack.
-ffi = ["onnx", "pipeline", "segmentation", "embedder", "clusterer", "resegmentation"]
+ffi = ["onnx", "download"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
 download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2"]
 # CLI binary (polyvoice command).
-cli = ["onnx", "download", "pipeline", "spectral", "segmentation", "embedder", "clusterer", "resegmentation", "dep:clap"]
+cli = ["onnx", "download", "dep:clap"]
 
 # Execution providers (forward `ort` features). Used by Pipeline implementations from M1+.
 coreml = ["onnx", "ort/coreml"]

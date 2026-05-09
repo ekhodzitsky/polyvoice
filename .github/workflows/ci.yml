@@ -5,6 +5,9 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -173,3 +176,39 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo check (wasm32, no default features, no onnx)
         run: cargo check --target wasm32-unknown-unknown --no-default-features --lib
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    needs: [test]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Download VoxConverse test data
+        run: bash scripts/download-voxconverse-test.sh
+      - name: Download ONNX models
+        run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
+      - name: Run E2E smoke test
+        run: cargo test --test e2e_smoke_test --features "onnx download" -- --ignored --nocapture
+
+  e2e-der-regression:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Download VoxConverse test data
+        run: bash scripts/download-voxconverse-test.sh
+      - name: Download ONNX models
+        run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
+      - name: Run DER regression test
+        run: cargo test --test der_regression_test --features "onnx download" -- --ignored --nocapture 2>&1 | tee der-regression.log
+      - name: Upload DER regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: der-regression-log
+          path: der-regression.log

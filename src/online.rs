@@ -82,6 +82,7 @@ impl OnlineDiarizer {
             hop_secs: config.hop_secs,
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
+            max_duration_secs: 3600.0,
             sample_rate: config.sample_rate,
         };
         Self {

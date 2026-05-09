@@ -349,6 +349,8 @@ pub struct DiarizationConfig {
     pub min_speech_secs: f32,
     /// Maximum gap between same-speaker segments to merge, in seconds.
     pub max_gap_secs: f32,
+    /// Maximum allowed audio duration in seconds (DoS guard).
+    pub max_duration_secs: f32,
     /// Sample rate expected by the embedding model (usually 16000).
     pub sample_rate: SampleRate,
 }
@@ -362,6 +364,7 @@ impl Default for DiarizationConfig {
             hop_secs: 0.75,
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
+            max_duration_secs: 3600.0,
             sample_rate: SampleRate(16000),
         }
     }

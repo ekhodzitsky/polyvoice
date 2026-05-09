@@ -24,6 +24,7 @@ pub enum PolyvoiceStatus {
     Ok = 0,
     InvalidArg = 1,
     AudioTooShort = 2,
+    AudioTooLong = 3,
     ModelLoad = 10,
     Inference = 11,
     OutOfMemory = 20,
@@ -130,7 +131,10 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
         let result = pipeline
             .inner
             .run(samples, &pipeline.extractor, &mut pipeline.vad)
-            .map_err(|_| PolyvoiceStatus::Inference as c_int)?;
+            .map_err(|e| match e {
+                crate::pipeline::PipelineError::AudioTooLong { .. } => PolyvoiceStatus::AudioTooLong as c_int,
+                _ => PolyvoiceStatus::Inference as c_int,
+            })?;
         let json =
             serde_json::to_string(&result).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
         let len = json.len();

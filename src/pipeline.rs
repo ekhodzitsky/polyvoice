@@ -22,6 +22,8 @@ pub enum PipelineError {
     Wav(#[from] wav::WavError),
     #[error("no speech detected in audio")]
     NoSpeech,
+    #[error("audio too long: {actual_secs:.1}s > max {max_secs:.1}s")]
+    AudioTooLong { actual_secs: f32, max_secs: f32 },
 }
 
 pub struct Pipeline {
@@ -35,12 +37,22 @@ impl Pipeline {
     }
 
     /// Run the full diarization pipeline on raw f32 samples.
+    ///
+    /// Returns [`PipelineError::AudioTooLong`] if the input exceeds
+    /// `config.max_duration_secs` (default 1 hour).
     pub fn run<E: EmbeddingExtractor, V: VoiceActivityDetector>(
         &self,
         samples: &[f32],
         extractor: &E,
         vad: &mut V,
     ) -> Result<DiarizationResult, PipelineError> {
+        let actual_secs = samples.len() as f32 / self.config.sample_rate.get() as f32;
+        if actual_secs > self.config.max_duration_secs {
+            return Err(PipelineError::AudioTooLong {
+                actual_secs,
+                max_secs: self.config.max_duration_secs,
+            });
+        }
         let speech_regions = segment_speech(vad, samples, &self.config, &self.vad_config)?;
 
         if speech_regions.is_empty() {

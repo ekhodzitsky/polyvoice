@@ -169,7 +169,30 @@ fn pipeline_mismatched_sample_rate_does_not_crash() {
 }
 
 // ---------------------------------------------------------------------------
-// 10. Property test: random samples of various lengths never panic
+// 10. Audio exceeding max_duration_secs is rejected
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pipeline_run_with_audio_too_long_returns_audio_too_long_error() {
+    let mut config = default_config();
+    config.max_duration_secs = 1.0;
+    let pipeline = Pipeline::new(config, default_vad_config());
+    let extractor = DummyExtractor::new(256);
+    let mut vad = EnergyVad::new(-40.0, 16000, 512);
+    // 2 seconds at 16 kHz = 32000 samples
+    let samples = vec![0.0f32; 32000];
+    let result = pipeline.run(&samples, &extractor, &mut vad);
+    match result {
+        Err(polyvoice::pipeline::PipelineError::AudioTooLong { actual_secs, max_secs }) => {
+            assert!((actual_secs - 2.0).abs() < 0.01, "expected actual_secs ≈ 2.0, got {}", actual_secs);
+            assert!((max_secs - 1.0).abs() < 0.01, "expected max_secs = 1.0, got {}", max_secs);
+        }
+        other => panic!("expected AudioTooLong error, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 11. Property test: random samples of various lengths never panic
 // ---------------------------------------------------------------------------
 
 use proptest::prelude::*;

@@ -1,5 +1,6 @@
-/* polyvoice.h — C FFI v2 ABI (M6b).
- * v1.0 architecture: profile-based Pipeline. Old ABI removed.
+/* polyvoice.h — C FFI for the legacy v0.5.2 Pipeline.
+ * Architecture: SileroVAD + WeSpeaker embeddings + AHC clustering.
+ * Threading: PolyvoicePipeline is Send. Each handle must be destroyed exactly once.
  */
 #ifndef POLYVOICE_H
 #define POLYVOICE_H
@@ -29,10 +30,12 @@ typedef enum {
     POLYVOICE_ERR_INTERNAL = 99
 } polyvoice_status_t;
 
+/** Create a pipeline from a profile. */
 int polyvoice_pipeline_create(polyvoice_profile_t profile,
                               const char* models_cache_dir,
                               PolyvoicePipeline** out_handle);
 
+/** Run diarization on f32 samples. Returns JSON via out_json. */
 int polyvoice_pipeline_run(PolyvoicePipeline* pipeline,
                            const float* samples,
                            size_t n_samples,
@@ -40,7 +43,10 @@ int polyvoice_pipeline_run(PolyvoicePipeline* pipeline,
                            char** out_json,
                            size_t* out_json_len);
 
+/** Destroy a pipeline. Must be called exactly once per handle. */
 void polyvoice_pipeline_destroy(PolyvoicePipeline* pipeline);
+
+/** Free a JSON string returned by polyvoice_pipeline_run. */
 void polyvoice_free_string(char* p, size_t n);
 
 #ifdef __cplusplus
