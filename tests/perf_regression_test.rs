@@ -51,10 +51,9 @@ fn peak_rss_mb() -> f64 {
                 if let Some(kb_str) = line
                     .strip_prefix("VmHWM:")
                     .and_then(|s| s.split_whitespace().next())
+                    && let Ok(kb) = kb_str.parse::<f64>()
                 {
-                    if let Ok(kb) = kb_str.parse::<f64>() {
-                        return kb / 1024.0;
-                    }
+                    return kb / 1024.0;
                 }
             }
         }
