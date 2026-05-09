@@ -1,12 +1,14 @@
-//! M6b — C FFI v2 ABI for the v1.0 Pipeline.
+//! Legacy v0.5.2 — C FFI ABI for the legacy Pipeline.
 //!
-//! Threading model: `PolyvoicePipeline` is `Send + Sync`. Each `*mut PolyvoicePipeline`
+//! Threading model: `PolyvoicePipeline` is `Send`. Each `*mut PolyvoicePipeline`
 //! owns its data; callers must call `polyvoice_pipeline_destroy` exactly once.
 //! All entry points are wrapped in `catch_unwind` per spec §8.4.
 
 use crate::models::ModelRegistry;
-use crate::pipeline_v1::{Pipeline, PipelineConfig};
-use crate::types::{Profile, SampleRate};
+use crate::pipeline::Pipeline;
+use crate::types::{DiarizationConfig, Profile};
+use crate::VadConfig;
+use crate::{FbankOnnxExtractor, SileroVad};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -31,6 +33,8 @@ pub enum PolyvoiceStatus {
 
 pub struct PolyvoicePipeline {
     inner: Pipeline,
+    extractor: FbankOnnxExtractor,
+    vad: SileroVad,
 }
 
 /// Create a new pipeline from a profile.
@@ -63,17 +67,22 @@ pub unsafe extern "C" fn polyvoice_pipeline_create(
                 ModelRegistry::with_cache_dir(s)
             }
             .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
-            let cfg = PipelineConfig {
-                profile: prof,
-                ..PipelineConfig::default()
-            };
-            let pipeline = Pipeline::builder()
-                .config(cfg)
-                .with_models_from(registry)
-                .build()
+            let models = registry
+                .ensure_for_profile(prof)
+                .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
+            let extractor = FbankOnnxExtractor::new(
+                &models.embedder_path,
+                prof.embedding_dim(),
+                1,
+            )
+            .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
+            let vad = SileroVad::new(&models.segmenter_path, 512)
                 .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
+            let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
             Ok(Box::into_raw(Box::new(PolyvoicePipeline {
                 inner: pipeline,
+                extractor,
+                vad,
             })))
         },
     ));
@@ -111,13 +120,16 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
             return Err(PolyvoiceStatus::InvalidArg as c_int);
         }
         // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
-        let pipeline = unsafe { &*pipeline };
+        let pipeline = unsafe { &mut *pipeline };
         // SAFETY: samples was checked non-null; n_samples is caller-provided length.
         let samples = unsafe { std::slice::from_raw_parts(samples, n_samples) };
-        let sr = SampleRate::new(sample_rate).ok_or(PolyvoiceStatus::InvalidArg as c_int)?;
+        // Legacy pipeline expects 16 kHz audio.
+        if sample_rate != 16000 {
+            return Err(PolyvoiceStatus::InvalidArg as c_int);
+        }
         let result = pipeline
             .inner
-            .run(samples, sr)
+            .run(samples, &pipeline.extractor, &mut pipeline.vad)
             .map_err(|_| PolyvoiceStatus::Inference as c_int)?;
         let json =
             serde_json::to_string(&result).map_err(|_| PolyvoiceStatus::Internal as c_int)?;

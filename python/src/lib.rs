@@ -1,15 +1,20 @@
-//! M6b — pyo3 bindings for the v1.0 Pipeline.
+//! pyo3 bindings for the legacy v0.5.2 Pipeline.
 
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v1::{Pipeline as RustPipeline, PipelineConfig};
-use polyvoice::types::{Profile, SampleRate};
+use polyvoice::pipeline::Pipeline as RustPipeline;
+use polyvoice::types::{DiarizationConfig, Profile, SampleRate};
+use polyvoice::vad::VadConfig;
+use polyvoice::FbankOnnxExtractor;
+use polyvoice::SileroVad;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 /// Python-facing `Pipeline` wrapper.
 #[pyclass]
 pub struct Pipeline {
-    inner: RustPipeline,
+    pipeline: RustPipeline,
+    extractor: FbankOnnxExtractor,
+    vad: SileroVad,
 }
 
 #[pymethods]
@@ -30,18 +35,18 @@ impl Pipeline {
 
     /// Run diarization on an iterable of f32 samples.
     fn run<'py>(
-        &self,
+        &mut self,
         py: Python<'py>,
         samples: Vec<f32>,
         sample_rate: u32,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let sr = SampleRate::new(sample_rate)
+        let _sr = SampleRate::new(sample_rate)
             .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!(
                 "invalid sample rate {sample_rate} (expected 8000..=192000)"
             )))?;
         let result = self
-            .inner
-            .run(&samples, sr)
+            .pipeline
+            .run(&samples, &self.extractor, &mut self.vad)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("pipeline.run: {e}")))?;
         let dict = PyDict::new(py);
         dict.set_item("num_speakers", result.num_speakers)?;
@@ -68,14 +73,23 @@ impl Pipeline {
             None => ModelRegistry::default(),
         }
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("registry: {e}")))?;
-        let mut cfg = PipelineConfig::default();
-        cfg.profile = profile;
-        let pipeline = RustPipeline::builder()
-            .config(cfg)
-            .with_models_from(registry)
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("build: {e}")))?;
-        Ok(Self { inner: pipeline })
+        let models = registry
+            .ensure_for_profile(profile)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("models: {e}")))?;
+        let extractor = FbankOnnxExtractor::new(
+            &models.embedder_path,
+            profile.embedding_dim(),
+            1,
+        )
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("extractor: {e}")))?;
+        let vad = SileroVad::new(&models.segmenter_path, 512)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("vad: {e}")))?;
+        let pipeline = RustPipeline::new(DiarizationConfig::default(), VadConfig::default());
+        Ok(Self {
+            pipeline,
+            extractor,
+            vad,
+        })
     }
 }
 
