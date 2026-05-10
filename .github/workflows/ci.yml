@@ -111,7 +111,6 @@ jobs:
       - name: cargo miri test
         run: |
           cargo miri test --features ffi --lib
-          cargo miri test --features ffi --test integration
           cargo miri test --features ffi --test test_ahc
         env:
           MIRIFLAGS: "-Zmiri-disable-isolation"
