@@ -226,6 +226,7 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn valid_onnx_file_passes_validation() {
         let path = std::path::Path::new("models/silero_vad.onnx");
         if !path.exists() {
@@ -236,6 +237,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn random_64_bytes_fails_validation() {
         let mut tmp = tempfile::NamedTempFile::new().unwrap();
         tmp.write_all(&[0xAB; 64]).unwrap();
@@ -250,6 +252,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn empty_file_fails_validation() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         let result = validate_onnx_header(tmp.path());
@@ -262,6 +265,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn file_with_onnx_magic_passes() {
         let mut tmp = tempfile::NamedTempFile::new().unwrap();
         let mut data = vec![0u8; 64];
@@ -271,6 +275,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn file_with_protobuf_header_passes() {
         let mut tmp = tempfile::NamedTempFile::new().unwrap();
         let mut data = vec![0u8; 64];
