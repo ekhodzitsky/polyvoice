@@ -31,6 +31,9 @@ impl SpeakerIdRemap {
         Self { mapping }
     }
 
+/// { TODO: precondition }
+/// pub fn remap(&self, id: SpeakerId) -> SpeakerId
+/// { TODO: postcondition }
     /// Apply the remap to a single [`SpeakerId`].
     ///
     /// Returns the new ID if the old ID was remapped, otherwise returns `id` unchanged.
@@ -42,11 +45,17 @@ impl SpeakerIdRemap {
             .unwrap_or(id)
     }
 
+/// { TODO: precondition }
+/// pub fn is_empty(&self) -> bool
+/// { TODO: postcondition }
     /// Returns true if no IDs were changed.
     pub fn is_empty(&self) -> bool {
         self.mapping.is_empty()
     }
 
+/// { TODO: precondition }
+/// pub fn len(&self) -> usize
+/// { TODO: postcondition }
     /// Returns the number of remapped IDs.
     pub fn len(&self) -> usize {
         self.mapping.len()
@@ -165,6 +174,9 @@ impl std::error::Error for ProfileParseError {}
 pub struct SampleRate(u32);
 
 impl SampleRate {
+/// { TODO: precondition }
+/// pub fn new(rate: u32) -> Option<Self>
+/// { TODO: postcondition }
     /// Create a validated sample rate.
     ///
     /// Returns `None` if the rate is outside the supported range (8000–192000 Hz).
@@ -179,6 +191,9 @@ impl SampleRate {
         (8000..=192000).contains(&rate).then_some(Self(rate))
     }
 
+/// { TODO: precondition }
+/// pub fn get(&self) -> u32
+/// { TODO: postcondition }
     /// Return the raw sample rate value in Hz.
     ///
     /// ```rust
@@ -204,6 +219,9 @@ impl Default for SampleRate {
 pub struct Confidence(f32);
 
 impl Confidence {
+/// { TODO: precondition }
+/// pub fn new(v: f32) -> Option<Self>
+/// { TODO: postcondition }
     /// Create a validated confidence score.
     ///
     /// Returns `None` if `v` is outside `[0.0, 1.0]`.
@@ -217,6 +235,9 @@ impl Confidence {
         (0.0..=1.0).contains(&v).then_some(Self(v))
     }
 
+/// { TODO: precondition }
+/// pub fn get(&self) -> f32
+/// { TODO: postcondition }
     /// Return the raw confidence value.
     ///
     /// ```rust
@@ -242,6 +263,9 @@ impl Default for Confidence {
 pub struct Seconds(f32);
 
 impl Seconds {
+/// { TODO: precondition }
+/// pub fn new(v: f32) -> Option<Self>
+/// { TODO: postcondition }
     /// Create a validated non-negative duration in seconds.
     ///
     /// Returns `None` if `v` is negative.
@@ -255,6 +279,9 @@ impl Seconds {
         (v >= 0.0).then_some(Self(v))
     }
 
+/// { TODO: precondition }
+/// pub fn get(&self) -> f32
+/// { TODO: postcondition }
     /// Return the raw duration value in seconds.
     ///
     /// ```rust
@@ -283,6 +310,9 @@ pub struct TimeRange {
 }
 
 impl TimeRange {
+/// { TODO: precondition }
+/// pub fn duration(&self) -> f64
+/// { TODO: postcondition }
     /// Return the duration of this time range in seconds.
     ///
     /// ```rust

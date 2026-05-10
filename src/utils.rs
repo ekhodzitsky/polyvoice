@@ -3,6 +3,9 @@
 //! Shared vector math (cosine similarity, L2 normalization, segment merging)
 //! used by clustering, embedding, and overlap modules. See [`cosine_similarity`].
 
+/// { TODO: precondition }
+/// pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32
+/// { TODO: postcondition }
 /// Compute cosine similarity between two vectors.
 ///
 /// Returns `0.0` for zero vectors or length mismatches (with a `tracing::warn`).
@@ -39,6 +42,9 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot / (norm_a.sqrt() * norm_b.sqrt())
 }
 
+/// { TODO: precondition }
+/// pub fn l2_normalize(vec: &mut [f32])
+/// { TODO: postcondition }
 /// L2-normalize a vector in-place.
 ///
 /// If the vector norm is below `1e-8`, it is left unchanged (all zeros).
@@ -59,6 +65,9 @@ pub fn l2_normalize(vec: &mut [f32]) {
     }
 }
 
+/// { TODO: precondition }
+/// pub fn cosine_similarity_f32_f64(a: &[f32], b: &[f64]) -> f32
+/// { TODO: postcondition }
 /// Compute cosine similarity between an f32 slice and an f64 slice.
 ///
 /// Returns `0.0` for zero vectors or length mismatches.
@@ -86,6 +95,9 @@ pub fn cosine_similarity_f32_f64(a: &[f32], b: &[f64]) -> f32 {
     dot / (norm_a.sqrt() * norm_b.sqrt())
 }
 
+/// { TODO: precondition }
+/// pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>>
+/// { TODO: postcondition }
 /// Compute the element-wise mean of a list of vectors.
 ///
 /// Returns `None` if the input slice is empty.
@@ -115,6 +127,9 @@ pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>> {
     Some(sum)
 }
 
+/// { TODO: precondition }
+/// pub fn moving_average(data: &[f32], window: usize) -> Vec<f32>
+/// { TODO: postcondition }
 /// Compute a simple moving average with a symmetric window.
 ///
 /// Returns a clone of `data` if `window` is zero or `data` is empty.
@@ -143,6 +158,9 @@ pub fn moving_average(data: &[f32], window: usize) -> Vec<f32> {
 
 use crate::types::Segment;
 
+/// { TODO: precondition }
+/// pub fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment>
+/// { TODO: postcondition }
 /// Merge adjacent segments with the same speaker if the gap between them
 /// is less than `max_gap_secs`.
 ///
