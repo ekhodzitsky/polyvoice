@@ -1,4 +1,8 @@
 //! Speaker embedding extraction trait.
+//!
+//! Use this module to turn audio windows into fixed-dimension speaker vectors
+//! for clustering. See [`EmbeddingExtractor`] for the trait and
+//! [`DummyExtractor`] for a test-time stand-in.
 
 use crate::types::DiarizationConfig;
 

@@ -1,4 +1,7 @@
 //! Speaker clustering with online incremental centroid updates.
+//!
+//! Assign incoming embeddings to existing speakers or create new ones in a
+//! single pass. See [`SpeakerCluster`] and [`ClusterConfig`].
 
 use crate::types::{SpeakerId, SpeakerIdRemap};
 use crate::utils::{cosine_similarity, l2_normalize};

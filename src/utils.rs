@@ -1,4 +1,7 @@
 //! Math utilities for diarization.
+//!
+//! Shared vector math (cosine similarity, L2 normalization, segment merging)
+//! used by clustering, embedding, and overlap modules. See [`cosine_similarity`].
 
 /// Compute cosine similarity between two vectors.
 ///

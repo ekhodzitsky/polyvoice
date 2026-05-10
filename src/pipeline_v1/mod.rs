@@ -1,6 +1,7 @@
-//! M6b — `polyvoice::pipeline` module (renamed from pipeline).
+//! High-level v1.0 diarization pipeline.
 //!
-//! Spec: `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md`.
+//! Wires segmentation, embedding, clustering, and overlap resegmentation into
+//! a single [`Pipeline`] that can be built with [`PipelineBuilder`].
 
 #[cfg(not(all(
     feature = "pipeline",
