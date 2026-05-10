@@ -3,8 +3,7 @@
 //! Requires the Balanced ONNX bundle to be cached (run
 //! `cargo run --features cli --bin polyvoice -- download-models --profile balanced`
 //! once before invoking with `cargo test -- --ignored e2e`). Picks one WAV
-//! from `data/voxconverse-test/audio/` (or `data/ami-test-single/audio/` as
-//! fallback), runs the legacy pipeline, and asserts DER < 50%.
+//! from the bundled test data, runs the legacy pipeline, and asserts DER < 50%.
 
 #![cfg(all(feature = "onnx", feature = "download"))]
 
@@ -25,6 +24,12 @@ struct SmokeDataset {
 }
 
 const DATASETS: &[SmokeDataset] = &[
+    // Bundled short clip (~2 MB, 26 s) — preferred for CI speed.
+    SmokeDataset {
+        audio_dir: "tests/data/e2e-smoke/audio",
+        rttm_dir: "tests/data/e2e-smoke/rttm",
+    },
+    // Full test sets (slower, require external download).
     SmokeDataset {
         audio_dir: "data/voxconverse-test/audio",
         rttm_dir: "data/voxconverse-test/rttm",
@@ -57,7 +62,7 @@ fn first_smoke_wav() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
     None
 }
 
-#[ignore = "requires cached ONNX bundle + a wav file under data/{voxconverse-test,ami-test-single}/audio/"]
+#[ignore = "requires cached ONNX bundle + a wav file in a smoke-test dataset"]
 #[test]
 fn e2e_smoke_single_file_der_below_50_percent() {
     let (wav_path, rttm_path) = match first_smoke_wav() {

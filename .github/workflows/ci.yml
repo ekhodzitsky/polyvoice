@@ -180,17 +180,11 @@ jobs:
   e2e-smoke:
     runs-on: ubuntu-latest
     needs: [test]
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
-        with:
-          path: data/ami-test-single
-          key: ami-test-single-${{ hashFiles('scripts/download-ami-test-single.sh') }}
-      - name: Download AMI test single
-        run: bash scripts/download-ami-test-single.sh
       - name: Download ONNX models
         run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
       - name: Run E2E smoke test
