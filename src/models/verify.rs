@@ -106,6 +106,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn valid_signature_passes() {
         let Some((_dir, path, sig_text)) = sign_temp_file(b"polyvoice test content") else {
             return;
@@ -114,6 +115,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn tampered_signature_fails() {
         let Some((_dir, path, mut sig_text)) = sign_temp_file(b"polyvoice test content") else {
             return;
@@ -145,6 +147,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn tampered_file_fails() {
         let Some((_dir, path, sig_text)) = sign_temp_file(b"polyvoice test content") else {
             return;
