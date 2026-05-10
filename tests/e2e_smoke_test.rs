@@ -3,8 +3,8 @@
 //! Requires the Balanced ONNX bundle to be cached (run
 //! `cargo run --features cli --bin polyvoice -- download-models --profile balanced`
 //! once before invoking with `cargo test -- --ignored e2e`). Picks one WAV
-//! from `data/voxconverse-test/audio/`, runs the legacy pipeline, and asserts
-//! DER < 50%.
+//! from `data/voxconverse-test/audio/` (or `data/ami-test-single/audio/` as
+//! fallback), runs the legacy pipeline, and asserts DER < 50%.
 
 #![cfg(all(feature = "onnx", feature = "download"))]
 
@@ -18,28 +18,53 @@ use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
 use std::path::Path;
 
-fn first_voxconverse_wav() -> Option<std::path::PathBuf> {
-    let dir = Path::new("data/voxconverse-test/audio");
-    if !dir.is_dir() {
-        return None;
-    }
-    let mut entries: Vec<_> = std::fs::read_dir(dir)
-        .ok()?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "wav"))
-        .map(|e| e.path())
-        .collect();
-    entries.sort();
-    entries.into_iter().next()
+/// A candidate dataset for the smoke test.
+struct SmokeDataset {
+    audio_dir: &'static str,
+    rttm_dir: &'static str,
 }
 
-#[ignore = "requires cached ONNX bundle + a wav file under data/voxconverse-test/audio/"]
+const DATASETS: &[SmokeDataset] = &[
+    SmokeDataset {
+        audio_dir: "data/voxconverse-test/audio",
+        rttm_dir: "data/voxconverse-test/rttm",
+    },
+    SmokeDataset {
+        audio_dir: "data/ami-test-single/audio",
+        rttm_dir: "data/ami-test-single/rttm",
+    },
+];
+
+fn first_smoke_wav() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+    for ds in DATASETS {
+        let audio_dir = Path::new(ds.audio_dir);
+        if !audio_dir.is_dir() {
+            continue;
+        }
+        let mut entries: Vec<_> = std::fs::read_dir(audio_dir)
+            .ok()?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "wav"))
+            .map(|e| e.path())
+            .collect();
+        entries.sort();
+        if let Some(wav) = entries.into_iter().next() {
+            let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let rttm = Path::new(ds.rttm_dir).join(format!("{stem}.rttm"));
+            return Some((wav, rttm));
+        }
+    }
+    None
+}
+
+#[ignore = "requires cached ONNX bundle + a wav file under data/{voxconverse-test,ami-test-single}/audio/"]
 #[test]
 fn e2e_smoke_single_file_der_below_50_percent() {
-    let wav_path = match first_voxconverse_wav() {
+    let (wav_path, rttm_path) = match first_smoke_wav() {
         Some(p) => p,
         None => panic!(
-            "data/voxconverse-test/audio/ is empty — run scripts/download-voxconverse-test.sh first"
+            "No WAV file found in any smoke-test dataset — \
+             run scripts/download-voxconverse-test.sh or scripts/download-ami-test-single.sh first"
         ),
     };
     let stem = wav_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
@@ -66,9 +91,8 @@ fn e2e_smoke_single_file_der_below_50_percent() {
 
     let result = pipeline
         .run(&samples, &extractor, &mut vad)
-        .expect("pipeline.run on a real VoxConverse clip should succeed");
+        .expect("pipeline.run on a real audio clip should succeed");
 
-    let rttm_path = Path::new("data/voxconverse-test/rttm").join(format!("{stem}.rttm"));
     let ref_turns = {
         let raw = parse_rttm_file(&rttm_path).expect("parse rttm");
         let grouped = group_by_file(&raw);
