@@ -1,6 +1,7 @@
-//! M6a — `PipelineConfig`, `ClustererKind`, `ExecutionProvider`.
+//! Pipeline configuration and execution-provider selection.
 //!
-//! Spec: `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md` §3.
+//! Holds all tunables for [`crate::pipeline_v1::Pipeline`]: sample rate, clustering algorithm,
+//! overlap handling, and ONNX execution provider. See [`PipelineConfig`].
 
 use crate::types::{Profile, SampleRate};
 

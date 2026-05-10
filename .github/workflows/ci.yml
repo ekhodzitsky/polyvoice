@@ -231,6 +231,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: data/voxconverse-test
+          key: voxconverse-test-${{ hashFiles('scripts/download-voxconverse-test.sh') }}
       - name: Download VoxConverse test data
         run: bash scripts/download-voxconverse-test.sh
       - name: Download ONNX models

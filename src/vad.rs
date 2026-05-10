@@ -1,4 +1,8 @@
-//! Voice Activity Detection trait and utilities.
+//! Voice Activity Detection (VAD) trait and utilities.
+//!
+//! Use this module to detect speech regions in audio before embedding or
+//! diarization. See [`VoiceActivityDetector`] for the trait and
+//! [`segment_speech`] for the high-level helper.
 
 use crate::types::DiarizationConfig;
 

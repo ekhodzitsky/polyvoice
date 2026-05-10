@@ -1,4 +1,7 @@
 //! WAV file I/O via the `hound` crate.
+//!
+//! Read mono f32 samples from WAV files with size and duration guards.
+//! See [`read_wav`] for the main entry point.
 
 use std::path::Path;
 
