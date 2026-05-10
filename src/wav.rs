@@ -21,6 +21,9 @@ pub enum WavError {
     Metadata(#[from] std::io::Error),
 }
 
+/// { TODO: precondition }
+/// pub fn read_wav(path: &Path) -> Result<(Vec<f32>, u32), WavError>
+/// { TODO: postcondition }
 /// Read a WAV file and return mono f32 samples normalized to [-1.0, 1.0] and its sample rate.
 ///
 /// Stereo files are downmixed by averaging channels. 16-bit and 32-bit float

@@ -92,6 +92,9 @@ pub enum ResegmentError {
     MissingPrimaryCentroid { index: usize, primary: SpeakerId },
 }
 
+/// { TODO: precondition }
+/// pub fn compute_centroids(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<SpeakerCentroid>
+/// { TODO: postcondition }
 /// Compute per-cluster L2-normalized centroids from clustered embeddings.
 ///
 /// `labels[i]` is the cluster label of `embeddings[i]`. The cluster id stored
@@ -131,6 +134,9 @@ pub fn compute_centroids(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<Speak
     out
 }
 
+/// { TODO: precondition }
+/// pub fn extract_overlap_time_ranges( segments: &[crate::segmentation::RawSegment], ) -> Vec<(TimeRange, u8, u8)>
+/// { TODO: postcondition }
 /// Find pairs of `RawSegment`s that share a time range, are flagged
 /// `is_overlap = true`, and carry two distinct `local_speaker_idx`.
 /// Returns `(time_range, lo_local_idx, hi_local_idx)` per detected pair.
@@ -195,6 +201,9 @@ pub struct OverlapResegmenter {
 }
 
 impl OverlapResegmenter {
+/// { TODO: precondition }
+/// pub fn new(threshold: f32, min_overlap_secs: f32) -> Self
+/// { TODO: postcondition }
     /// `threshold` — minimum cosine similarity required to attach a secondary
     /// speaker to an overlap region. Default `0.0` (always attach the nearest
     /// non-primary cluster).
@@ -207,10 +216,16 @@ impl OverlapResegmenter {
         }
     }
 
+/// { TODO: precondition }
+/// pub fn threshold(&self) -> f32
+/// { TODO: postcondition }
     pub fn threshold(&self) -> f32 {
         self.threshold
     }
 
+/// { TODO: precondition }
+/// pub fn min_overlap_secs(&self) -> f32
+/// { TODO: postcondition }
     pub fn min_overlap_secs(&self) -> f32 {
         self.min_overlap_secs
     }
@@ -444,7 +459,8 @@ mod centroid_tests {
     }
 }
 
-#[cfg(all(test, feature = "segmentation"))]
+#[cfg(test)]
+#[cfg(feature = "segmentation")]
 mod overlap_extract_tests {
     use super::*;
     use crate::segmentation::RawSegment;
@@ -455,7 +471,7 @@ mod overlap_extract_tests {
             time: TimeRange { start, end },
             local_speaker_idx: spk,
             is_overlap: overlap,
-            confidence: Confidence::new(0.9).unwrap(),
+            confidence: Confidence::new(0.9).expect("0.9 is valid confidence"),
         }
     }
 

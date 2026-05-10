@@ -30,6 +30,9 @@ impl std::fmt::Display for DerResult {
     }
 }
 
+/// { TODO: precondition }
+/// pub fn compute_der( reference: &[SpeakerTurn], hypothesis: &[SpeakerTurn], collar: f64, ) -> DerResult
+/// { TODO: postcondition }
 /// Compute DER between reference and hypothesis annotations.
 ///
 /// `collar` is the forgiveness window (in seconds) around each reference
@@ -209,6 +212,9 @@ fn greedy_speaker_mapping(
     mapping
 }
 
+/// { TODO: precondition }
+/// pub fn compute_der_from_rttm( reference: &[(f64, f64, &str)], hypothesis: &[SpeakerTurn], collar: f64, ) -> DerResult
+/// { TODO: postcondition }
 /// Convenience: compute DER from RTTM segments (string speaker labels).
 pub fn compute_der_from_rttm(
     reference: &[(f64, f64, &str)],

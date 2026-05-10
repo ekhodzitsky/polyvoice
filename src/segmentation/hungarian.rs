@@ -1,8 +1,11 @@
 //! Kuhn-Munkres minimum-cost assignment for square cost matrices.
 //!
-//! Pure Rust, no `unsafe`, wasm32-clean. Used by the segmentation aggregator to
+//! Pure Rust, wasm32-clean. Used by the segmentation aggregator to
 //! align local speaker indices between overlapping windows.
 
+/// { TODO: precondition }
+/// pub fn solve(cost: &[Vec<f32>]) -> Option<Vec<usize>>
+/// { TODO: postcondition }
 /// Solve the assignment problem for an N×N cost matrix.
 ///
 /// Returns a `Vec<usize>` of length N where `result[i]` is the column assigned to row `i`.

@@ -70,6 +70,9 @@ pub struct OnlineDiarizer {
 
 #[allow(deprecated)]
 impl OnlineDiarizer {
+/// { TODO: precondition }
+/// pub fn new(config: OnlineConfig) -> Self
+/// { TODO: postcondition }
     /// Create a new streaming diarizer.
     ///
     /// ```rust
@@ -99,6 +102,9 @@ impl OnlineDiarizer {
         }
     }
 
+/// { TODO: precondition }
+/// pub fn feed<E: EmbeddingExtractor>( &mut self, samples: &[f32], extractor: &E, ) -> Result<Vec<Segment>, crate::embedding::EmbeddingError>
+/// { TODO: postcondition }
     /// Feed audio samples into the streaming diarizer.
     ///
     /// Returns newly completed segments whenever enough audio has accumulated
@@ -150,6 +156,9 @@ impl OnlineDiarizer {
         Ok(new_segments)
     }
 
+/// { TODO: precondition }
+/// pub fn align_words(&self, words: &mut [WordAlignment])
+/// { TODO: postcondition }
     /// Align transcript words to speakers based on diarization state.
     ///
     /// Each word's `speaker` field is updated to the most likely speaker
@@ -185,6 +194,9 @@ impl OnlineDiarizer {
         }
     }
 
+/// { TODO: precondition }
+/// pub fn current_speaker(&self) -> Option<SpeakerId>
+/// { TODO: postcondition }
     /// Return the most recently assigned speaker, if any.
     ///
     /// ```rust
@@ -196,6 +208,9 @@ impl OnlineDiarizer {
         self.current_speaker
     }
 
+/// { TODO: precondition }
+/// pub fn num_speakers(&self) -> usize
+/// { TODO: postcondition }
     /// Return the number of distinct speakers detected so far.
     ///
     /// ```rust
@@ -207,6 +222,9 @@ impl OnlineDiarizer {
         self.cluster.num_speakers()
     }
 
+/// { TODO: precondition }
+/// pub fn flush<E: EmbeddingExtractor>( &mut self, extractor: &E, ) -> Result<Option<Segment>, crate::embedding::EmbeddingError>
+/// { TODO: postcondition }
     /// Flush any remaining audio and return the final segment.
     ///
     /// Pads the trailing audio with zeros to fill the analysis window.

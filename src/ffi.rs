@@ -43,8 +43,11 @@ pub struct PolyvoicePipeline {
 /// # Safety
 /// - `models_cache_dir`, if non-null, must point to a valid nul-terminated UTF-8 string.
 /// - `out_handle` must be a valid non-null pointer to a `*mut PolyvoicePipeline`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn polyvoice_pipeline_create(
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+#[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
+polyvoice_pipeline_create(
     profile: PolyvoiceProfile,
     models_cache_dir: *const c_char,
     out_handle: *mut *mut PolyvoicePipeline,
@@ -61,9 +64,10 @@ pub unsafe extern "C" fn polyvoice_pipeline_create(
             let registry = if models_cache_dir.is_null() {
                 ModelRegistry::default()
             } else {
-                // SAFETY: caller guarantees models_cache_dir is a valid nul-terminated string.
-                let s = unsafe { CStr::from_ptr(models_cache_dir) }
-                    .to_str()
+                let s = unsafe { // SAFETY: caller guarantees models_cache_dir is a valid nul-terminated string.
+                    CStr::from_ptr(models_cache_dir)
+                }
+                .to_str()
                     .map_err(|_| PolyvoiceStatus::InvalidArg as c_int)?;
                 // Reject path-traversal attempts (e.g. "../../evil") before the
                 // path is passed to ModelRegistry::with_cache_dir.  FFI-002.
@@ -90,8 +94,7 @@ pub unsafe extern "C" fn polyvoice_pipeline_create(
     ));
     match r {
         Ok(Ok(handle)) => {
-            // SAFETY: out_handle was checked non-null inside the closure above.
-            unsafe {
+            unsafe { // SAFETY: out_handle was checked non-null inside the closure above.
                 *out_handle = handle;
             }
             PolyvoiceStatus::Ok as c_int
@@ -108,8 +111,11 @@ pub unsafe extern "C" fn polyvoice_pipeline_create(
 /// - `samples` must point to at least `n_samples` valid f32 values.
 /// - `out_json` and `out_json_len` must be valid non-null pointers.
 /// - The returned `*out_json` string must be freed with `polyvoice_free_string`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn polyvoice_pipeline_run(
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+#[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
+polyvoice_pipeline_run(
     pipeline: *mut PolyvoicePipeline,
     samples: *const c_float,
     n_samples: usize,
@@ -121,14 +127,17 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
         if pipeline.is_null() || samples.is_null() || out_json.is_null() || out_json_len.is_null() {
             return Err(PolyvoiceStatus::InvalidArg as c_int);
         }
-        // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
-        let pipeline = unsafe { &mut *pipeline };
+        let pipeline = unsafe { // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
+            &mut *pipeline
+        };
         // SAFETY: samples was checked non-null; n_samples is caller-provided length.
         const MAX_SAMPLES: usize = 16000 * 3600; // 1 hour at 16 kHz
         if n_samples > MAX_SAMPLES {
             return Err(PolyvoiceStatus::AudioTooLong as c_int);
         }
-        let samples = unsafe { std::slice::from_raw_parts(samples, n_samples) };
+        let samples = unsafe { // SAFETY: samples was checked non-null; n_samples was validated against MAX_SAMPLES.
+            std::slice::from_raw_parts(samples, n_samples)
+        };
         // Legacy pipeline expects 16 kHz audio.
         if sample_rate != 16000 {
             return Err(PolyvoiceStatus::InvalidArg as c_int);
@@ -147,8 +156,7 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
         let len = json.len();
         let cstr = CString::new(json).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
         let ptr_out = cstr.into_raw();
-        // SAFETY: out_json and out_json_len were checked non-null above.
-        unsafe {
+        unsafe { // SAFETY: out_json and out_json_len were checked non-null above.
             *out_json = ptr_out;
             *out_json_len = len;
         }
@@ -166,12 +174,14 @@ pub unsafe extern "C" fn polyvoice_pipeline_run(
 /// # Safety
 /// `pipeline` must be a valid pointer returned by `polyvoice_pipeline_create`, or null.
 /// Must be called exactly once per handle.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipeline) {
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+#[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
+polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipeline) {
     if !pipeline.is_null()
         && catch_unwind(AssertUnwindSafe(|| {
-            // SAFETY: pipeline is non-null and was created by Box::into_raw; caller destroys exactly once.
-            unsafe {
+            unsafe { // SAFETY: pipeline is non-null and was created by Box::into_raw; caller destroys exactly once.
                 drop(Box::from_raw(pipeline));
             }
         }))
@@ -185,12 +195,14 @@ pub unsafe extern "C" fn polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipe
 ///
 /// # Safety
 /// `p` must be a pointer returned by `polyvoice_pipeline_run`, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn polyvoice_free_string(p: *mut c_char, _n: usize) {
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+#[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
+polyvoice_free_string(p: *mut c_char, _n: usize) {
     if !p.is_null()
         && catch_unwind(AssertUnwindSafe(|| {
-            // SAFETY: p is non-null and was created by CString::into_raw in polyvoice_pipeline_run.
-            unsafe {
+            unsafe { // SAFETY: p is non-null and was created by CString::into_raw in polyvoice_pipeline_run.
                 drop(CString::from_raw(p));
             }
         }))

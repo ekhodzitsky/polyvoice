@@ -99,6 +99,9 @@ pub struct FbankExtractor {
 }
 
 impl FbankExtractor {
+/// { TODO: precondition }
+/// pub fn new(config: FbankConfig) -> Self
+/// { TODO: postcondition }
     /// Create a cached fbank extractor.
     ///
     /// The FFT planner, Hamming window, and mel-filterbank matrices are computed
@@ -128,6 +131,9 @@ impl FbankExtractor {
         }
     }
 
+/// { TODO: precondition }
+/// pub fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError>
+/// { TODO: postcondition }
     /// Extract log-mel filterbank features from audio samples.
     ///
     /// Returns an empty vector if `samples` is shorter than the window length.
@@ -193,6 +199,9 @@ impl FbankExtractor {
     }
 }
 
+/// { TODO: precondition }
+/// pub fn apply_cmvn(frames: &[Vec<f32>]) -> Vec<Vec<f32>>
+/// { TODO: postcondition }
 /// Apply cepstral mean normalization (CMN) to fbank features.
 ///
 /// Subtracts the per-bin mean across all frames. Required by WeSpeaker
