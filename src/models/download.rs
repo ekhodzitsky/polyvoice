@@ -263,6 +263,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn verify_streams_large_file_without_loading_into_ram() {
         // Write a 5 MB file; verify_sha256 must use streaming reader, not Vec::read_to_end.
         // The test passes purely if it doesn't OOM and computes a deterministic hash.
@@ -288,6 +289,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn download_with_checksum_no_signature_fallback() {
         // When signature is None and the file is already cached with a matching
         // hash, download_with_checksum_and_signature must take the cache-hit
