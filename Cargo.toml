@@ -68,7 +68,6 @@ resegmentation = []
 # Mobile/Balanced profiles. The module gates itself with a `compile_error!`
 # if onnx/segmentation/embedder/clusterer/resegmentation are missing, so
 # half-wired feature combos cannot ship.
-pipeline = ["download"]
 
 # Model profile bundles. M0 only emits metadata; CLI uses these to pick which
 # manifest entries to ensure(). M5 will introduce INT8 model variants.

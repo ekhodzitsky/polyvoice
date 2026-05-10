@@ -60,6 +60,9 @@ pub struct EnergyVad {
 }
 
 impl EnergyVad {
+/// { TODO: precondition }
+/// pub fn new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Self
+/// { TODO: postcondition }
     /// Create an energy-based voice activity detector.
     ///
     /// `threshold_db` is the energy threshold in dB (converted internally to linear).
@@ -103,6 +106,9 @@ impl VoiceActivityDetector for EnergyVad {
     }
 }
 
+/// { TODO: precondition }
+/// pub fn segment_speech<V: VoiceActivityDetector>( vad: &mut V, samples: &[f32], config: &DiarizationConfig, vad_config: &VadConfig, ) -> Result<Vec<(usize, usize)>, VadError>
+/// { TODO: postcondition }
 /// Segment speech regions using a voice activity detector.
 ///
 /// Returns a list of `(start_sample, end_sample)` pairs where speech was detected.

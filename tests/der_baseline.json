@@ -12,5 +12,31 @@
     },
     "_status": "operational — filled 2026-05-08 by v0.5.2 legacy pipeline (threshold=0.45)",
     "_filled_by": "polyvoice-bench-v052"
+  },
+  "e2e_smoke": {
+    "files": 1,
+    "profile": "balanced",
+    "der_collar_0_25": 6.62,
+    "der_no_collar": null,
+    "tolerance": 1.0,
+    "model_versions": {
+      "silero_vad": "v5",
+      "wespeaker_resnet34": "fp32"
+    },
+    "_status": "operational — bundled 26 s clip, v0.6.0-alpha.3 legacy pipeline (threshold=0.45)",
+    "_filled_by": "cargo test --all-features --test e2e_smoke_test -- --ignored"
+  },
+  "ami_test_single": {
+    "files": 1,
+    "profile": "balanced",
+    "der_collar_0_25": null,
+    "der_no_collar": null,
+    "tolerance": 1.0,
+    "model_versions": {
+      "silero_vad": "v5",
+      "wespeaker_resnet34": "fp32"
+    },
+    "_status": "pending — requires long-running benchmark (~30 min on CPU). Run: cargo test --all-features --test der_ami_baseline_test -- --ignored",
+    "_filled_by": null
   }
 }

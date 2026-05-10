@@ -2,6 +2,9 @@
 
 use crate::utils::cosine_similarity;
 
+/// { TODO: precondition }
+/// pub fn kmeans_auto_k(embeddings: &[Vec<f32>], max_k: usize, max_iter: usize) -> Vec<usize>
+/// { TODO: postcondition }
 /// Run K-means++ with automatic k selection.
 ///
 /// Searches k in 1..=max_k and picks the one with the highest silhouette score.
@@ -30,6 +33,9 @@ pub fn kmeans_auto_k(embeddings: &[Vec<f32>], max_k: usize, max_iter: usize) -> 
     best_labels
 }
 
+/// { TODO: precondition }
+/// pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize>
+/// { TODO: postcondition }
 /// K-means++ initialization + Lloyd's algorithm.
 pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize> {
     let n = embeddings.len();

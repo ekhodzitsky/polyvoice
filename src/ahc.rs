@@ -7,6 +7,9 @@
 use crate::utils::{cosine_similarity, l2_normalize};
 use std::collections::HashMap;
 
+/// { TODO: precondition }
+/// pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usize>
+/// { TODO: postcondition }
 /// Run agglomerative hierarchical clustering on a set of embeddings.
 ///
 /// Returns a label vector of the same length as `embeddings`, where each
@@ -18,6 +21,9 @@ pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usi
     ahc_impl(embeddings, Some(threshold)).0
 }
 
+/// { TODO: precondition }
+/// pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32)
+/// { TODO: postcondition }
 /// Run AHC with automatic threshold selection via largest-merge-gap heuristic.
 ///
 /// Returns labels and the automatically selected threshold.
@@ -161,6 +167,9 @@ fn estimate_threshold_from_similarities(embeddings: &[Vec<f32>]) -> f32 {
     th.clamp(0.2, 0.7)
 }
 
+/// { TODO: precondition }
+/// pub fn refine_clusters(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<usize>
+/// { TODO: postcondition }
 /// Refine cluster assignments by reassigning each embedding to the nearest centroid.
 ///
 /// After AHC, some embeddings may be misassigned due to greedy merging.

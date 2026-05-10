@@ -80,31 +80,8 @@ pub use resegmentation::{
 #[cfg(all(feature = "resegmentation", feature = "segmentation"))]
 pub use resegmentation::extract_overlap_time_ranges;
 
-#[cfg(all(
-    feature = "pipeline",
-    feature = "onnx",
-    feature = "segmentation",
-    feature = "embedder",
-    feature = "clusterer",
-    feature = "resegmentation",
-))]
-pub mod pipeline_v1;
-
-#[cfg(all(
-    feature = "pipeline",
-    feature = "onnx",
-    feature = "segmentation",
-    feature = "embedder",
-    feature = "clusterer",
-    feature = "resegmentation",
-))]
-pub use pipeline_v1::{
-    ClustererKind, ConfigError, ExecutionProvider, Pipeline as PipelineV1, PipelineBuilder,
-    PipelineConfig, PipelineError as PipelineV1Error,
-};
-
 pub mod pipeline;
-pub use pipeline::{Pipeline, PipelineError as LegacyPipelineError};
+pub use pipeline::{Pipeline, PipelineError};
 
 pub mod vad;
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
