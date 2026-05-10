@@ -1,4 +1,7 @@
 //! Core types for speaker diarization.
+//!
+//! These types are shared across the offline pipeline, online diarizer, and
+//! evaluation code. Start with [`DiarizationResult`] and [`SpeakerId`].
 
 use serde::{Deserialize, Serialize};
 use std::fmt;

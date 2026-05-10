@@ -31,7 +31,7 @@ if [ "$RTTM_COUNT" -gt 50 ]; then
 else
     echo "[RTTM] Downloading ground-truth annotations..."
     TMP_TAR=$(mktemp /tmp/voxconverse-XXXXXX.tar.gz)
-    curl -sL "$ARCHIVE_URL" -o "$TMP_TAR"
+    curl -sL --retry 5 --retry-delay 10 --continue-at - "$ARCHIVE_URL" -o "$TMP_TAR"
     tar xzf "$TMP_TAR" --strip-components=2 -C "$RTTM_DIR" "voxconverse-master/test/"
     rm -f "$TMP_TAR"
     RTTM_COUNT=$(find "$RTTM_DIR" -name "*.rttm" | wc -l | tr -d ' ')
@@ -50,7 +50,7 @@ else
     else
         echo "[Audio] Downloading test audio (~1.5 GB)..."
         echo "        Source: ${AUDIO_URL}"
-        curl -L --progress-bar -o "$ZIP_FILE" "$AUDIO_URL"
+        curl -L --progress-bar --retry 5 --retry-delay 10 --continue-at - -o "$ZIP_FILE" "$AUDIO_URL"
 
         # Verify checksum
         if command -v md5sum &>/dev/null; then

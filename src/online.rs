@@ -1,4 +1,7 @@
 //! Online (streaming) speaker diarization.
+//!
+//! Feed audio incrementally and receive speaker-labeled segments as they are
+//! produced. See [`OnlineDiarizer`] and [`OnlineConfig`].
 
 use crate::cluster::{ClusterConfig, SpeakerCluster};
 use crate::embedding::EmbeddingExtractor;
