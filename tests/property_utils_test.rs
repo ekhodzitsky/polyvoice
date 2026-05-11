@@ -29,7 +29,7 @@ proptest! {
         let _ = len;
         let sim = cosine_similarity(&a, &b);
         prop_assert!(
-            sim >= -1.0 - 1e-6 && sim <= 1.0 + 1e-6,
+            (-1.0 - 1e-6..=1.0 + 1e-6).contains(&sim),
             "cosine_similarity out of range: {}",
             sim
         );
