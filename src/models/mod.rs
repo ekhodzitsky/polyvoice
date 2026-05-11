@@ -111,6 +111,7 @@ impl ModelRegistry {
 /// { TODO: postcondition }
     /// Override the manifest. Useful for tests that need a fixture manifest
     /// without hitting the network.
+    #[cfg(test)]
     pub fn with_manifest_override(mut self, manifest: Manifest) -> Self {
         self.manifest = manifest;
         self
@@ -120,6 +121,7 @@ impl ModelRegistry {
 /// pub fn with_manifest( manifest: Manifest, cache_dir: impl AsRef<Path>, ) -> Result<Self, RegistryError>
 /// { TODO: postcondition }
     /// Build a registry with a custom manifest and cache directory.
+    #[cfg(test)]
     pub fn with_manifest(
         manifest: Manifest,
         cache_dir: impl AsRef<Path>,
@@ -223,6 +225,7 @@ impl ModelRegistry {
 /// pub fn ensure_in_cache_only_for_profile( &self, profile: Profile, ) -> Result<ProfileModels, RegistryError>
 /// { TODO: postcondition }
     /// Same as `ensure_for_profile` but never touches the network.
+    #[cfg(test)]
     pub fn ensure_in_cache_only_for_profile(
         &self,
         profile: Profile,

@@ -27,7 +27,6 @@ pub mod kmeans;
 #[cfg(feature = "spectral")]
 pub mod spectral;
 pub use features::{FbankConfig, FbankExtractor};
-pub mod online;
 pub mod overlap;
 pub mod streaming;
 pub mod rttm;
@@ -106,9 +105,6 @@ pub use cluster::SpeakerCluster;
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
-pub use online::OnlineConfig;
-#[allow(deprecated)]
-pub use online::OnlineDiarizer;
 pub use overlap::{OverlapRegion, detect_overlaps};
 pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, Profile, SampleRate, Seconds, Segment,
