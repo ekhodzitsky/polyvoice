@@ -23,7 +23,7 @@ fn ami_single_file_der_below_30_percent() {
     let wav_path = Path::new("data/ami-test-single/audio/EN2002a.Mix-Headset.wav");
     let rttm_path = Path::new("data/ami-test-single/rttm/EN2002a.Mix-Headset.rttm");
 
-    let (samples, sr_hz) = read_wav(&wav_path).expect("WAV read");
+    let (samples, sr_hz) = read_wav(wav_path).expect("WAV read");
     assert_eq!(sr_hz, 16000);
 
     let registry = ModelRegistry::default().expect("registry");
@@ -39,7 +39,7 @@ fn ami_single_file_der_below_30_percent() {
 
     let result = pipeline.run(&samples, &extractor, &mut vad).expect("pipeline");
 
-    let raw = parse_rttm_file(&rttm_path).expect("rttm");
+    let raw = parse_rttm_file(rttm_path).expect("rttm");
     let grouped = group_by_file(&raw);
     let segs: Vec<_> = grouped
         .get("EN2002a")

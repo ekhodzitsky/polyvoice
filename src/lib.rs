@@ -29,6 +29,7 @@ pub mod spectral;
 pub use features::{FbankConfig, FbankExtractor};
 pub mod online;
 pub mod overlap;
+pub mod streaming;
 pub mod rttm;
 pub mod types;
 pub mod utils;
