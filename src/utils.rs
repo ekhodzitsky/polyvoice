@@ -127,35 +127,6 @@ pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>> {
     Some(sum)
 }
 
-/// { TODO: precondition }
-/// pub fn moving_average(data: &[f32], window: usize) -> Vec<f32>
-/// { TODO: postcondition }
-/// Compute a simple moving average with a symmetric window.
-///
-/// Returns a clone of `data` if `window` is zero or `data` is empty.
-///
-/// ```rust
-/// use polyvoice::utils::moving_average;
-/// let data = vec![1.0, 2.0, 3.0, 4.0];
-/// let smoothed = moving_average(&data, 2);
-/// assert_eq!(smoothed.len(), data.len());
-/// assert!((smoothed[1] - 2.0).abs() < 1e-5);
-/// ```
-pub fn moving_average(data: &[f32], window: usize) -> Vec<f32> {
-    if window == 0 || data.is_empty() {
-        return data.to_vec();
-    }
-    let mut result = Vec::with_capacity(data.len());
-    let half = window / 2;
-    for i in 0..data.len() {
-        let start = i.saturating_sub(half);
-        let end = (i + half + 1).min(data.len());
-        let avg = data[start..end].iter().sum::<f32>() / (end - start) as f32;
-        result.push(avg);
-    }
-    result
-}
-
 use crate::types::Segment;
 
 /// { TODO: precondition }

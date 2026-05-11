@@ -123,7 +123,7 @@ impl Pipeline {
             })
             .collect();
 
-        segments = merge_segments(segments, self.config.max_gap_secs as f64);
+        segments = crate::utils::merge_segments(segments, self.config.max_gap_secs as f64);
         segments.retain(|s| s.time.duration() >= self.config.min_speech_secs as f64);
 
         let turns: Vec<SpeakerTurn> = segments
@@ -159,21 +159,3 @@ impl Pipeline {
     }
 }
 
-fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment> {
-    if segments.is_empty() {
-        return segments;
-    }
-    let mut merged = Vec::new();
-    let mut current = segments[0].clone();
-
-    for next in segments.into_iter().skip(1) {
-        if current.speaker == next.speaker && next.time.start - current.time.end <= max_gap_secs {
-            current.time.end = next.time.end;
-        } else {
-            merged.push(current);
-            current = next;
-        }
-    }
-    merged.push(current);
-    merged
-}

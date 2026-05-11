@@ -418,12 +418,6 @@ impl DiarizationConfig {
         (self.hop_secs * self.sample_rate.get() as f32) as usize
     }
 
-    /// { self.min_speech_secs >= 0.0 }
-    /// `fn min_speech_samples(&self) -> usize`
-    /// { ret == (self.min_speech_secs * self.sample_rate as f32) as usize }
-    pub fn min_speech_samples(&self) -> usize {
-        (self.min_speech_secs * self.sample_rate.get() as f32) as usize
-    }
 }
 
 #[cfg(test)]

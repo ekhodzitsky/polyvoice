@@ -18,7 +18,7 @@ use std::collections::HashMap;
 /// `threshold` is the minimum cosine similarity to merge two clusters.
 /// Higher threshold → more clusters (stricter merging).
 pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usize> {
-    ahc_impl(embeddings, Some(threshold)).0
+    ahc_impl(embeddings, threshold).0
 }
 
 /// { TODO: precondition }
@@ -28,10 +28,15 @@ pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usi
 ///
 /// Returns labels and the automatically selected threshold.
 pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32) {
-    ahc_impl(embeddings, None)
+    let n = embeddings.len();
+    if n == 0 {
+        return (Vec::new(), 0.0);
+    }
+    let threshold = estimate_threshold_from_similarities(embeddings);
+    ahc_impl(embeddings, threshold)
 }
 
-fn ahc_impl(embeddings: &[Vec<f32>], threshold: Option<f32>) -> (Vec<usize>, f32) {
+fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32) -> (Vec<usize>, f32) {
     let n = embeddings.len();
     if n == 0 {
         return (Vec::new(), 0.0);
@@ -60,12 +65,7 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: Option<f32>) -> (Vec<usize>, f32
             }
         }
 
-        if let Some(th) = threshold {
-            if best_sim < th {
-                break;
-            }
-        } else if active.iter().filter(|&&a| a).count() <= 1 {
-            // Only one cluster left in auto mode.
+        if best_sim < threshold {
             break;
         }
 
@@ -91,21 +91,7 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: Option<f32>) -> (Vec<usize>, f32
 
         merge_history.push(best_sim);
 
-        // In auto mode, stop when only one cluster remains.
-        if threshold.is_none() && active_indices.len() <= 1 {
-            break;
-        }
-    }
 
-    // If auto mode, estimate threshold from pairwise similarity distribution.
-    let effective_threshold = match threshold {
-        Some(th) => th,
-        None => estimate_threshold_from_similarities(embeddings),
-    };
-
-    // If auto mode, re-run with the estimated threshold for clean labels.
-    if threshold.is_none() {
-        return ahc_impl(embeddings, Some(effective_threshold));
     }
 
     // Make labels contiguous (0, 1, 2, ...).
@@ -120,7 +106,7 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: Option<f32>) -> (Vec<usize>, f32
         *label = *entry;
     }
 
-    (labels, effective_threshold)
+    (labels, threshold)
 }
 
 /// Estimate a good AHC threshold from the distribution of pairwise similarities.
@@ -165,60 +151,6 @@ fn estimate_threshold_from_similarities(embeddings: &[Vec<f32>]) -> f32 {
     let th = sims[best_idx + 1];
     // Clamp to a reasonable range.
     th.clamp(0.2, 0.7)
-}
-
-/// { TODO: precondition }
-/// pub fn refine_clusters(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<usize>
-/// { TODO: postcondition }
-/// Refine cluster assignments by reassigning each embedding to the nearest centroid.
-///
-/// After AHC, some embeddings may be misassigned due to greedy merging.
-/// This function recomputes centroids and reassigns embeddings in a k-means-like
-/// refinement step (single iteration).  Returns a new label vector.
-pub fn refine_clusters(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<usize> {
-    let n = embeddings.len();
-    if n == 0 {
-        return Vec::new();
-    }
-
-    let num_clusters = labels.iter().copied().max().unwrap_or(0) + 1;
-    let dim = embeddings[0].len();
-
-    // Compute centroids.
-    let mut centroids = vec![vec![0.0f32; dim]; num_clusters];
-    let mut counts = vec![0usize; num_clusters];
-    for (i, emb) in embeddings.iter().enumerate() {
-        let c = labels[i];
-        for (centroid, &v) in centroids[c].iter_mut().zip(emb.iter()) {
-            *centroid += v;
-        }
-        counts[c] += 1;
-    }
-    for (c, centroid) in centroids.iter_mut().enumerate() {
-        if counts[c] > 0 {
-            for v in centroid.iter_mut() {
-                *v /= counts[c] as f32;
-            }
-            l2_normalize(centroid);
-        }
-    }
-
-    // Reassign each embedding to the nearest centroid.
-    let mut new_labels = vec![0usize; n];
-    for (i, emb) in embeddings.iter().enumerate() {
-        let mut best = 0usize;
-        let mut best_sim = f32::NEG_INFINITY;
-        for (c_idx, centroid) in centroids.iter().enumerate() {
-            let sim = cosine_similarity(emb, centroid);
-            if sim > best_sim {
-                best_sim = sim;
-                best = c_idx;
-            }
-        }
-        new_labels[i] = best;
-    }
-
-    new_labels
 }
 
 #[cfg(test)]
