@@ -4,7 +4,7 @@
 //! align local speaker indices between overlapping windows.
 
 /// { TODO: precondition }
-/// pub fn solve(cost: &[Vec<f32>]) -> Option<Vec<usize>>
+/// `pub fn solve(cost: &[Vec<f32>]) -> Option<Vec<usize>>`
 /// { TODO: postcondition }
 /// Solve the assignment problem for an N×N cost matrix.
 ///

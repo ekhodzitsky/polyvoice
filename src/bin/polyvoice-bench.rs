@@ -6,7 +6,7 @@ use polyvoice::der::compute_der;
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline;
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
-use polyvoice::types::{DiarizationConfig, Profile, SampleRate};
+use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
@@ -68,7 +68,10 @@ fn main() -> Result<()> {
     let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
 
     let config = DiarizationConfig {
-        threshold: args.threshold,
+        cluster: ClusterConfig {
+            threshold: args.threshold,
+            ..Default::default()
+        },
         ..DiarizationConfig::default()
     };
     let vad_config = VadConfig::default();

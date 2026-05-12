@@ -32,7 +32,7 @@ pub struct WindowOutput {
 
 impl WindowOutput {
 /// { TODO: precondition }
-/// pub fn new( start_time: f32, end_time: f32, logits: Vec<f32>, num_frames: usize, ) -> Result<Self, SegmentationError>
+/// `pub fn new( start_time: f32, end_time: f32, logits: Vec<f32>, num_frames: usize, ) -> Result<Self, SegmentationError>`
 /// { TODO: postcondition }
     pub fn new(
         start_time: f32,
@@ -109,7 +109,7 @@ impl Aggregator {
     }
 
 /// { TODO: precondition }
-/// pub fn stitch(&self, windows: &[WindowOutput]) -> Result<Vec<RawSegment>, SegmentationError>
+/// `pub fn stitch(&self, windows: &[WindowOutput]) -> Result<Vec<RawSegment>, SegmentationError>`
 /// { TODO: postcondition }
     /// Stitch overlapping windows into file-consistent `RawSegment`s.
     pub fn stitch(&self, windows: &[WindowOutput]) -> Result<Vec<RawSegment>, SegmentationError> {

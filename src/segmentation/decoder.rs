@@ -32,7 +32,7 @@ impl PowersetClass {
     }
 
 /// { TODO: precondition }
-/// pub fn speakers(self) -> Vec<u8>
+/// `pub fn speakers(self) -> Vec<u8>`
 /// { TODO: postcondition }
     /// Local speaker indices active in this class.
     pub fn speakers(self) -> Vec<u8> {
@@ -72,7 +72,7 @@ impl PowersetDecoder {
     }
 
 /// { TODO: precondition }
-/// pub fn decode_frame(logits: &[f32]) -> Result<FrameLabel, SegmentationError>
+/// `pub fn decode_frame(logits: &[f32]) -> Result<FrameLabel, SegmentationError>`
 /// { TODO: postcondition }
     /// Decode one frame given its 7-vector of logits.
     pub fn decode_frame(logits: &[f32]) -> Result<FrameLabel, SegmentationError> {
@@ -112,7 +112,7 @@ impl PowersetDecoder {
     }
 
 /// { TODO: precondition }
-/// pub fn decode_window( logits_flat: &[f32], num_frames: usize, ) -> Result<Vec<FrameLabel>, SegmentationError>
+/// `pub fn decode_window( logits_flat: &[f32], num_frames: usize, ) -> Result<Vec<FrameLabel>, SegmentationError>`
 /// { TODO: postcondition }
     /// Decode every frame in a flat row-major `[num_frames, 7]` buffer.
     pub fn decode_window(

@@ -3,26 +3,8 @@
 //! Assign incoming embeddings to existing speakers or create new ones in a
 //! single pass. See [`SpeakerCluster`] and [`ClusterConfig`].
 
-use crate::types::{SpeakerId, SpeakerIdRemap};
+use crate::types::{ClusterConfig, SpeakerId, SpeakerIdRemap};
 use crate::utils::{cosine_similarity, l2_normalize};
-
-/// Configuration for `SpeakerCluster`.
-#[derive(Debug, Clone, Copy)]
-pub struct ClusterConfig {
-    /// Cosine similarity threshold for assigning to an existing speaker.
-    pub threshold: f32,
-    /// Maximum number of speakers to track.
-    pub max_speakers: usize,
-}
-
-impl Default for ClusterConfig {
-    fn default() -> Self {
-        Self {
-            threshold: 0.45,
-            max_speakers: 64,
-        }
-    }
-}
 
 /// State for a single speaker centroid.
 #[derive(Debug, Clone)]
@@ -132,7 +114,7 @@ impl SpeakerCluster {
     }
 
 /// { TODO: precondition }
-/// pub fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)>
+/// `pub fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)>`
 /// { TODO: postcondition }
     /// Return a view of all current centroids.
     ///
@@ -160,7 +142,7 @@ impl SpeakerCluster {
     }
 
 /// { TODO: precondition }
-/// pub fn merge(&mut self, from: SpeakerId, into: SpeakerId) -> Option<SpeakerIdRemap>
+/// `pub fn merge(&mut self, from: SpeakerId, into: SpeakerId) -> Option<SpeakerIdRemap>`
 /// { TODO: postcondition }
     /// Merge one speaker centroid into another.
     ///

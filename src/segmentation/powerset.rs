@@ -44,7 +44,7 @@ pub struct PowersetSegmenter {
 
 impl PowersetSegmenter {
 /// { TODO: precondition }
-/// pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError>
+/// `pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError>`
 /// { TODO: postcondition }
     /// Load the ONNX model from `model_path`.
     pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError> {
@@ -52,7 +52,7 @@ impl PowersetSegmenter {
     }
 
 /// { TODO: precondition }
-/// pub fn with_config( model_path: impl AsRef<Path>, config: PowersetConfig, ) -> Result<Self, SegmentationError>
+/// `pub fn with_config( model_path: impl AsRef<Path>, config: PowersetConfig, ) -> Result<Self, SegmentationError>`
 /// { TODO: postcondition }
     /// Load with explicit configuration.
     pub fn with_config(
@@ -174,23 +174,18 @@ impl Segmenter for PowersetSegmenter {
 
         let win_samples = self.window_samples();
         let hop_samples = self.hop_samples();
-        let total_samples = audio.len();
         let mut windows: Vec<WindowOutput> = Vec::new();
-        let mut window_idx = 0_usize;
-        let mut start_sample = 0_usize;
-        loop {
-            let end_sample = (start_sample + win_samples).min(total_samples);
-            let slice = &audio[start_sample..end_sample];
+        for (window_idx, (start_sample, _end_sample)) in
+            crate::window::WindowIter::new(audio.len(), win_samples, hop_samples)
+                .include_partial()
+                .enumerate()
+        {
+            let slice = &audio[start_sample..(start_sample + win_samples).min(audio.len())];
             let (logits, num_frames) = self.infer_window(slice, window_idx)?;
             let start_t = start_sample as f32 / self.config.sample_rate as f32;
             let end_t = (start_sample + win_samples) as f32 / self.config.sample_rate as f32;
             let w = WindowOutput::new(start_t, end_t, logits, num_frames)?;
             windows.push(w);
-            window_idx += 1;
-            if start_sample + win_samples >= total_samples {
-                break;
-            }
-            start_sample += hop_samples;
         }
 
         let agg = Aggregator::new(self.config.aggregation.clone());

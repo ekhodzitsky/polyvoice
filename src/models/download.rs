@@ -45,7 +45,7 @@ impl From<SignatureError> for DownloadError {
 }
 
 /// { TODO: precondition }
-/// pub fn download_with_checksum( url: &str, expected_sha256: &str, dest: &Path, ) -> Result<bool, DownloadError>
+/// `pub fn download_with_checksum( url: &str, expected_sha256: &str, dest: &Path, ) -> Result<bool, DownloadError>`
 /// { TODO: postcondition }
 /// Stream `url` to `dest` and verify the SHA-256 matches `expected_sha256`.
 ///
@@ -65,7 +65,7 @@ pub fn download_with_checksum(
 }
 
 /// { TODO: precondition }
-/// pub fn download_with_checksum_and_signature( url: &str, expected_sha256: &str, signature: Option<&str>, dest: &Path, ) -> Result<bool, DownloadError>
+/// `pub fn download_with_checksum_and_signature( url: &str, expected_sha256: &str, signature: Option<&str>, dest: &Path, ) -> Result<bool, DownloadError>`
 /// { TODO: postcondition }
 /// Stream `url` to `dest`, verify SHA-256, and optionally verify a Minisign signature.
 ///
@@ -202,7 +202,7 @@ pub fn download_with_checksum_and_signature(
 }
 
 /// { TODO: precondition }
-/// pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), DownloadError>
+/// `pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), DownloadError>`
 /// { TODO: postcondition }
 /// Compute the SHA-256 of `path` and compare against `expected`. Streams the file
 /// (does not load it into RAM).

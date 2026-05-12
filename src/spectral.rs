@@ -8,7 +8,7 @@ use faer::Side;
 use faer::prelude::*;
 
 /// { TODO: precondition }
-/// pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize>
+/// `pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize>`
 /// { TODO: postcondition }
 /// Run spectral clustering with automatic k selection.
 pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {

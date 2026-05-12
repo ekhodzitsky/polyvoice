@@ -93,7 +93,7 @@ pub enum ResegmentError {
 }
 
 /// { TODO: precondition }
-/// pub fn compute_centroids(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<SpeakerCentroid>
+/// `pub fn compute_centroids(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<SpeakerCentroid>`
 /// { TODO: postcondition }
 /// Compute per-cluster L2-normalized centroids from clustered embeddings.
 ///
@@ -135,7 +135,7 @@ pub fn compute_centroids(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<Speak
 }
 
 /// { TODO: precondition }
-/// pub fn extract_overlap_time_ranges( segments: &[crate::segmentation::RawSegment], ) -> Vec<(TimeRange, u8, u8)>
+/// `pub fn extract_overlap_time_ranges( segments: &[crate::segmentation::RawSegment], ) -> Vec<(TimeRange, u8, u8)>`
 /// { TODO: postcondition }
 /// Find pairs of `RawSegment`s that share a time range, are flagged
 /// `is_overlap = true`, and carry two distinct `local_speaker_idx`.
