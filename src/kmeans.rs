@@ -1,6 +1,5 @@
 //! K-Means++ clustering with automatic k selection via silhouette score.
 
-
 /// { TODO: precondition }
 /// `pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize>`
 /// { TODO: postcondition }
@@ -91,5 +90,3 @@ fn cosine_distance_f32_f64(a: &[f32], b: &[f64]) -> f64 {
     let sim = crate::utils::cosine_similarity_f32_f64(a, b);
     (1.0 - sim).max(0.0) as f64
 }
-
-

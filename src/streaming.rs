@@ -26,13 +26,13 @@
 //! }
 //! ```
 
-use crate::cluster::SpeakerCluster;
-use crate::types::ClusterConfig;
-use crate::embedding::{EmbeddingError, EmbeddingExtractor};
-use crate::types::{DiarizationConfig, SpeakerTurn, TimeRange};
-use crate::vad::{VadError, VoiceActivityDetector, VadStateMachine, VadEvent};
-use crate::window::WindowBuffer;
 use crate::VadConfig;
+use crate::cluster::SpeakerCluster;
+use crate::embedding::{EmbeddingError, EmbeddingExtractor};
+use crate::types::ClusterConfig;
+use crate::types::{DiarizationConfig, SpeakerTurn, TimeRange};
+use crate::vad::{VadError, VadEvent, VadStateMachine, VoiceActivityDetector};
+use crate::window::WindowBuffer;
 
 /// Errors from streaming pipeline operations.
 #[derive(Debug, thiserror::Error)]
@@ -99,7 +99,8 @@ where
             max_speakers: config.cluster.max_speakers,
         });
 
-        let vad_state = VadStateMachine::new(vad_config.threshold, min_silence_frames, min_speech_frames);
+        let vad_state =
+            VadStateMachine::new(vad_config.threshold, min_silence_frames, min_speech_frames);
 
         Ok(Self {
             vad,
@@ -110,10 +111,7 @@ where
             sample_rate,
             vad_buffer: Vec::new(),
             vad_state,
-            window_buffer: WindowBuffer::new(
-                config.window_samples(),
-                config.hop_samples(),
-            ),
+            window_buffer: WindowBuffer::new(config.window_samples(), config.hop_samples()),
             turns: Vec::new(),
             total_frames: 0,
         })
@@ -149,7 +147,10 @@ where
                             self.window_buffer.clear();
                             self.window_buffer.set_next_start(start_frame * frame_size);
                         }
-                        VadEvent::SpeechEnd { start_frame, end_frame } => {
+                        VadEvent::SpeechEnd {
+                            start_frame,
+                            end_frame,
+                        } => {
                             let seg_end_sample = end_frame * frame_size;
                             let duration_frames = end_frame - start_frame;
                             if duration_frames >= self.vad_state.min_speech_frames() {
@@ -183,7 +184,11 @@ where
         // Discard any trailing sub-frame samples.
         self.vad_buffer.clear();
 
-        if let Some(VadEvent::SpeechEnd { start_frame, end_frame }) = self.vad_state.flush(self.total_frames) {
+        if let Some(VadEvent::SpeechEnd {
+            start_frame,
+            end_frame,
+        }) = self.vad_state.flush(self.total_frames)
+        {
             let duration_frames = end_frame - start_frame;
             if duration_frames >= self.vad_state.min_speech_frames() {
                 let seg_end_sample = end_frame * self.frame_size;
@@ -316,7 +321,10 @@ mod tests {
         let mut p = pipeline();
         // 5 seconds of loud audio guarantees at least one full window (1.5 s)
         let turns = p.feed(&loud_samples(5.0)).unwrap();
-        assert!(!turns.is_empty(), "expected at least one turn for 5 s of speech");
+        assert!(
+            !turns.is_empty(),
+            "expected at least one turn for 5 s of speech"
+        );
     }
 
     #[test]
@@ -325,7 +333,10 @@ mod tests {
         // Feed just under one window — no turn emitted yet.
         let _ = p.feed(&loud_samples(1.0)).unwrap();
         let turns = p.flush().unwrap();
-        assert!(!turns.is_empty(), "flush should emit the trailing partial window");
+        assert!(
+            !turns.is_empty(),
+            "flush should emit the trailing partial window"
+        );
     }
 
     #[test]

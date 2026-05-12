@@ -16,6 +16,9 @@ pub struct WindowIter {
 }
 
 impl WindowIter {
+    /// { TODO: precondition }
+    /// `pub fn new(total: usize, win: usize, hop: usize) -> Self`
+    /// { TODO: postcondition }
     /// Create a new iterator.
     ///
     /// * `total` — total number of samples in the audio region.
@@ -31,6 +34,9 @@ impl WindowIter {
         }
     }
 
+    /// { TODO: precondition }
+    /// `pub fn include_partial(mut self) -> Self`
+    /// { TODO: postcondition }
     /// Include a final partial window if the region does not divide evenly.
     pub fn include_partial(mut self) -> Self {
         self.include_partial = true;
@@ -72,6 +78,9 @@ pub struct WindowBuffer {
 }
 
 impl WindowBuffer {
+    /// { TODO: precondition }
+    /// `pub fn new(win: usize, hop: usize) -> Self`
+    /// { TODO: postcondition }
     /// Create a new buffer.
     ///
     /// * `win` — window size in samples.
@@ -85,11 +94,17 @@ impl WindowBuffer {
         }
     }
 
+    /// { TODO: precondition }
+    /// `pub fn extend(&mut self, samples: &[f32])`
+    /// { TODO: postcondition }
     /// Append samples to the buffer.
     pub fn extend(&mut self, samples: &[f32]) {
         self.buf.extend_from_slice(samples);
     }
 
+    /// { TODO: precondition }
+    /// `pub fn try_pop(&mut self) -> Option<(usize, Vec<f32>)>`
+    /// { TODO: postcondition }
     /// Return the next full window if one is available.
     ///
     /// Returns `Some((global_start, buf[..win].to_vec()))` where `global_start` is the
@@ -106,6 +121,9 @@ impl WindowBuffer {
         Some((start, window))
     }
 
+    /// { TODO: precondition }
+    /// `pub fn flush(&mut self) -> Option<(usize, Vec<f32>)>`
+    /// { TODO: postcondition }
     /// Zero-pad the remaining buffer to `win` and return the final window.
     ///
     /// Returns `None` if the buffer is empty.
@@ -122,26 +140,41 @@ impl WindowBuffer {
         Some((start, padded))
     }
 
+    /// { TODO: precondition }
+    /// `pub fn is_empty(&self) -> bool`
+    /// { TODO: postcondition }
     /// Whether the buffer is currently empty.
     pub fn is_empty(&self) -> bool {
         self.buf.is_empty()
     }
 
+    /// { TODO: precondition }
+    /// `pub fn len(&self) -> usize`
+    /// { TODO: postcondition }
     /// Current length of the buffered samples.
     pub fn len(&self) -> usize {
         self.buf.len()
     }
 
+    /// { TODO: precondition }
+    /// `pub fn clear(&mut self)`
+    /// { TODO: postcondition }
     /// Clear all buffered samples and reset the next-start offset.
     pub fn clear(&mut self) {
         self.buf.clear();
     }
 
+    /// { TODO: precondition }
+    /// `pub fn reset_start(&mut self)`
+    /// { TODO: postcondition }
     /// Reset the next-start offset to `0`.  The buffer itself is **not** cleared.
     pub fn reset_start(&mut self) {
         self.next_start = 0;
     }
 
+    /// { TODO: precondition }
+    /// `pub fn set_next_start(&mut self, start: usize)`
+    /// { TODO: postcondition }
     /// Set the next-start offset to a specific value.
     pub fn set_next_start(&mut self, start: usize) {
         self.next_start = start;

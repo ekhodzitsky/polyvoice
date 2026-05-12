@@ -28,9 +28,9 @@ pub struct SpeakerCluster {
 }
 
 impl SpeakerCluster {
-/// { TODO: precondition }
-/// pub fn new(config: ClusterConfig) -> Self
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn new(config: ClusterConfig) -> Self
+    /// { TODO: postcondition }
     /// Create a new empty speaker clusterer.
     ///
     /// ```rust
@@ -45,9 +45,9 @@ impl SpeakerCluster {
         }
     }
 
-/// { TODO: precondition }
-/// pub fn assign(&mut self, embedding: &[f32]) -> (SpeakerId, f32)
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn assign(&mut self, embedding: &[f32]) -> (SpeakerId, f32)
+    /// { TODO: postcondition }
     /// Assign an embedding to the closest speaker centroid.
     ///
     /// Returns the speaker ID and the cosine similarity score. If no existing
@@ -99,9 +99,9 @@ impl SpeakerCluster {
         (SpeakerId(new_id as u32), 1.0)
     }
 
-/// { TODO: precondition }
-/// pub fn num_speakers(&self) -> usize
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn num_speakers(&self) -> usize
+    /// { TODO: postcondition }
     /// Return the current number of speaker centroids.
     ///
     /// ```rust
@@ -113,9 +113,9 @@ impl SpeakerCluster {
         self.centroids.len()
     }
 
-/// { TODO: precondition }
-/// `pub fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)>`
+    /// { TODO: postcondition }
     /// Return a view of all current centroids.
     ///
     /// Each tuple contains `(SpeakerId, centroid_vector, average_confidence)`.
@@ -141,9 +141,9 @@ impl SpeakerCluster {
             .collect()
     }
 
-/// { TODO: precondition }
-/// `pub fn merge(&mut self, from: SpeakerId, into: SpeakerId) -> Option<SpeakerIdRemap>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn merge(&mut self, from: SpeakerId, into: SpeakerId) -> Option<SpeakerIdRemap>`
+    /// { TODO: postcondition }
     /// Merge one speaker centroid into another.
     ///
     /// The `from` centroid is removed and its statistics are averaged into `into`.

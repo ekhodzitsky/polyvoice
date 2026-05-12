@@ -28,13 +28,13 @@ pub mod kmeans;
 pub mod spectral;
 pub use features::{FbankConfig, FbankExtractor};
 pub mod overlap;
-pub mod streaming;
 pub mod rttm;
+pub mod streaming;
 pub mod types;
 pub mod utils;
 pub use utils::merge_segments;
-pub mod window;
 pub mod wav;
+pub mod window;
 
 #[cfg(feature = "download")]
 pub mod models;
@@ -101,17 +101,17 @@ pub use onnx::OnnxEmbeddingExtractor;
 pub mod ecapa;
 
 // Public re-exports for ergonomic use.
-pub use types::ClusterConfig;
-pub use window::{WindowBuffer, WindowIter};
 pub use cluster::SpeakerCluster;
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
 pub use overlap::{OverlapRegion, detect_overlaps};
+pub use types::ClusterConfig;
 pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, Profile, SampleRate, Seconds, Segment,
     SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
 };
+pub use window::{WindowBuffer, WindowIter};
 
 #[cfg(feature = "onnx")]
 pub use ecapa::FbankOnnxExtractor;
