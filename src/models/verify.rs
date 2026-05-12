@@ -22,7 +22,7 @@ pub enum SignatureError {
 }
 
 /// { TODO: precondition }
-/// pub fn verify_minisign(path: &Path, sig_text: &str) -> Result<(), SignatureError>
+/// `pub fn verify_minisign(path: &Path, sig_text: &str) -> Result<(), SignatureError>`
 /// { TODO: postcondition }
 /// Verify `path` against a Minisign signature string (the raw `.minisig` text).
 ///

@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline;
 use polyvoice::rttm::write_rttm;
-use polyvoice::types::{DiarizationConfig, Profile, SampleRate};
+use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
@@ -98,7 +98,10 @@ fn cmd_diarize(
     let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
 
     let config = DiarizationConfig {
-        threshold,
+        cluster: ClusterConfig {
+            threshold,
+            ..Default::default()
+        },
         ..DiarizationConfig::default()
     };
     let vad_config = VadConfig::default();

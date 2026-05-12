@@ -96,7 +96,7 @@ pub fn cosine_similarity_f32_f64(a: &[f32], b: &[f64]) -> f32 {
 }
 
 /// { TODO: precondition }
-/// pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>>
+/// `pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>>`
 /// { TODO: postcondition }
 /// Compute the element-wise mean of a list of vectors.
 ///
@@ -130,7 +130,7 @@ pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>> {
 use crate::types::Segment;
 
 /// { TODO: precondition }
-/// pub fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment>
+/// `pub fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment>`
 /// { TODO: postcondition }
 /// Merge adjacent segments with the same speaker if the gap between them
 /// is less than `max_gap_secs`.

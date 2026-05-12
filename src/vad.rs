@@ -106,8 +106,106 @@ impl VoiceActivityDetector for EnergyVad {
     }
 }
 
+/// Event emitted by [`VadStateMachine`] when the speech state changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VadEvent {
+    /// A speech region started at the given frame index.
+    SpeechStart { start_frame: usize },
+    /// A speech region ended. `end_frame` is exclusive.
+    SpeechEnd {
+        start_frame: usize,
+        end_frame: usize,
+    },
+}
+
+/// Incremental speech-region detector.
+///
+/// Maintains the same state machine as [`segment_speech`] but operates
+/// frame-by-frame. Useful for both batch and streaming pipelines.
+#[derive(Debug, Clone)]
+pub struct VadStateMachine {
+    threshold: f32,
+    min_silence_frames: usize,
+    min_speech_frames: usize,
+    in_speech: bool,
+    seg_start_frame: usize,
+    silence_count: usize,
+}
+
+impl VadStateMachine {
+    /// Create a new state machine.
+    pub fn new(threshold: f32, min_silence_frames: usize, min_speech_frames: usize) -> Self {
+        Self {
+            threshold,
+            min_silence_frames,
+            min_speech_frames,
+            in_speech: false,
+            seg_start_frame: 0,
+            silence_count: 0,
+        }
+    }
+
+    /// Advance by one frame probability.
+    ///
+    /// Returns [`VadEvent::SpeechStart`] when speech begins and
+    /// [`VadEvent::SpeechEnd`] when a speech region completes (silence
+    /// exceeded `min_silence_frames`).
+    pub fn advance(&mut self, prob: f32, frame: usize) -> Option<VadEvent> {
+        if self.in_speech {
+            if prob < self.threshold {
+                self.silence_count += 1;
+                if self.silence_count >= self.min_silence_frames {
+                    let event = VadEvent::SpeechEnd {
+                        start_frame: self.seg_start_frame,
+                        end_frame: frame + 1,
+                    };
+                    self.in_speech = false;
+                    self.silence_count = 0;
+                    return Some(event);
+                }
+            } else {
+                self.silence_count = 0;
+            }
+        } else if prob >= self.threshold {
+            self.in_speech = true;
+            self.seg_start_frame = frame;
+            self.silence_count = 0;
+            return Some(VadEvent::SpeechStart {
+                start_frame: frame,
+            });
+        }
+        None
+    }
+
+    /// Finalize any in-flight speech region.
+    ///
+    /// Returns [`VadEvent::SpeechEnd`] if a region was active.
+    pub fn flush(&mut self, frame: usize) -> Option<VadEvent> {
+        if self.in_speech {
+            let event = VadEvent::SpeechEnd {
+                start_frame: self.seg_start_frame,
+                end_frame: frame,
+            };
+            self.in_speech = false;
+            self.silence_count = 0;
+            return Some(event);
+        }
+        None
+    }
+
+    /// Whether the detector is currently inside a speech region.
+    pub fn in_speech(&self) -> bool {
+        self.in_speech
+    }
+
+    /// Minimum speech frames required for a region to be emitted.
+    pub fn min_speech_frames(&self) -> usize {
+        self.min_speech_frames
+    }
+}
+
 /// { TODO: precondition }
-/// pub fn segment_speech<V: VoiceActivityDetector>( vad: &mut V, samples: &[f32], config: &DiarizationConfig, vad_config: &VadConfig, ) -> Result<Vec<(usize, usize)>, VadError>
+/// `pub fn segment_speech<V: VoiceActivityDetector>( vad: &mut V, samples: &[f32], config: &DiarizationConfig, vad_config: &VadConfig, ) -> Result<Vec<(usize, usize)>, VadError>`
 /// { TODO: postcondition }
 /// Segment speech regions using a voice activity detector.
 ///
@@ -139,45 +237,28 @@ pub fn segment_speech<V: VoiceActivityDetector>(
         probs.extend(frame_probs);
     }
 
-    let sr = config.sample_rate.get() as f32;
+    let sr = config.window.sample_rate.get() as f32;
     let ms_per_frame = (frame_size as f32 / sr) * 1000.0;
-    let min_speech_frames = ((config.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
+    let min_speech_frames = ((config.speech_filter.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
     let threshold = vad_config.threshold;
-
-    let mut segments = Vec::new();
-    let mut in_speech = false;
-    let mut seg_start = 0usize;
-    let mut silence_count = 0usize;
     let min_silence_frames = (vad_config.min_silence_ms / ms_per_frame).ceil() as usize;
 
+    let mut sm = VadStateMachine::new(threshold, min_silence_frames, min_speech_frames);
+    let mut segments = Vec::new();
+
     for (i, &prob) in probs.iter().enumerate() {
-        if in_speech {
-            if prob < threshold {
-                silence_count += 1;
-                if silence_count >= min_silence_frames {
-                    let seg_end = (i + 1) * frame_size;
-                    let duration_frames = i + 1 - seg_start / frame_size;
-                    if duration_frames >= min_speech_frames {
-                        segments.push((seg_start, seg_end));
-                    }
-                    in_speech = false;
-                    silence_count = 0;
-                }
-            } else {
-                silence_count = 0;
+        if let Some(VadEvent::SpeechEnd { start_frame, end_frame }) = sm.advance(prob, i) {
+            let duration_frames = end_frame - start_frame;
+            if duration_frames >= min_speech_frames {
+                segments.push((start_frame * frame_size, end_frame * frame_size));
             }
-        } else if prob >= threshold {
-            seg_start = i * frame_size;
-            in_speech = true;
-            silence_count = 0;
         }
     }
 
-    if in_speech {
-        let seg_end = num_frames * frame_size;
-        let duration_frames = num_frames - seg_start / frame_size;
+    if let Some(VadEvent::SpeechEnd { start_frame, end_frame }) = sm.flush(num_frames) {
+        let duration_frames = end_frame - start_frame;
         if duration_frames >= min_speech_frames {
-            segments.push((seg_start, seg_end));
+            segments.push((start_frame * frame_size, end_frame * frame_size));
         }
     }
 

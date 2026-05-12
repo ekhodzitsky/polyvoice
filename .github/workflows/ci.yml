@@ -132,8 +132,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-semver-checks
-        run: cargo install cargo-semver-checks
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
       - name: cargo semver-checks
         run: cargo semver-checks check-release
 
@@ -143,10 +144,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
       - name: cargo audit
         run: cargo audit
+
+  kimi-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-kimi
+        run: cargo install cargo-kimi
+      - name: cargo kimi check
+        run: cargo kimi check
 
   cross-aarch64-linux:
     runs-on: ubuntu-latest

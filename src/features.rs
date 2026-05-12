@@ -132,7 +132,7 @@ impl FbankExtractor {
     }
 
 /// { TODO: precondition }
-/// pub fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError>
+/// `pub fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError>`
 /// { TODO: postcondition }
     /// Extract log-mel filterbank features from audio samples.
     ///
@@ -200,7 +200,7 @@ impl FbankExtractor {
 }
 
 /// { TODO: precondition }
-/// pub fn apply_cmvn(frames: &[Vec<f32>]) -> Vec<Vec<f32>>
+/// `pub fn apply_cmvn(frames: &[Vec<f32>]) -> Vec<Vec<f32>>`
 /// { TODO: postcondition }
 /// Apply cepstral mean normalization (CMN) to fbank features.
 ///

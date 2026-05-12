@@ -33,6 +33,7 @@ pub mod rttm;
 pub mod types;
 pub mod utils;
 pub use utils::merge_segments;
+pub mod window;
 pub mod wav;
 
 #[cfg(feature = "download")]
@@ -100,7 +101,8 @@ pub use onnx::OnnxEmbeddingExtractor;
 pub mod ecapa;
 
 // Public re-exports for ergonomic use.
-pub use cluster::ClusterConfig;
+pub use types::ClusterConfig;
+pub use window::{WindowBuffer, WindowIter};
 pub use cluster::SpeakerCluster;
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]

@@ -52,7 +52,7 @@ pub enum EmbedderError {
 }
 
 /// { TODO: precondition }
-/// pub fn apply_overlap_mask( audio: &[f32], overlap_regions: &[(f32, f32)], sample_rate: u32, ) -> Vec<f32>
+/// `pub fn apply_overlap_mask( audio: &[f32], overlap_regions: &[(f32, f32)], sample_rate: u32, ) -> Vec<f32>`
 /// { TODO: postcondition }
 /// Zero-fill audio samples in regions where the segmenter flagged a 2-speaker
 /// overlap. The returned `Vec<f32>` is a copy of `audio` with zeros in the
@@ -105,7 +105,7 @@ pub struct EmbedderPool<E: Embedder> {
 
 impl<E: Embedder> EmbedderPool<E> {
 /// { TODO: precondition }
-/// pub fn new(embedders: Vec<E>) -> Self
+/// `pub fn new(embedders: Vec<E>) -> Self`
 /// { TODO: postcondition }
     /// Build a pool from a list of embedders. All must share the same `dim()`.
     /// An empty list constructs a pool that fails on every call (returns
@@ -139,7 +139,7 @@ impl<E: Embedder> EmbedderPool<E> {
     }
 
 /// { TODO: precondition }
-/// pub fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError>
+/// `pub fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError>`
 /// { TODO: postcondition }
     /// Extract a single embedding using the next-available pooled embedder.
     /// Blocks (busy-spins) until one is free.
@@ -182,7 +182,7 @@ mod onnx_adapters {
 
     impl ResNet34Adapter {
 /// { TODO: precondition }
-/// pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError>
+/// `pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError>`
 /// { TODO: postcondition }
         /// Load the WeSpeaker ResNet34 ONNX model.
         pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError> {
@@ -221,7 +221,7 @@ mod onnx_adapters {
 
     impl CamPlusPlusExtractor {
 /// { TODO: precondition }
-/// pub fn new( path: impl AsRef<Path>, dim: usize, pool_size: usize, ) -> Result<Self, EmbedderError>
+/// `pub fn new( path: impl AsRef<Path>, dim: usize, pool_size: usize, ) -> Result<Self, EmbedderError>`
 /// { TODO: postcondition }
         /// Load a CAM++ ONNX model. `dim` must match the model's output
         /// dimension (e.g. 192 or 512 depending on the variant). Pool size

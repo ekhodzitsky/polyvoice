@@ -175,7 +175,7 @@ pub struct SampleRate(u32);
 
 impl SampleRate {
 /// { TODO: precondition }
-/// pub fn new(rate: u32) -> Option<Self>
+/// `pub fn new(rate: u32) -> Option<Self>`
 /// { TODO: postcondition }
     /// Create a validated sample rate.
     ///
@@ -220,7 +220,7 @@ pub struct Confidence(f32);
 
 impl Confidence {
 /// { TODO: precondition }
-/// pub fn new(v: f32) -> Option<Self>
+/// `pub fn new(v: f32) -> Option<Self>`
 /// { TODO: postcondition }
     /// Create a validated confidence score.
     ///
@@ -264,7 +264,7 @@ pub struct Seconds(f32);
 
 impl Seconds {
 /// { TODO: precondition }
-/// pub fn new(v: f32) -> Option<Self>
+/// `pub fn new(v: f32) -> Option<Self>`
 /// { TODO: postcondition }
     /// Create a validated non-negative duration in seconds.
     ///
@@ -367,55 +367,113 @@ pub struct DiarizationResult {
     pub num_speakers: usize,
 }
 
-/// Configuration shared between online and offline diarizers.
+/// Configuration for speaker clustering.
 #[derive(Debug, Clone, Copy)]
-pub struct DiarizationConfig {
+pub struct ClusterConfig {
     /// Cosine similarity threshold for assigning to an existing speaker.
     pub threshold: f32,
     /// Maximum number of speakers to track.
     pub max_speakers: usize,
+}
+
+impl Default for ClusterConfig {
+    fn default() -> Self {
+        Self {
+            threshold: 0.45,
+            max_speakers: 64,
+        }
+    }
+}
+
+/// Configuration for sliding-window embedding extraction.
+#[derive(Debug, Clone, Copy)]
+pub struct WindowConfig {
     /// Window size for embedding extraction, in seconds.
     pub window_secs: f32,
     /// Hop length between consecutive windows, in seconds.
     pub hop_secs: f32,
-    /// Minimum speech duration to consider for clustering, in seconds.
-    pub min_speech_secs: f32,
-    /// Maximum gap between same-speaker segments to merge, in seconds.
-    pub max_gap_secs: f32,
-    /// Maximum allowed audio duration in seconds (DoS guard).
-    pub max_duration_secs: f32,
     /// Sample rate expected by the embedding model (usually 16000).
     pub sample_rate: SampleRate,
 }
 
-impl Default for DiarizationConfig {
+impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            threshold: 0.4,
-            max_speakers: 64,
             window_secs: 1.5,
             hop_secs: 0.75,
-            min_speech_secs: 0.25,
-            max_gap_secs: 0.5,
-            max_duration_secs: 3600.0,
             sample_rate: SampleRate(16000),
         }
     }
 }
 
-impl DiarizationConfig {
+impl WindowConfig {
     /// { self.window_secs >= 0.0 }
     /// `fn window_samples(&self) -> usize`
-    /// { ret == (self.window_secs * self.sample_rate as f32) as usize }
+    /// { ret == (self.window_secs * self.sample_rate.get() as f32) as usize }
     pub fn window_samples(&self) -> usize {
         (self.window_secs * self.sample_rate.get() as f32) as usize
     }
 
     /// { self.hop_secs >= 0.0 }
     /// `fn hop_samples(&self) -> usize`
-    /// { ret == (self.hop_secs * self.sample_rate as f32) as usize }
+    /// { ret == (self.hop_secs * self.sample_rate.get() as f32) as usize }
     pub fn hop_samples(&self) -> usize {
         (self.hop_secs * self.sample_rate.get() as f32) as usize
+    }
+}
+
+/// Configuration for post-clustering speech filtering.
+#[derive(Debug, Clone, Copy)]
+pub struct SpeechFilterConfig {
+    /// Minimum speech duration to consider for clustering, in seconds.
+    pub min_speech_secs: f32,
+    /// Maximum gap between same-speaker segments to merge, in seconds.
+    pub max_gap_secs: f32,
+}
+
+impl Default for SpeechFilterConfig {
+    fn default() -> Self {
+        Self {
+            min_speech_secs: 0.25,
+            max_gap_secs: 0.5,
+        }
+    }
+}
+
+/// Configuration shared between online and offline diarizers.
+#[derive(Debug, Clone, Copy)]
+pub struct DiarizationConfig {
+    pub cluster: ClusterConfig,
+    pub window: WindowConfig,
+    pub speech_filter: SpeechFilterConfig,
+    /// Maximum allowed audio duration in seconds (DoS guard).
+    pub max_duration_secs: f32,
+}
+
+impl Default for DiarizationConfig {
+    fn default() -> Self {
+        Self {
+            cluster: ClusterConfig::default(),
+            window: WindowConfig::default(),
+            speech_filter: SpeechFilterConfig::default(),
+            max_duration_secs: 3600.0,
+        }
+    }
+}
+
+impl DiarizationConfig {
+    /// { self.window.window_secs >= 0.0 }
+    /// `fn window_samples(&self) -> usize`
+    /// { ret == self.window.window_samples() }
+    pub fn window_samples(&self) -> usize {
+        self.window.window_samples()
+    }
+
+    /// { self.window.hop_secs >= 0.0 }
+    /// `fn hop_samples(&self) -> usize`
+    /// { ret == self.window.hop_samples() }
+    pub fn hop_samples(&self) -> usize {
+        self.window.hop_samples()
     }
 
 }

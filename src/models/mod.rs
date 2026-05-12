@@ -73,7 +73,7 @@ pub struct ModelRegistry {
 
 impl ModelRegistry {
 /// { TODO: precondition }
-/// pub fn default() -> Result<Self, RegistryError>
+/// `pub fn default() -> Result<Self, RegistryError>`
 /// { TODO: postcondition }
     /// Build a registry rooted at the user's cache directory (`~/.cache/polyvoice/models`
     /// on Linux, `~/Library/Caches/polyvoice/models` on macOS, `%LOCALAPPDATA%\polyvoice\models`
@@ -90,7 +90,7 @@ impl ModelRegistry {
     }
 
 /// { TODO: precondition }
-/// pub fn with_cache_dir(path: impl AsRef<Path>) -> Result<Self, RegistryError>
+/// `pub fn with_cache_dir(path: impl AsRef<Path>) -> Result<Self, RegistryError>`
 /// { TODO: postcondition }
     /// Build a registry with a caller-specified cache directory and the embedded
     /// default manifest. Creates the directory if it doesn't exist.
@@ -118,7 +118,7 @@ impl ModelRegistry {
     }
 
 /// { TODO: precondition }
-/// pub fn with_manifest( manifest: Manifest, cache_dir: impl AsRef<Path>, ) -> Result<Self, RegistryError>
+/// `pub fn with_manifest( manifest: Manifest, cache_dir: impl AsRef<Path>, ) -> Result<Self, RegistryError>`
 /// { TODO: postcondition }
     /// Build a registry with a custom manifest and cache directory.
     #[cfg(test)]
@@ -152,7 +152,7 @@ impl ModelRegistry {
     }
 
 /// { TODO: precondition }
-/// pub fn ensure(&self, model_id: &str) -> Result<PathBuf, RegistryError>
+/// `pub fn ensure(&self, model_id: &str) -> Result<PathBuf, RegistryError>`
 /// { TODO: postcondition }
     /// Ensure the model with id `model_id` is present in cache and SHA-256-verified.
     /// Downloads if missing. Idempotent: returns immediately when the cached file
@@ -175,7 +175,7 @@ impl ModelRegistry {
     }
 
 /// { TODO: precondition }
-/// pub fn ensure_in_cache_only(&self, model_id: &str) -> Result<PathBuf, RegistryError>
+/// `pub fn ensure_in_cache_only(&self, model_id: &str) -> Result<PathBuf, RegistryError>`
 /// { TODO: postcondition }
     /// Test-only helper that bypasses SHA-256 verification.
     #[doc(hidden)]
@@ -200,7 +200,7 @@ impl ModelRegistry {
     }
 
 /// { TODO: precondition }
-/// pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError>
+/// `pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError>`
 /// { TODO: postcondition }
     /// Resolve all models for a profile, downloading any that are missing.
     pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError> {
@@ -222,7 +222,7 @@ impl ModelRegistry {
     }
 
 /// { TODO: precondition }
-/// pub fn ensure_in_cache_only_for_profile( &self, profile: Profile, ) -> Result<ProfileModels, RegistryError>
+/// `pub fn ensure_in_cache_only_for_profile( &self, profile: Profile, ) -> Result<ProfileModels, RegistryError>`
 /// { TODO: postcondition }
     /// Same as `ensure_for_profile` but never touches the network.
     #[cfg(test)]
