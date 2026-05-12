@@ -31,7 +31,7 @@ impl RttmSegment {
 }
 
 /// { TODO: precondition }
-/// pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError>
+/// `pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError>`
 /// { TODO: postcondition }
 /// Parse RTTM content from a reader, returning segments grouped by file_id.
 pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError> {
@@ -90,7 +90,7 @@ pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError> 
 }
 
 /// { TODO: precondition }
-/// pub fn parse_rttm_file(path: &Path) -> Result<Vec<RttmSegment>, RttmError>
+/// `pub fn parse_rttm_file(path: &Path) -> Result<Vec<RttmSegment>, RttmError>`
 /// { TODO: postcondition }
 /// Parse an RTTM file from disk.
 pub fn parse_rttm_file(path: &Path) -> Result<Vec<RttmSegment>, RttmError> {
@@ -100,7 +100,7 @@ pub fn parse_rttm_file(path: &Path) -> Result<Vec<RttmSegment>, RttmError> {
 }
 
 /// { TODO: precondition }
-/// pub fn group_by_file(segments: &[RttmSegment]) -> HashMap<&str, Vec<&RttmSegment>>
+/// `pub fn group_by_file(segments: &[RttmSegment]) -> HashMap<&str, Vec<&RttmSegment>>`
 /// { TODO: postcondition }
 /// Group RTTM segments by file_id.
 pub fn group_by_file(segments: &[RttmSegment]) -> HashMap<&str, Vec<&RttmSegment>> {
@@ -112,7 +112,7 @@ pub fn group_by_file(segments: &[RttmSegment]) -> HashMap<&str, Vec<&RttmSegment
 }
 
 /// { TODO: precondition }
-/// pub fn to_speaker_turns( segments: &[RttmSegment], ) -> (Vec<SpeakerTurn>, HashMap<String, SpeakerId>)
+/// `pub fn to_speaker_turns( segments: &[RttmSegment], ) -> (Vec<SpeakerTurn>, HashMap<String, SpeakerId>)`
 /// { TODO: postcondition }
 /// Convert RTTM segments to SpeakerTurns with string→SpeakerId mapping.
 pub fn to_speaker_turns(
@@ -144,7 +144,7 @@ pub fn to_speaker_turns(
 }
 
 /// { TODO: precondition }
-/// pub fn write_rttm<W: Write>( writer: &mut W, file_id: &str, turns: &[SpeakerTurn], ) -> Result<(), RttmError>
+/// `pub fn write_rttm<W: Write>( writer: &mut W, file_id: &str, turns: &[SpeakerTurn], ) -> Result<(), RttmError>`
 /// { TODO: postcondition }
 /// Write speaker turns as RTTM to a writer.
 pub fn write_rttm<W: Write>(

@@ -223,7 +223,7 @@ fn vad_process_with_invalid_chunk_size_returns_err() {
 #[test]
 fn pipeline_mismatched_sample_rate_does_not_crash() {
     let mut config = default_config();
-    config.sample_rate = SampleRate::new(8000).unwrap();
+    config.window.sample_rate = SampleRate::new(8000).unwrap();
     let pipeline = Pipeline::new(config, default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, 16000, 512);

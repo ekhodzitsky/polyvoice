@@ -26,10 +26,12 @@
 //! }
 //! ```
 
-use crate::cluster::{ClusterConfig, SpeakerCluster};
+use crate::cluster::SpeakerCluster;
+use crate::types::ClusterConfig;
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
 use crate::types::{DiarizationConfig, SpeakerTurn, TimeRange};
-use crate::vad::{VadError, VoiceActivityDetector};
+use crate::vad::{VadError, VoiceActivityDetector, VadStateMachine, VadEvent};
+use crate::window::WindowBuffer;
 use crate::VadConfig;
 
 /// Errors from streaming pipeline operations.
@@ -54,15 +56,9 @@ pub struct StreamingPipeline<V, E> {
     // VAD buffering
     vad_buffer: Vec<f32>,
     // Speech detection state
-    in_speech: bool,
-    seg_start_frame: usize,
-    silence_count: usize,
-    min_silence_frames: usize,
-    min_speech_frames: usize,
-    threshold: f32,
+    vad_state: VadStateMachine,
     // Embedding state (active speech region)
-    window_buffer: Vec<f32>,
-    next_window_start_sample: usize,
+    window_buffer: WindowBuffer,
     // Output
     turns: Vec<SpeakerTurn>,
     total_frames: usize,
@@ -91,17 +87,19 @@ where
             }
             .into());
         }
-        let sample_rate = config.sample_rate.get();
+        let sample_rate = config.window.sample_rate.get();
         let sr_f = sample_rate as f32;
         let ms_per_frame = (frame_size as f32 / sr_f) * 1000.0;
         let min_silence_frames = (vad_config.min_silence_ms / ms_per_frame).ceil() as usize;
         let min_speech_frames =
-            ((config.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
+            ((config.speech_filter.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
 
         let cluster = SpeakerCluster::new(ClusterConfig {
-            threshold: config.threshold,
-            max_speakers: config.max_speakers,
+            threshold: config.cluster.threshold,
+            max_speakers: config.cluster.max_speakers,
         });
+
+        let vad_state = VadStateMachine::new(vad_config.threshold, min_silence_frames, min_speech_frames);
 
         Ok(Self {
             vad,
@@ -111,14 +109,11 @@ where
             frame_size,
             sample_rate,
             vad_buffer: Vec::new(),
-            in_speech: false,
-            seg_start_frame: 0,
-            silence_count: 0,
-            min_silence_frames,
-            min_speech_frames,
-            threshold: vad_config.threshold,
-            window_buffer: Vec::new(),
-            next_window_start_sample: 0,
+            vad_state,
+            window_buffer: WindowBuffer::new(
+                config.window_samples(),
+                config.hop_samples(),
+            ),
             turns: Vec::new(),
             total_frames: 0,
         })
@@ -148,37 +143,27 @@ where
                 let current_frame = self.total_frames;
                 self.total_frames += 1;
 
-                if self.in_speech {
-                    if prob < self.threshold {
-                        self.silence_count += 1;
-                        if self.silence_count >= self.min_silence_frames {
-                            // Speech region ended.
-                            let seg_end_frame = current_frame;
-                            let seg_end_sample = seg_end_frame * frame_size;
-                            let duration_frames = seg_end_frame - self.seg_start_frame;
-                            if duration_frames >= self.min_speech_frames {
+                if let Some(event) = self.vad_state.advance(prob, current_frame) {
+                    match event {
+                        VadEvent::SpeechStart { start_frame } => {
+                            self.window_buffer.clear();
+                            self.window_buffer.set_next_start(start_frame * frame_size);
+                        }
+                        VadEvent::SpeechEnd { start_frame, end_frame } => {
+                            let seg_end_sample = end_frame * frame_size;
+                            let duration_frames = end_frame - start_frame;
+                            if duration_frames >= self.vad_state.min_speech_frames() {
                                 new_turns.extend(self.flush_window_buffer(seg_end_sample)?);
                             } else {
                                 self.window_buffer.clear();
                             }
-                            self.in_speech = false;
-                            self.silence_count = 0;
                         }
-                    } else {
-                        self.silence_count = 0;
                     }
+                }
 
-                    if self.in_speech {
-                        self.window_buffer.extend_from_slice(&frame);
-                        new_turns.extend(self.try_extract_windows()?);
-                    }
-                } else if prob >= self.threshold {
-                    // Speech region started.
-                    self.in_speech = true;
-                    self.seg_start_frame = current_frame;
-                    self.next_window_start_sample = self.seg_start_frame * frame_size;
-                    self.silence_count = 0;
-                    self.window_buffer.clear();
+                if self.vad_state.in_speech() {
+                    self.window_buffer.extend(&frame);
+                    new_turns.extend(self.try_extract_windows()?);
                 }
             }
         }
@@ -198,16 +183,14 @@ where
         // Discard any trailing sub-frame samples.
         self.vad_buffer.clear();
 
-        if self.in_speech {
-            let seg_end_sample = self.total_frames * self.frame_size;
-            let duration_frames = self.total_frames - self.seg_start_frame;
-            if duration_frames >= self.min_speech_frames {
+        if let Some(VadEvent::SpeechEnd { start_frame, end_frame }) = self.vad_state.flush(self.total_frames) {
+            let duration_frames = end_frame - start_frame;
+            if duration_frames >= self.vad_state.min_speech_frames() {
+                let seg_end_sample = end_frame * self.frame_size;
                 new_turns.extend(self.flush_window_buffer(seg_end_sample)?);
             } else {
                 self.window_buffer.clear();
             }
-            self.in_speech = false;
-            self.silence_count = 0;
         }
 
         Ok(new_turns)
@@ -236,18 +219,12 @@ where
     /// Extract as many full windows as possible from `window_buffer`.
     fn try_extract_windows(&mut self) -> Result<Vec<SpeakerTurn>, StreamingError> {
         let mut turns = Vec::new();
-        let window_samples = self.config.window_samples();
-        let hop_samples = self.config.hop_samples();
         let sr_f = self.sample_rate as f64;
 
-        while self.window_buffer.len() >= window_samples {
-            let embedding = self
-                .extractor
-                .extract(&self.window_buffer[..window_samples], &self.config)?;
+        while let Some((start, chunk)) = self.window_buffer.try_pop() {
+            let embedding = self.extractor.extract(&chunk, &self.config)?;
             let (speaker, _conf) = self.cluster.assign(&embedding);
-
-            let start = self.next_window_start_sample;
-            let end = start + window_samples;
+            let end = start + chunk.len();
             turns.push(SpeakerTurn {
                 speaker,
                 time: TimeRange {
@@ -256,36 +233,23 @@ where
                 },
                 text: None,
             });
-
-            self.next_window_start_sample += hop_samples;
-            self.window_buffer.drain(..hop_samples);
         }
 
         Ok(turns)
     }
 
-    /// Zero-pad the trailing `window_buffer` to `window_samples`, extract one
-    /// final embedding, and clear the buffer.
+    /// Zero-pad the trailing `window_buffer`, extract one final embedding, and clear the buffer.
     fn flush_window_buffer(
         &mut self,
         seg_end_sample: usize,
     ) -> Result<Vec<SpeakerTurn>, StreamingError> {
         let mut turns = Vec::new();
-        let window_samples = self.config.window_samples();
         let sr_f = self.sample_rate as f64;
 
-        if !self.window_buffer.is_empty() {
-            if self.window_buffer.len() < window_samples {
-                self.window_buffer
-                    .resize(window_samples, 0.0f32);
-            }
-            let embedding = self
-                .extractor
-                .extract(&self.window_buffer[..window_samples], &self.config)?;
+        if let Some((start, padded)) = self.window_buffer.flush() {
+            let embedding = self.extractor.extract(&padded, &self.config)?;
             let (speaker, _conf) = self.cluster.assign(&embedding);
-
-            let start = self.next_window_start_sample;
-            let end = seg_end_sample.min(start + window_samples);
+            let end = seg_end_sample.min(start + padded.len());
             turns.push(SpeakerTurn {
                 speaker,
                 time: TimeRange {
@@ -294,8 +258,6 @@ where
                 },
                 text: None,
             });
-
-            self.window_buffer.clear();
         }
 
         Ok(turns)

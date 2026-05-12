@@ -2,7 +2,7 @@
 
 
 /// { TODO: precondition }
-/// pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize>
+/// `pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize>`
 /// { TODO: postcondition }
 /// K-means++ initialization + Lloyd's algorithm.
 pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize> {

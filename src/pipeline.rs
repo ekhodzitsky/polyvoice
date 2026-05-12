@@ -40,7 +40,7 @@ impl Pipeline {
     }
 
 /// { TODO: precondition }
-/// pub fn run<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>
+/// `pub fn run<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
 /// { TODO: postcondition }
     /// Run the full diarization pipeline on raw f32 samples.
     ///
@@ -52,7 +52,7 @@ impl Pipeline {
         extractor: &E,
         vad: &mut V,
     ) -> Result<DiarizationResult, PipelineError> {
-        let actual_secs = samples.len() as f32 / self.config.sample_rate.get() as f32;
+        let actual_secs = samples.len() as f32 / self.config.window.sample_rate.get() as f32;
         if actual_secs > self.config.max_duration_secs {
             return Err(PipelineError::AudioTooLong {
                 actual_secs,
@@ -69,7 +69,7 @@ impl Pipeline {
             });
         }
 
-        let sr = self.config.sample_rate.get() as f64;
+        let sr = self.config.window.sample_rate.get() as f64;
         let window = self.config.window_samples();
         let hop = self.config.hop_samples();
         let mut embeddings = Vec::new();
@@ -88,16 +88,14 @@ impl Pipeline {
                     end: end as f64 / sr,
                 });
             } else {
-                let mut offset = 0;
-                while offset + window <= region.len() {
-                    let chunk = &region[offset..offset + window];
+                for (offset, offset_end) in crate::window::WindowIter::new(region.len(), window, hop) {
+                    let chunk = &region[offset..offset_end];
                     let emb = extractor.extract(chunk, &self.config)?;
                     embeddings.push(emb);
                     time_ranges.push(TimeRange {
                         start: (start + offset) as f64 / sr,
-                        end: (start + offset + window) as f64 / sr,
+                        end: (start + offset_end) as f64 / sr,
                     });
-                    offset += hop;
                 }
             }
         }
@@ -110,7 +108,7 @@ impl Pipeline {
             });
         }
 
-        let labels = agglomerative_cluster(&embeddings, self.config.threshold);
+        let labels = agglomerative_cluster(&embeddings, self.config.cluster.threshold);
         let num_speakers = labels.iter().copied().max().map_or(0, |m| m + 1);
 
         let mut segments: Vec<Segment> = labels
@@ -123,8 +121,8 @@ impl Pipeline {
             })
             .collect();
 
-        segments = crate::utils::merge_segments(segments, self.config.max_gap_secs as f64);
-        segments.retain(|s| s.time.duration() >= self.config.min_speech_secs as f64);
+        segments = crate::utils::merge_segments(segments, self.config.speech_filter.max_gap_secs as f64);
+        segments.retain(|s| s.time.duration() >= self.config.speech_filter.min_speech_secs as f64);
 
         let turns: Vec<SpeakerTurn> = segments
             .iter()
@@ -145,7 +143,7 @@ impl Pipeline {
     }
 
 /// { TODO: precondition }
-/// pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>
+/// `pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
 /// { TODO: postcondition }
     /// Run the pipeline from a WAV file path.
     pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>(
