@@ -32,16 +32,16 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-/// { TODO: precondition }
-/// pub fn new(config: DiarizationConfig, vad_config: VadConfig) -> Self
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn new(config: DiarizationConfig, vad_config: VadConfig) -> Self
+    /// { TODO: postcondition }
     pub fn new(config: DiarizationConfig, vad_config: VadConfig) -> Self {
         Self { config, vad_config }
     }
 
-/// { TODO: precondition }
-/// `pub fn run<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn run<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
+    /// { TODO: postcondition }
     /// Run the full diarization pipeline on raw f32 samples.
     ///
     /// Returns [`PipelineError::AudioTooLong`] if the input exceeds
@@ -88,7 +88,9 @@ impl Pipeline {
                     end: end as f64 / sr,
                 });
             } else {
-                for (offset, offset_end) in crate::window::WindowIter::new(region.len(), window, hop) {
+                for (offset, offset_end) in
+                    crate::window::WindowIter::new(region.len(), window, hop)
+                {
                     let chunk = &region[offset..offset_end];
                     let emb = extractor.extract(chunk, &self.config)?;
                     embeddings.push(emb);
@@ -121,7 +123,8 @@ impl Pipeline {
             })
             .collect();
 
-        segments = crate::utils::merge_segments(segments, self.config.speech_filter.max_gap_secs as f64);
+        segments =
+            crate::utils::merge_segments(segments, self.config.speech_filter.max_gap_secs as f64);
         segments.retain(|s| s.time.duration() >= self.config.speech_filter.min_speech_secs as f64);
 
         let turns: Vec<SpeakerTurn> = segments
@@ -142,9 +145,9 @@ impl Pipeline {
         })
     }
 
-/// { TODO: precondition }
-/// `pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
+    /// { TODO: postcondition }
     /// Run the pipeline from a WAV file path.
     pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>(
         &self,
@@ -156,4 +159,3 @@ impl Pipeline {
         self.run(&samples, extractor, vad)
     }
 }
-

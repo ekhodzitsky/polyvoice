@@ -46,9 +46,9 @@ pub struct AhcClusterer {
 }
 
 impl AhcClusterer {
-/// { TODO: precondition }
-/// pub fn new(max_clusters: usize) -> Self
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn new(max_clusters: usize) -> Self
+    /// { TODO: postcondition }
     pub fn new(max_clusters: usize) -> Self {
         Self {
             max_clusters: max_clusters.max(1),
@@ -192,9 +192,9 @@ pub struct NmeScClusterer {
 
 #[cfg(feature = "spectral")]
 impl NmeScClusterer {
-/// { TODO: precondition }
-/// pub fn new(max_clusters: usize) -> Self
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn new(max_clusters: usize) -> Self
+    /// { TODO: postcondition }
     pub fn new(max_clusters: usize) -> Self {
         Self {
             max_clusters: max_clusters.max(1),
@@ -339,7 +339,9 @@ mod nme_sc_tests {
     #[test]
     fn nme_sc_separates_three_clusters() {
         let c = NmeScClusterer::default();
-        let labels = c.cluster(&synth_three_clusters()).expect("synthetic clusters must be clusterable");
+        let labels = c
+            .cluster(&synth_three_clusters())
+            .expect("synthetic clusters must be clusterable");
         assert_eq!(labels[0], labels[1]);
         assert_eq!(labels[1], labels[2]);
         assert_eq!(labels[3], labels[4]);
@@ -361,7 +363,9 @@ mod nme_sc_tests {
     #[test]
     fn nme_sc_max_clusters_caps_estimate() {
         let c = NmeScClusterer::new(2);
-        let labels = c.cluster(&synth_three_clusters()).expect("synthetic clusters must be clusterable");
+        let labels = c
+            .cluster(&synth_three_clusters())
+            .expect("synthetic clusters must be clusterable");
         let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
         assert!(unique.len() <= 2);
     }

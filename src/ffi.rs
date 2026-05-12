@@ -46,6 +46,7 @@ pub struct PolyvoicePipeline {
 // SAFETY: caller upholds the safety contract documented in # Safety above.
 #[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
+#[rustfmt::skip]
 pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
 polyvoice_pipeline_create(
     profile: PolyvoiceProfile,
@@ -114,6 +115,7 @@ polyvoice_pipeline_create(
 // SAFETY: caller upholds the safety contract documented in # Safety above.
 #[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
+#[rustfmt::skip]
 pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
 polyvoice_pipeline_run(
     pipeline: *mut PolyvoicePipeline,
@@ -177,6 +179,7 @@ polyvoice_pipeline_run(
 // SAFETY: caller upholds the safety contract documented in # Safety above.
 #[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
+#[rustfmt::skip]
 pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
 polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipeline) {
     if !pipeline.is_null()
@@ -198,6 +201,7 @@ polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipeline) {
 // SAFETY: caller upholds the safety contract documented in # Safety above.
 #[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
+#[rustfmt::skip]
 pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
 polyvoice_free_string(p: *mut c_char, _n: usize) {
     if !p.is_null()

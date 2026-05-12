@@ -43,17 +43,17 @@ pub struct PowersetSegmenter {
 }
 
 impl PowersetSegmenter {
-/// { TODO: precondition }
-/// `pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError>`
+    /// { TODO: postcondition }
     /// Load the ONNX model from `model_path`.
     pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError> {
         Self::with_config(model_path, PowersetConfig::default())
     }
 
-/// { TODO: precondition }
-/// `pub fn with_config( model_path: impl AsRef<Path>, config: PowersetConfig, ) -> Result<Self, SegmentationError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn with_config( model_path: impl AsRef<Path>, config: PowersetConfig, ) -> Result<Self, SegmentationError>`
+    /// { TODO: postcondition }
     /// Load with explicit configuration.
     pub fn with_config(
         model_path: impl AsRef<Path>,
@@ -87,16 +87,16 @@ impl PowersetSegmenter {
         })
     }
 
-/// { TODO: precondition }
-/// pub fn config(&self) -> &PowersetConfig
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn config(&self) -> &PowersetConfig
+    /// { TODO: postcondition }
     pub fn config(&self) -> &PowersetConfig {
         &self.config
     }
 
-/// { TODO: precondition }
-/// pub fn model_path(&self) -> &Path
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn model_path(&self) -> &Path
+    /// { TODO: postcondition }
     pub fn model_path(&self) -> &Path {
         &self.model_path
     }

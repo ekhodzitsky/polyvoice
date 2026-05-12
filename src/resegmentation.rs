@@ -201,9 +201,9 @@ pub struct OverlapResegmenter {
 }
 
 impl OverlapResegmenter {
-/// { TODO: precondition }
-/// pub fn new(threshold: f32, min_overlap_secs: f32) -> Self
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn new(threshold: f32, min_overlap_secs: f32) -> Self
+    /// { TODO: postcondition }
     /// `threshold` — minimum cosine similarity required to attach a secondary
     /// speaker to an overlap region. Default `0.0` (always attach the nearest
     /// non-primary cluster).
@@ -216,16 +216,16 @@ impl OverlapResegmenter {
         }
     }
 
-/// { TODO: precondition }
-/// pub fn threshold(&self) -> f32
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn threshold(&self) -> f32
+    /// { TODO: postcondition }
     pub fn threshold(&self) -> f32 {
         self.threshold
     }
 
-/// { TODO: precondition }
-/// pub fn min_overlap_secs(&self) -> f32
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn min_overlap_secs(&self) -> f32
+    /// { TODO: postcondition }
     pub fn min_overlap_secs(&self) -> f32 {
         self.min_overlap_secs
     }

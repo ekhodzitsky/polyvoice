@@ -99,9 +99,9 @@ pub struct FbankExtractor {
 }
 
 impl FbankExtractor {
-/// { TODO: precondition }
-/// pub fn new(config: FbankConfig) -> Self
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn new(config: FbankConfig) -> Self
+    /// { TODO: postcondition }
     /// Create a cached fbank extractor.
     ///
     /// The FFT planner, Hamming window, and mel-filterbank matrices are computed
@@ -131,9 +131,9 @@ impl FbankExtractor {
         }
     }
 
-/// { TODO: precondition }
-/// `pub fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn extract(&self, samples: &[f32]) -> Result<Vec<Vec<f32>>, FbankError>`
+    /// { TODO: postcondition }
     /// Extract log-mel filterbank features from audio samples.
     ///
     /// Returns an empty vector if `samples` is shorter than the window length.
