@@ -90,8 +90,6 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32) -> (Vec<usize>, f32) {
         }
 
         merge_history.push(best_sim);
-
-
     }
 
     // Make labels contiguous (0, 1, 2, ...).

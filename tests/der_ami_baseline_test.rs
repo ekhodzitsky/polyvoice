@@ -37,7 +37,9 @@ fn ami_single_file_der_below_30_percent() {
     let mut vad = SileroVad::new(&models.segmenter_path, 512).expect("vad");
     let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
 
-    let result = pipeline.run(&samples, &extractor, &mut vad).expect("pipeline");
+    let result = pipeline
+        .run(&samples, &extractor, &mut vad)
+        .expect("pipeline");
 
     let raw = parse_rttm_file(rttm_path).expect("rttm");
     let grouped = group_by_file(&raw);

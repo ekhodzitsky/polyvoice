@@ -31,9 +31,9 @@ pub struct WindowOutput {
 }
 
 impl WindowOutput {
-/// { TODO: precondition }
-/// `pub fn new( start_time: f32, end_time: f32, logits: Vec<f32>, num_frames: usize, ) -> Result<Self, SegmentationError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn new( start_time: f32, end_time: f32, logits: Vec<f32>, num_frames: usize, ) -> Result<Self, SegmentationError>`
+    /// { TODO: postcondition }
     pub fn new(
         start_time: f32,
         end_time: f32,
@@ -53,9 +53,9 @@ impl WindowOutput {
         })
     }
 
-/// { TODO: precondition }
-/// pub fn frame_stride(&self) -> f32
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn frame_stride(&self) -> f32
+    /// { TODO: postcondition }
     pub fn frame_stride(&self) -> f32 {
         if self.num_frames == 0 {
             0.0
@@ -64,9 +64,9 @@ impl WindowOutput {
         }
     }
 
-/// { TODO: precondition }
-/// pub fn frame_time(&self, frame_idx: usize) -> f32
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn frame_time(&self, frame_idx: usize) -> f32
+    /// { TODO: postcondition }
     pub fn frame_time(&self, frame_idx: usize) -> f32 {
         self.start_time + frame_idx as f32 * self.frame_stride()
     }
@@ -94,23 +94,23 @@ pub struct Aggregator {
 }
 
 impl Aggregator {
-/// { TODO: precondition }
-/// pub fn new(config: AggregationConfig) -> Self
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn new(config: AggregationConfig) -> Self
+    /// { TODO: postcondition }
     pub fn new(config: AggregationConfig) -> Self {
         Self { config }
     }
 
-/// { TODO: precondition }
-/// pub fn config(&self) -> &AggregationConfig
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn config(&self) -> &AggregationConfig
+    /// { TODO: postcondition }
     pub fn config(&self) -> &AggregationConfig {
         &self.config
     }
 
-/// { TODO: precondition }
-/// `pub fn stitch(&self, windows: &[WindowOutput]) -> Result<Vec<RawSegment>, SegmentationError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn stitch(&self, windows: &[WindowOutput]) -> Result<Vec<RawSegment>, SegmentationError>`
+    /// { TODO: postcondition }
     /// Stitch overlapping windows into file-consistent `RawSegment`s.
     pub fn stitch(&self, windows: &[WindowOutput]) -> Result<Vec<RawSegment>, SegmentationError> {
         if windows.is_empty() {

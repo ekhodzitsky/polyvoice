@@ -72,9 +72,9 @@ pub struct ModelRegistry {
 }
 
 impl ModelRegistry {
-/// { TODO: precondition }
-/// `pub fn default() -> Result<Self, RegistryError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn default() -> Result<Self, RegistryError>`
+    /// { TODO: postcondition }
     /// Build a registry rooted at the user's cache directory (`~/.cache/polyvoice/models`
     /// on Linux, `~/Library/Caches/polyvoice/models` on macOS, `%LOCALAPPDATA%\polyvoice\models`
     /// on Windows) using the embedded default manifest.
@@ -89,9 +89,9 @@ impl ModelRegistry {
         Self::with_cache_dir(cache)
     }
 
-/// { TODO: precondition }
-/// `pub fn with_cache_dir(path: impl AsRef<Path>) -> Result<Self, RegistryError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn with_cache_dir(path: impl AsRef<Path>) -> Result<Self, RegistryError>`
+    /// { TODO: postcondition }
     /// Build a registry with a caller-specified cache directory and the embedded
     /// default manifest. Creates the directory if it doesn't exist.
     pub fn with_cache_dir(path: impl AsRef<Path>) -> Result<Self, RegistryError> {
@@ -106,9 +106,9 @@ impl ModelRegistry {
         })
     }
 
-/// { TODO: precondition }
-/// pub fn with_manifest_override(mut self, manifest: Manifest) -> Self
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn with_manifest_override(mut self, manifest: Manifest) -> Self
+    /// { TODO: postcondition }
     /// Override the manifest. Useful for tests that need a fixture manifest
     /// without hitting the network.
     #[cfg(test)]
@@ -117,9 +117,9 @@ impl ModelRegistry {
         self
     }
 
-/// { TODO: precondition }
-/// `pub fn with_manifest( manifest: Manifest, cache_dir: impl AsRef<Path>, ) -> Result<Self, RegistryError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn with_manifest( manifest: Manifest, cache_dir: impl AsRef<Path>, ) -> Result<Self, RegistryError>`
+    /// { TODO: postcondition }
     /// Build a registry with a custom manifest and cache directory.
     #[cfg(test)]
     pub fn with_manifest(
@@ -137,23 +137,23 @@ impl ModelRegistry {
         })
     }
 
-/// { TODO: precondition }
-/// pub fn cache_dir(&self) -> &Path
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn cache_dir(&self) -> &Path
+    /// { TODO: postcondition }
     pub fn cache_dir(&self) -> &Path {
         &self.cache_dir
     }
 
-/// { TODO: precondition }
-/// pub fn manifest(&self) -> &Manifest
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn manifest(&self) -> &Manifest
+    /// { TODO: postcondition }
     pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
 
-/// { TODO: precondition }
-/// `pub fn ensure(&self, model_id: &str) -> Result<PathBuf, RegistryError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn ensure(&self, model_id: &str) -> Result<PathBuf, RegistryError>`
+    /// { TODO: postcondition }
     /// Ensure the model with id `model_id` is present in cache and SHA-256-verified.
     /// Downloads if missing. Idempotent: returns immediately when the cached file
     /// already matches the expected hash.
@@ -174,9 +174,9 @@ impl ModelRegistry {
         Ok(dest)
     }
 
-/// { TODO: precondition }
-/// `pub fn ensure_in_cache_only(&self, model_id: &str) -> Result<PathBuf, RegistryError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn ensure_in_cache_only(&self, model_id: &str) -> Result<PathBuf, RegistryError>`
+    /// { TODO: postcondition }
     /// Test-only helper that bypasses SHA-256 verification.
     #[doc(hidden)]
     /// Same as `ensure` but never makes a network call. Returns `OfflineMissing`
@@ -199,9 +199,9 @@ impl ModelRegistry {
         Ok(dest)
     }
 
-/// { TODO: precondition }
-/// `pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError>`
+    /// { TODO: postcondition }
     /// Resolve all models for a profile, downloading any that are missing.
     pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError> {
         if profile == Profile::Custom {
@@ -221,9 +221,9 @@ impl ModelRegistry {
         })
     }
 
-/// { TODO: precondition }
-/// `pub fn ensure_in_cache_only_for_profile( &self, profile: Profile, ) -> Result<ProfileModels, RegistryError>`
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// `pub fn ensure_in_cache_only_for_profile( &self, profile: Profile, ) -> Result<ProfileModels, RegistryError>`
+    /// { TODO: postcondition }
     /// Same as `ensure_for_profile` but never touches the network.
     #[cfg(test)]
     pub fn ensure_in_cache_only_for_profile(

@@ -22,9 +22,9 @@ pub struct RttmSegment {
 }
 
 impl RttmSegment {
-/// { TODO: precondition }
-/// pub fn end(&self) -> f64
-/// { TODO: postcondition }
+    /// { TODO: precondition }
+    /// pub fn end(&self) -> f64
+    /// { TODO: postcondition }
     pub fn end(&self) -> f64 {
         self.start + self.duration
     }
