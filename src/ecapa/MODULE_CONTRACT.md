@@ -38,9 +38,9 @@ surface:
       Legacy ONNX-backed extractor combining FBank + ECAPA-TDNN.
       Re-exported at crate root for backward compatibility.
     proof:
-      kind: missing
-      target: ""
-      command: "Legacy surface; tests in embedder_test.rs cover equivalent behavior"
+      kind: smoke
+      target: tests/e2e_smoke_test.rs
+      command: cargo test --test e2e_smoke_test --features cli
 dependencies:
   internal:
     - module: embedding
@@ -70,9 +70,9 @@ invariants:
   - id: output-normalized
     rule: Extractor outputs L2-normalized embeddings.
     proof:
-      kind: missing
-      target: ""
-      command: "Covered by embedder_test.rs for equivalent adapters"
+      kind: unit-test
+      target: tests/embedder_test.rs
+      command: cargo test --test embedder_test --features onnx,embedder,download -- --ignored
 verification:
   pre_change:
     - cargo check --all-features
