@@ -44,9 +44,9 @@ impl From<SignatureError> for DownloadError {
     }
 }
 
-/// { TODO: precondition }
+/// { !url.is_empty() && expected_sha256.len() == 64 }
 /// `pub fn download_with_checksum( url: &str, expected_sha256: &str, dest: &Path, ) -> Result<bool, DownloadError>`
-/// { TODO: postcondition }
+/// { ret.as_ref().map_or(true, |&downloaded| if downloaded { dest.exists() } else { true }) }
 /// Stream `url` to `dest` and verify the SHA-256 matches `expected_sha256`.
 ///
 /// Idempotent: if `dest` already exists with the correct hash, returns Ok(false)
@@ -64,9 +64,9 @@ pub fn download_with_checksum(
     download_with_checksum_and_signature(url, expected_sha256, None, dest)
 }
 
-/// { TODO: precondition }
+/// { !url.is_empty() && expected_sha256.len() == 64 }
 /// `pub fn download_with_checksum_and_signature( url: &str, expected_sha256: &str, signature: Option<&str>, dest: &Path, ) -> Result<bool, DownloadError>`
-/// { TODO: postcondition }
+/// { ret.as_ref().map_or(true, |&downloaded| if downloaded { dest.exists() } else { true }) }
 /// Stream `url` to `dest`, verify SHA-256, and optionally verify a Minisign signature.
 ///
 /// When `signature` is `Some(sig_text)`, the signature is verified both on cache
@@ -201,9 +201,9 @@ pub fn download_with_checksum_and_signature(
     Ok(true)
 }
 
-/// { TODO: precondition }
+/// { expected.len() == 64 }
 /// `pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), DownloadError>`
-/// { TODO: postcondition }
+/// { true }
 /// Compute the SHA-256 of `path` and compare against `expected`. Streams the file
 /// (does not load it into RAM).
 pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), DownloadError> {

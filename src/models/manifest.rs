@@ -54,9 +54,9 @@ pub enum ManifestError {
 }
 
 impl Manifest {
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn from_toml_str(s: &str) -> Result<Self, ManifestError>`
-    /// { TODO: postcondition }
+    /// { ret.as_ref().map_or(true, |m| m.schema == SCHEMA_V1) }
     /// Parse a manifest from a TOML source string.
     ///
     /// Validates: schema version, that every profile's `segmenter` and `embedder`
@@ -100,16 +100,16 @@ impl Manifest {
         Ok(m)
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn profile(&self, id: &str) -> Option<&ProfileEntry>`
-    /// { TODO: postcondition }
+    /// { ret == self.profiles.get(id) }
     pub fn profile(&self, id: &str) -> Option<&ProfileEntry> {
         self.profiles.get(id)
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn model(&self, id: &str) -> Option<&ModelEntry>`
-    /// { TODO: postcondition }
+    /// { ret == self.models.get(id) }
     pub fn model(&self, id: &str) -> Option<&ModelEntry> {
         self.models.get(id)
     }
