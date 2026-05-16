@@ -21,9 +21,9 @@ pub enum SignatureError {
     VerificationFailed(String),
 }
 
-/// { TODO: precondition }
+/// { !sig_text.is_empty() }
 /// `pub fn verify_minisign(path: &Path, sig_text: &str) -> Result<(), SignatureError>`
-/// { TODO: postcondition }
+/// { true }
 /// Verify `path` against a Minisign signature string (the raw `.minisig` text).
 ///
 /// Streams the file in 64 KiB chunks; does not load the whole model into memory.
