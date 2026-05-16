@@ -254,3 +254,52 @@ fn main() -> Result<()> {
         },
     }
 }
+
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn parse_profile_accepts_only_valid(s in "[a-zA-Z0-9_-]{1,20}") {
+            let result = parse_profile(&s);
+            if s == "mobile" || s == "balanced" {
+                prop_assert!(result.is_ok());
+            } else {
+                prop_assert!(result.is_err());
+            }
+        }
+
+        #[test]
+        fn cli_diarize_parses_with_valid_args(
+            profile in "(mobile|balanced)",
+            format in "(rttm|json)",
+            threshold in 0.0f32..2.0f32,
+        ) {
+            let args = vec![
+                "polyvoice".to_string(),
+                "diarize".to_string(),
+                "/tmp/test.wav".to_string(),
+                "--profile".to_string(), profile,
+                "--format".to_string(), format,
+                "--threshold".to_string(), threshold.to_string(),
+            ];
+            let result = Cli::try_parse_from(&args);
+            prop_assert!(result.is_ok());
+        }
+
+        #[test]
+        fn cli_models_info_parses(name in "[a-zA-Z0-9_][a-zA-Z0-9_-]{0,29}") {
+            let args = vec![
+                "polyvoice".to_string(),
+                "models".to_string(),
+                "info".to_string(),
+                name,
+            ];
+            let result = Cli::try_parse_from(&args);
+            prop_assert!(result.is_ok());
+        }
+    }
+}
