@@ -7,9 +7,9 @@
 use crate::utils::{cosine_similarity, l2_normalize};
 use std::collections::HashMap;
 
-/// { TODO: precondition }
+/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings[0].len()) }
 /// `pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usize>`
-/// { TODO: postcondition }
+/// { ret.len() == embeddings.len() && ret.iter().all(|&l| l < embeddings.len()) }
 /// Run agglomerative hierarchical clustering on a set of embeddings.
 ///
 /// Returns a label vector of the same length as `embeddings`, where each
@@ -21,9 +21,9 @@ pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usi
     ahc_impl(embeddings, threshold).0
 }
 
-/// { TODO: precondition }
+/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings[0].len()) }
 /// `pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32)`
-/// { TODO: postcondition }
+/// { ret.0.len() == embeddings.len() && ret.0.iter().all(|&l| l < embeddings.len()) && ret.1 >= 0.0 }
 /// Run AHC with automatic threshold selection via largest-merge-gap heuristic.
 ///
 /// Returns labels and the automatically selected threshold.
