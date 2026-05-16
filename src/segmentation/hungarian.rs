@@ -18,7 +18,6 @@
 /// Implementation: classic Kuhn-Munkres in O(N³) using row/column potentials
 /// (u/v) and shortest-path augmentation. Index 0 is reserved as a sentinel,
 /// so internal arrays are length N+1.
-#[allow(dead_code)]
 pub fn solve(cost: &[Vec<f32>]) -> Option<Vec<usize>> {
     let n = cost.len();
     if n == 0 {

@@ -234,3 +234,91 @@ mod tests {
         assert!(buf.flush().is_none());
     }
 }
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 1000,
+            ..ProptestConfig::default()
+        })]
+
+        /// All yielded (start, end) pairs satisfy start < end.
+        #[test]
+        fn window_iter_start_less_than_end(
+            total in 0usize..10000,
+            win in 1usize..5000,
+            hop in 1usize..5000,
+            include_partial in any::<bool>(),
+        ) {
+            let iter = if include_partial {
+                WindowIter::new(total, win, hop).include_partial()
+            } else {
+                WindowIter::new(total, win, hop)
+            };
+            for (start, end) in iter {
+                prop_assert!(start < end, "start {} must be < end {}", start, end);
+            }
+        }
+
+        /// All yielded end values are <= total.
+        #[test]
+        fn window_iter_end_le_total(
+            total in 0usize..10000,
+            win in 1usize..5000,
+            hop in 1usize..5000,
+            include_partial in any::<bool>(),
+        ) {
+            let iter = if include_partial {
+                WindowIter::new(total, win, hop).include_partial()
+            } else {
+                WindowIter::new(total, win, hop)
+            };
+            for (_, end) in iter {
+                prop_assert!(end <= total, "end {} must be <= total {}", end, total);
+            }
+        }
+
+        /// When include_partial = false, every yielded window has end - start == win.
+        #[test]
+        fn window_iter_no_partial(
+            total in 0usize..10000,
+            win in 1usize..5000,
+            hop in 1usize..5000,
+        ) {
+            for (start, end) in WindowIter::new(total, win, hop) {
+                prop_assert_eq!(
+                    end - start,
+                    win,
+                    "window [{}..{}] must be full size {} when include_partial=false",
+                    start, end, win
+                );
+            }
+        }
+
+        /// When include_partial = true, every yielded window satisfies
+        /// end == (start + win).min(total). The final window reaches total
+        /// when total > 0.
+        #[test]
+        fn window_iter_partial_last(
+            total in 0usize..10000,
+            win in 1usize..5000,
+            hop in 1usize..5000,
+        ) {
+            let ranges: Vec<_> = WindowIter::new(total, win, hop).include_partial().collect();
+            for (start, end) in &ranges {
+                prop_assert!(
+                    *end == (*start + win).min(total),
+                    "window [{}..{}] must equal ({} + {}).min({})",
+                    start, end, start, win, total
+                );
+            }
+            // Note: with hop > win, the final window may not reach total;
+            // include_partial only ensures that a partial window is yielded
+            // when the current start is still inside the total range.
+        }
+    }
+}

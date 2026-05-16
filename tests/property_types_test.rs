@@ -47,4 +47,15 @@ proptest! {
             duration, tr.duration()
         );
     }
+
+    /// TimeRange duration is non-negative for arbitrary ranges.
+    #[test]
+    fn time_range_duration_arbitrary_non_negative(start in -100.0f64..=100.0, end in -100.0f64..=100.0) {
+        let tr = TimeRange { start, end };
+        prop_assert!(
+            tr.duration() >= 0.0,
+            "duration should be non-negative for range [{}..{}], got {}",
+            start, end, tr.duration()
+        );
+    }
 }
