@@ -7,9 +7,9 @@ use crate::utils::cosine_similarity;
 use faer::Side;
 use faer::prelude::*;
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize>`
-/// { TODO: postcondition }
+/// { ret.len() == embeddings.len() }
 /// Run spectral clustering with automatic k selection.
 pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {
     let n = embeddings.len();

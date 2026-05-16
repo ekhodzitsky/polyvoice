@@ -2,9 +2,9 @@
 
 use crate::types::{Segment, SpeakerId, TimeRange};
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn detect_overlaps(segments: &[Segment]) -> Vec<OverlapRegion>`
-/// { TODO: postcondition }
+/// { ret.iter().all(|o| o.speakers.len() >= 2) }
 /// Detect regions where multiple speakers overlap.
 ///
 /// Zero-length segments and segments without a speaker label are ignored.

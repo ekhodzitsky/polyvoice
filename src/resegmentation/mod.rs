@@ -92,9 +92,9 @@ pub enum ResegmentError {
     MissingPrimaryCentroid { index: usize, primary: SpeakerId },
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn compute_centroids(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<SpeakerCentroid>`
-/// { TODO: postcondition }
+/// { ret.iter().all(|c| c.embedding.len() == embeddings.first().map_or(0, |e| e.len())) }
 /// Compute per-cluster L2-normalized centroids from clustered embeddings.
 ///
 /// `labels[i]` is the cluster label of `embeddings[i]`. The cluster id stored
@@ -134,9 +134,9 @@ pub fn compute_centroids(embeddings: &[Vec<f32>], labels: &[usize]) -> Vec<Speak
     out
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn extract_overlap_time_ranges( segments: &[crate::segmentation::RawSegment], ) -> Vec<(TimeRange, u8, u8)>`
-/// { TODO: postcondition }
+/// { ret.iter().all(|(_, lo, hi)| lo < hi) }
 /// Find pairs of `RawSegment`s that share a time range, are flagged
 /// `is_overlap = true`, and carry two distinct `local_speaker_idx`.
 /// Returns `(time_range, lo_local_idx, hi_local_idx)` per detected pair.
@@ -201,9 +201,9 @@ pub struct OverlapResegmenter {
 }
 
 impl OverlapResegmenter {
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn new(threshold: f32, min_overlap_secs: f32) -> Self
-    /// { TODO: postcondition }
+    /// { ret.min_overlap_secs >= 0.0 }
     /// `threshold` — minimum cosine similarity required to attach a secondary
     /// speaker to an overlap region. Default `0.0` (always attach the nearest
     /// non-primary cluster).
@@ -216,16 +216,16 @@ impl OverlapResegmenter {
         }
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn threshold(&self) -> f32
-    /// { TODO: postcondition }
+    /// { ret == self.threshold }
     pub fn threshold(&self) -> f32 {
         self.threshold
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn min_overlap_secs(&self) -> f32
-    /// { TODO: postcondition }
+    /// { ret == self.min_overlap_secs }
     pub fn min_overlap_secs(&self) -> f32 {
         self.min_overlap_secs
     }

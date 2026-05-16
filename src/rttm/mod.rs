@@ -22,17 +22,17 @@ pub struct RttmSegment {
 }
 
 impl RttmSegment {
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn end(&self) -> f64
-    /// { TODO: postcondition }
+    /// { ret == self.start + self.duration }
     pub fn end(&self) -> f64 {
         self.start + self.duration
     }
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError>`
-/// { TODO: postcondition }
+/// { ret.as_ref().map_or(true, |v| v.iter().all(|s| s.start >= 0.0 && s.duration >= 0.0)) }
 /// Parse RTTM content from a reader, returning segments grouped by file_id.
 pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError> {
     let mut segments = Vec::new();
@@ -89,9 +89,9 @@ pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError> 
     Ok(segments)
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn parse_rttm_file(path: &Path) -> Result<Vec<RttmSegment>, RttmError>`
-/// { TODO: postcondition }
+/// { true }
 /// Parse an RTTM file from disk.
 pub fn parse_rttm_file(path: &Path) -> Result<Vec<RttmSegment>, RttmError> {
     let file = std::fs::File::open(path)?;
@@ -99,9 +99,9 @@ pub fn parse_rttm_file(path: &Path) -> Result<Vec<RttmSegment>, RttmError> {
     parse_rttm(reader)
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn group_by_file(segments: &[RttmSegment]) -> HashMap<&str, Vec<&RttmSegment>>`
-/// { TODO: postcondition }
+/// { ret.len() <= segments.len() }
 /// Group RTTM segments by file_id.
 pub fn group_by_file(segments: &[RttmSegment]) -> HashMap<&str, Vec<&RttmSegment>> {
     let mut groups: HashMap<&str, Vec<&RttmSegment>> = HashMap::new();
@@ -111,9 +111,9 @@ pub fn group_by_file(segments: &[RttmSegment]) -> HashMap<&str, Vec<&RttmSegment
     groups
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn to_speaker_turns( segments: &[RttmSegment], ) -> (Vec<SpeakerTurn>, HashMap<String, SpeakerId>)`
-/// { TODO: postcondition }
+/// { ret.0.len() == segments.len() }
 /// Convert RTTM segments to SpeakerTurns with string→SpeakerId mapping.
 pub fn to_speaker_turns(
     segments: &[RttmSegment],
@@ -143,9 +143,9 @@ pub fn to_speaker_turns(
     (turns, speaker_map)
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn write_rttm<W: Write>( writer: &mut W, file_id: &str, turns: &[SpeakerTurn], ) -> Result<(), RttmError>`
-/// { TODO: postcondition }
+/// { true }
 /// Write speaker turns as RTTM to a writer.
 pub fn write_rttm<W: Write>(
     writer: &mut W,

@@ -54,9 +54,9 @@ pub struct DummyExtractor {
 }
 
 impl DummyExtractor {
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn new(dim: usize) -> Self
-    /// { TODO: postcondition }
+    /// { true }
     /// Create a dummy extractor that returns deterministic pseudo-random embeddings.
     ///
     /// Useful for tests and benchmarks where a real ONNX model is not available.
