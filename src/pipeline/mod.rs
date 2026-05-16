@@ -32,16 +32,16 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn new(config: DiarizationConfig, vad_config: VadConfig) -> Self
-    /// { TODO: postcondition }
+    /// { true }
     pub fn new(config: DiarizationConfig, vad_config: VadConfig) -> Self {
         Self { config, vad_config }
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn run<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
-    /// { TODO: postcondition }
+    /// { ret.as_ref().map_or(true, |r| r.num_speakers <= r.segments.len()) }
     /// Run the full diarization pipeline on raw f32 samples.
     ///
     /// Returns [`PipelineError::AudioTooLong`] if the input exceeds
@@ -145,9 +145,9 @@ impl Pipeline {
         })
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
-    /// { TODO: postcondition }
+    /// { ret.as_ref().map_or(true, |r| r.num_speakers <= r.segments.len()) }
     /// Run the pipeline from a WAV file path.
     pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>(
         &self,

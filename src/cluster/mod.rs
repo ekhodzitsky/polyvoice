@@ -28,9 +28,9 @@ pub struct SpeakerCluster {
 }
 
 impl SpeakerCluster {
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn new(config: ClusterConfig) -> Self
-    /// { TODO: postcondition }
+    /// { ret.num_speakers() == 0 }
     /// Create a new empty speaker clusterer.
     ///
     /// ```rust
@@ -45,9 +45,9 @@ impl SpeakerCluster {
         }
     }
 
-    /// { TODO: precondition }
+    /// { !embedding.is_empty() }
     /// pub fn assign(&mut self, embedding: &[f32]) -> (SpeakerId, f32)
-    /// { TODO: postcondition }
+    /// { ret.1 >= -1.0 && ret.1 <= 1.0 && ret.0.0 < self.num_speakers() }
     /// Assign an embedding to the closest speaker centroid.
     ///
     /// Returns the speaker ID and the cosine similarity score. If no existing
@@ -99,9 +99,9 @@ impl SpeakerCluster {
         (SpeakerId(new_id as u32), 1.0)
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn num_speakers(&self) -> usize
-    /// { TODO: postcondition }
+    /// { ret <= self.config.max_speakers }
     /// Return the current number of speaker centroids.
     ///
     /// ```rust
@@ -113,9 +113,9 @@ impl SpeakerCluster {
         self.centroids.len()
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn centroids(&self) -> Vec<(SpeakerId, &[f32], f32)>`
-    /// { TODO: postcondition }
+    /// { ret.len() == self.num_speakers() }
     /// Return a view of all current centroids.
     ///
     /// Each tuple contains `(SpeakerId, centroid_vector, average_confidence)`.
@@ -141,9 +141,9 @@ impl SpeakerCluster {
             .collect()
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn merge(&mut self, from: SpeakerId, into: SpeakerId) -> Option<SpeakerIdRemap>`
-    /// { TODO: postcondition }
+    /// { ret.is_none() || self.num_speakers() >= 1 }
     /// Merge one speaker centroid into another.
     ///
     /// The `from` centroid is removed and its statistics are averaged into `into`.
