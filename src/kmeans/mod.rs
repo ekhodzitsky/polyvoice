@@ -11,6 +11,10 @@ pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usiz
     }
     let k = k.min(n);
     let dim = embeddings[0].len();
+    debug_assert!(
+        embeddings.iter().all(|e| e.len() == dim),
+        "kmeans_pp precondition violated: all embeddings must have the same dimension"
+    );
 
     // K-means++ initialization.
     let mut centroids: Vec<Vec<f64>> = Vec::with_capacity(k);
