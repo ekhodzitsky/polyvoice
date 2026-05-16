@@ -21,9 +21,9 @@ pub struct SileroVad {
 impl SileroVad {
     const STATE_SIZE: usize = 2 * 128;
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error>`
-    /// { TODO: postcondition }
+    /// { true }
     pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error> {
         crate::onnx::validate_onnx_header(model_path).map_err(|e| anyhow::anyhow!("{e}"))?;
         let session = ort::session::Session::builder()
@@ -123,9 +123,9 @@ pub struct SileroVad;
 
 #[cfg(not(feature = "onnx"))]
 impl SileroVad {
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn new(_model_path: &std::path::Path, _chunk_size: usize) -> Result<Self, anyhow::Error>`
-    /// { TODO: postcondition }
+    /// { true }
     pub fn new(_model_path: &std::path::Path, _chunk_size: usize) -> Result<Self, anyhow::Error> {
         anyhow::bail!("the `onnx` feature is not enabled")
     }

@@ -1,8 +1,8 @@
 //! K-Means++ clustering with automatic k selection via silhouette score.
 
-/// { TODO: precondition }
+/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings[0].len()) }
 /// `pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize>`
-/// { TODO: postcondition }
+/// { ret.len() == embeddings.len() }
 /// K-means++ initialization + Lloyd's algorithm.
 pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize> {
     let n = embeddings.len();
