@@ -7,7 +7,7 @@
 use crate::utils::{cosine_similarity, l2_normalize};
 use std::collections::HashMap;
 
-/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings[0].len()) }
+/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
 /// `pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usize>`
 /// { ret.len() == embeddings.len() && ret.iter().all(|&l| l < embeddings.len()) }
 /// Run agglomerative hierarchical clustering on a set of embeddings.
@@ -21,7 +21,7 @@ pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usi
     ahc_impl(embeddings, threshold).0
 }
 
-/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings[0].len()) }
+/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
 /// `pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32)`
 /// { ret.0.len() == embeddings.len() && ret.0.iter().all(|&l| l < embeddings.len()) && ret.1 >= 0.0 }
 /// Run AHC with automatic threshold selection via largest-merge-gap heuristic.

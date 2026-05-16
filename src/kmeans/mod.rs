@@ -1,6 +1,6 @@
 //! K-Means++ clustering with automatic k selection via silhouette score.
 
-/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings[0].len()) }
+/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
 /// `pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize>`
 /// { ret.len() == embeddings.len() }
 /// K-means++ initialization + Lloyd's algorithm.
