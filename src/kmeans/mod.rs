@@ -90,3 +90,45 @@ fn cosine_distance_f32_f64(a: &[f32], b: &[f64]) -> f64 {
     let sim = crate::utils::cosine_similarity_f32_f64(a, b);
     (1.0 - sim).max(0.0) as f64
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_input_returns_empty() {
+        let labels = kmeans_pp(&[], 3, 10);
+        assert!(labels.is_empty());
+    }
+
+    #[test]
+    fn well_separated_clusters() {
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.9, 0.1],
+            vec![0.0, 1.0],
+            vec![0.1, 0.9],
+            vec![-1.0, 0.0],
+            vec![-0.9, 0.1],
+        ];
+        let labels = kmeans_pp(&embeddings, 3, 20);
+        assert_eq!(labels.len(), 6);
+        for &l in &labels {
+            assert!(l < 3);
+        }
+        assert_eq!(labels[0], labels[1]);
+        assert_eq!(labels[2], labels[3]);
+        assert_eq!(labels[4], labels[5]);
+    }
+
+    #[test]
+    fn k_larger_than_n() {
+        let embeddings = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let labels = kmeans_pp(&embeddings, 10, 10);
+        assert_eq!(labels.len(), 2);
+        for &l in &labels {
+            assert!(l < 2);
+        }
+    }
+
+}

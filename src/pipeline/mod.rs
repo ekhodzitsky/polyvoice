@@ -159,3 +159,39 @@ impl Pipeline {
         self.run(&samples, extractor, vad)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pipeline_new_with_defaults() {
+        let config = DiarizationConfig::default();
+        let vad_config = VadConfig::default();
+        let pipeline = Pipeline::new(config, vad_config);
+        // Pipeline exists; basic sanity check via debug print would require
+        // accessing private fields, so we just verify construction succeeds.
+        assert!(std::mem::size_of_val(&pipeline) > 0);
+    }
+
+    #[test]
+    fn audio_too_long_error() {
+        let config = DiarizationConfig {
+            max_duration_secs: 1.0,
+            ..Default::default()
+        };
+        let vad_config = VadConfig::default();
+        let pipeline = Pipeline::new(config, vad_config);
+
+        // Create 2 seconds of silence at 16kHz
+        let samples = vec![0.0f32; 32000];
+        let extractor = crate::embedding::DummyExtractor::new(256);
+        let mut vad = crate::vad::EnergyVad::new(-40.0, 16000, 512);
+        let result = pipeline.run(&samples, &extractor, &mut vad);
+        assert!(
+            matches!(result, Err(PipelineError::AudioTooLong { .. })),
+            "expected AudioTooLong error, got {:?}",
+            result
+        );
+    }
+}

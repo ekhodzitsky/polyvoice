@@ -1,0 +1,48 @@
+---
+schema_version: 1
+kind: task_contract
+task_id:
+objective:
+owner_role: leaf_write_agent
+status: pending
+risk: low
+change_class: internal_refactor
+modules:
+  - <affected module>
+read_scope:
+  - <files to read>
+write_scope:
+  - <files to edit>
+dependencies: []
+allowed_mutations:
+  - <safe changes>
+forbidden_mutations:
+  - <changes that require escalation>
+acceptance:
+  - <criteria for done>
+proof:
+  required:
+    - proof_id:
+      kind: unit-test
+      target:
+      command:
+handoff:
+  required_fields:
+    - changed_files
+    - proof_results
+    - contract_updates
+    - known_gaps
+---
+
+# Task: <task-id>
+
+## Context
+
+Explain only what the worker needs to execute this task safely.
+Reference the relevant `MODULE_CONTRACT.md`, `README.md`, and `TODO.md`.
+
+## Exit Criteria
+
+- **complete**: All acceptance criteria met, proof commands pass, contracts updated.
+- **blocked**: External dependency or unclear ownership — escalate to orchestrator.
+- **not_ready**: Preconditions not satisfied — do not start work.
