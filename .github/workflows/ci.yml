@@ -159,6 +159,8 @@ jobs:
           python-version: '3.12'
       - name: Install uv
         run: pip install uv
+      - name: Clean up package directory
+        run: rm -rf target/package/
       - name: coad check
         run: uvx --from 'git+https://github.com/ekhodzitsky/coad.git#subdirectory=tools/coad-validator' coad check .
 
