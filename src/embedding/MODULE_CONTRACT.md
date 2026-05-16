@@ -37,27 +37,27 @@ surface:
     contract: >
       Legacy embedding extraction trait. Use Embedder from embedder.rs for new code.
     proof:
-      kind: missing
-      target: ""
-      command: "Legacy surface; no new tests"
+      kind: smoke
+      target: tests/e2e_smoke_test.rs
+      command: cargo test --test e2e_smoke_test --features cli
   - name: DummyExtractor
     kind: struct
     visibility: public
     contract: >
       Mock extractor for testing. Returns random or zero embeddings.
     proof:
-      kind: missing
-      target: ""
-      command: "Legacy surface; no new tests"
+      kind: smoke
+      target: tests/chaos_test.rs
+      command: cargo test --test chaos_test
   - name: EmbeddingError
     kind: enum
     visibility: public
     contract: >
       Legacy error type for embedding extraction.
     proof:
-      kind: missing
-      target: ""
-      command: "Legacy surface; no new tests"
+      kind: smoke
+      target: tests/chaos_test.rs
+      command: cargo test --test chaos_test
 dependencies:
   internal:
     - module: types
@@ -82,9 +82,9 @@ invariants:
   - id: dummy-deterministic
     rule: DummyExtractor with fixed seed produces deterministic output.
     proof:
-      kind: missing
-      target: ""
-      command: "Legacy surface"
+      kind: smoke
+      target: tests/chaos_test.rs
+      command: cargo test --test chaos_test
 verification:
   pre_change:
     - cargo check --all-features
