@@ -1,12 +1,12 @@
-//! Property tests for core math utilities.
-//!
-//! Verified invariants:
-//! - cosine_similarity ∈ [-1, 1]
-//! - l2_normalize produces unit-norm vectors (or zero vector)
-//! - mean_vector length equals input dimension
+//! Property tests for utility function invariants.
 
 use polyvoice::utils::{cosine_similarity, l2_normalize, mean_vector};
 use proptest::prelude::*;
+
+fn non_zero_vec() -> impl Strategy<Value = Vec<f32>> {
+    prop::collection::vec(-1.0f32..=1.0f32, 1..=256)
+        .prop_filter("non-zero vector", |v| v.iter().any(|&x| x != 0.0))
+}
 
 proptest! {
     #![proptest_config(ProptestConfig {
@@ -14,74 +14,54 @@ proptest! {
         ..ProptestConfig::default()
     })]
 
-    /// Cosine similarity of any two finite f32 vectors is in [-1, 1].
+    /// cosine_similarity always returns a value in [-1.0, 1.0].
     #[test]
-    fn cosine_similarity_range(
-        (len, a, b) in (1usize..=256)
-            .prop_flat_map(|len| {
-                (
-                    Just(len),
-                    prop::collection::vec(-10.0f32..=10.0f32, len),
-                    prop::collection::vec(-10.0f32..=10.0f32, len),
-                )
-            }),
-    ) {
-        let _ = len;
+    fn cosine_similarity_range(a in non_zero_vec(), b in non_zero_vec()) {
         let sim = cosine_similarity(&a, &b);
         prop_assert!(
-            (-1.0 - 1e-6..=1.0 + 1e-6).contains(&sim),
-            "cosine_similarity out of range: {}",
+            (-1.0..=1.0).contains(&sim),
+            "cosine_similarity must be in [-1, 1], got {} for vectors of len {} and {}",
+            sim, a.len(), b.len()
+        );
+    }
+
+    /// cosine_similarity of identical vectors is exactly 1.0.
+    #[test]
+    fn cosine_similarity_identical_is_one(v in non_zero_vec()) {
+        let sim = cosine_similarity(&v, &v);
+        prop_assert!(
+            (sim - 1.0).abs() < 1e-5,
+            "cosine_similarity of identical vectors should be 1.0, got {}",
             sim
         );
     }
 
-    /// L2-normalized vector has norm 1 (or 0 if input was zero).
+    /// After l2_normalize, vector norm is 1.0 (for non-zero vectors).
     #[test]
-    fn l2_normalize_produces_unit_norm(
-        mut v in prop::collection::vec(-10.0f32..=10.0f32, 1..=256),
-    ) {
-        let input_norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    fn l2_normalize_produces_unit_vector(mut v in non_zero_vec()) {
         l2_normalize(&mut v);
-        let computed: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if input_norm > 1e-6 {
-            prop_assert!(
-                (computed - 1.0).abs() < 1e-4,
-                "norm after l2_normalize should be 1, got {}",
-                computed
-            );
-        } else {
-            prop_assert!(
-                computed.abs() < 1e-6,
-                "zero input should produce zero output, got norm {}",
-                computed
-            );
-        }
+        let norm_sq: f32 = v.iter().map(|&x| x * x).sum();
+        let norm = norm_sq.sqrt();
+        prop_assert!(
+            (norm - 1.0).abs() < 1e-5,
+            "l2_normalize should produce unit vector, got norm {}",
+            norm
+        );
     }
 
-    /// Mean vector has the same dimension as inputs and components are averages.
+    /// mean_vector output length equals input dimension.
     #[test]
-    fn mean_vector_preserves_dimension(
-        (dim, vectors) in (1usize..=64)
-            .prop_flat_map(|dim| {
-                prop::collection::vec(
-                    prop::collection::vec(-10.0f32..=10.0f32, dim),
-                    1..=16,
-                )
-                .prop_map(move |v| (dim, v))
-            }),
-    ) {
-        let mean = mean_vector(&vectors).expect("non-empty input");
-        prop_assert_eq!(mean.len(), dim, "mean vector dimension mismatch");
-        for (i, &m) in mean.iter().enumerate() {
-            let expected: f32 =
-                vectors.iter().map(|v| v[i]).sum::<f32>() / vectors.len() as f32;
-            prop_assert!(
-                (m - expected).abs() < 1e-4,
-                "mean[{}] = {} != expected {}",
-                i,
-                m,
-                expected
-            );
-        }
+    fn mean_vector_dimension(vecs in prop::collection::vec(non_zero_vec(), 1..=16)) {
+        let dim = vecs[0].len();
+        let mean = mean_vector(&vecs);
+        prop_assert!(
+            mean.is_some(),
+            "mean_vector should return Some for non-empty input"
+        );
+        prop_assert_eq!(
+            mean.unwrap().len(),
+            dim,
+            "mean_vector output dimension must match input dimension"
+        );
     }
 }

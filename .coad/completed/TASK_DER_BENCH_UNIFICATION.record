@@ -1,0 +1,78 @@
+---
+schema_version: 1
+kind: task_contract
+task_id: der-bench-unification-001
+objective: >
+  Remove duplicate DER implementation from benches/der_ami.rs and replace it
+  with polyvoice::der::compute_der_from_rttm. Eliminates maintenance risk
+  from divergent DER logic.
+owner_role: leaf_write_agent
+status: in_progress
+risk: low
+change_class: internal_refactor
+modules:
+  - src/der
+  - benches/der_ami
+read_scope:
+  - src/der/mod.rs
+  - src/der/MODULE_CONTRACT.md
+  - src/der/TODO.md
+  - src/der/README.md
+  - benches/der_ami.rs
+  - src/types/mod.rs
+write_scope:
+  - benches/der_ami.rs
+  - src/der/TODO.md
+dependencies:
+  - src/types (SpeakerTurn, SpeakerId, TimeRange data shapes)
+  - src/der (compute_der_from_rttm public surface)
+allowed_mutations:
+  - Replace local compute_der in bench with crate call.
+  - Add use statements for polyvoice types in bench.
+  - Update src/der/TODO.md to mark task done.
+forbidden_mutations:
+  - Changing compute_der_from_rttm signature or behavior.
+  - Changing bench assertions or thresholds.
+  - Modifying src/der/mod.rs implementation.
+acceptance:
+  - benches/der_ami.rs no longer contains a local compute_der function.
+  - bench still compiles: cargo bench --bench der_ami compiles.
+  - bench assertions still pass on synthetic data.
+  - coad check . passes.
+proof:
+  required:
+    - proof_id: bench-compiles
+      kind: static-check
+      target: benches/der_ami.rs
+      command: cargo check --bench der_ami
+    - proof_id: bench-runs
+      kind: benchmark
+      target: benches/der_ami.rs
+      command: cargo bench --bench der_ami
+handoff:
+  required_fields:
+    - changed_files
+    - proof_results
+    - contract_updates
+    - known_gaps
+---
+
+# Task: Unify DER computation in benchmark
+
+## Context
+
+`benches/der_ami.rs` maintains its own simplified 100ms-resolution DER impl.
+This diverges from `src/der/mod.rs` and is a maintenance risk (tracked in
+`src/der/TODO.md` Known Gaps and `docs/strategy/dead-code-cleanup-plan.md`).
+
+`src/der::compute_der_from_rttm` accepts `&[(f64, f64, &str)]` for reference
+and `&[SpeakerTurn]` for hypothesis — compatible with bench data after a
+lightweight mapping of hypothesis tuples to SpeakerTurns.
+
+## Exit Criteria
+
+- **complete**: Local compute_der removed, bench uses crate function,
+  assertions pass, TODO updated.
+- **blocked**: If compute_der_from_rttm behavior differs enough to break
+  bench assertions — escalate to src/der owner for invariant review.
+- **not_ready**: If src/der contract or tests are failing — do not start.

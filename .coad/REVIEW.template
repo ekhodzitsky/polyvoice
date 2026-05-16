@@ -1,0 +1,42 @@
+---
+schema_version: 1
+kind: review_contract
+review_id:
+target_task:
+required_reviewers:
+  - role: composite_orchestrator
+    scope: module boundary + cross-module impact
+findings:
+  severity_levels:
+    - blocker
+    - high
+    - medium
+    - low
+acceptance:
+  blocks_on:
+    - blocker
+    - high
+  requires_no_unresolved_questions: true
+outputs:
+  - review_report
+  - follow_up_task_contracts
+---
+
+# Review: <review-id>
+
+## Checklist
+
+1. Does the change stay inside declared module ownership?
+2. Did it alter public or internal surfaces?
+3. Are consumers updated or explicitly unaffected?
+4. Are invariants preserved?
+5. Is proof strong enough for the change class?
+6. Did module context change when the module changed?
+
+## Findings
+
+List findings first, ordered by severity.
+
+## Outcome
+
+State `pass`, `blocked`, or `pass_with_known_gaps`.

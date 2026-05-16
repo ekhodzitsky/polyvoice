@@ -2,7 +2,7 @@
 
 > **Version:** 0.6.0-alpha.3 | **Date:** 2026-05-10 | **Scope:** Rust library + Python bindings + FFI
 >
-> **Last updated:** 2026-05-11 — M6b dead code removed, `cargo kimi check` green, property tests expanded, cross-dataset DER infrastructure in place, streaming pipeline MVP (`StreamingPipeline`) implemented, `ahc_impl` recursion eliminated, deprecated `OnlineDiarizer` removed, dead code cleaned.
+> **Last updated:** 2026-05-11 — M6b dead code removed, property tests expanded, cross-dataset DER infrastructure in place, streaming pipeline MVP (`StreamingPipeline`) implemented, `ahc_impl` recursion eliminated, deprecated `OnlineDiarizer` removed, dead code cleaned.
 
 ## Executive Summary
 

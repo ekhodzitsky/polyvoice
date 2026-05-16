@@ -1,0 +1,140 @@
+---
+schema_version: 1
+kind: module_contract
+module: src/segmentation
+level: subsystem
+layer: algorithm
+purpose: >
+  Owns speaker segmentation algorithms: powerset segmentation, frame
+  decoding, aggregation with Hungarian assignment, and windowed segmenter
+  trait. Does NOT own embedding extraction, clustering, or VAD.
+status: stable
+owners:
+  - polyvoice-core
+workcell:
+  type: leaf
+  parent: ""
+  children: []
+  owns_paths:
+    - src/segmentation/
+  context_budget:
+    max_files: 12
+    max_source_lines: 1500
+    max_contract_lines: 180
+    max_readme_lines: 120
+    max_todo_lines: 80
+authority:
+  write_policy: single_active_write_lease
+  orchestrator: polyvoice-core
+  read_agents: many_allowed
+  migration_lease_required:
+    - cross-workcell write
+    - public surface migration
+surface:
+  - name: Segmenter
+    kind: trait
+    visibility: public
+    contract: >
+      Core segmentation trait: process audio window → speaker labels.
+    proof:
+      kind: unit-test
+      target: src/segmentation::mod::tests
+      command: cargo test --lib segmentation
+  - name: PowersetSegmenter
+    kind: struct
+    visibility: public
+    contract: >
+      ONNX-backed powerset speaker segmenter (sherpa-onnx-pyannote).
+    proof:
+      kind: unit-test
+      target: src/segmentation::mod::tests
+      command: cargo test --lib segmentation
+  - name: PowersetDecoder
+    kind: struct
+    visibility: public
+    contract: >
+      Decodes powerset class logits → (speaker_set, is_overlap).
+    proof:
+      kind: unit-test
+      target: src/segmentation::decoder::tests
+      command: cargo test --lib segmentation
+  - name: Aggregator
+    kind: struct
+    visibility: public
+    contract: >
+      Aggregates frame-level predictions into segments using Hungarian
+      assignment for speaker identity tracking across windows.
+    proof:
+      kind: unit-test
+      target: src/segmentation::aggregator::tests
+      command: cargo test --lib segmentation
+  - name: FrameLabel
+    kind: struct
+    visibility: public
+    contract: >
+      Per-frame speaker set and overlap flag.
+    proof:
+      kind: unit-test
+      target: src/segmentation::mod::tests
+      command: cargo test --lib segmentation
+  - name: MIN_AUDIO_SAMPLES
+    kind: constant
+    visibility: public
+    contract: >
+      Minimum audio samples required for segmentation (1600 = 0.1s at 16kHz).
+    proof:
+      kind: unit-test
+      target: src/segmentation::mod::tests
+      command: cargo test --lib segmentation
+dependencies:
+  internal:
+    - module: types
+      scope: data-shape
+      reason: Confidence, TimeRange for segment timestamps.
+  external: []
+consumers:
+  - path: src/pipeline/mod.rs
+    uses:
+      - Segmenter
+      - PowersetSegmenter
+  - path: src/resegmentation/mod.rs
+    uses:
+      - extract_overlap_time_ranges
+invariants:
+  - id: decoder-deterministic
+    rule: PowersetDecoder with identical logits always produces identical output.
+    proof:
+      kind: unit-test
+      target: src/segmentation::decoder::tests
+      command: cargo test --lib segmentation
+  - id: hungarian-optimal
+    rule: Aggregator Hungarian assignment minimizes total cost for speaker
+      tracking across windows.
+    proof:
+      kind: unit-test
+      target: src/segmentation::aggregator::tests
+      command: cargo test --lib segmentation
+verification:
+  pre_change:
+    - cargo test --lib segmentation
+  full:
+    - cargo test --lib segmentation
+    - cargo test --test chaos_test --features onnx,download
+    - cargo clippy --all-targets --all-features -- -D warnings
+agent_policy:
+  allowed_mutations:
+    - Refactoring decoder internals.
+    - Adding aggregation strategies.
+    - Performance optimizations in frame processing.
+  forbidden_mutations:
+    - Changing Segmenter trait without updating all implementors.
+    - Changing MIN_AUDIO_SAMPLES without checking downstream consumers.
+  escalation:
+    - Changes to Segmenter trait signature.
+    - Changes to powerset class semantics.
+---
+
+# src/segmentation
+
+Speaker segmentation algorithms: powerset decoder, aggregator, Hungarian
+assignment, and segmenter trait.

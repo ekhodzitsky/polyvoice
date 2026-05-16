@@ -150,16 +150,17 @@ jobs:
       - name: cargo audit
         run: cargo audit
 
-  kimi-check:
+  coad-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-kimi
-        run: cargo install cargo-kimi
-      - name: cargo kimi check
-        run: cargo kimi check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: coad check
+        run: uvx --from 'git+https://github.com/ekhodzitsky/coad.git#subdirectory=tools/coad-validator' coad check .
 
   cross-aarch64-linux:
     runs-on: ubuntu-latest

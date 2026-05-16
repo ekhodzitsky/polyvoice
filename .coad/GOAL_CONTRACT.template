@@ -1,0 +1,52 @@
+---
+schema_version: 1
+kind: goal_contract
+goal_id:
+objective:
+status: proposed
+risk: medium
+goal_class: feature
+delivery:
+  max_parallel_agents: 3
+  allow_external_side_effects: false
+  require_contract_updates: true
+budget:
+  time:
+  tokens:
+  cost:
+readiness_oracle:
+  type: test_suite
+  claim: All tests pass and coad check passes
+  required_proof:
+    - cargo test
+    - coad check .
+decomposition:
+  strategy: module_owned
+  tasks:
+    - <task-id>
+contracts:
+  modules:
+    - <module>
+  tasks:
+    - <task-contract-path>
+  proofs:
+    - <proof-contract-path>
+  reviews:
+    - <review-contract-path>
+  integration:
+    - <integration-contract-path>
+---
+
+# Goal: <goal-id>
+
+## Intent
+
+Explain the user-visible outcome and constraints.
+
+## Readiness Oracle
+
+Explain what proves the goal is ready.
+
+## Decomposition Notes
+
+Explain why the task split is safe for orchestration.
