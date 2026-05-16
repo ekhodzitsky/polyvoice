@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0-alpha.6]
+
+### Added
+
+- COAD execution ledger (`.coad/LEDGER.md`) with completed task records.
+- GitHub Actions `coad-check` CI job.
+- `VERSION` file for single-source-of-truth versioning.
+- Property tests for `types`, `utils`, and `kmeans`.
+
+### Changed
+
+- `benches/der_ami.rs` migrated to canonical `polyvoice::der::compute_der_from_rttm`.
+- `AGENTS.md` updated to reference COAD as sole coordination standard.
+
 ## [0.6.0-alpha.5]
 
 ### Added
