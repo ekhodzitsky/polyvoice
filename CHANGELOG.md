@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0-alpha.7]
+
+### Added
+
+- Property tests for CLI argument parsing (`polyvoice`, `polyvoice-bench`).
+- `debug_assert!` in `kmeans_pp` for uniform embedding dimensions precondition.
+
+### Changed
+
+- All 109 `TODO: precondition` stubs filled with Hoare triples across all 25 modules.
+- All 6 `kind: missing` proofs in deprecated `ecapa` and `embedding` modules replaced
+  with links to existing smoke/unit tests.
+- CLI binaries (`src/bin/`) now have `MODULE_CONTRACT.md`, `README.md`, `TODO.md`.
+
+### Fixed
+
+- Rustdoc warnings from unresolved intra-doc links and bracket syntax in contracts.
+
 ## [0.6.0-alpha.6]
 
 ### Added
