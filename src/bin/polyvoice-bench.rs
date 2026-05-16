@@ -171,3 +171,41 @@ struct Aggregate {
     confusion: f64,
     count: usize,
 }
+
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn bench_args_parses_with_valid_args(
+            profile in "(mobile|balanced)",
+            collar in 0.0f64..1.0f64,
+            threshold in 0.0f32..1.0f32,
+            max_files in 0usize..100usize,
+        ) {
+            let args = vec![
+                "polyvoice-bench".to_string(),
+                "/tmp/dataset".to_string(),
+                "--profile".to_string(), profile,
+                "--collar".to_string(), collar.to_string(),
+                "--threshold".to_string(), threshold.to_string(),
+                "--max-files".to_string(), max_files.to_string(),
+            ];
+            let result = Args::try_parse_from(&args);
+            prop_assert!(result.is_ok());
+        }
+
+        #[test]
+        fn parse_profile_accepts_only_valid(s in "[a-zA-Z0-9_-]{1,20}") {
+            let result = parse_profile(&s);
+            if s == "mobile" || s == "balanced" {
+                prop_assert!(result.is_ok());
+            } else {
+                prop_assert!(result.is_err());
+            }
+        }
+    }
+}
