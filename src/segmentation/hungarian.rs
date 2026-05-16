@@ -3,9 +3,9 @@
 //! Pure Rust, wasm32-clean. Used by the segmentation aggregator to
 //! align local speaker indices between overlapping windows.
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn solve(cost: &[Vec<f32>]) -> Option<Vec<usize>>`
-/// { TODO: postcondition }
+/// { ret.as_ref().map_or(true, |v| v.len() == cost.len()) }
 /// Solve the assignment problem for an N×N cost matrix.
 ///
 /// Returns a `Vec<usize>` of length N where `result[i]` is the column assigned to row `i`.
