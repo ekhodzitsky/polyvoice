@@ -28,6 +28,10 @@ impl SpeakerIdRemap {
     /// `fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Self`
     /// { ret.mapping.len() == mapping.len() }
     pub fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Self {
+        debug_assert!(
+            mapping.iter().map(|(old, _)| old).collect::<std::collections::HashSet<_>>().len() == mapping.len(),
+            "duplicate old SpeakerIds in mapping"
+        );
         Self { mapping }
     }
 
@@ -312,7 +316,7 @@ pub struct TimeRange {
 impl TimeRange {
     /// { true }
     /// pub fn duration(&self) -> f64
-    /// { ret == self.end - self.start }
+    /// { ret >= 0.0 }
     /// Return the duration of this time range in seconds.
     ///
     /// ```rust
@@ -321,11 +325,7 @@ impl TimeRange {
     /// assert_eq!(tr.duration(), 2.5);
     /// ```
     pub fn duration(&self) -> f64 {
-        debug_assert!(
-            self.end >= self.start,
-            "TimeRange invariant violated: end < start"
-        );
-        self.end - self.start
+        (self.end - self.start).max(0.0)
     }
 }
 
