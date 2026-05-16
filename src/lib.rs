@@ -13,7 +13,7 @@
 //!
 //! ## Quick start
 //!
-//! Build a diarization pipeline using [`Pipeline`] and [`ModelRegistry`].
+//! Build a diarization pipeline using `Pipeline` and `ModelRegistry`.
 //! See the `pipeline` module for details.
 
 pub mod ahc;
