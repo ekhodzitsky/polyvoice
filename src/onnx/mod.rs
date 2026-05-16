@@ -16,9 +16,9 @@ pub struct OnnxValidationError {
     pub detail: String,
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError>`
-/// { TODO: postcondition }
+/// { true }
 /// Validate that `path` points to a file with a plausible ONNX header.
 ///
 /// Checks (in order):

@@ -46,9 +46,9 @@ pub struct AhcClusterer {
 }
 
 impl AhcClusterer {
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn new(max_clusters: usize) -> Self
-    /// { TODO: postcondition }
+    /// { ret.max_clusters >= 1 }
     pub fn new(max_clusters: usize) -> Self {
         Self {
             max_clusters: max_clusters.max(1),
@@ -192,9 +192,9 @@ pub struct NmeScClusterer {
 
 #[cfg(feature = "spectral")]
 impl NmeScClusterer {
-    /// { TODO: precondition }
+    /// { true }
     /// pub fn new(max_clusters: usize) -> Self
-    /// { TODO: postcondition }
+    /// { ret.max_clusters >= 1 }
     pub fn new(max_clusters: usize) -> Self {
         Self {
             max_clusters: max_clusters.max(1),
