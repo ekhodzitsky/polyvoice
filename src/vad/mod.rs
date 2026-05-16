@@ -60,9 +60,9 @@ pub struct EnergyVad {
 }
 
 impl EnergyVad {
-    /// { TODO: precondition }
+    /// { frame_size > 0 }
     /// pub fn new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Self
-    /// { TODO: postcondition }
+    /// { true }
     /// Create an energy-based voice activity detector.
     ///
     /// `threshold_db` is the energy threshold in dB (converted internally to linear).
@@ -133,9 +133,9 @@ pub struct VadStateMachine {
 }
 
 impl VadStateMachine {
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn new(threshold: f32, min_silence_frames: usize, min_speech_frames: usize) -> Self`
-    /// { TODO: postcondition }
+    /// { true }
     /// Create a new state machine.
     pub fn new(threshold: f32, min_silence_frames: usize, min_speech_frames: usize) -> Self {
         Self {
@@ -148,9 +148,9 @@ impl VadStateMachine {
         }
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn advance(&mut self, prob: f32, frame: usize) -> Option<VadEvent>`
-    /// { TODO: postcondition }
+    /// { true }
     /// Advance by one frame probability.
     ///
     /// Returns [`VadEvent::SpeechStart`] when speech begins and
@@ -181,9 +181,9 @@ impl VadStateMachine {
         None
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn flush(&mut self, frame: usize) -> Option<VadEvent>`
-    /// { TODO: postcondition }
+    /// { !self.in_speech }
     /// Finalize any in-flight speech region.
     ///
     /// Returns [`VadEvent::SpeechEnd`] if a region was active.
@@ -200,26 +200,26 @@ impl VadStateMachine {
         None
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn in_speech(&self) -> bool`
-    /// { TODO: postcondition }
+    /// { ret == self.in_speech }
     /// Whether the detector is currently inside a speech region.
     pub fn in_speech(&self) -> bool {
         self.in_speech
     }
 
-    /// { TODO: precondition }
+    /// { true }
     /// `pub fn min_speech_frames(&self) -> usize`
-    /// { TODO: postcondition }
+    /// { ret == self.min_speech_frames }
     /// Minimum speech frames required for a region to be emitted.
     pub fn min_speech_frames(&self) -> usize {
         self.min_speech_frames
     }
 }
 
-/// { TODO: precondition }
+/// { true }
 /// `pub fn segment_speech<V: VoiceActivityDetector>( vad: &mut V, samples: &[f32], config: &DiarizationConfig, vad_config: &VadConfig, ) -> Result<Vec<(usize, usize)>, VadError>`
-/// { TODO: postcondition }
+/// { ret.as_ref().map_or(true, |v| v.iter().all(|(s, e)| s < e)) }
 /// Segment speech regions using a voice activity detector.
 ///
 /// Returns a list of `(start_sample, end_sample)` pairs where speech was detected.
