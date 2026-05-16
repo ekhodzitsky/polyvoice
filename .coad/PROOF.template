@@ -1,0 +1,33 @@
+---
+schema_version: 1
+kind: proof_contract
+proof_id:
+claim: <claim being proven>
+required:
+  - kind: unit-test
+    target:
+    command:
+    blocks_readiness: true
+accepted_missing: []
+artifacts: []
+---
+
+# Proof: <proof-id>
+
+## Claim
+
+State the exact claim this proof accepts or rejects.
+
+## Evidence
+
+List command outputs, artifact paths, review reports, or manual verification records.
+
+## Example
+
+```
+Claim: DER of identical ref/hyp is exactly 0.
+Evidence:
+  - cargo test --test property_der_test::der_identical_ref_hyp_is_zero
+    test der_identical_ref_hyp_is_zero ... ok
+  - 1000 proptest cases passed
+```

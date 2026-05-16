@@ -1,12 +1,16 @@
+<!-- From: /Users/ekhodzitsky/Documents/personal/polyvoice/AGENTS.md -->
 # Guidelines for Correct Rust with polyvoice
 
-> Version: 1.0.0 | Based on https://github.com/ekhodzitsky/kimi-guidelines
+> Version: 2.0.0 | COAD-native correctness guidelines
 
 ## Meta Principle
 
 Before applying any rule, ask: **what problem does this solve?**
 
-A newtype, a Hoare triple, or a refactor is justified only if it prevents a concrete bug, clarifies an invariant, or removes a footgun. If the answer is "it looks better" or "the score goes up" — revert. Decoration is not engineering.
+A newtype, a Hoare triple, or a refactor is justified only if it prevents a
+concrete bug, clarifies an invariant, or removes a footgun. If the answer is
+"it looks better" or "the score goes up" — revert. Decoration is not
+engineering.
 
 ## The 5 Rules
 
@@ -43,7 +47,8 @@ Patterns: [docs/FORMALISM.md](docs/FORMALISM.md) §1 (Hoare triples, debug_asser
 
 ### 3. No unwrap/expect/panic Without Proof
 
-Handle all cases. Use `Result`/`Option`. `unwrap()` is allowed only in tests or with compile-time proof.
+Handle all cases. Use `Result`/`Option`. `unwrap()` is allowed only in tests or
+with compile-time proof.
 
 ```rust
 // BAD
@@ -53,7 +58,7 @@ let speaker = cluster.assign(&embedding).0;
 let (speaker, confidence) = cluster.assign(&embedding);
 ```
 
-Enforced by: `cargo kimi check` + clippy `unwrap_used = "deny"`
+Enforced by: clippy `unwrap_used = "deny"` + code review
 
 ### 4. Verify with Property Tests
 
@@ -73,11 +78,11 @@ Patterns: [docs/FORMALISM.md](docs/FORMALISM.md) §4 (proptest, fuzzing)
 
 ### 5. Check Contracts Automatically
 
-Run mechanized verification before every commit:
+Run verification before every commit:
 
 ```bash
-# Check contracts, unwrap/expect/panic, unsafe SAFETY comments
-cargo kimi check
+# COAD repository compliance
+coad check .
 
 # Full verification
 cargo test
@@ -86,6 +91,31 @@ cargo doc --no-deps
 ```
 
 ---
+
+## COAD Agent Development Coordination
+
+This repository uses COAD (Contract-Orchestrated Agent Development) for
+agent work coordination.
+
+COAD repository: https://github.com/ekhodzitsky/coad
+
+Before editing, identify the relevant workcell and read its
+`MODULE_CONTRACT.md`, `README.md`, and `TODO.md`.
+
+Before claiming completion:
+
+```bash
+coad check .
+```
+
+One leaf workcell may have only one active write agent. Read-only agents may
+investigate, review, or verify in parallel. Composite workcell agents orchestrate
+child work but do not directly edit child implementation files.
+
+Keep at least one `MODULE_CONTRACT.md` for the module being changed. The module
+is a workcell: one bounded agent workspace with ownership, surfaces, consumers,
+invariants, verification, and write authority. The module directory must include
+`README.md` and `TODO.md` for future agents.
 
 ## Reference (Optional)
 

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0-alpha.5]
+
+### Added
+
+- COAD (Contract-Orchestrated Agent Development) adoption across the entire
+  repository.
+- `MODULE_CONTRACT.md`, `README.md`, `TODO.md` for all 25 workcells.
+- Project-level COAD files: `COAD_PROJECT_STANDARD.md`, `AGENT_FLOW.md`.
+- `.coad/` directory with orchestration templates for coordinated agent work
+  (task, proof, handoff, review, integration, goal, write lease).
+- Unit tests for `kmeans`, `wav`, and `pipeline` modules.
+
 ### Reverted (M6b rollback — Path A)
 
 - **Default pipeline restored to v0.5.2 legacy.** The M6b new pipeline

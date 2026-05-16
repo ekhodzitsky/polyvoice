@@ -83,3 +83,24 @@ pub fn read_wav(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
 
     Ok((mono, sample_rate))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_file_error() {
+        let result = read_wav(Path::new("/nonexistent/path/file.wav"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn wav_error_display() {
+        let e = WavError::FileTooLarge {
+            size: 2_000_000_000,
+            max: MAX_WAV_FILE_SIZE,
+        };
+        let msg = format!("{e}");
+        assert!(msg.contains("too large"));
+    }
+}
