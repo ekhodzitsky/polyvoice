@@ -18,7 +18,7 @@ workcell:
     - src/bin/
   context_budget:
     max_files: 6
-    max_source_lines: 600
+    max_source_lines: 700
     max_contract_lines: 180
     max_readme_lines: 120
     max_todo_lines: 80

@@ -1,19 +1,26 @@
-//! DER baseline validation. Numbers are verified against a full VoxConverse-test
-//! run with the legacy v0.5 pipeline (threshold=0.45, collar=0.25).
+//! DER baseline validation. Numbers are verified against committed benchmark artifacts.
 
 use serde::Deserialize;
 use std::path::Path;
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct Baseline {
     schema: String,
-    voxconverse_test: VoxConverse,
+    #[serde(rename = "crate_version")]
+    crate_version: Option<String>,
+    voxconverse_test: DatasetBaseline,
+    #[serde(default)]
+    voxconverse_test_10files: Option<DatasetBaseline>,
+    e2e_smoke: DatasetBaseline,
+    ami_test_single: DatasetBaseline,
 }
 
 #[derive(Deserialize)]
-struct VoxConverse {
+struct DatasetBaseline {
     files: usize,
     profile: String,
+    #[serde(rename = "der_collar_0_25")]
     der_collar_0_25: f64,
     tolerance: f64,
     #[serde(rename = "_status")]
@@ -25,14 +32,16 @@ fn der_baseline_json_parses() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/der_baseline.json");
     let raw = std::fs::read_to_string(&path).expect("read der_baseline.json");
     let parsed: Baseline = serde_json::from_str(&raw).expect("parse der_baseline.json");
-    assert_eq!(parsed.schema, "polyvoice-der-baseline-v1");
+    assert_eq!(parsed.schema, "polyvoice-der-baseline-v2");
     assert_eq!(parsed.voxconverse_test.profile, "balanced");
     assert_eq!(parsed.voxconverse_test.tolerance, 1.0);
     assert!(parsed.voxconverse_test.status.contains("operational"));
+    assert!(parsed.e2e_smoke.status.contains("operational"));
+    assert!(parsed.ami_test_single.status.contains("operational"));
 }
 
 #[test]
-fn der_baseline_has_verified_numbers() {
+fn der_baseline_voxconverse_has_verified_numbers() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/der_baseline.json");
     let raw = std::fs::read_to_string(&path).expect("read");
     let parsed: Baseline = serde_json::from_str(&raw).expect("parse");
@@ -45,5 +54,19 @@ fn der_baseline_has_verified_numbers() {
         parsed.voxconverse_test.der_collar_0_25 > 0.0
             && parsed.voxconverse_test.der_collar_0_25 < 100.0,
         "DER must be a sane percentage"
+    );
+}
+
+#[test]
+fn der_baseline_ami_has_verified_numbers() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/der_baseline.json");
+    let raw = std::fs::read_to_string(&path).expect("read");
+    let parsed: Baseline = serde_json::from_str(&raw).expect("parse");
+
+    assert_eq!(parsed.ami_test_single.files, 1);
+    assert!(
+        parsed.ami_test_single.der_collar_0_25 > 0.0
+            && parsed.ami_test_single.der_collar_0_25 < 100.0,
+        "AMI DER must be a sane percentage"
     );
 }
