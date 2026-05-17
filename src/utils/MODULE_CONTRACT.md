@@ -74,26 +74,13 @@ dependencies:
       reason: Segment type.
   external: []
 consumers:
-  - path: src/ahc/mod.rs
+  - path: .
     uses:
       - cosine_similarity
       - l2_normalize
-  - path: src/cluster/mod.rs
-    uses:
-      - cosine_similarity
-      - l2_normalize
-  - path: src/spectral/mod.rs
-    uses:
-      - cosine_similarity
-  - path: src/ecapa/mod.rs
-    uses:
-      - l2_normalize
-  - path: src/onnx/mod.rs
-    uses:
-      - l2_normalize
-  - path: src/lib.rs
-    uses:
+      - mean_vector
       - merge_segments
+      - polyvoice_internal
 invariants:
   - id: cosine-range
     rule: cosine_similarity returns value in [-1.0, 1.0].

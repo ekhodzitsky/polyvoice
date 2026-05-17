@@ -75,14 +75,13 @@ dependencies:
       reason: SpeakerId, SpeakerTurn, TimeRange.
   external: []
 consumers:
-  - path: src/pipeline/mod.rs
+  - path: .
     uses:
       - Resegmenter
       - OverlapResegmenter
-  - path: tests/resegmenter_test.rs
-    uses:
-      - OverlapResegmenter
       - compute_centroids
+      - extract_overlap_time_ranges
+      - polyvoice_internal
 invariants:
   - id: centroids-normalized
     rule: compute_centroids outputs L2-normalized vectors.

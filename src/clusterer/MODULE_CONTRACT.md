@@ -72,14 +72,13 @@ dependencies:
   external: []
 
 consumers:
-  - path: src/streaming/mod.rs
+  - path: .
     uses:
       - Clusterer
-  - path: tests/clusterer_test.rs
-    uses:
-      - Clusterer
+      - ClustererError
       - AhcClusterer
       - NmeScClusterer
+      - polyvoice_internal
 invariants:
   - id: cluster-labels-contiguous
     rule: Output labels are contiguous integers starting from 0.

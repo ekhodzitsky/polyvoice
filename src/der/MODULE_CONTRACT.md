@@ -71,24 +71,12 @@ dependencies:
       reason: SpeakerTurn, TimeRange, SpeakerId are the input/output data shapes.
   external: []
 consumers:
-  - path: tests/der_baseline_test.rs
+  - path: .
     uses:
       - compute_der
-  - path: tests/der_regression_test.rs
-    uses:
-      - compute_der
-  - path: tests/der_ami_baseline_test.rs
-    uses:
-      - compute_der
-  - path: tests/property_der_test.rs
-    uses:
-      - compute_der
-  - path: tests/e2e_smoke_test.rs
-    uses:
-      - compute_der
-  - path: benches/der_ami.rs
-    uses:
-      - compute_der (duplicated locally, see Known Gaps)
+      - DerResult
+      - compute_der_from_rttm
+      - polyvoice_internal
 invariants:
   - id: der-range
     rule: der field of DerResult is always in [0.0, 1.0].

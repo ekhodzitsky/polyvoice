@@ -53,7 +53,12 @@ surface:
 dependencies:
   internal: []
   external: []
-consumers: []
+consumers:
+  - path: .
+    uses:
+      - polyvoice
+      - polyvoice-bench
+      - polyvoice_internal
 invariants:
   - id: thin-wrapper
     rule: CLI binaries contain no business logic; all algorithms live in lib modules.

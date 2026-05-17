@@ -82,32 +82,15 @@ dependencies:
   internal: []
   external: []
 consumers:
-  - path: src/cluster/mod.rs
-    uses: [ClusterConfig, SpeakerId]
-  - path: src/clusterer/mod.rs
-    uses: [SpeakerId]
-  - path: src/pipeline/mod.rs
-    uses: [DiarizationConfig]
-  - path: src/vad/mod.rs
-    uses: [DiarizationConfig]
-  - path: src/streaming/mod.rs
-    uses: [DiarizationConfig, SpeakerTurn]
-  - path: src/overlap/mod.rs
-    uses: [Segment, SpeakerId]
-  - path: src/rttm/mod.rs
-    uses: [SpeakerId, SpeakerTurn, TimeRange]
-  - path: src/utils/mod.rs
-    uses: [Segment]
-  - path: src/ecapa/mod.rs
-    uses: [DiarizationConfig]
-  - path: src/onnx/mod.rs
-    uses: [DiarizationConfig]
-  - path: src/segmentation/mod.rs
-    uses: [Confidence, TimeRange]
-  - path: src/resegmentation/mod.rs
-    uses: [SpeakerId, SpeakerTurn, TimeRange]
-  - path: src/models/mod.rs
-    uses: [Profile]
+  - path: .
+    uses:
+      - SpeakerId / SpeakerIdRemap
+      - DiarizationConfig / ClusterConfig / WindowConfig / SpeechFilterConfig
+      - Profile
+      - SpeakerTurn / Segment / TimeRange / WordAlignment / DiarizationResult
+      - SampleRate / Confidence / Seconds
+      - remap_segments / remap_turns
+      - polyvoice_internal
 invariants:
   - id: sample-rate-range
     rule: SampleRate constructor rejects values outside 8000..=192000.
