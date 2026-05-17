@@ -29,7 +29,12 @@ impl SpeakerIdRemap {
     /// { ret.mapping.len() == mapping.len() }
     pub fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Self {
         debug_assert!(
-            mapping.iter().map(|(old, _)| old).collect::<std::collections::HashSet<_>>().len() == mapping.len(),
+            mapping
+                .iter()
+                .map(|(old, _)| old)
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                == mapping.len(),
             "duplicate old SpeakerIds in mapping"
         );
         Self { mapping }

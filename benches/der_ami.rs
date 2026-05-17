@@ -29,7 +29,10 @@ fn bench_der_synthetic(c: &mut Criterion) {
     let perfect_turns = to_speaker_turns(&perfect_hyp);
     let result = compute_der_from_rttm(&reference, &perfect_turns, 0.0);
     eprintln!("Synthetic DER (perfect): {:.1}%", result.der * 100.0);
-    assert!(result.der < 0.05, "perfect hypothesis should have near-zero DER");
+    assert!(
+        result.der < 0.05,
+        "perfect hypothesis should have near-zero DER"
+    );
 
     let imperfect_hyp: Vec<(f64, f64, u32)> = vec![
         (0.0, 3.0, 0),
