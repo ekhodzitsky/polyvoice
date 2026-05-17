@@ -255,7 +255,6 @@ fn main() -> Result<()> {
     }
 }
 
-
 #[cfg(test)]
 mod prop_tests {
     use super::*;

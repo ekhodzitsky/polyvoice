@@ -5,10 +5,7 @@ use proptest::prelude::*;
 
 fn embedding_vec() -> impl Strategy<Value = Vec<Vec<f32>>> {
     (4usize..=16, 1usize..=32).prop_flat_map(|(dim, n)| {
-        prop::collection::vec(
-            prop::collection::vec(-1.0f32..=1.0f32, dim..=dim),
-            n..=n,
-        )
+        prop::collection::vec(prop::collection::vec(-1.0f32..=1.0f32, dim..=dim), n..=n)
     })
 }
 
