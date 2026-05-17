@@ -98,23 +98,19 @@ dependencies:
       scope: parsing
       reason: Manifest TOML deserialization.
 consumers:
-  - path: src/ffi/mod.rs
-    uses:
-      - ModelRegistry
-  - path: src/pipeline/mod.rs
+  - path: .
     uses:
       - ModelRegistry
       - ProfileModels
-  - path: tests/der_regression_test.rs
-    uses:
-      - ModelRegistry
-  - path: tests/der_ami_baseline_test.rs
-    uses:
-      - ModelRegistry
-  - path: tests/m5_manifest_smoke_test.rs
-    uses:
-      - ModelRegistry
+      - RegistryError
       - Manifest
+      - DEFAULT_MANIFEST_TOML
+      - ureq
+      - sha2
+      - minisign-verify
+      - dirs
+      - toml
+      - polyvoice_internal
 invariants:
   - id: verify-sha256
     rule: Downloaded files must match manifest SHA-256 before use.

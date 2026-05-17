@@ -53,21 +53,11 @@ dependencies:
   external: []
 
 consumers:
-  - path: src/pipeline/mod.rs
+  - path: .
     uses:
       - read_wav
-  - path: tests/e2e_smoke_test.rs
-    uses:
-      - read_wav
-  - path: tests/der_regression_test.rs
-    uses:
-      - read_wav
-  - path: tests/der_ami_baseline_test.rs
-    uses:
-      - read_wav
-  - path: benches/der_ami.rs
-    uses:
-      - read_wav
+      - WavError
+      - polyvoice_internal
 invariants:
   - id: sample-rate-exposed
     rule: read_wav returns the actual sample rate from the WAV header.

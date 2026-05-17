@@ -93,13 +93,15 @@ dependencies:
       reason: Confidence, TimeRange for segment timestamps.
   external: []
 consumers:
-  - path: src/pipeline/mod.rs
+  - path: .
     uses:
       - Segmenter
       - PowersetSegmenter
-  - path: src/resegmentation/mod.rs
-    uses:
-      - extract_overlap_time_ranges
+      - PowersetDecoder
+      - Aggregator
+      - FrameLabel
+      - MIN_AUDIO_SAMPLES
+      - polyvoice_internal
 invariants:
   - id: decoder-deterministic
     rule: PowersetDecoder with identical logits always produces identical output.

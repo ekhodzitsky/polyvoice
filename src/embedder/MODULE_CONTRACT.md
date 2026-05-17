@@ -95,17 +95,17 @@ dependencies:
       scope: concurrency
       reason: Lock-free queue for EmbedderPool.
 consumers:
-  - path: src/streaming/mod.rs
+  - path: .
     uses:
       - Embedder
-  - path: tests/embedder_test.rs
-    uses:
-      - Embedder
+      - EmbedderError
+      - EmbedderPool
+      - apply_overlap_mask
       - CamPlusPlusExtractor
       - ResNet34Adapter
-  - path: tests/loom_pool.rs
-    uses:
-      - EmbedderPool
+      - ort
+      - crossbeam-queue
+      - polyvoice_internal
 invariants:
   - id: embedder-output-normalized
     rule: Embedder implementations must output L2-normalized embeddings
