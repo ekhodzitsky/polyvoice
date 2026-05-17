@@ -1,5 +1,8 @@
 {
-  "schema": "polyvoice-der-baseline-v1",
+  "schema": "polyvoice-der-baseline-v2",
+  "crate_version": "0.6.0-alpha.7",
+  "git_sha": "ddbfb77daccf74bfc9664da356fe27631d146981",
+  "command_line": "cargo run --release --features cli --bin polyvoice-bench -- data/<dataset> --profile balanced --collar 0.25",
   "voxconverse_test": {
     "files": 232,
     "profile": "balanced",
@@ -7,11 +10,24 @@
     "der_no_collar": null,
     "tolerance": 1.0,
     "model_versions": {
-      "silero_vad": "v5",
-      "wespeaker_resnet34": "fp32"
+      "segmenter": "silero_vad",
+      "embedder": "wespeaker_resnet34"
     },
     "_status": "operational — filled 2026-05-08 by v0.5.2 legacy pipeline (threshold=0.45)",
     "_filled_by": "polyvoice-bench-v052"
+  },
+  "voxconverse_test_10files": {
+    "files": 10,
+    "profile": "balanced",
+    "der_collar_0_25": 17.43,
+    "der_no_collar": 25.99,
+    "tolerance": 1.0,
+    "model_versions": {
+      "segmenter": "silero_vad",
+      "embedder": "wespeaker_resnet34"
+    },
+    "_status": "operational — 10-file subset, v0.6.0-alpha.7 legacy pipeline (threshold=0.45)",
+    "_filled_by": "polyvoice-bench-v0.6"
   },
   "e2e_smoke": {
     "files": 1,
@@ -20,8 +36,8 @@
     "der_no_collar": null,
     "tolerance": 1.0,
     "model_versions": {
-      "silero_vad": "v5",
-      "wespeaker_resnet34": "fp32"
+      "segmenter": "silero_vad",
+      "embedder": "wespeaker_resnet34"
     },
     "_status": "operational — bundled 26 s clip, v0.6.0-alpha.3 legacy pipeline (threshold=0.45)",
     "_filled_by": "cargo test --all-features --test e2e_smoke_test -- --ignored"
@@ -29,14 +45,14 @@
   "ami_test_single": {
     "files": 1,
     "profile": "balanced",
-    "der_collar_0_25": null,
-    "der_no_collar": null,
+    "der_collar_0_25": 36.30,
+    "der_no_collar": 44.73,
     "tolerance": 1.0,
     "model_versions": {
-      "silero_vad": "v5",
-      "wespeaker_resnet34": "fp32"
+      "segmenter": "silero_vad",
+      "embedder": "wespeaker_resnet34"
     },
-    "_status": "pending — requires long-running benchmark (~30 min on CPU). Run: cargo test --all-features --test der_ami_baseline_test -- --ignored",
-    "_filled_by": null
+    "_status": "operational — EN2002a single meeting, v0.6.0-alpha.7 legacy pipeline (threshold=0.45)",
+    "_filled_by": "polyvoice-bench-v0.6"
   }
 }

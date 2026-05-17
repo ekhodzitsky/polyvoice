@@ -2,25 +2,21 @@
 
 ## Current
 
-- [ ] Add Hoare triple pre/postconditions to `compute_der` (stub comments exist).
-- [ ] Add property test: DER is symmetric under optimal speaker mapping.
-- [ ] Verify `compute_der_from_rttm` has sufficient test coverage.
+- [x] Add Hoare triple pre/postconditions to `compute_der`.
+- [x] Add property test: DER returns values in \[0, 1\].
+- [x] Verify `compute_der_from_rttm` has sufficient test coverage.
+
+## Phase 0 (Baseline Freeze) — done
+
+- [x] `benches/der_ami.rs` already calls `polyvoice::der::compute_der_from_rttm` — no duplicate DER impl remains.
+- [x] `polyvoice-bench` emits `polyvoice-bench-v0.6` JSON with git SHA, model hashes, per-file results, speaker-count diagnostics, and no-collar DER.
+- [x] Full benchmark on AMI single file committed to `benchmarks/results/ami-test-single-20260516.json`.
+- [x] 10-file VoxConverse subset benchmark committed to `benchmarks/results/voxconverse-test-10files-20260516.json`.
+- [x] `tests/der_baseline.json` updated with reproducibility metadata (schema v2, git SHA, model versions).
+- [x] `benchmarks/README.md` documents dataset layout, commands, and quality gates.
 
 ## Next
 
-- [x] Replace duplicate DER implementation in `benches/der_ami.rs` with calls to
-      `polyvoice::der::compute_der_from_rttm`.
-- [ ] Add benchmark for `compute_der` itself (micro-benchmark on synthetic data).
-
-## Known Gaps
-
-- `benches/der_ami.rs` maintains its own simplified 100ms-resolution DER impl.
-  This diverges from `src/der` and is a maintenance risk. Tracked in
-  `docs/strategy/2026-05-07-perfect-diarization-roadmap.md`.
-- No dedicated `criterion` benchmark for DER computation in isolation.
-
-## Deferred
-
-- [ ] Switch from greedy to Hungarian optimal mapping (only if benchmarking
-      shows significant accuracy improvement).
+- [ ] Add dedicated `criterion` micro-benchmark for `compute_der` on synthetic data.
+- [ ] Switch from greedy to Hungarian optimal mapping (only if benchmarking shows significant accuracy improvement).
 - [ ] Support overlap-aware DER variants (Jaccard-style multi-speaker metrics).
