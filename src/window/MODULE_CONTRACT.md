@@ -53,9 +53,11 @@ dependencies:
   external: []
 
 consumers:
-  - path: src/streaming/mod.rs
+  - path: .
     uses:
+      - WindowIter
       - WindowBuffer
+      - polyvoice_internal
 invariants:
   - id: window-size-constant
     rule: WindowIter yields windows of exactly the configured size.

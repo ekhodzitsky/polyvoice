@@ -71,9 +71,13 @@ dependencies:
       scope: ml-runtime
       reason: ONNX Runtime inference.
 consumers:
-  - path: src/lib.rs
+  - path: .
     uses:
+      - validate_onnx_header
+      - OnnxValidationError
       - OnnxEmbeddingExtractor
+      - ort
+      - polyvoice_internal
 invariants:
   - id: header-validation-false-positive-rate
     rule: validate_onnx_header rejects non-ONNX files and accepts valid ONNX files.

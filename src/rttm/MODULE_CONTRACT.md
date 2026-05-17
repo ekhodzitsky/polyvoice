@@ -100,21 +100,16 @@ dependencies:
       reason: SpeakerId, SpeakerTurn, TimeRange.
   external: []
 consumers:
-  - path: tests/der_regression_test.rs
+  - path: .
     uses:
+      - RttmSegment
+      - RttmError
+      - parse_rttm
       - parse_rttm_file
       - group_by_file
-      - to_speaker_turns
-  - path: tests/der_ami_baseline_test.rs
-    uses:
-      - parse_rttm_file
-      - group_by_file
-      - to_speaker_turns
-  - path: tests/e2e_smoke_test.rs
-    uses:
-      - parse_rttm_file
       - to_speaker_turns
       - write_rttm
+      - polyvoice_internal
 invariants:
   - id: roundtrip
     rule: write_rttm ∘ parse_rttm preserves segments (within formatting).

@@ -68,9 +68,11 @@ dependencies:
       reason: Embedder for embedding extraction.
   external: []
 consumers:
-  - path: tests/streaming_test.rs
+  - path: .
     uses:
       - StreamingPipeline
+      - StreamingError
+      - polyvoice_internal
 invariants:
   - id: turns-monotonic
     rule: Output speaker turns are monotonically ordered by time.

@@ -61,13 +61,12 @@ dependencies:
   internal: []
   external: []
 consumers:
-  - path: src/ecapa/mod.rs
+  - path: .
     uses:
+      - FbankConfig
       - FbankExtractor
       - apply_cmvn
-  - path: src/onnx/mod.rs
-    uses:
-      - FbankExtractor
+      - polyvoice_internal
 invariants:
   - id: fbank-non-negative
     rule: FbankExtractor outputs non-negative mel energies (before CMVN).
