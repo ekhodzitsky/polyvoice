@@ -224,6 +224,11 @@ impl Clusterer for NmeScClusterer {
         if n == 1 {
             return Ok(vec![0]);
         }
+        // Fallback: tiny k-NN graphs collapse to 1 cluster; delegate to AHC.
+        const FALLBACK_N: usize = 8;
+        if n < FALLBACK_N {
+            return AhcClusterer::new(self.max_clusters).cluster(embeddings);
+        }
 
         // Build k-NN cosine affinity matrix.
         let k_nn = (n / 10).clamp(2, 10);
@@ -369,5 +374,19 @@ mod nme_sc_tests {
             .expect("synthetic clusters must be clusterable");
         let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
         assert!(unique.len() <= 2);
+    }
+
+    #[test]
+    fn nme_sc_fallback_to_ahc_on_small_n() {
+        let c = NmeScClusterer::default();
+        // 3 well-separated embeddings — with n < 10 NME-SC delegates to AHC.
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 1.0],
+        ];
+        let labels = c.cluster(&embeddings).unwrap();
+        let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(unique.len(), 3, "AHC fallback should preserve 3 clusters");
     }
 }

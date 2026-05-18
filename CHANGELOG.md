@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-05-18
+
+### Summary
+
+Pipeline v2 is now the default for CLI `diarize` command. ResNet34 + AHC
+replaces broken CAM++ + NME-SC as the default embedder/clusterer pair,
+fixing the DER regression and improving accuracy over the legacy pipeline.
+
+### Changed
+
+- `pipeline_v2` module is no longer gated behind a Cargo feature; it is
+  available whenever `onnx + segmentation + embedder + clusterer + resegmentation`
+  features are enabled (which the `cli` feature now includes).
+- CLI `diarize` command now uses Pipeline v2 for `mobile` and `balanced`
+  profiles instead of the legacy v0.5 pipeline.
+- Default clusterer in Pipeline v2 changed from NME-SC to AHC.
+- Default embedder in `Mobile` profile changed from CAM++ to ResNet34
+  (CAM++ ONNX model produces near-identical embeddings regardless of input).
+- Model manifest updated: both `mobile` and `balanced` profiles now use
+  `powerset_fp32` segmenter + `wespeaker_resnet34` embedder.
+
+### Fixed
+
+- DER regression in Pipeline v2: achieved **4.79%** on e2e-smoke test
+  (vs legacy 6.62%, vs broken v2 with CAM++ 49.91%).
+- NME-SC fallback to AHC for small-n inputs (n < 8) to avoid collapse
+  to a single cluster.
+
 ## [0.6.0] - 2026-05-18
 
 ### Summary
