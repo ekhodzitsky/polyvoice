@@ -44,15 +44,29 @@ pub enum ClustererError {
 /// `crate::ahc::agglomerative_cluster_auto` through the v1.0 `Clusterer` trait.
 pub struct AhcClusterer {
     max_clusters: usize,
+    /// Fixed cosine-similarity threshold. When `Some`, `agglomerative_cluster`
+    /// is used (legacy behaviour). When `None`, automatic threshold selection
+    /// via `agglomerative_cluster_auto_max_clusters` is used.
+    threshold: Option<f32>,
 }
 
 impl AhcClusterer {
     /// { true }
     /// pub fn new(max_clusters: usize) -> Self
     /// { ret.max_clusters >= 1 }
+    /// Create with automatic threshold selection.
     pub fn new(max_clusters: usize) -> Self {
         Self {
             max_clusters: max_clusters.max(1),
+            threshold: None,
+        }
+    }
+
+    /// Create with a fixed merge threshold (legacy behaviour).
+    pub fn with_threshold(max_clusters: usize, threshold: f32) -> Self {
+        Self {
+            max_clusters: max_clusters.max(1),
+            threshold: Some(threshold),
         }
     }
 }
@@ -71,7 +85,10 @@ impl Clusterer for AhcClusterer {
         if embeddings.len() == 1 {
             return Ok(vec![0]);
         }
-        let (labels, _threshold) = crate::ahc::agglomerative_cluster_auto(embeddings);
+        let labels = match self.threshold {
+            Some(t) => crate::ahc::agglomerative_cluster(embeddings, t),
+            None => crate::ahc::agglomerative_cluster_auto_max_clusters(embeddings, self.max_clusters).0,
+        };
         Ok(labels)
     }
 

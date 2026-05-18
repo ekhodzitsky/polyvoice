@@ -3,8 +3,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::Pipeline as LegacyPipeline;
-use polyvoice::pipeline_v2::Pipeline as V2Pipeline;
+use polyvoice::pipeline::Pipeline;
 use polyvoice::rttm::write_rttm;
 use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate};
 use polyvoice::vad::VadConfig;
@@ -90,44 +89,40 @@ fn cmd_diarize(
         eprintln!("Loading {profile:?} profile from registry...");
     }
 
-    let (samples, sr_hz) = read_wav(&wav).with_context(|| format!("read WAV {}", wav.display()))?;
-    let sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
+    let models = registry
+        .ensure_for_profile(profile)
+        .context("ensure models")?;
+    let embedding_dim = profile.embedding_dim();
+    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
+        .context("load embedder")?;
+    let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
 
-    let result = match profile {
-        Profile::Mobile | Profile::Balanced => {
-            let pipeline = V2Pipeline::builder()
-                .profile(profile)
-                .with_models_from(registry)
-                .build()
-                .context("build v2 pipeline")?;
-            if !quiet {
-                eprintln!("Running v2 diarization on {} samples ({} Hz)...", samples.len(), sr_hz);
-            }
-            pipeline.run(&samples, sr).context("v2 pipeline.run failed")?
-        }
-        Profile::Custom => {
-            let models = registry
-                .ensure_for_profile(profile)
-                .context("ensure models")?;
-            let embedding_dim = profile.embedding_dim();
-            let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
-                .context("load embedder")?;
-            let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
-            let config = DiarizationConfig {
-                cluster: ClusterConfig {
-                    threshold,
-                    ..Default::default()
-                },
-                ..DiarizationConfig::default()
-            };
-            let vad_config = VadConfig::default();
-            let pipeline = LegacyPipeline::new(config, vad_config);
-            if !quiet {
-                eprintln!("Running legacy diarization on {} samples ({} Hz)...", samples.len(), sr_hz);
-            }
-            pipeline.run(&samples, &extractor, &mut vad).context("legacy pipeline.run failed")?
-        }
+    let config = DiarizationConfig {
+        cluster: ClusterConfig {
+            threshold,
+            ..Default::default()
+        },
+        ..DiarizationConfig::default()
     };
+    let vad_config = VadConfig::default();
+    let pipeline = Pipeline::new(config, vad_config);
+
+    if !quiet {
+        eprintln!("Reading {}...", wav.display());
+    }
+    let (samples, sr_hz) = read_wav(&wav).with_context(|| format!("read WAV {}", wav.display()))?;
+    let _sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
+
+    if !quiet {
+        eprintln!(
+            "Running diarization on {} samples ({} Hz)...",
+            samples.len(),
+            sr_hz
+        );
+    }
+    let result = pipeline
+        .run(&samples, &extractor, &mut vad)
+        .context("pipeline.run failed")?;
     if !quiet {
         eprintln!(
             "Done — {} turns, {} speakers",

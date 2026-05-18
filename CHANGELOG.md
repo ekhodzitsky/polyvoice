@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-05-18
+
+### Fixed
+
+- **CLI `diarize` reverted to legacy pipeline** (v0.5). Pipeline v2
+  (PowersetSegmenter → ResNet34 → AHC) achieves excellent DER on short clips
+  (4.79% on e2e-smoke) but degrades on long recordings (VoxConverse ~30%,
+  AMI ~80%). Legacy pipeline remains the stable default until v2 is hardened
+  for long-form audio.
+- `AhcClusterer` now respects `max_clusters` ceiling via
+  `agglomerative_cluster_auto_max_clusters`.
+- `AhcClusterer::with_threshold` added for fixed-threshold mode (legacy
+  behaviour) alongside auto-threshold mode.
+- `FbankOnnxExtractor` zero-pads short inputs below the fbank window length,
+  preventing crashes on sub-25 ms segments from PowersetSegmenter.
+
+### Changed
+
+- `der_baseline.json` updated with `v2_e2e_smoke` entry (4.79% DER).
+
 ## [0.6.1] - 2026-05-18
 
 ### Summary

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 /// `threshold` is the minimum cosine similarity to merge two clusters.
 /// Higher threshold → more clusters (stricter merging).
 pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usize> {
-    ahc_impl(embeddings, threshold).0
+    ahc_impl(embeddings, threshold, 0).0
 }
 
 /// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
@@ -28,15 +28,24 @@ pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usi
 ///
 /// Returns labels and the automatically selected threshold.
 pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32) {
+    agglomerative_cluster_auto_max_clusters(embeddings, 0)
+}
+
+/// Run AHC with automatic threshold selection and a hard ceiling on the number
+/// of clusters.
+pub fn agglomerative_cluster_auto_max_clusters(
+    embeddings: &[Vec<f32>],
+    max_clusters: usize,
+) -> (Vec<usize>, f32) {
     let n = embeddings.len();
     if n == 0 {
         return (Vec::new(), 0.0);
     }
     let threshold = estimate_threshold_from_similarities(embeddings);
-    ahc_impl(embeddings, threshold)
+    ahc_impl(embeddings, threshold, max_clusters)
 }
 
-fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32) -> (Vec<usize>, f32) {
+fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Vec<usize>, f32) {
     let n = embeddings.len();
     if n == 0 {
         return (Vec::new(), 0.0);
@@ -65,7 +74,13 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32) -> (Vec<usize>, f32) {
             }
         }
 
-        if best_sim < threshold {
+        // Hard ceiling: if we are above the ceiling, ignore threshold and
+        // keep merging until we drop to max_clusters (or run out of pairs).
+        let above_ceiling = max_clusters > 0 && max_clusters < n && active_indices.len() > max_clusters;
+        if !above_ceiling && best_sim < threshold {
+            break;
+        }
+        if above_ceiling && best_sim == f32::NEG_INFINITY {
             break;
         }
 
@@ -197,5 +212,18 @@ mod tests {
         let (labels, th) = agglomerative_cluster_auto(&embeddings);
         assert_eq!(labels.len(), 4);
         assert!((0.2..=0.7).contains(&th), "threshold {} out of range", th);
+    }
+
+    #[test]
+    fn test_agglomerative_cluster_auto_max_clusters_caps_count() {
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.9, 0.1, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.1, 0.9, 0.0],
+        ];
+        let (labels, _th) = agglomerative_cluster_auto_max_clusters(&embeddings, 2);
+        let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(unique.len(), 2, "max_clusters=2 must produce exactly 2 clusters");
     }
 }

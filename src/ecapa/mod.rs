@@ -63,6 +63,20 @@ impl EmbeddingExtractor for FbankOnnxExtractor {
             EmbeddingError::InferenceFailed("ONNX session pool exhausted".to_string())
         })?;
 
+        // Zero-pad short inputs to the minimum window length required by fbank.
+        let min_samples = self.fbank.config.win_length;
+        let padded: Vec<f32>;
+        let samples = if samples.len() < min_samples {
+            padded = {
+                let mut v = vec![0.0_f32; min_samples];
+                v[..samples.len()].copy_from_slice(samples);
+                v
+            };
+            &padded
+        } else {
+            samples
+        };
+
         let fbank = self
             .fbank
             .extract(samples)
