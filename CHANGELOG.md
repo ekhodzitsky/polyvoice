@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-18
+
+### Summary
+
+Stable release combining the v1.0 architecture milestones (M0–M6) with the proven
+v0.5.2 legacy pipeline as the default execution path.
+
+### Added
+
+- Model registry with SHA-256 verified ONNX downloads (`polyvoice::models`).
+- Powerset segmentation (`segmentation` feature), Embedder trait + CAM++/ResNet34
+  adapters (`embedder` feature).
+- Clusterer trait with AHC and NME-SC adapters (`clusterer` feature).
+- Overlap-aware resegmentation pass (`resegmentation` feature).
+- Pipeline builder API (`pipeline` feature).
+- INT8 quantized model support in manifest.
+- Model signing with Minisign (Ed25519), TLS hardening (`rustls`), WAV DoS guards,
+  ONNX header validation.
+- Comprehensive property tests and contract verification (Hoare triples) across
+  all modules.
+
+### Changed
+
+- Default pipeline restored to v0.5.2 legacy path (DER ~13.8% on VoxConverse-test).
+- New v1.0 architecture preserved as opt-in via Cargo features.
+
+### Fixed
+
+- See alpha release notes ([0.6.0-alpha.1] through [0.6.0-alpha.8]) for the
+  complete incremental list.
+
 ## [0.6.0-alpha.7]
 
 ### Added
