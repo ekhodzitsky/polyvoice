@@ -1,6 +1,6 @@
 [package]
 name = "polyvoice"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
 description = "Speaker diarization library for Rust — online and offline, ONNX-powered, ecosystem-agnostic"
 license = "MIT"
@@ -31,7 +31,7 @@ ffi = ["onnx", "download"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
 download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
 # CLI binary (polyvoice command).
-cli = ["onnx", "download", "dep:clap"]
+cli = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "dep:clap"]
 
 # Execution providers (forward `ort` features). Used by Pipeline implementations from M1+.
 coreml = ["onnx", "ort/coreml"]

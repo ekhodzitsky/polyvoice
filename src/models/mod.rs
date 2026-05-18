@@ -291,15 +291,16 @@ mod tests {
     }
 
     #[test]
-    fn profiles_share_segmenter_diverge_on_embedder_in_m5() {
-        // M5+: Mobile and Balanced share the same INT8 segmenter (powerset)
-        // but diverge on the embedder (CAM++ for Mobile, ResNet34 for Balanced).
-        // Replaces the M0 stub `both_profiles_resolve_to_legacy_models_in_m0`.
+    fn profiles_share_segmenter_and_embedder_in_v2_hotfix() {
+        // V2 hotfix (2026-05-18): both Mobile and Balanced use ResNet34 + AHC
+        // because CAM++ ONNX produces near-identical embeddings (cosine sim ~0.85
+        // between different speakers). NME-SC also falls back to AHC on small n.
+        // Revert this test once CAM++ is re-converted and NME-SC is fixed.
         let m = default_manifest();
         let mob = m.profile("mobile").unwrap();
         let bal = m.profile("balanced").unwrap();
-        assert_eq!(mob.segmenter, bal.segmenter);
-        assert_ne!(mob.embedder, bal.embedder);
+        assert_eq!(mob.segmenter, bal.segmenter, "both use powerset");
+        assert_eq!(mob.embedder, bal.embedder, "both use resnet34 (CAM++ broken)");
     }
 
     #[test]
