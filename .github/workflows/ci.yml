@@ -223,18 +223,24 @@ jobs:
 
   e2e-der-regression:
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    timeout-minutes: 30
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Download e2e-smoke test data
+        run: bash scripts/download-ami-test-single.sh
       - name: Download VoxConverse test data
         run: bash scripts/download-voxconverse-test.sh
       - name: Download ONNX models
         run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
-      - name: Run DER regression test
-        run: cargo test --test der_regression_test --features "onnx download" -- --ignored --nocapture 2>&1 | tee der-regression.log
+      - name: Run DER regression — legacy e2e_smoke
+        run: cargo test --test der_regression_test --features "onnx download" der_regression_e2e_smoke -- --ignored --nocapture 2>&1 | tee -a der-regression.log
+      - name: Run DER regression — legacy VoxConverse 10-file
+        run: cargo test --test der_regression_test --features "onnx download" der_regression_voxconverse_10_file_subset -- --ignored --nocapture 2>&1 | tee -a der-regression.log
+      - name: Run DER regression — pipeline v2 e2e_smoke
+        run: cargo test --test pipeline_v2_integration --features "onnx,segmentation,embedder,clusterer,resegmentation,download" -- --ignored --nocapture 2>&1 | tee -a der-regression.log
       - name: Upload DER regression log
         if: always()
         uses: actions/upload-artifact@v4

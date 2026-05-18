@@ -92,6 +92,33 @@ cargo doc --no-deps
 
 ---
 
+## Release Checklist (mandatory before `cargo publish`)
+
+The 0.6.1 incident (pipeline v2 shipped as CLI default, degraded DER on
+long-form audio) must never repeat. Follow this checklist verbatim:
+
+1. **Run the release gate script** — it fails fast if anything is broken:
+   ```bash
+   bash scripts/release-check.sh
+   ```
+2. **DER regression tests must pass** — they compare against
+   `tests/der_baseline.json` with tolerance:
+   - Legacy pipeline e2e_smoke: DER ≤ 7.62% (baseline 6.62% + 1.0%)
+   - Legacy pipeline VoxConverse 10-file: DER ≤ 18.43% (baseline 17.43% + 1.0%)
+   - Legacy pipeline AMI single: DER ≤ 37.30% (baseline 36.30% + 1.0%)
+   - Pipeline v2 e2e_smoke: DER ≤ 5.79% (baseline 4.79% + 1.0%)
+3. **If DER improved** — update `tests/der_baseline.json` with the new numbers
+   and lower tolerance if appropriate. Never silence a regression test.
+4. **If the default pipeline changed** — the release gate script will catch
+   DER drift. Do not bypass it.
+5. **Version bump** — update `Cargo.toml`, `python/Cargo.toml`,
+   `python/pyproject.toml`, `tests/cli_smoke_test.rs`, and `CHANGELOG.md`.
+6. **Tag format** — `vX.Y.Z` (e.g. `v0.6.2`).
+7. **CI must be green** on the tag before crates.io publish. The
+   `e2e-der-regression` job runs automatically for `refs/tags/v*`.
+
+---
+
 ## COAD Agent Development Coordination
 
 This repository uses COAD (Contract-Orchestrated Agent Development) for
