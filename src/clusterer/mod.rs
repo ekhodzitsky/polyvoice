@@ -9,6 +9,7 @@
 /// In v1.0 (M3) the polyvoice crate introduces `Clusterer` as the canonical
 /// trait. The legacy free functions `ahc::agglomerative_cluster_auto` and
 /// `spectral::spectral_cluster` remain available — M6 will deprecate them.
+#[cfg_attr(test, mockall::automock)]
 pub trait Clusterer: Send + Sync {
     /// Cluster `embeddings`. Each inner vector must have the same length and
     /// be approximately L2-normalized.
