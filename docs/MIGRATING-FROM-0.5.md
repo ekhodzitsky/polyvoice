@@ -1,6 +1,6 @@
 # Migrating from polyvoice 0.5 to 1.0
 
-`polyvoice 0.6.0-alpha.3` introduces the v1.0 architecture: a single
+`polyvoice 0.6.0` introduces the v1.0 architecture: a single
 `Pipeline::builder()` API, profile-based model selection, and INT8-quantized
 ONNX bundles. This is intentionally a breaking change.
 
@@ -77,6 +77,6 @@ for the new contract.
 
 ## OnlineDiarizer is deprecated
 
-`OnlineDiarizer` remains accessible but is `#[deprecated(since = "0.6.0-alpha.3")]`.
+`OnlineDiarizer` remains accessible but is `#[deprecated(since = "0.6.0")]`.
 The streaming pipeline is being redesigned in v1.1 with a richer latency vs.
 DER tradeoff. For offline batch processing, use `Pipeline::builder()`.

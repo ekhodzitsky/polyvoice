@@ -1,6 +1,6 @@
 # Production Readiness Assessment
 
-> **Version:** 0.6.0-alpha.3 | **Date:** 2026-05-10 | **Scope:** Rust library + Python bindings + FFI
+> **Version:** 0.6.0 | **Date:** 2026-05-18 | **Scope:** Rust library + Python bindings + FFI
 >
 > **Last updated:** 2026-05-11 — M6b dead code removed, property tests expanded, cross-dataset DER infrastructure in place, streaming pipeline MVP (`StreamingPipeline`) implemented, `ahc_impl` recursion eliminated, deprecated `OnlineDiarizer` removed, dead code cleaned.
 
@@ -18,7 +18,7 @@ The project is hardened against common attack vectors and passes an extensive CI
 
 | Item | Status | Risk |
 |------|--------|------|
-| Semantic version | `0.6.0-alpha.3` | API may break before `0.6.0` stable |
+| Semantic version | `0.6.0` | Stable — API follows semver |
 | `semver-checks` | Passes in CI | Only checks public API surface; alpha allows breaking changes |
 | CHANGELOG | Exists | Good, but alpha changes are rapid |
 
