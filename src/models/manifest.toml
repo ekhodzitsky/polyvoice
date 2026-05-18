@@ -4,11 +4,11 @@ schema = "polyvoice-models-v1"
 # are validated. Mobile uses CAM++ (512-dim), Balanced uses WeSpeaker ResNet34
 # (256-dim). Both share Silero VAD for speech segmentation.
 [profiles.mobile]
-segmenter = "silero_vad"
-embedder  = "cam_pp_fp32"
+segmenter = "powerset_fp32"
+embedder  = "wespeaker_resnet34"
 
 [profiles.balanced]
-segmenter = "silero_vad"
+segmenter = "powerset_fp32"
 embedder  = "wespeaker_resnet34"
 
 # Legacy v0.5 entries — kept for back-compat callers that pass the model id

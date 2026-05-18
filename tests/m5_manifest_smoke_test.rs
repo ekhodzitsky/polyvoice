@@ -56,18 +56,20 @@ fn int8_sha256_is_real_not_placeholder() {
 }
 
 #[test]
-fn mobile_profile_resolves_to_legacy_fp32() {
+fn mobile_profile_resolves_to_v2_hotfix() {
+    // V2 hotfix: Mobile uses powerset + resnet34 because CAM++ ONNX is broken.
     let m = parse();
     let prof = m.profile("mobile").expect("mobile profile present");
-    assert_eq!(prof.segmenter, "silero_vad");
-    assert_eq!(prof.embedder, "cam_pp_fp32");
+    assert_eq!(prof.segmenter, "powerset_fp32");
+    assert_eq!(prof.embedder, "wespeaker_resnet34");
 }
 
 #[test]
-fn balanced_profile_resolves_to_legacy_fp32() {
+fn balanced_profile_resolves_to_v2_hotfix() {
+    // V2 hotfix: Balanced uses powerset + resnet34 (same as Mobile for now).
     let m = parse();
     let prof = m.profile("balanced").expect("balanced profile present");
-    assert_eq!(prof.segmenter, "silero_vad");
+    assert_eq!(prof.segmenter, "powerset_fp32");
     assert_eq!(prof.embedder, "wespeaker_resnet34");
 }
 
@@ -78,7 +80,7 @@ fn mobile_bundle_under_relaxed_15mb_budget() {
     let seg = m.model(&prof.segmenter).unwrap();
     let emb = m.model(&prof.embedder).unwrap();
     let total = seg.size.unwrap_or(0) + emb.size.unwrap_or(0);
-    // Legacy FP32 mobile bundle (silero_vad + cam_pp_fp32) is ~31 MB;
+    // V2 hotfix mobile bundle (powerset_fp32 + wespeaker_resnet34) is ~32 MB;
     // budget updated to 35 MB until INT8 re-validated.
     assert!(
         total <= BUNDLE_BUDGET_BYTES,

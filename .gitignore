@@ -58,3 +58,4 @@ python/polyvoice/_polyvoice.cpython-*.dll
 # cargo-kimi artifacts
 .kimi/
 kimi-score.svg
+mutants.out/
