@@ -54,5 +54,18 @@
     },
     "_status": "operational — EN2002a single meeting, v0.6.0-alpha.7 legacy pipeline (threshold=0.45)",
     "_filled_by": "polyvoice-bench-v0.6"
+  },
+  "v2_e2e_smoke": {
+    "files": 1,
+    "profile": "balanced",
+    "der_collar_0_25": 4.79,
+    "der_no_collar": null,
+    "tolerance": 1.0,
+    "model_versions": {
+      "segmenter": "powerset_fp32",
+      "embedder": "wespeaker_resnet34"
+    },
+    "_status": "operational — Pipeline v2 (Powerset + ResNet34 + AHC), DER < 5% on 26s clip",
+    "_filled_by": "cargo test --test pipeline_v2_integration -- --ignored"
   }
 }
