@@ -1,60 +1,113 @@
-//! M6b — smoke tests for the polyvoice CLI.
+//! M6b — smoke tests for the polyvoice CLI using assert_cmd + predicates.
 
 #![cfg(feature = "cli")]
 
-use std::process::Command;
+use assert_cmd::Command;
+use predicates::prelude::*;
 
-fn cli() -> Command {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_polyvoice"));
-    c.env("RUST_BACKTRACE", "0");
-    c
+fn polyvoice() -> Command {
+    let mut cmd = Command::cargo_bin("polyvoice").unwrap();
+    cmd.env("RUST_BACKTRACE", "0");
+    cmd
+}
+
+fn polyvoice_bench() -> Command {
+    let mut cmd = Command::cargo_bin("polyvoice-bench").unwrap();
+    cmd.env("RUST_BACKTRACE", "0");
+    cmd
 }
 
 #[test]
 fn help_top_level() {
-    let out = cli().arg("--help").output().expect("spawn polyvoice");
-    assert!(out.status.success());
-    let s = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        s.contains("diarize"),
-        "help missing 'diarize' subcommand: {s}"
-    );
-    assert!(
-        s.contains("download-models"),
-        "help missing 'download-models': {s}"
-    );
-    assert!(s.contains("models"), "help missing 'models': {s}");
+    polyvoice()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("diarize"))
+        .stdout(predicate::str::contains("download-models"))
+        .stdout(predicate::str::contains("models"));
 }
 
 #[test]
 fn help_diarize() {
-    let out = cli().args(["diarize", "--help"]).output().expect("spawn");
-    assert!(out.status.success());
-    let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains("--profile"));
-    assert!(s.contains("--output"));
-    assert!(s.contains("--format"));
+    polyvoice()
+        .args(["diarize", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--profile"))
+        .stdout(predicate::str::contains("--output"))
+        .stdout(predicate::str::contains("--format"));
+}
+
+#[test]
+fn version_prints_correctly() {
+    polyvoice()
+        .arg("--version")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("polyvoice 0.6.0"));
 }
 
 #[test]
 fn diarize_invalid_profile_errors() {
-    let out = cli()
+    polyvoice()
         .args(["diarize", "/nonexistent/file.wav", "--profile", "garbage"])
-        .output()
-        .expect("spawn");
-    assert!(!out.status.success(), "expected non-zero exit");
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        stderr.contains("invalid profile") || stderr.contains("garbage"),
-        "stderr: {stderr}"
-    );
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("invalid profile").or(predicate::str::contains("garbage")),
+        );
 }
 
 #[test]
-fn models_list_runs() {
-    let out = cli().args(["models", "list"]).output().expect("spawn");
-    // May fail if registry can't write to home dir in CI sandbox — accept either success or
-    // a known cache-dir error; we only assert the binary doesn't crash with internal panic.
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(!stderr.contains("panicked at"), "binary panicked: {stderr}");
+fn diarize_missing_file_errors() {
+    polyvoice()
+        .args([
+            "diarize",
+            "/nonexistent/directory/file.wav",
+            "--profile",
+            "balanced",
+        ])
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("No such file").or(predicate::str::contains("cannot find")),
+        );
+}
+
+#[test]
+fn models_list_runs_without_panic() {
+    polyvoice()
+        .args(["models", "list"])
+        .assert()
+        .stderr(predicate::str::contains("panicked at").not());
+}
+
+#[test]
+fn models_info_shows_metadata() {
+    polyvoice()
+        .args(["models", "info", "silero_vad"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("silero_vad").or(predicate::str::contains("sha256")));
+}
+
+#[test]
+fn download_models_help_shows_profiles() {
+    polyvoice()
+        .args(["download-models", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--profile"));
+}
+
+#[test]
+fn bench_help_shows_args() {
+    polyvoice_bench()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--profile"))
+        .stdout(predicate::str::contains("--collar"))
+        .stdout(predicate::str::contains("--output"));
 }
