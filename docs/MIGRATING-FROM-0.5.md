@@ -4,6 +4,12 @@
 `Pipeline::builder()` API, profile-based model selection, and INT8-quantized
 ONNX bundles. This is intentionally a breaking change.
 
+> **Status as of v0.6.3**: The new `Pipeline::builder()` and `HybridPipeline`
+> APIs are available in Rust but are **API-only**. The CLI (`polyvoice diarize`)
+> and Python bindings continue to use the proven legacy pipeline (Silero VAD +
+> ResNet34 + AHC) for stability. M6b will migrate CLI/FFI/Python to the new
+> pipeline once long-form DER is fully hardened.
+
 ## Rust API
 
 ### Before (v0.5)
@@ -16,15 +22,36 @@ let pipeline = polyvoice::Pipeline::new(DiarizationConfig::default(), VadConfig:
 let result = pipeline.run(&samples, &extractor, &mut vad)?;
 ```
 
-### After (v1.0-alpha.3)
+### After (v1.0-alpha.3 — API-only)
 ```rust
-use polyvoice::{Pipeline, ModelRegistry, Profile, SampleRate};
+use polyvoice::models::ModelRegistry;
+use polyvoice::pipeline_v2::Pipeline;
+use polyvoice::types::{Profile, SampleRate};
 
 let registry = ModelRegistry::default()?;
 let pipeline = Pipeline::builder()
     .profile(Profile::Balanced)
     .with_models_from(registry)
     .build()?;
+let sr = SampleRate::new(16000).unwrap();
+let result = pipeline.run(&samples, sr)?;
+```
+
+### Hybrid Pipeline (v0.6.3 — API-only)
+For long-form multi-speaker audio, use the hybrid pipeline which treats
+`PowersetSegmenter` as a superior VAD and resolves speakers globally via AHC:
+
+```rust
+use polyvoice::pipeline_v2::hybrid::HybridPipeline;
+use polyvoice::segmentation::PowersetSegmenter;
+use polyvoice::embedder::ResNet34Adapter;
+use polyvoice::clusterer::AhcClusterer;
+use polyvoice::types::SampleRate;
+
+let segmenter = PowersetSegmenter::new("models/powerset_fp32.onnx")?;
+let embedder = ResNet34Adapter::new("models/wespeaker_resnet34.onnx", 4)?;
+let clusterer = AhcClusterer::with_threshold(20, 0.35);
+let pipeline = HybridPipeline::new(Box::new(segmenter), Box::new(embedder), Box::new(clusterer));
 let sr = SampleRate::new(16000).unwrap();
 let result = pipeline.run(&samples, sr)?;
 ```
@@ -46,13 +73,20 @@ result = p.run(samples, sample_rate=16000)
 print(result["num_speakers"], len(result["turns"]))
 ```
 
+> Python bindings still use the legacy pipeline in v0.6.3.
+
 ## CLI
 
-| Before                                                     | After                                                |
+| Before                                                     | After (v0.6.3)                                       |
 |------------------------------------------------------------|------------------------------------------------------|
 | `polyvoice diarize meeting.wav --threshold 0.4`            | `polyvoice diarize meeting.wav --profile balanced`   |
 | `polyvoice diarize meeting.wav --vad-threshold 0.5`        | `polyvoice diarize meeting.wav --profile balanced`   |
 | `polyvoice download-models --dir ./models`                 | `polyvoice download-models --profile balanced`       |
+
+> The CLI continues to run the legacy pipeline. `--profile mobile|balanced`
+> resolves model paths; the actual diarization uses `SileroVad` +
+> `FbankOnnxExtractor` + AHC. Hybrid pipeline CLI integration is planned for
+> M6b.
 
 ## C FFI
 
@@ -65,7 +99,7 @@ for the new contract.
 
 | Removed                       | Replacement                              |
 |-------------------------------|------------------------------------------|
-| `Pipeline::new(cfg, vad_cfg)` | `Pipeline::builder()`                    |
+| `Pipeline::new(cfg, vad_cfg)` | `Pipeline::builder()` (API-only)         |
 | `DiarizationConfig`           | `pipeline::PipelineConfig`               |
 | `VadConfig`, `EnergyVad`,    `VoiceActivityDetector` | absorbed by `Segmenter` |
 | `OfflineDiarizer`             | `Pipeline::run`                          |
