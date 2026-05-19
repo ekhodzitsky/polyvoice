@@ -32,6 +32,10 @@ impl FbankOnnxExtractor {
         for i in 0..pool_size {
             let session = ort::session::Session::builder()
                 .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?
+                .with_intra_threads(1)
+                .map_err(|e| {
+                    EmbeddingError::InferenceFailed(format!("session {i} intra threads: {e}"))
+                })?
                 .commit_from_file(model_path)
                 .map_err(|e| EmbeddingError::InferenceFailed(format!("session {i}: {e}")))?;
             pool.push(session)

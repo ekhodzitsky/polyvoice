@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-05-19
+
+### Added
+
+- **Hybrid pipeline** (`pipeline_v2::hybrid::HybridPipeline`) — API-only.
+  Combines `PowersetSegmenter` (used purely as a VAD for speech+overlap
+  detection) with legacy-style sliding-window ResNet34 embeddings and AHC
+  clustering. Overcomes the 3-speaker hard limit of the Powerset model on
+  long-form multi-speaker audio.
+  - e2e_smoke DER: **4.43%** (vs legacy 6.62%, v2 4.79%).
+  - VoxConverse 3-file average DER: **8.27%**.
+- `Embedder::embed_batch` parallel implementation via `std::thread::scope`
+  for `ResNet34Adapter` and `CamPlusPlusExtractor`.
+- `agglomerative_cluster_max_clusters()` — fixed-threshold AHC with a hard
+  ceiling on cluster count.
+
+### Changed
+
+- **AHC optimized from O(n³) to O(n²)** by caching the similarity matrix
+  and updating only the merged centroid row/column. Massive speedup on
+  inputs with >500 embeddings (e.g. long-form audio).
+- `FbankOnnxExtractor` now sets `intra_op_num_threads(1)` per ONNX session
+  to prevent parallel embedder threads from competing for CPU cores.
+- `HybridPipeline` uses `embed_batch` and 1.5s hop windows for faster
+  extraction on long recordings.
+- `der_baseline.json` updated:
+  - `v2_e2e_smoke`: 4.43% (improved from 4.79%).
+  - Added `hybrid_e2e_smoke`: 4.43%.
+  - Added `hybrid_voxconverse_3file`: 8.27%.
+
+### Fixed
+
+- `der_regression_test.rs` now loads `silero_vad.onnx` via explicit path
+  instead of `models.segmenter_path`, which changed to `powerset_fp32.onnx`
+  after the manifest update in v0.6.2.
+
 ## [0.6.2] - 2026-05-18
 
 ### Fixed
