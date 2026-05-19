@@ -43,8 +43,16 @@ fn run_v2_pipeline_on_file(stem: &str, audio_dir: &Path, rttm_dir: &Path) -> (f6
     let wav_path_alt = audio_dir.join(format!("{stem}.Mix-Headset.wav"));
     let rttm_path = rttm_dir.join(format!("{stem}.rttm"));
     let rttm_path_alt = rttm_dir.join(format!("{stem}.Mix-Headset.rttm"));
-    let wav_path = if wav_path.is_file() { wav_path } else { wav_path_alt };
-    let rttm_path = if rttm_path.is_file() { rttm_path } else { rttm_path_alt };
+    let wav_path = if wav_path.is_file() {
+        wav_path
+    } else {
+        wav_path_alt
+    };
+    let rttm_path = if rttm_path.is_file() {
+        rttm_path
+    } else {
+        rttm_path_alt
+    };
 
     let (samples, sr_hz) = read_wav(&wav_path).expect("WAV read failure");
     assert_eq!(sr_hz, 16000, "only 16 kHz WAVs supported");
@@ -68,7 +76,11 @@ fn run_v2_pipeline_on_file(stem: &str, audio_dir: &Path, rttm_dir: &Path) -> (f6
     (
         der.der,
         result.num_speakers,
-        ref_turns.iter().map(|t| t.speaker.0).collect::<std::collections::HashSet<_>>().len(),
+        ref_turns
+            .iter()
+            .map(|t| t.speaker.0)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
     )
 }
 
@@ -98,8 +110,7 @@ fn v2_der_voxconverse_10_file_subset() {
     let mut count = 0_usize;
 
     for stem in SUBSET_10 {
-        let (der, num_speakers, ref_speakers) =
-            run_v2_pipeline_on_file(stem, audio_dir, rttm_dir);
+        let (der, num_speakers, ref_speakers) = run_v2_pipeline_on_file(stem, audio_dir, rttm_dir);
         println!(
             "{stem}: DER={:.2}% speakers={} ref_speakers={}",
             der * 100.0,

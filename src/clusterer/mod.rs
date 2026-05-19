@@ -86,8 +86,12 @@ impl Clusterer for AhcClusterer {
             return Ok(vec![0]);
         }
         let labels = match self.threshold {
-            Some(t) => crate::ahc::agglomerative_cluster(embeddings, t),
-            None => crate::ahc::agglomerative_cluster_auto_max_clusters(embeddings, self.max_clusters).0,
+            Some(t) => {
+                crate::ahc::agglomerative_cluster_max_clusters(embeddings, t, self.max_clusters)
+            }
+            None => {
+                crate::ahc::agglomerative_cluster_auto_max_clusters(embeddings, self.max_clusters).0
+            }
         };
         Ok(labels)
     }

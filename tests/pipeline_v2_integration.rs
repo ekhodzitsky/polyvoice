@@ -74,13 +74,17 @@ fn pipeline_v2_balanced_resnet34_ahc_der_under_10_percent() {
 
     let der = compute_der(&ground_truth, &result.turns, 0.25);
 
-    println!("Pipeline v2 (Balanced / ResNet34 / AHC) DER: {:.2}%", der.der * 100.0);
+    println!(
+        "Pipeline v2 (Balanced / ResNet34 / AHC) DER: {:.2}%",
+        der.der * 100.0
+    );
     println!("  num_speakers: {}", result.num_speakers);
     println!("  num_turns: {}", result.turns.len());
 
     assert!(
         der.der < 0.10,
-        "DER must be < 10%, got {:.2}%", der.der * 100.0
+        "DER must be < 10%, got {:.2}%",
+        der.der * 100.0
     );
 }
 
@@ -112,12 +116,16 @@ fn pipeline_v2_mobile_resnet34_ahc_der_under_10_percent() {
 
     let der = compute_der(&ground_truth, &result.turns, 0.25);
 
-    println!("Pipeline v2 (Mobile / ResNet34 / AHC) DER: {:.2}%", der.der * 100.0);
+    println!(
+        "Pipeline v2 (Mobile / ResNet34 / AHC) DER: {:.2}%",
+        der.der * 100.0
+    );
     println!("  num_speakers: {}", result.num_speakers);
     println!("  num_turns: {}", result.turns.len());
 
     assert!(
         der.der < 0.10,
-        "DER must be < 10%, got {:.2}%", der.der * 100.0
+        "DER must be < 10%, got {:.2}%",
+        der.der * 100.0
     );
 }

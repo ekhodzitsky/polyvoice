@@ -42,23 +42,32 @@ fn load_baseline() -> Baseline {
 }
 
 fn run_legacy_pipeline(wav_path: &Path, rttm_path: &Path) -> (f64, String) {
-    let stem = wav_path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    let stem = wav_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
 
     let (samples, sr_hz) = read_wav(wav_path).expect("WAV read failure");
     assert_eq!(sr_hz, 16000, "only 16 kHz WAVs supported");
 
     let registry = ModelRegistry::default().expect("registry");
-    let models = registry.ensure_for_profile(Profile::Balanced).expect("models");
+    let models = registry
+        .ensure_for_profile(Profile::Balanced)
+        .expect("models");
 
     let embedding_dim = Profile::Balanced.embedding_dim();
-    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("embedder");
-    let mut vad = SileroVad::new(&models.segmenter_path, 512).expect("vad");
+    let extractor =
+        FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("embedder");
+    let mut vad = SileroVad::new(Path::new("models/silero_vad.onnx"), 512).expect("vad");
 
     let config = DiarizationConfig::default();
     let vad_config = VadConfig::default();
     let pipeline = Pipeline::new(config, vad_config);
 
-    let result = pipeline.run(&samples, &extractor, &mut vad).expect("pipeline.run");
+    let result = pipeline
+        .run(&samples, &extractor, &mut vad)
+        .expect("pipeline.run");
 
     let ref_turns = {
         let raw = parse_rttm_file(rttm_path).expect("parse rttm");
@@ -93,7 +102,11 @@ fn der_regression_voxconverse_10_file_subset() {
         let wav_path = audio_dir.join(format!("{stem}.wav"));
         let rttm_path = rttm_dir.join(format!("{stem}.rttm"));
         assert!(wav_path.is_file(), "WAV not found: {}", wav_path.display());
-        assert!(rttm_path.is_file(), "RTTM not found: {}", rttm_path.display());
+        assert!(
+            rttm_path.is_file(),
+            "RTTM not found: {}",
+            rttm_path.display()
+        );
 
         let (der, _stem) = run_legacy_pipeline(&wav_path, &rttm_path);
         println!("{stem}: DER={:.2}%", der * 100.0);
@@ -155,8 +168,16 @@ fn der_regression_ami_test_single() {
     let rttm_path = rttm_dir.join("EN2002a.Mix-Headset.rttm");
     let rttm_path_alt = rttm_dir.join("EN2002a.rttm");
 
-    let wav_path = if wav_path.is_file() { wav_path } else { audio_dir.join("EN2002a.wav") };
-    let rttm_path = if rttm_path.is_file() { rttm_path } else { rttm_path_alt };
+    let wav_path = if wav_path.is_file() {
+        wav_path
+    } else {
+        audio_dir.join("EN2002a.wav")
+    };
+    let rttm_path = if rttm_path.is_file() {
+        rttm_path
+    } else {
+        rttm_path_alt
+    };
 
     if !wav_path.is_file() {
         println!("AMI WAV not found — skipping");

@@ -90,7 +90,10 @@ mod tests {
         assert_eq!(cfg.sample_rate.get(), 16000);
         assert!((cfg.seg_window_secs - 10.0).abs() < f32::EPSILON);
         assert!((cfg.seg_hop_secs - 0.5).abs() < f32::EPSILON);
-        assert!(matches!(cfg.clusterer, ClustererKind::Ahc { threshold: 0.5 }));
+        assert!(matches!(
+            cfg.clusterer,
+            ClustererKind::Ahc { threshold: 0.5 }
+        ));
         assert_eq!(cfg.max_speakers, 20);
         assert_eq!(cfg.min_cluster_size, 12);
         assert!(cfg.resegment_overlap);

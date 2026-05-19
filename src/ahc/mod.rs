@@ -21,6 +21,15 @@ pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usi
     ahc_impl(embeddings, threshold, 0).0
 }
 
+/// Run AHC with a fixed threshold and a hard ceiling on the number of clusters.
+pub fn agglomerative_cluster_max_clusters(
+    embeddings: &[Vec<f32>],
+    threshold: f32,
+    max_clusters: usize,
+) -> Vec<usize> {
+    ahc_impl(embeddings, threshold, max_clusters).0
+}
+
 /// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
 /// `pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32)`
 /// { ret.0.len() == embeddings.len() && ret.0.iter().all(|&l| l < embeddings.len()) && ret.1 >= 0.0 }
@@ -45,6 +54,7 @@ pub fn agglomerative_cluster_auto_max_clusters(
     ahc_impl(embeddings, threshold, max_clusters)
 }
 
+#[allow(clippy::needless_range_loop)]
 fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Vec<usize>, f32) {
     let n = embeddings.len();
     if n == 0 {
@@ -55,17 +65,35 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
     let mut centroids: Vec<Vec<f32>> = embeddings.to_vec();
     let mut cluster_sizes: Vec<usize> = vec![1; n];
     let mut active: Vec<bool> = vec![true; n];
-    let mut merge_history: Vec<f32> = Vec::with_capacity(n.saturating_sub(1));
+
+    // Precompute similarity matrix. sim_matrix[i][j] holds the similarity
+    // between centroids i and j. Inactive rows/columns are kept at NEG_INFINITY.
+    let neg_inf = f32::NEG_INFINITY;
+    let mut sim_matrix: Vec<Vec<f32>> = vec![vec![neg_inf; n]; n];
+    for i in 0..n {
+        sim_matrix[i][i] = 1.0;
+        for j in (i + 1)..n {
+            let sim = cosine_similarity(&centroids[i], &centroids[j]);
+            sim_matrix[i][j] = sim;
+            sim_matrix[j][i] = sim;
+        }
+    }
 
     loop {
-        let mut best_sim = f32::NEG_INFINITY;
+        let mut best_sim = neg_inf;
         let mut best_i = 0;
         let mut best_j = 0;
 
-        let active_indices: Vec<usize> = (0..n).filter(|&i| active[i]).collect();
-        for (ii, &i) in active_indices.iter().enumerate() {
-            for &j in &active_indices[ii + 1..] {
-                let sim = cosine_similarity(&centroids[i], &centroids[j]);
+        // Find the best pair among active clusters.
+        for i in 0..n {
+            if !active[i] {
+                continue;
+            }
+            for j in (i + 1)..n {
+                if !active[j] {
+                    continue;
+                }
+                let sim = sim_matrix[i][j];
                 if sim > best_sim {
                     best_sim = sim;
                     best_i = i;
@@ -74,13 +102,12 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
             }
         }
 
-        // Hard ceiling: if we are above the ceiling, ignore threshold and
-        // keep merging until we drop to max_clusters (or run out of pairs).
-        let above_ceiling = max_clusters > 0 && max_clusters < n && active_indices.len() > max_clusters;
+        let active_count = active.iter().filter(|&&a| a).count();
+        let above_ceiling = max_clusters > 0 && max_clusters < n && active_count > max_clusters;
         if !above_ceiling && best_sim < threshold {
             break;
         }
-        if above_ceiling && best_sim == f32::NEG_INFINITY {
+        if above_ceiling && best_sim == neg_inf {
             break;
         }
 
@@ -88,9 +115,10 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
         let total = cluster_sizes[best_i] + cluster_sizes[best_j];
         let w_i = cluster_sizes[best_i] as f32 / total as f32;
         let w_j = cluster_sizes[best_j] as f32 / total as f32;
-        let mut new_centroid = vec![0.0f32; centroids[best_i].len()];
-        for (k, v) in new_centroid.iter_mut().enumerate() {
-            *v = centroids[best_i][k] * w_i + centroids[best_j][k] * w_j;
+        let dim = centroids[best_i].len();
+        let mut new_centroid = vec![0.0f32; dim];
+        for k in 0..dim {
+            new_centroid[k] = centroids[best_i][k] * w_i + centroids[best_j][k] * w_j;
         }
         l2_normalize(&mut new_centroid);
 
@@ -98,13 +126,27 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
         cluster_sizes[best_i] = total;
         active[best_j] = false;
 
+        // Invalidate best_j from the similarity matrix.
+        for k in 0..n {
+            sim_matrix[best_j][k] = neg_inf;
+            sim_matrix[k][best_j] = neg_inf;
+        }
+
+        // Update similarities for best_i against all other active clusters.
+        for k in 0..n {
+            if k == best_i || !active[k] {
+                continue;
+            }
+            let sim = cosine_similarity(&centroids[best_i], &centroids[k]);
+            sim_matrix[best_i][k] = sim;
+            sim_matrix[k][best_i] = sim;
+        }
+
         for label in &mut labels {
             if *label == best_j {
                 *label = best_i;
             }
         }
-
-        merge_history.push(best_sim);
     }
 
     // Make labels contiguous (0, 1, 2, ...).
@@ -224,6 +266,10 @@ mod tests {
         ];
         let (labels, _th) = agglomerative_cluster_auto_max_clusters(&embeddings, 2);
         let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
-        assert_eq!(unique.len(), 2, "max_clusters=2 must produce exactly 2 clusters");
+        assert_eq!(
+            unique.len(),
+            2,
+            "max_clusters=2 must produce exactly 2 clusters"
+        );
     }
 }

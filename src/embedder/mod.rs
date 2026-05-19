@@ -163,6 +163,49 @@ impl<E: Embedder> EmbedderPool<E> {
     }
 }
 
+/// Parallel batch embedding using `std::thread::scope`.
+/// Spawns up to `available_parallelism` threads, each processing a chunk
+/// of the input via `embedder.embed()`.
+fn parallel_embed_batch<E: Embedder>(
+    embedder: &E,
+    audios: &[&[f32]],
+) -> Result<Vec<Vec<f32>>, EmbedderError> {
+    let n = audios.len();
+    if n == 0 {
+        return Ok(Vec::new());
+    }
+    let num_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(n);
+
+    let chunk_size = n.div_ceil(num_threads);
+    let chunks: Vec<&[&[f32]]> = audios.chunks(chunk_size).collect();
+
+    std::thread::scope(|s| {
+        let handles: Vec<_> = chunks
+            .into_iter()
+            .map(|chunk| {
+                s.spawn(move || {
+                    chunk
+                        .iter()
+                        .map(|audio| embedder.embed(audio))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+
+        let mut all_results = Vec::with_capacity(n);
+        for h in handles {
+            let chunk_results = h
+                .join()
+                .map_err(|_| EmbedderError::Legacy("embed_batch thread panicked".to_string()))?;
+            all_results.extend(chunk_results);
+        }
+        all_results.into_iter().collect::<Result<Vec<_>, _>>()
+    })
+}
+
 #[cfg(all(feature = "onnx", feature = "embedder"))]
 mod onnx_adapters {
     use super::*;
@@ -206,6 +249,10 @@ mod onnx_adapters {
             self.inner
                 .extract(audio, &config)
                 .map_err(|e| EmbedderError::Legacy(format!("{e}")))
+        }
+
+        fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {
+            parallel_embed_batch(self, audios)
         }
     }
 
@@ -252,6 +299,10 @@ mod onnx_adapters {
             self.inner
                 .extract(audio, &config)
                 .map_err(|e| EmbedderError::Legacy(format!("{e}")))
+        }
+
+        fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {
+            parallel_embed_batch(self, audios)
         }
     }
 }

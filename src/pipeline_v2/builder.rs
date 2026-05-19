@@ -214,23 +214,23 @@ impl PipelineBuilder {
                     })?,
                 );
                 let clusterer: Box<dyn Clusterer> = match self.config.clusterer {
-                    ClustererKind::Ahc { threshold } => Box::new(
-                        crate::clusterer::AhcClusterer::with_threshold(
+                    ClustererKind::Ahc { threshold } => {
+                        Box::new(crate::clusterer::AhcClusterer::with_threshold(
                             self.config.max_speakers as usize,
                             threshold,
-                        ),
-                    ),
+                        ))
+                    }
                     #[cfg(feature = "spectral")]
                     ClustererKind::NmeSc => Box::new(crate::clusterer::NmeScClusterer::new(
                         self.config.max_speakers as usize,
                     )),
                     #[cfg(not(feature = "spectral"))]
-                    ClustererKind::NmeSc => Box::new(
-                        crate::clusterer::AhcClusterer::with_threshold(
+                    ClustererKind::NmeSc => {
+                        Box::new(crate::clusterer::AhcClusterer::with_threshold(
                             self.config.max_speakers as usize,
                             self.config.profile.default_threshold(),
-                        ),
-                    ),
+                        ))
+                    }
                 };
                 Ok(Pipeline::from_components(
                     self.config,

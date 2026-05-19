@@ -300,7 +300,10 @@ mod tests {
         let mob = m.profile("mobile").unwrap();
         let bal = m.profile("balanced").unwrap();
         assert_eq!(mob.segmenter, bal.segmenter, "both use powerset");
-        assert_eq!(mob.embedder, bal.embedder, "both use resnet34 (CAM++ broken)");
+        assert_eq!(
+            mob.embedder, bal.embedder,
+            "both use resnet34 (CAM++ broken)"
+        );
     }
 
     #[test]
