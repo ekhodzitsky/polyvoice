@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `v2_e2e_smoke`: 4.43% (improved from 4.79%).
   - Added `hybrid_e2e_smoke`: 4.43%.
   - Added `hybrid_voxconverse_3file`: 8.27%.
+  - Added `hybrid_voxconverse_10file`: 16.62% (aorju is a known outlier at 52.51%).
+- Zero-padding fix for partial chunks in `HybridPipeline::run` — prevents NaN
+  embeddings on short trailing windows.
 
 ### Fixed
 

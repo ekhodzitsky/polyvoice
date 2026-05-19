@@ -27,6 +27,25 @@ use std::path::Path;
 
 #[allow(clippy::needless_borrow)]
 fn run_hybrid_on_file(stem: &str, audio_dir: &Path, rttm_dir: &Path) -> (f64, usize, usize) {
+    run_hybrid_on_file_with_config(stem, audio_dir, rttm_dir, true)
+}
+
+#[allow(clippy::needless_borrow)]
+fn run_hybrid_on_file_no_partial(
+    stem: &str,
+    audio_dir: &Path,
+    rttm_dir: &Path,
+) -> (f64, usize, usize) {
+    run_hybrid_on_file_with_config(stem, audio_dir, rttm_dir, false)
+}
+
+#[allow(clippy::needless_borrow)]
+fn run_hybrid_on_file_with_config(
+    stem: &str,
+    audio_dir: &Path,
+    rttm_dir: &Path,
+    include_partial: bool,
+) -> (f64, usize, usize) {
     let registry = ModelRegistry::default().expect("registry");
     let models = registry
         .ensure_for_profile(Profile::Balanced)
@@ -40,7 +59,8 @@ fn run_hybrid_on_file(stem: &str, audio_dir: &Path, rttm_dir: &Path) -> (f64, us
     let clusterer = AhcClusterer::with_threshold(20, 0.35);
 
     let pipeline =
-        HybridPipeline::new(Box::new(segmenter), Box::new(embedder), Box::new(clusterer));
+        HybridPipeline::new(Box::new(segmenter), Box::new(embedder), Box::new(clusterer))
+            .with_include_partial_chunks(include_partial);
 
     let wav_path = audio_dir.join(format!("{stem}.wav"));
     let rttm_path = rttm_dir.join(format!("{stem}.rttm"));
@@ -115,6 +135,9 @@ fn hybrid_voxconverse_3_file_subset() {
     assert!(count > 0);
     let avg = total_der / count as f64;
     println!("Average DER over {} files: {:.2}%", count, avg * 100.0);
+    // Note: aorju is a known outlier (52.51% DER, 12 speakers, 23 min, 17% overlap).
+    // Excluding aorju the avg DER is ~10.5%. The 25% ceiling gives headroom for
+    // the outlier while catching systemic regressions on the other 9 files.
     assert!(
         avg < 0.25,
         "Average DER must be < 25%, got {:.2}%",
@@ -154,6 +177,22 @@ fn hybrid_voxconverse_10_file_subset() {
         avg < 0.25,
         "Average DER must be < 25%, got {:.2}%",
         avg * 100.0
+    );
+}
+
+#[test]
+#[ignore = "requires ONNX models + wav/rttm under data/voxconverse-test/"]
+fn hybrid_aorju_no_partial() {
+    let (der, num_speakers, ref_speakers) = run_hybrid_on_file_no_partial(
+        "aorju",
+        Path::new("data/voxconverse-test/audio"),
+        Path::new("data/voxconverse-test/rttm"),
+    );
+    println!(
+        "Hybrid aorju (no partial): DER={:.2}% speakers={} ref={}",
+        der * 100.0,
+        num_speakers,
+        ref_speakers
     );
 }
 
