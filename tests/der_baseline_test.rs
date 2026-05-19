@@ -81,8 +81,7 @@ fn der_baseline_v2_e2e_smoke_has_verified_numbers() {
 
     assert_eq!(parsed.v2_e2e_smoke.files, 1);
     assert!(
-        parsed.v2_e2e_smoke.der_collar_0_25 > 0.0
-            && parsed.v2_e2e_smoke.der_collar_0_25 < 10.0,
+        parsed.v2_e2e_smoke.der_collar_0_25 > 0.0 && parsed.v2_e2e_smoke.der_collar_0_25 < 10.0,
         "Pipeline v2 e2e_smoke DER must be < 10%"
     );
 }

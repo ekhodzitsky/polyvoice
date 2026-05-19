@@ -4,7 +4,7 @@
 
 use crate::clusterer::{Clusterer, ClustererError};
 use crate::embedder::{Embedder, EmbedderError};
-use crate::resegmentation::{Resegmenter, ResegmentError, ResegmentInputs};
+use crate::resegmentation::{ResegmentError, ResegmentInputs, Resegmenter};
 use crate::segmentation::{RawSegment, SegmentationError, Segmenter};
 use crate::types::{Confidence, SpeakerTurn, TimeRange};
 
@@ -60,10 +60,7 @@ pub struct MockClusterer {
 }
 
 impl Clusterer for MockClusterer {
-    fn cluster(
-        &self,
-        embeddings: &[Vec<f32>],
-    ) -> Result<Vec<usize>, ClustererError> {
+    fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
         if self.labels.is_empty() {
             // Default: single cluster.
             return Ok(vec![0; embeddings.len()]);
@@ -87,10 +84,7 @@ impl Clusterer for MockClusterer {
 pub struct PassThroughResegmenter;
 
 impl Resegmenter for PassThroughResegmenter {
-    fn resegment(
-        &self,
-        inputs: ResegmentInputs<'_>,
-    ) -> Result<Vec<SpeakerTurn>, ResegmentError> {
+    fn resegment(&self, inputs: ResegmentInputs<'_>) -> Result<Vec<SpeakerTurn>, ResegmentError> {
         let mut out: Vec<SpeakerTurn> = inputs.primary_turns.to_vec();
         out.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
         Ok(out)

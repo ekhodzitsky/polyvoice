@@ -15,6 +15,7 @@ compile_error!(
 
 pub mod builder;
 pub mod config;
+pub mod hybrid;
 
 #[cfg(test)]
 pub mod mocks;
