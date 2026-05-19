@@ -255,8 +255,8 @@ fn hybrid_ami_test_single() {
         4
     );
     assert!(
-        der.der < 0.50,
-        "DER must be < 50%, got {:.2}%",
+        der.der < 0.35,
+        "Hybrid AMI DER must be < 35%, got {:.2}%",
         der.der * 100.0
     );
 }
