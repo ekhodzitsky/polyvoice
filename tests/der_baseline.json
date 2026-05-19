@@ -97,14 +97,14 @@
   "hybrid_voxconverse_10file": {
     "files": 10,
     "profile": "balanced",
-    "der_collar_0_25": 16.62,
+    "der_collar_0_25": 15.03,
     "der_no_collar": null,
     "tolerance": 2.0,
     "model_versions": {
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — Hybrid pipeline 10-file subset. aorju is a known outlier (52.51% DER, 12 speakers, 23 min, 17% overlap). Excluding aorju: avg DER ~10.5%.",
+    "_status": "operational — Hybrid pipeline 10-file subset (threshold=0.40). aorju is a known outlier (47.00% DER, 12 speakers, 23 min, 17% overlap). Excluding aorju: avg DER ~9.4%.",
     "_filled_by": "cargo test --release --test pipeline_v2_hybrid_test -- hybrid_voxconverse_10_file_subset --ignored --nocapture"
   },
   "hybrid_ami_test_single": {

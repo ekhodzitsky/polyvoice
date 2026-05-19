@@ -63,8 +63,7 @@ fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>, file_key:
     let clusterer = AhcClusterer::with_threshold(20, 0.35);
 
     let pipeline =
-        HybridPipeline::new(Box::new(segmenter), Box::new(embedder), Box::new(clusterer))
-            .with_exclude_overlap(true);
+        HybridPipeline::new(Box::new(segmenter), Box::new(embedder), Box::new(clusterer));
 
     let diag = pipeline
         .run_diagnostics(&samples, SampleRate::new(16000).unwrap())
@@ -500,4 +499,17 @@ fn diagnose_ami_en2002a() {
         Some(Path::new("data/ami-test-single/rttm")),
         Some("EN2002a"),
     );
+}
+
+#[test]
+#[ignore = "requires ONNX models + wav/rttm under data/voxconverse-test/"]
+fn diagnose_voxconverse_worst_cases() {
+    for stem in ["xggbk", "wcxfk", "iowob"] {
+        analyze_file(
+            stem,
+            Path::new("data/voxconverse-test/audio"),
+            Some(Path::new("data/voxconverse-test/rttm")),
+            None,
+        );
+    }
 }
