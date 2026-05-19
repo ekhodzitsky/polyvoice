@@ -72,8 +72,14 @@ fn run_legacy_pipeline(wav_path: &Path, rttm_path: &Path) -> (f64, String) {
     let ref_turns = {
         let raw = parse_rttm_file(rttm_path).expect("parse rttm");
         let grouped = group_by_file(&raw);
+        // AMI files use basename like EN2002a.Mix-Headset.wav but RTTM key is EN2002a
+        let rttm_key = if stem.contains(".Mix-Headset") {
+            stem.trim_end_matches(".Mix-Headset")
+        } else {
+            &stem
+        };
         let segs: Vec<_> = grouped
-            .get(stem.as_str())
+            .get(rttm_key)
             .map(|v| v.iter().map(|s| (*s).clone()).collect())
             .unwrap_or_default();
         let (turns, _map) = to_speaker_turns(&segs);

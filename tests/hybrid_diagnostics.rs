@@ -32,7 +32,7 @@ fn percentile_sorted(sorted: &[f32], p: f64) -> f32 {
     sorted[idx.min(sorted.len() - 1)]
 }
 
-fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>) {
+fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>, file_key: Option<&str>) {
     let registry = ModelRegistry::default().expect("registry");
     let models = registry
         .ensure_for_profile(Profile::Balanced)
@@ -178,8 +178,9 @@ fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>) {
             let ref_turns = {
                 let raw = parse_rttm_file(&rttm_path).expect("parse rttm");
                 let grouped = group_by_file(&raw);
+                let key = file_key.unwrap_or(stem);
                 let segs: Vec<_> = grouped
-                    .get(stem)
+                    .get(key)
                     .map(|v| v.iter().map(|s| (*s).clone()).collect())
                     .unwrap_or_default();
                 let (turns, _map) = to_speaker_turns(&segs);
@@ -290,8 +291,9 @@ fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>) {
             let ref_turns = {
                 let raw = parse_rttm_file(&rttm_path).expect("parse rttm");
                 let grouped = group_by_file(&raw);
+                let key = file_key.unwrap_or(stem);
                 let segs: Vec<_> = grouped
-                    .get(stem)
+                    .get(key)
                     .map(|v| v.iter().map(|s| (*s).clone()).collect())
                     .unwrap_or_default();
                 let (turns, _map) = to_speaker_turns(&segs);
@@ -394,8 +396,9 @@ fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>) {
             let ref_turns = {
                 let raw = parse_rttm_file(&rttm_path).expect("parse rttm");
                 let grouped = group_by_file(&raw);
+                let key = file_key.unwrap_or(stem);
                 let segs: Vec<_> = grouped
-                    .get(stem)
+                    .get(key)
                     .map(|v| v.iter().map(|s| (*s).clone()).collect())
                     .unwrap_or_default();
                 let (turns, _map) = to_speaker_turns(&segs);
@@ -460,6 +463,7 @@ fn diagnose_aorju() {
         "aorju",
         Path::new("data/voxconverse-test/audio"),
         Some(Path::new("data/voxconverse-test/rttm")),
+        None,
     );
 }
 
@@ -470,6 +474,7 @@ fn diagnose_e2e_smoke() {
         "fuzfh",
         Path::new("tests/data/e2e-smoke/audio"),
         Some(Path::new("tests/data/e2e-smoke/rttm")),
+        None,
     );
 }
 
@@ -481,6 +486,18 @@ fn diagnose_3_file_subset() {
             stem,
             Path::new("data/voxconverse-test/audio"),
             Some(Path::new("data/voxconverse-test/rttm")),
+            None,
         );
     }
+}
+
+#[test]
+#[ignore = "requires ONNX models + wav/rttm under data/ami-test-single/"]
+fn diagnose_ami_en2002a() {
+    analyze_file(
+        "EN2002a.Mix-Headset",
+        Path::new("data/ami-test-single/audio"),
+        Some(Path::new("data/ami-test-single/rttm")),
+        Some("EN2002a"),
+    );
 }
