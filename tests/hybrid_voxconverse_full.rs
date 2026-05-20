@@ -14,7 +14,7 @@
     feature = "download",
 ))]
 
-use polyvoice::clusterer::AhcClusterer;
+use polyvoice::clusterer::KMeansClusterer;
 use polyvoice::embedder::ResNet34Adapter;
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline_v2::hybrid::HybridPipeline;
@@ -40,7 +40,7 @@ fn hybrid_voxconverse_full_regression() {
         .map(|n| n.get())
         .unwrap_or(4);
     let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
-    let clusterer = AhcClusterer::with_threshold(20, 0.35);
+    let clusterer = KMeansClusterer::new(20);
 
     let pipeline =
         HybridPipeline::new(Box::new(segmenter), Box::new(embedder), Box::new(clusterer));

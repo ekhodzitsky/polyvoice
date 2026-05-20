@@ -101,6 +101,56 @@ impl Clusterer for AhcClusterer {
     }
 }
 
+/// K-Means++ clusterer with automatic k selection via silhouette score.
+pub struct KMeansClusterer {
+    max_clusters: usize,
+    max_iter: usize,
+}
+
+impl KMeansClusterer {
+    /// Create a new K-means clusterer with automatic k selection.
+    /// `max_clusters` is the upper bound on the number of clusters.
+    pub fn new(max_clusters: usize) -> Self {
+        Self {
+            max_clusters: max_clusters.max(2),
+            max_iter: 50,
+        }
+    }
+
+    /// Set the maximum number of Lloyd iterations (default 50).
+    pub fn with_max_iter(mut self, max_iter: usize) -> Self {
+        self.max_iter = max_iter;
+        self
+    }
+}
+
+impl Default for KMeansClusterer {
+    fn default() -> Self {
+        Self::new(64)
+    }
+}
+
+impl Clusterer for KMeansClusterer {
+    fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
+        if embeddings.is_empty() {
+            return Err(ClustererError::TooFewEmbeddings { actual: 0, min: 1 });
+        }
+        if embeddings.len() == 1 {
+            return Ok(vec![0]);
+        }
+        // Fallback to AHC for tiny inputs where k-means is unstable.
+        if embeddings.len() < 8 {
+            return AhcClusterer::new(self.max_clusters).cluster(embeddings);
+        }
+        let labels = crate::kmeans::kmeans_auto_k(embeddings, 2, self.max_clusters, self.max_iter);
+        Ok(labels)
+    }
+
+    fn max_clusters(&self) -> usize {
+        self.max_clusters
+    }
+}
+
 #[cfg(test)]
 mod trait_tests {
     use super::*;

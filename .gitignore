@@ -59,3 +59,4 @@ python/polyvoice/_polyvoice.cpython-*.dll
 .kimi/
 kimi-score.svg
 mutants.out/
+benchmark_kmeans*
