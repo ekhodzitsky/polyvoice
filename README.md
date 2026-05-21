@@ -8,7 +8,8 @@
 
 > Speaker diarization for Rust — who spoke when, without Python.
 > Legacy pipeline: Silero VAD + WeSpeaker embeddings + AHC clustering.
-> **New in v0.6.3**: Hybrid pipeline (Powerset VAD + ResNet34 + AHC) for long-form multi-speaker audio — API-only.
+> **New in v0.6.3**: Hybrid pipeline (Powerset VAD + ResNet34 + AHC/K-means) for long-form multi-speaker audio — API-only.
+> **New in unreleased**: K-means auto-k clusterer (silhouette-based k selection) beats AHC by 4.65% DER on VoxConverse.
 
 ## Quick Start
 
@@ -23,7 +24,7 @@ cargo add polyvoice --features onnx
 
 ## Features
 
-- **One-call pipeline** — `Pipeline::run()` wires VAD → embeddings → AHC clustering.
+- **One-call pipeline** — `Pipeline::run()` wires VAD → embeddings → AHC or K-means clustering.
 - **Hybrid pipeline** — `HybridPipeline` (v0.6.3, API-only) uses PowersetSegmenter as a superior VAD (overlap-aware) + global ResNet34 embedding clustering. Overcomes the 3-speaker limit of local segmentation models on long-form audio.
 - **Online & offline** — `OnlineDiarizer` for streaming, `OfflineDiarizer` for batch.
 - **CPU-only, ~30 MB** — ONNX Runtime, no GPU or Python runtime required.
@@ -31,6 +32,7 @@ cargo add polyvoice --features onnx
 - **Lock-free concurrency** — `crossbeam-queue` session pool for parallel inference.
 - **Parallel embedder** — `embed_batch` spreads chunks across CPU cores via `std::thread::scope`.
 - **AHC O(n²)** — agglomerative clustering rewritten from cubic to quadratic; handles >500 embeddings on long recordings.
+- **K-means auto-k** — silhouette-based automatic k selection with single-speaker detection. 14.12% DER on VoxConverse full (vs AHC 18.77%).
 - **Hardened** — Miri (memory), Loom (concurrency), cargo-fuzz (4 targets), model signing (Minisign).
 
 ## Minimal Example (Legacy Pipeline — CLI / Python default)
@@ -61,7 +63,7 @@ use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline_v2::hybrid::HybridPipeline;
 use polyvoice::segmentation::PowersetSegmenter;
 use polyvoice::embedder::ResNet34Adapter;
-use polyvoice::clusterer::AhcClusterer;
+use polyvoice::clusterer::KMeansClusterer;
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -70,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let segmenter = PowersetSegmenter::new(&models.segmenter_path)?;
     let embedder = ResNet34Adapter::new(&models.embedder_path, 4)?;
-    let clusterer = AhcClusterer::with_threshold(20, 0.35);
+    let clusterer = KMeansClusterer::new(20);
 
     let pipeline = HybridPipeline::new(
         Box::new(segmenter),
@@ -118,6 +120,8 @@ polyvoice_pipeline_run(handle, samples, n, 16000, &json, &len);
 | **Hybrid** (Powerset VAD + ResNet34 + AHC) | e2e smoke (26 s clip) | **4.43%** | — |
 | **Hybrid** (Powerset VAD + ResNet34 + AHC) | VoxConverse (3-file subset) | **8.27%** | — |
 | **Hybrid** (Powerset VAD + ResNet34 + AHC) | VoxConverse (10-file subset) | **16.62%** | — |
+| **Hybrid** (Powerset VAD + ResNet34 + **K-means**) | VoxConverse (10-file subset) | **13.48%** | — |
+| **Hybrid** (Powerset VAD + ResNet34 + **K-means**) | VoxConverse (full 232 files) | **14.12%** | — |
 
 ~80% of pyannote's accuracy at 10× the speed on CPU — no GPU, no Python.
 

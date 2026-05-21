@@ -7,7 +7,7 @@ ONNX bundles. This is intentionally a breaking change.
 > **Status as of v0.6.3**: The new `Pipeline::builder()` and `HybridPipeline`
 > APIs are available in Rust but are **API-only**. The CLI (`polyvoice diarize`)
 > and Python bindings continue to use the proven legacy pipeline (Silero VAD +
-> ResNet34 + AHC) for stability. M6b will migrate CLI/FFI/Python to the new
+> ResNet34 + K-means) for stability. M6b will migrate CLI/FFI/Python to the new
 > pipeline once long-form DER is fully hardened.
 
 ## Rust API
@@ -39,18 +39,18 @@ let result = pipeline.run(&samples, sr)?;
 
 ### Hybrid Pipeline (v0.6.3 — API-only)
 For long-form multi-speaker audio, use the hybrid pipeline which treats
-`PowersetSegmenter` as a superior VAD and resolves speakers globally via AHC:
+`PowersetSegmenter` as a superior VAD and resolves speakers globally via K-means auto-k:
 
 ```rust
 use polyvoice::pipeline_v2::hybrid::HybridPipeline;
 use polyvoice::segmentation::PowersetSegmenter;
 use polyvoice::embedder::ResNet34Adapter;
-use polyvoice::clusterer::AhcClusterer;
+use polyvoice::clusterer::KMeansClusterer;
 use polyvoice::types::SampleRate;
 
 let segmenter = PowersetSegmenter::new("models/powerset_fp32.onnx")?;
 let embedder = ResNet34Adapter::new("models/wespeaker_resnet34.onnx", 4)?;
-let clusterer = AhcClusterer::with_threshold(20, 0.35);
+let clusterer = KMeansClusterer::new(20);
 let pipeline = HybridPipeline::new(Box::new(segmenter), Box::new(embedder), Box::new(clusterer));
 let sr = SampleRate::new(16000).unwrap();
 let result = pipeline.run(&samples, sr)?;
