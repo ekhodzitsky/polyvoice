@@ -87,13 +87,13 @@ Current: **Level 4** — Ledger-audited orchestration.
 
 - `AGENTS.md` with COAD guidance: yes
 - All meaningful modules have `MODULE_CONTRACT.md`, `README.md`, `TODO.md`: yes
-- `coad check .` passes: yes
+- `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo doc --no-deps` pass: yes
 - Critical surfaces have concrete proof commands: yes
 - All non-deprecated modules have passing unit/property/integration tests: yes
 - Write lease and migration lease discipline demonstrated: yes
 - Task/proof/handoff/review/integration contracts used in practice: yes
 - Execution ledger tracks completed work with evidence: yes
-- CI enforces `coad check .` on every PR: yes
+- CI enforces tests and clippy on every PR: yes
 
 ### What Each Level Means Here
 
@@ -136,11 +136,7 @@ Every non-trivial change must declare:
 ## Validator
 
 ```bash
-coad check .
-```
-
-Or, if `coad` is not installed:
-
-```bash
-uvx --from 'git+https://github.com/ekhodzitsky/coad.git#subdirectory=tools/coad-validator' coad check .
+cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+cargo doc --no-deps
 ```
