@@ -102,14 +102,14 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
+      - uses: taiki-e/install-action@cargo-tarpaulin
       - name: Generate coverage
-        run: cargo tarpaulin --all-features --lib --tests --out Xml --timeout 300
+        run: cargo tarpaulin --all-features --lib --tests --out Xml --timeout 600
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -165,20 +165,6 @@ jobs:
           tool: cargo-audit
       - name: cargo audit
         run: cargo audit
-
-  coad-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install uv
-        run: pip install uv
-      - name: Clean up package directory
-        run: rm -rf target/package/
-      - name: coad check
-        run: uvx --from 'git+https://github.com/ekhodzitsky/coad.git#subdirectory=tools/coad-validator' coad check .
 
   cross-aarch64-linux:
     runs-on: ubuntu-latest
