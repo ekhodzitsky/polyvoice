@@ -114,7 +114,8 @@ impl OnnxEmbeddingExtractor {
             #[cfg(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))]
             {
                 let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
-                builder = builder.with_execution_providers([coreml.build()])
+                builder = builder
+                    .with_execution_providers([coreml.build()])
                     .map_err(|e| EmbeddingError::InferenceFailed(format!("coreml ep: {e}")))?;
             }
             let session = builder
