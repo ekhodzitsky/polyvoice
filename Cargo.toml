@@ -2,7 +2,7 @@
 name = "polyvoice"
 version = "0.6.5"
 edition = "2024"
-description = "Speaker diarization library for Rust — online and offline, ONNX-powered, ecosystem-agnostic"
+description = "Speaker diarization for Rust — who spoke when. ONNX-powered: Silero VAD, WeSpeaker embeddings, Pyannote segmentation, K-means/AHC clustering, overlap detection."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "onnx", "stt", "voice"]
