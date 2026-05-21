@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-05-21
+
+### Fixed
+
+- `e2e_smoke_test.rs`: legacy v0.5 pipeline now correctly loads Silero VAD model
+  (`registry.ensure("silero_vad")`) instead of passing the powerset segmenter path
+  to `SileroVad::new()`.
+- CI: removed broken `coad-check` job (coad-validator no longer exists).
+- CI: replaced `cargo-tarpaulin` with `cargo-llvm-cov` in coverage job for stability.
+- Docs: removed obsolete `coad check .` and `uvx --from 'git+...'` references from
+  `AGENTS.md`, `AGENT_FLOW.md`, and `COAD_PROJECT_STANDARD.md`.
+
 ## [0.6.4] - 2026-05-21
 
 ### Added
