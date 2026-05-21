@@ -64,15 +64,15 @@ impl PowersetSegmenter {
             path: path.clone(),
             detail: e.to_string(),
         })?;
-        let mut builder = Session::builder()
-            .map_err(|e| SegmentationError::ModelIo {
-                path: path.clone(),
-                detail: format!("session builder failed: {e}"),
-            })?;
+        let mut builder = Session::builder().map_err(|e| SegmentationError::ModelIo {
+            path: path.clone(),
+            detail: format!("session builder failed: {e}"),
+        })?;
         #[cfg(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))]
         {
             let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
-            builder = builder.with_execution_providers([coreml.build()])
+            builder = builder
+                .with_execution_providers([coreml.build()])
                 .map_err(|e| SegmentationError::ModelIo {
                     path: path.clone(),
                     detail: format!("coreml ep: {e}"),

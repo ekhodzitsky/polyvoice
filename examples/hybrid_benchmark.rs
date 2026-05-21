@@ -62,7 +62,8 @@ fn main() {
             sample_rate: 16000,
             aggregation: Default::default(),
         },
-    ).expect("segmenter");
+    )
+    .expect("segmenter");
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);

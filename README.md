@@ -8,8 +8,8 @@
 
 > Speaker diarization for Rust — who spoke when, without Python.
 > Legacy pipeline: Silero VAD + WeSpeaker embeddings + AHC clustering.
-> **New in v0.6.3**: Hybrid pipeline (Powerset VAD + ResNet34 + AHC/K-means) for long-form multi-speaker audio — API-only.
-> **New in unreleased**: K-means auto-k clusterer (silhouette-based k selection) beats AHC by 4.65% DER on VoxConverse.
+> **New in v0.6.3**: Hybrid pipeline (Powerset VAD + ResNet34 + AHC) for long-form multi-speaker audio — API-only.
+> **New in v0.6.4**: K-means auto-k clusterer (silhouette-based k selection) beats AHC by 4.65% DER on VoxConverse.
 
 ## Quick Start
 
@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Hybrid Pipeline (API-only, v0.6.3)
 
-The hybrid pipeline is available in Rust via the `pipeline_v2::hybrid` module. It uses `PowersetSegmenter` purely for speech-region detection (including overlaps), then extracts sliding-window ResNet34 embeddings and clusters them globally with AHC. This avoids the 3-speaker hard limit of the Powerset model.
+The hybrid pipeline is available in Rust via the `pipeline_v2::hybrid` module. It uses `PowersetSegmenter` purely for speech-region detection (including overlaps), then extracts sliding-window ResNet34 embeddings and clusters them globally with K-means auto-k (or AHC). This avoids the 3-speaker hard limit of the Powerset model.
 
 ```rust,no_run
 use polyvoice::models::ModelRegistry;
