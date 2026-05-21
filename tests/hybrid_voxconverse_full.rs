@@ -124,10 +124,10 @@ fn hybrid_voxconverse_full_regression() {
     );
 
     // Baseline: legacy VoxConverse full = ~14% DER.
-    // Hybrid should be competitive; allow up to 20% as a loose ceiling.
+    // K-means auto-k with hop=1.0s: 14.12% DER (232 files).
     assert!(
-        avg_der < 0.20,
-        "Full VoxConverse avg DER must be < 20%, got {:.2}%",
+        avg_der < 0.16,
+        "Full VoxConverse avg DER must be < 16%, got {:.2}%",
         avg_der * 100.0
     );
 }

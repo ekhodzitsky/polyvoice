@@ -1,7 +1,7 @@
 //! `PowersetSegmenter` — ONNX-backed `Segmenter` wrapping
 //! `sherpa-onnx-pyannote-segmentation-3-0`.
 //!
-//! Slides a 10-second window across the audio with a 500ms hop (95% overlap),
+//! Slides a 10-second window across the audio with a 1.0s hop (90% overlap),
 //! runs ONNX inference per window, and feeds outputs into `Aggregator`.
 
 use crate::segmentation::aggregator::{AggregationConfig, Aggregator, WindowOutput};
@@ -27,7 +27,7 @@ impl Default for PowersetConfig {
     fn default() -> Self {
         Self {
             window_secs: 10.0,
-            hop_secs: 0.5,
+            hop_secs: 1.0,
             sample_rate: 16000,
             aggregation: AggregationConfig::default(),
         }
@@ -64,11 +64,21 @@ impl PowersetSegmenter {
             path: path.clone(),
             detail: e.to_string(),
         })?;
-        let session = Session::builder()
+        let mut builder = Session::builder()
             .map_err(|e| SegmentationError::ModelIo {
                 path: path.clone(),
                 detail: format!("session builder failed: {e}"),
-            })?
+            })?;
+        #[cfg(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))]
+        {
+            let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
+            builder = builder.with_execution_providers([coreml.build()])
+                .map_err(|e| SegmentationError::ModelIo {
+                    path: path.clone(),
+                    detail: format!("coreml ep: {e}"),
+                })?;
+        }
+        let session = builder
             .commit_from_file(&path)
             .map_err(|e| SegmentationError::ModelIo {
                 path: path.clone(),

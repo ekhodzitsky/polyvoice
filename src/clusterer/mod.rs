@@ -105,6 +105,8 @@ impl Clusterer for AhcClusterer {
 pub struct KMeansClusterer {
     max_clusters: usize,
     max_iter: usize,
+    trials: usize,
+    fast_mode: bool,
 }
 
 impl KMeansClusterer {
@@ -114,12 +116,27 @@ impl KMeansClusterer {
         Self {
             max_clusters: max_clusters.max(2),
             max_iter: 50,
+            trials: 3,
+            fast_mode: false,
         }
+    }
+
+    /// Enable fast mode: fewer k candidates, fewer iterations, 1 trial.
+    /// ~10× faster than default, with minor quality trade-off.
+    pub fn fast_mode(mut self) -> Self {
+        self.fast_mode = true;
+        self
     }
 
     /// Set the maximum number of Lloyd iterations (default 50).
     pub fn with_max_iter(mut self, max_iter: usize) -> Self {
         self.max_iter = max_iter;
+        self
+    }
+
+    /// Set the number of random initializations per k (default 3).
+    pub fn with_trials(mut self, trials: usize) -> Self {
+        self.trials = trials.max(1);
         self
     }
 }
@@ -142,7 +159,15 @@ impl Clusterer for KMeansClusterer {
         if embeddings.len() < 8 {
             return AhcClusterer::new(self.max_clusters).cluster(embeddings);
         }
-        let labels = crate::kmeans::kmeans_auto_k(embeddings, 2, self.max_clusters, self.max_iter);
+        let n = embeddings.len();
+        let (k_max, max_iter, trials) = if self.fast_mode {
+            // Adaptive k_max: fewer candidates for small n, capped at 12.
+            let adaptive_k = (n / 20).clamp(5, 12).min(self.max_clusters);
+            (adaptive_k, 20, 1)
+        } else {
+            (self.max_clusters.min(n), self.max_iter, self.trials)
+        };
+        let labels = crate::kmeans::kmeans_auto_k(embeddings, 2, k_max, max_iter, trials);
         Ok(labels)
     }
 

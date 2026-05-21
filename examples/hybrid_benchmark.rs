@@ -54,7 +54,15 @@ fn main() {
         .ensure_for_profile(Profile::Balanced)
         .expect("models");
 
-    let segmenter = PowersetSegmenter::new(&models.segmenter_path).expect("segmenter");
+    let segmenter = PowersetSegmenter::with_config(
+        &models.segmenter_path,
+        polyvoice::segmentation::PowersetConfig {
+            window_secs: 10.0,
+            hop_secs: 1.0,
+            sample_rate: 16000,
+            aggregation: Default::default(),
+        },
+    ).expect("segmenter");
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
@@ -102,9 +110,11 @@ fn main() {
         let (samples, sr) = read_wav(&wav_path).expect("read wav");
         assert_eq!(sr, 16000);
 
+        let t0 = std::time::Instant::now();
         let result = pipeline
             .run(&samples, SampleRate::new(16000).unwrap())
             .expect("run");
+        let elapsed = t0.elapsed().as_secs_f64();
 
         let ref_turns = {
             let raw = polyvoice::rttm::parse_rttm_file(&rttm_path).expect("parse rttm");
@@ -125,7 +135,7 @@ fn main() {
             .map_or(0, |m| m + 1) as usize;
 
         println!(
-            "[{}/{}] {}: DER={:.2}% miss={:.2}% fa={:.2}% conf={:.2}% spk={} ref={}",
+            "[{}/{}] {}: DER={:.2}% miss={:.2}% fa={:.2}% conf={:.2}% spk={} ref={} time={:.1}s",
             idx + 1,
             total,
             stem,
@@ -135,6 +145,7 @@ fn main() {
             der.confusion_rate * 100.0,
             result.num_speakers,
             ref_speakers,
+            elapsed,
         );
 
         checkpoint.files.push(FileResult {

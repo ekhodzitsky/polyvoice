@@ -109,8 +109,15 @@ impl OnnxEmbeddingExtractor {
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
         let pool = crossbeam_queue::ArrayQueue::new(pool_size);
         for i in 0..pool_size {
-            let session = ort::session::Session::builder()
-                .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?
+            let mut builder = ort::session::Session::builder()
+                .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
+            #[cfg(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))]
+            {
+                let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
+                builder = builder.with_execution_providers([coreml.build()])
+                    .map_err(|e| EmbeddingError::InferenceFailed(format!("coreml ep: {e}")))?;
+            }
+            let session = builder
                 .commit_from_file(model_path)
                 .map_err(|e| EmbeddingError::InferenceFailed(format!("session {i}: {e}")))?;
             pool.push(session)
