@@ -84,11 +84,16 @@ fn e2e_smoke_single_file_der_below_50_percent() {
         "Balanced profile models should be available — \
              run `polyvoice download-models --profile balanced` first",
     );
+    // Legacy v0.5 pipeline uses Silero VAD directly, not the powerset segmenter.
+    let vad_path = registry.ensure("silero_vad").expect(
+        "Silero VAD model should be available — \
+             run `polyvoice download-models --profile balanced` first",
+    );
 
     let embedding_dim = Profile::Balanced.embedding_dim();
     let extractor =
         FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("load embedder");
-    let mut vad = SileroVad::new(&models.segmenter_path, 512).expect("load vad");
+    let mut vad = SileroVad::new(&vad_path, 512).expect("load vad");
 
     let config = DiarizationConfig::default();
     let vad_config = VadConfig::default();
