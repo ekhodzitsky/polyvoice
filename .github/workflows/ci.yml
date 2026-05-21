@@ -106,10 +106,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@cargo-tarpaulin
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
       - name: Generate coverage
-        run: cargo tarpaulin --all-features --lib --tests --out Xml --timeout 600
+        run: cargo llvm-cov --all-features --lib --tests --cobertura --output-path cobertura.xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
