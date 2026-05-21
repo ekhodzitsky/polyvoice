@@ -5,16 +5,26 @@ build-backend = "maturin"
 [project]
 name = "polyvoice"
 version = "0.6.5"
-description = "Speaker diarization — who spoke when. Rust + ONNX, no Python runtime overhead."
+description = "Speaker diarization for Python — who spoke when. Rust + ONNX, no Python runtime overhead. K-means/AHC clustering, overlap detection."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
-keywords = ["diarization", "speaker", "audio", "speech", "onnx"]
+keywords = ["diarization", "speaker", "audio", "speech", "onnx", "clustering", "vad", "voice-activity-detection"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
-    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
 [project.urls]
