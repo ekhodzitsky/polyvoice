@@ -102,19 +102,19 @@ ONNX-based VAD used by the legacy pipeline and CLI.
 ### `HybridPipeline`
 
 Combines `PowersetSegmenter` (used purely as a VAD for speech+overlap detection)
-with legacy-style sliding-window ResNet34 embeddings and AHC clustering.
+with legacy-style sliding-window ResNet34 embeddings and K-means auto-k clustering.
 Overcomes the 3-speaker hard limit of the Powerset model on long-form audio.
 
 ```rust
 use polyvoice::pipeline_v2::hybrid::HybridPipeline;
 use polyvoice::segmentation::PowersetSegmenter;
 use polyvoice::embedder::ResNet34Adapter;
-use polyvoice::clusterer::AhcClusterer;
+use polyvoice::clusterer::KMeansClusterer;
 use polyvoice::types::SampleRate;
 
 let segmenter = PowersetSegmenter::new("models/powerset_fp32.onnx")?;
 let embedder = ResNet34Adapter::new("models/wespeaker_resnet34.onnx", 4)?;
-let clusterer = AhcClusterer::with_threshold(20, 0.35);
+let clusterer = KMeansClusterer::new(20);
 
 let pipeline = HybridPipeline::new(
     Box::new(segmenter),
@@ -179,4 +179,4 @@ See `include/polyvoice.h` and `examples/ffi_usage.c` for usage.
 3. **Use `HybridPipeline`** with `embed_batch` for long recordings — parallel extraction across CPU cores.
 4. **Tune `threshold`** — lower values merge more aggressively; higher values split more.
 5. **Tune `max_gap_secs`** — larger gaps mean fewer turns but may miss real speaker changes.
-6. **AHC `max_clusters`** — set a ceiling (e.g. 20) to prevent over-clustering on noisy embeddings.
+6. **K-means `max_clusters`** — set a ceiling (e.g. 20) to prevent over-clustering on noisy embeddings. K-means auto-k uses silhouette-based selection; single-speaker files are auto-detected.

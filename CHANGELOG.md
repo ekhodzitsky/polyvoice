@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **K-means auto-k clusterer** (`clusterer::KMeansClusterer`) with automatic k
+  selection via silhouette score. 3 trials per k, full silhouette on cached
+  pairwise cosine distances. Single-speaker detection via embedding homogeneity
+  check (mean pairwise distance < 0.15 → force k=1).
+  - VoxConverse 10-file: **13.48%** DER (vs AHC 15.03%).
+  - VoxConverse full 232-file: **14.12%** DER (vs AHC 18.77%).
+- `KMeansClusterer::fast_mode()` — adaptive k_max, 1 trial, 20 iterations for
+  ~10× speedup with minor quality trade-off (16.34% on 10-file).
+- `KMeansClusterer::with_max_iter()` / `with_trials()` builder methods.
+- CoreML Execution Provider support on macOS ARM64 (`--features coreml`).
+- `examples/hybrid_benchmark.rs` — standalone benchmark with per-file timing and
+  JSON checkpoint/resume.
+- `hybrid_voxconverse_10_file_subset_kmeans_fast` integration test.
+
+### Changed
+
+- **PowersetSegmenter default hop: 0.5s → 1.0s** — 2× fewer windows, ~2× faster
+  inference with slightly better DER (less segmentation noise). No API change;
+  existing `PowersetConfig::default()` users automatically get the new hop.
+- Full VoxConverse regression assertion tightened: 20% → **16%** DER ceiling.
+
 ## [0.6.3] - 2026-05-19
 
 ### Added

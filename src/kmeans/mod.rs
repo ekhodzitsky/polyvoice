@@ -1,11 +1,18 @@
 //! K-Means++ clustering with automatic k selection via silhouette score.
 
+/// K-means++ result: labels + centroids + WCSS.
+pub struct KmeansResult {
+    pub labels: Vec<usize>,
+    pub centroids: Vec<Vec<f64>>,
+    pub wcss: f64,
+}
+
 /// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
 /// `pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize>`
 /// { ret.len() == embeddings.len() }
 /// K-means++ initialization + Lloyd's algorithm with deterministic seed.
 pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize> {
-    kmeans_pp_with_seed(embeddings, k, max_iter, 42)
+    kmeans_pp_with_seed(embeddings, k, max_iter, 42).labels
 }
 
 fn kmeans_pp_with_seed(
@@ -13,10 +20,14 @@ fn kmeans_pp_with_seed(
     k: usize,
     max_iter: usize,
     seed: u64,
-) -> Vec<usize> {
+) -> KmeansResult {
     let n = embeddings.len();
     if n == 0 {
-        return Vec::new();
+        return KmeansResult {
+            labels: Vec::new(),
+            centroids: Vec::new(),
+            wcss: 0.0,
+        };
     }
     let k = k.min(n);
     let dim = embeddings[0].len();
@@ -96,7 +107,21 @@ fn kmeans_pp_with_seed(
         centroids = new_centroids;
     }
 
-    labels
+    // Compute WCSS.
+    let wcss: f64 = embeddings
+        .iter()
+        .enumerate()
+        .map(|(i, emb)| {
+            let d = cosine_distance_f32_f64(emb, &centroids[labels[i]]);
+            d * d
+        })
+        .sum();
+
+    KmeansResult {
+        labels,
+        centroids,
+        wcss,
+    }
 }
 
 fn cosine_distance_f32_f64(a: &[f32], b: &[f64]) -> f64 {
@@ -104,68 +129,85 @@ fn cosine_distance_f32_f64(a: &[f32], b: &[f64]) -> f64 {
     (1.0 - sim).max(0.0) as f64
 }
 
-/// Compute the average silhouette score for a clustering using a precomputed
-/// pairwise distance matrix.
-/// Higher is better (range: -1 to 1).
+/// Compute average silhouette score using precomputed pairwise distances.
+/// O(n²) per call, but uses cached dists matrix.
 fn silhouette_score_with_dists(n: usize, labels: &[usize], dists: &[f64]) -> f64 {
-    if n < 2 {
+    if n <= 2 {
         return 0.0;
     }
-    let k = labels.iter().copied().max().unwrap_or(0) + 1;
+    let k = *labels.iter().max().unwrap_or(&0) + 1;
     if k < 2 {
         return 0.0;
     }
 
-    let mut total = 0.0f64;
+    let mut total = 0.0;
+    let mut count = 0;
     for i in 0..n {
-        let label_i = labels[i];
-        let mut a = 0.0f64;
+        let label = labels[i];
+        // a(i): average distance to same cluster.
+        let mut a = 0.0;
         let mut a_count = 0usize;
-        let mut b = vec![0.0f64; k];
-        let mut b_count = vec![0usize; k];
         for j in 0..n {
-            if i == j {
-                continue;
-            }
-            let d = dists[i * n + j];
-            if labels[j] == label_i {
-                a += d;
+            if i != j && labels[j] == label {
+                a += dists[i * n + j];
                 a_count += 1;
-            } else {
-                b[labels[j]] += d;
-                b_count[labels[j]] += 1;
             }
         }
-        let a_avg = if a_count > 0 { a / a_count as f64 } else { 0.0 };
-        let b_min = b
-            .iter()
-            .zip(b_count.iter())
-            .filter(|(_, c)| **c > 0)
-            .map(|(sum, c)| sum / *c as f64)
-            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .unwrap_or(0.0);
-        let s = if a_avg == 0.0 && b_min == 0.0 {
-            0.0
-        } else {
-            (b_min - a_avg) / a_avg.max(b_min)
-        };
+        if a_count == 0 {
+            continue;
+        }
+        a /= a_count as f64;
+
+        // b(i): minimum average distance to other clusters.
+        let mut b = f64::INFINITY;
+        for c in 0..k {
+            if c == label {
+                continue;
+            }
+            let mut b_c = 0.0;
+            let mut b_c_count = 0usize;
+            for j in 0..n {
+                if labels[j] == c {
+                    b_c += dists[i * n + j];
+                    b_c_count += 1;
+                }
+            }
+            if b_c_count == 0 {
+                continue;
+            }
+            b_c /= b_c_count as f64;
+            if b_c < b {
+                b = b_c;
+            }
+        }
+        if b.is_infinite() {
+            continue;
+        }
+        let s = (b - a) / a.max(b);
         total += s;
+        count += 1;
     }
-    total / n as f64
+    if count == 0 {
+        0.0
+    } else {
+        total / count as f64
+    }
 }
 
 /// K-means++ with automatic k selection via silhouette score.
-/// Searches k in [k_min, k_max] and returns the best clustering.
+/// Searches k in [k_min, k_max], runs `trials` per k, picks best by silhouette.
 ///
 /// * `embeddings` — input vectors (assumed L2-normalized).
 /// * `k_min` — minimum number of clusters (at least 2).
 /// * `k_max` — maximum number of clusters.
-/// * `max_iter` — Lloyd iterations per k.
+/// * `max_iter` — Lloyd iterations for the final accurate run.
+/// * `trials` — number of random initializations for the final run.
 pub fn kmeans_auto_k(
     embeddings: &[Vec<f32>],
     k_min: usize,
     k_max: usize,
     max_iter: usize,
+    trials: usize,
 ) -> Vec<usize> {
     let n = embeddings.len();
     if n == 0 {
@@ -177,33 +219,39 @@ pub fn kmeans_auto_k(
     let k_min = k_min.max(2).min(n);
     let k_max = k_max.max(k_min).min(n);
 
-    // Precompute pairwise cosine distances once.
+    // Precompute pairwise cosine distances once for silhouette.
     let mut dists = vec![0.0f64; n * n];
+    let mut total_dist = 0.0;
+    let mut dist_count = 0usize;
     for i in 0..n {
         for j in (i + 1)..n {
             let d = 1.0 - crate::utils::cosine_similarity(&embeddings[i], &embeddings[j]);
             let d = d.max(0.0) as f64;
             dists[i * n + j] = d;
             dists[j * n + i] = d;
+            total_dist += d;
+            dist_count += 1;
         }
     }
 
-    // Run multiple trials per k with different seeds and pick the best by
-    // average silhouette score (most stable metric).
-    const TRIALS: usize = 3;
+    // Single-speaker detection: if embeddings are very homogeneous, force k=1.
+    const HOMOGENEITY_THRESHOLD: f64 = 0.15;
+    if dist_count > 0 && (total_dist / dist_count as f64) < HOMOGENEITY_THRESHOLD {
+        return vec![0; n];
+    }
 
+    // Search all k, running multiple trials per k. Pick best by silhouette.
     let mut best_labels = vec![0usize; n];
     let mut best_score = f64::NEG_INFINITY;
-
     for k in k_min..=k_max {
         let mut trial_best_score = f64::NEG_INFINITY;
         let mut trial_best_labels = vec![0usize; n];
-        for t in 0..TRIALS {
-            let labels = kmeans_pp_with_seed(embeddings, k, max_iter, 42 + t as u64);
-            let score = silhouette_score_with_dists(n, &labels, &dists);
+        for t in 0..trials.max(1) {
+            let result = kmeans_pp_with_seed(embeddings, k, max_iter, 42 + t as u64);
+            let score = silhouette_score_with_dists(n, &result.labels, &dists);
             if score > trial_best_score {
                 trial_best_score = score;
-                trial_best_labels = labels;
+                trial_best_labels = result.labels;
             }
         }
         if trial_best_score > best_score {
