@@ -464,7 +464,11 @@ fn hybrid_voxconverse_10_file_subset_kmeans_fast() {
             stem,
             der.der * 100.0,
             result.num_speakers,
-            ref_turns.iter().map(|t| t.speaker.0).max().map_or(0, |m| m + 1),
+            ref_turns
+                .iter()
+                .map(|t| t.speaker.0)
+                .max()
+                .map_or(0, |m| m + 1),
         );
         total_der += der.der;
         count += 1;
