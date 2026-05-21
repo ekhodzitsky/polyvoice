@@ -41,7 +41,7 @@ Before editing, the agent should be able to answer:
    invariants, or verification changed.
 6. Run focused proof.
 7. Run broader verification when the change touches shared behavior.
-8. Run `coad check .` before claiming the repository still follows COAD.
+8. Run `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo doc --no-deps` before claiming completion.
 
 ## Handoff Template
 
@@ -80,4 +80,4 @@ A reviewer checks the contract before the diff:
 - Changing public surfaces without naming affected consumers.
 - Reporting completion without proof output.
 - Leaving local TODO or README stale after changing module behavior.
-- Treating `coad check .` as a substitute for understanding the module.
+- Treating `cargo test` as a substitute for understanding the module.

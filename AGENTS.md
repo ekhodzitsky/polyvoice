@@ -81,9 +81,6 @@ Patterns: [docs/FORMALISM.md](docs/FORMALISM.md) §4 (proptest, fuzzing)
 Run verification before every commit:
 
 ```bash
-# COAD repository compliance
-coad check .
-
 # Full verification
 cargo test
 cargo clippy --all-targets --all-features -- -D warnings
@@ -132,7 +129,9 @@ Before editing, identify the relevant workcell and read its
 Before claiming completion:
 
 ```bash
-coad check .
+cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+cargo doc --no-deps
 ```
 
 One leaf workcell may have only one active write agent. Read-only agents may
