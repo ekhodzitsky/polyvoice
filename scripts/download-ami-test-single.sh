@@ -27,7 +27,7 @@ if [ -f "$RTTM_FILE" ] && [ "$(wc -l < "$RTTM_FILE" | tr -d ' ')" -gt 1 ]; then
     echo "[RTTM] Already exists: ${RTTM_FILE}"
 else
     echo "[RTTM] Downloading..."
-    curl -sL --retry 5 --retry-delay 10 --continue-at - "$RTTM_URL" -o "$RTTM_FILE"
+    curl -sL --connect-timeout 30 --max-time 300 --retry 10 --retry-delay 10 --continue-at - "$RTTM_URL" -o "$RTTM_FILE"
     echo "[RTTM] Done"
 fi
 echo ""
@@ -37,7 +37,7 @@ if [ -f "$WAV_FILE" ]; then
     echo "[Audio] Already exists: ${WAV_FILE}"
 else
     echo "[Audio] Downloading EN2002a.Mix-Headset.wav (~68 MB)..."
-    curl -L --retry 5 --retry-delay 10 --continue-at - -o "$WAV_FILE" "$AUDIO_URL"
+    curl -L --connect-timeout 30 --max-time 300 --retry 10 --retry-delay 10 --continue-at - -o "$WAV_FILE" "$AUDIO_URL"
     SIZE=$(du -h "$WAV_FILE" | cut -f1)
     echo "[Audio] Done (${SIZE})"
 fi
