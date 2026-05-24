@@ -26,8 +26,8 @@ crate-type = ["cdylib", "rlib"]
 default = []
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
-# C FFI bindings (ABI v2). Requires the full pipeline stack.
-ffi = ["onnx", "download"]
+# C FFI bindings (ABI v3). Requires the full pipeline stack.
+ffi = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
 download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
 # CLI binary (polyvoice command).
@@ -121,6 +121,10 @@ loom = "0.7.2"
 mockall = "0.13"
 assert_cmd = "2"
 predicates = "3"
+
+[[example]]
+name = "hybrid_benchmark"
+required-features = ["onnx", "segmentation", "embedder", "clusterer", "resegmentation", "download"]
 
 [[bench]]
 name = "der_ami"

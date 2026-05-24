@@ -286,3 +286,287 @@ pub fn segment_speech<V: VoiceActivityDetector>(
 
     Ok(segments)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn energy_vad_process_high_energy() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        let samples = vec![0.5f32; 512];
+        let probs = vad.process(&samples).unwrap();
+        assert_eq!(probs.len(), 1);
+        assert!(
+            probs[0] > 0.9,
+            "high energy should give prob > 0.9, got {}",
+            probs[0]
+        );
+    }
+
+    #[test]
+    fn energy_vad_process_low_energy() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        // threshold = 10^(-40/20) = 0.01
+        // energy = sqrt(512 * amplitude^2) must be < 0.001 for prob < 0.1
+        // amplitude < 0.001 / sqrt(512) ≈ 4.4e-5
+        let samples = vec![1e-5f32; 512];
+        let probs = vad.process(&samples).unwrap();
+        assert_eq!(probs.len(), 1);
+        assert!(
+            probs[0] < 0.1,
+            "low energy should give prob < 0.1, got {}",
+            probs[0]
+        );
+    }
+
+    #[test]
+    fn energy_vad_invalid_chunk_size() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        let samples = vec![0.5f32; 256]; // not a multiple of 512
+        let err = vad.process(&samples).unwrap_err();
+        match err {
+            VadError::InvalidChunkSize {
+                expected: 512,
+                got: 256,
+            } => {}
+            other => panic!("expected InvalidChunkSize(512, 256), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn energy_vad_multiple_chunks() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        let samples = vec![0.5f32; 512 * 4];
+        let probs = vad.process(&samples).unwrap();
+        assert_eq!(probs.len(), 4);
+        assert!(probs.iter().all(|&p| p > 0.9));
+    }
+
+    #[test]
+    fn vad_state_machine_advance_speech_start() {
+        let mut sm = VadStateMachine::new(0.5, 3, 1);
+        assert!(!sm.in_speech());
+        let event = sm.advance(0.6, 0);
+        assert_eq!(event, Some(VadEvent::SpeechStart { start_frame: 0 }));
+        assert!(sm.in_speech());
+    }
+
+    #[test]
+    fn vad_state_machine_advance_speech_end_after_silence() {
+        let mut sm = VadStateMachine::new(0.5, 3, 1);
+        sm.advance(0.6, 0); // SpeechStart
+        sm.advance(0.6, 1);
+        sm.advance(0.6, 2);
+        // silence frames
+        sm.advance(0.1, 3);
+        sm.advance(0.1, 4);
+        let event = sm.advance(0.1, 5); // 3rd silence frame → SpeechEnd
+        assert_eq!(
+            event,
+            Some(VadEvent::SpeechEnd {
+                start_frame: 0,
+                end_frame: 6,
+            })
+        );
+        assert!(!sm.in_speech());
+    }
+
+    #[test]
+    fn vad_state_machine_silence_count_resets_on_speech() {
+        let mut sm = VadStateMachine::new(0.5, 3, 1);
+        sm.advance(0.6, 0); // SpeechStart
+        sm.advance(0.1, 1); // silence 1
+        sm.advance(0.1, 2); // silence 2
+        sm.advance(0.6, 3); // back to speech → reset silence_count
+        sm.advance(0.1, 4); // silence 1
+        sm.advance(0.1, 5); // silence 2
+        let event = sm.advance(0.1, 6); // silence 3 → SpeechEnd
+        assert_eq!(
+            event,
+            Some(VadEvent::SpeechEnd {
+                start_frame: 0,
+                end_frame: 7,
+            })
+        );
+    }
+
+    #[test]
+    fn vad_state_machine_flush_during_speech() {
+        let mut sm = VadStateMachine::new(0.5, 3, 1);
+        sm.advance(0.6, 0); // SpeechStart
+        let event = sm.flush(5);
+        assert_eq!(
+            event,
+            Some(VadEvent::SpeechEnd {
+                start_frame: 0,
+                end_frame: 5,
+            })
+        );
+        assert!(!sm.in_speech());
+    }
+
+    #[test]
+    fn vad_state_machine_flush_when_silent() {
+        let mut sm = VadStateMachine::new(0.5, 3, 1);
+        let event = sm.flush(10);
+        assert_eq!(event, None);
+        assert!(!sm.in_speech());
+    }
+
+    #[test]
+    fn segment_speech_empty_samples() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        let samples: Vec<f32> = vec![];
+        let config = DiarizationConfig::default();
+        let vad_config = VadConfig::default();
+        let segs = segment_speech(&mut vad, &samples, &config, &vad_config).unwrap();
+        assert!(segs.is_empty());
+    }
+
+    #[test]
+    fn segment_speech_all_silence() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        let samples = vec![1e-5f32; 16000]; // 1 second of very low energy
+        let config = DiarizationConfig::default();
+        let vad_config = VadConfig::default();
+        let segs = segment_speech(&mut vad, &samples, &config, &vad_config).unwrap();
+        assert!(segs.is_empty());
+    }
+
+    #[test]
+    fn segment_speech_sustained_loud() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        let samples = vec![0.5f32; 16000 * 3]; // 3 seconds of loud audio
+        let config = DiarizationConfig::default();
+        let vad_config = VadConfig::default();
+        let segs = segment_speech(&mut vad, &samples, &config, &vad_config).unwrap();
+        assert!(!segs.is_empty());
+        assert!(segs.iter().all(|(s, e)| s < e));
+    }
+
+    #[test]
+    fn segment_speech_ignores_partial_trailing_chunk() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        // 768 = 512 + 256 — trailing 256 samples are ignored by segment_speech
+        let samples = vec![0.5f32; 768];
+        let config = DiarizationConfig::default();
+        let vad_config = VadConfig::default();
+        let segs = segment_speech(&mut vad, &samples, &config, &vad_config).unwrap();
+        // Only the first 512 samples are processed, which is 1 frame → may or may not be
+        // enough for a segment depending on min_speech_frames. The key point is that
+        // it does NOT error and the trailing partial chunk is silently ignored.
+        assert!(segs.iter().all(|(s, e)| s < e));
+    }
+}
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Generates valid sample vectors whose length is a multiple of `frame_size`.
+    fn valid_samples(frame_size: usize) -> impl Strategy<Value = Vec<f32>> {
+        (0usize..=64usize)
+            .prop_map(move |n| n * frame_size)
+            .prop_flat_map(move |len| prop::collection::vec(-1.0f32..=1.0f32, len))
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 256,
+            ..ProptestConfig::default()
+        })]
+
+        /// EnergyVad::process never panics on valid chunk-sized input and
+        /// returns probabilities in [0, 1].
+        #[test]
+        fn energy_vad_process_never_panics(
+            samples in valid_samples(512),
+        ) {
+            let mut vad = EnergyVad::new(-40.0, 16000, 512);
+            let result = vad.process(&samples);
+            if let Ok(probs) = result {
+                prop_assert_eq!(probs.len(), samples.len() / 512);
+                prop_assert!(probs.iter().all(|&p| (0.0..=1.0).contains(&p)),
+                    "probabilities must be in [0, 1]");
+            }
+        }
+
+        /// segment_speech never panics and returns valid segments.
+        #[test]
+        fn segment_speech_never_panics_and_segments_valid(
+            samples in prop::collection::vec(-1.0f32..=1.0f32, 0..=16000),
+        ) {
+            let mut vad = EnergyVad::new(-40.0, 16000, 512);
+            let config = DiarizationConfig::default();
+            let vad_config = VadConfig::default();
+
+            let result = segment_speech(&mut vad, &samples, &config, &vad_config);
+
+            match result {
+                Ok(segs) => {
+                    prop_assert!(
+                        segs.iter().all(|(s, e)| s < e),
+                        "all segments must have start < end"
+                    );
+                }
+                Err(_) => {
+                    // Err is acceptable (e.g. downstream VAD may reject chunk size),
+                    // but we must never panic.
+                }
+            }
+        }
+
+        /// VadStateMachine maintains invariants across random parameters and
+        /// probability sequences.
+        #[test]
+        fn vad_state_machine_invariants(
+            threshold in 0.0f32..=1.0f32,
+            min_silence_frames in 0usize..=10usize,
+            min_speech_frames in 0usize..=10usize,
+            probs in prop::collection::vec(0.0f32..=1.0f32, 0..=128usize),
+        ) {
+            let mut sm = VadStateMachine::new(threshold, min_silence_frames, min_speech_frames);
+            let mut in_speech_after_flush = false;
+
+            for (i, &prob) in probs.iter().enumerate() {
+                if let Some(event) = sm.advance(prob, i) {
+                    match event {
+                        VadEvent::SpeechStart { start_frame } => {
+                            prop_assert!(
+                                !in_speech_after_flush,
+                                "SpeechStart without preceding SpeechEnd at frame {}", start_frame
+                            );
+                            in_speech_after_flush = true;
+                        }
+                        VadEvent::SpeechEnd { start_frame, end_frame } => {
+                            prop_assert!(
+                                in_speech_after_flush,
+                                "SpeechEnd without preceding SpeechStart"
+                            );
+                            prop_assert!(
+                                start_frame < end_frame,
+                                "SpeechEnd: start_frame {} must be < end_frame {}",
+                                start_frame, end_frame
+                            );
+                            in_speech_after_flush = false;
+                        }
+                    }
+                }
+            }
+
+            if let Some(VadEvent::SpeechEnd { start_frame, end_frame }) = sm.flush(probs.len()) {
+                prop_assert!(
+                    start_frame < end_frame,
+                    "flush SpeechEnd: start_frame {} must be < end_frame {}",
+                    start_frame, end_frame
+                );
+            }
+            prop_assert!(
+                !sm.in_speech(),
+                "after flush in_speech must be false"
+            );
+        }
+    }
+}

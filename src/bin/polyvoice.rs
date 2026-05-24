@@ -81,7 +81,12 @@ fn cmd_diarize(
 ) -> Result<()> {
     let profile = parse_profile(&profile)?;
     let registry = match models_cache {
-        Some(p) => ModelRegistry::with_cache_dir(&p).context("failed to open models cache")?,
+        Some(p) => {
+            if p.to_str().is_some_and(|s| s.contains("..")) {
+                anyhow::bail!("models_cache path contains '..' (path traversal rejected)");
+            }
+            ModelRegistry::with_cache_dir(&p).context("failed to open models cache")?
+        }
         None => ModelRegistry::default().context("failed to resolve default models cache")?,
     };
 

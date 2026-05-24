@@ -1,4 +1,4 @@
-"""Basic tests for polyvoice Python bindings (legacy v0.5 API)."""
+"""Basic tests for polyvoice Python bindings (Pipeline v2)."""
 
 import os
 import pytest
@@ -18,7 +18,7 @@ def pipeline():
 def test_version():
     import polyvoice
 
-    assert polyvoice.__version__ == "0.6.0-alpha.0"
+    assert polyvoice.__version__ == "0.6.5"
 
 
 def test_pipeline_repr(pipeline):
@@ -102,5 +102,5 @@ def test_missing_models(tmp_path):
     # create_dir_all on a file path returns "Not a directory".
     fake_dir = tmp_path / "not_a_dir"
     fake_dir.write_text("i am a file")
-    with pytest.raises(RuntimeError):
+    with pytest.raises(OSError):
         polyvoice.Pipeline.balanced(str(fake_dir))

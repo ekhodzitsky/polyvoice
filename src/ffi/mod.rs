@@ -1,14 +1,12 @@
-//! Legacy v0.5.2 — C FFI ABI for the legacy Pipeline.
+//! C FFI ABI v3 for polyvoice Pipeline (v0.6.5+).
 //!
 //! Threading model: `PolyvoicePipeline` is `Send`. Each `*mut PolyvoicePipeline`
 //! owns its data; callers must call `polyvoice_pipeline_destroy` exactly once.
 //! All entry points are wrapped in `catch_unwind` per spec §8.4.
 
-use crate::VadConfig;
 use crate::models::ModelRegistry;
-use crate::pipeline::Pipeline;
-use crate::types::{DiarizationConfig, Profile};
-use crate::{FbankOnnxExtractor, SileroVad};
+use crate::pipeline_v2::Pipeline;
+use crate::types::{Profile, SampleRate};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -34,8 +32,6 @@ pub enum PolyvoiceStatus {
 
 pub struct PolyvoicePipeline {
     inner: Pipeline,
-    extractor: FbankOnnxExtractor,
-    vad: SileroVad,
 }
 
 /// Create a new pipeline from a profile.
@@ -49,7 +45,7 @@ pub struct PolyvoicePipeline {
 #[rustfmt::skip]
 pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
 polyvoice_pipeline_create(
-    profile: PolyvoiceProfile,
+    profile: c_int,
     models_cache_dir: *const c_char,
     out_handle: *mut *mut PolyvoicePipeline,
 ) -> c_int {
@@ -59,8 +55,9 @@ polyvoice_pipeline_create(
                 return Err(PolyvoiceStatus::InvalidArg as c_int);
             }
             let prof = match profile {
-                PolyvoiceProfile::Mobile => Profile::Mobile,
-                PolyvoiceProfile::Balanced => Profile::Balanced,
+                0 => Profile::Mobile,
+                1 => Profile::Balanced,
+                _ => return Err(PolyvoiceStatus::InvalidArg as c_int),
             };
             let registry = if models_cache_dir.is_null() {
                 ModelRegistry::default()
@@ -72,25 +69,29 @@ polyvoice_pipeline_create(
                     .map_err(|_| PolyvoiceStatus::InvalidArg as c_int)?;
                 // Reject path-traversal attempts (e.g. "../../evil") before the
                 // path is passed to ModelRegistry::with_cache_dir.  FFI-002.
-                if s.contains("..") {
+                if s.contains("..") || s.starts_with('/') {
                     return Err(PolyvoiceStatus::InvalidArg as c_int);
                 }
                 ModelRegistry::with_cache_dir(s)
             }
             .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
-            let models = registry
-                .ensure_for_profile(prof)
-                .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
-            let extractor = FbankOnnxExtractor::new(&models.embedder_path, prof.embedding_dim(), 1)
-                .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
-            let vad = SileroVad::new(&models.segmenter_path, 512)
-                .map_err(|_| PolyvoiceStatus::ModelLoad as c_int)?;
-            let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
-            Ok(Box::into_raw(Box::new(PolyvoicePipeline {
-                inner: pipeline,
-                extractor,
-                vad,
-            })))
+            let pipeline = Pipeline::builder()
+                .profile(prof)
+                .with_models_from(registry)
+                .build()
+                .map_err(|e| match e {
+                    crate::pipeline_v2::ConfigError::Registry(_) |
+                    crate::pipeline_v2::ConfigError::UnknownModel { .. } => {
+                        PolyvoiceStatus::Registry as c_int
+                    }
+                    crate::pipeline_v2::ConfigError::MissingRegistry { .. } |
+                    crate::pipeline_v2::ConfigError::CustomComponentInProfile { .. } |
+                    crate::pipeline_v2::ConfigError::RegistryInCustomProfile |
+                    crate::pipeline_v2::ConfigError::MissingCustomComponent { .. } => {
+                        PolyvoiceStatus::InvalidArg as c_int
+                    }
+                })?;
+            Ok(Box::into_raw(Box::new(PolyvoicePipeline { inner: pipeline })))
         },
     ));
     match r {
@@ -130,7 +131,7 @@ polyvoice_pipeline_run(
             return Err(PolyvoiceStatus::InvalidArg as c_int);
         }
         let pipeline = unsafe { // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
-            &mut *pipeline
+            &*pipeline
         };
         // SAFETY: samples was checked non-null; n_samples is caller-provided length.
         const MAX_SAMPLES: usize = 16000 * 3600; // 1 hour at 16 kHz
@@ -140,16 +141,20 @@ polyvoice_pipeline_run(
         let samples = unsafe { // SAFETY: samples was checked non-null; n_samples was validated against MAX_SAMPLES.
             std::slice::from_raw_parts(samples, n_samples)
         };
-        // Legacy pipeline expects 16 kHz audio.
-        if sample_rate != 16000 {
-            return Err(PolyvoiceStatus::InvalidArg as c_int);
-        }
+        let sr = SampleRate::new(sample_rate)
+            .ok_or(PolyvoiceStatus::InvalidArg as c_int)?;
         let result = pipeline
             .inner
-            .run(samples, &pipeline.extractor, &mut pipeline.vad)
+            .run(samples, sr)
             .map_err(|e| match e {
-                crate::pipeline::PipelineError::AudioTooLong { .. } => {
-                    PolyvoiceStatus::AudioTooLong as c_int
+                crate::pipeline_v2::PipelineError::UnsupportedSampleRate { .. } => {
+                    PolyvoiceStatus::InvalidArg as c_int
+                }
+                crate::pipeline_v2::PipelineError::ModelLoad { .. } => {
+                    PolyvoiceStatus::ModelLoad as c_int
+                }
+                crate::pipeline_v2::PipelineError::Registry(_) => {
+                    PolyvoiceStatus::Registry as c_int
                 }
                 _ => PolyvoiceStatus::Inference as c_int,
             })?;
