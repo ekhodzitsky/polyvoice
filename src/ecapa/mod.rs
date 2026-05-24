@@ -156,6 +156,7 @@ impl Drop for PooledSession<'_> {
 }
 
 #[cfg(not(feature = "onnx"))]
+#[derive(Debug)]
 pub struct FbankOnnxExtractor;
 
 #[cfg(not(feature = "onnx"))]
@@ -169,5 +170,31 @@ impl FbankOnnxExtractor {
         _pool_size: usize,
     ) -> anyhow::Result<Self> {
         anyhow::bail!("the `onnx` feature is not enabled")
+    }
+}
+
+#[cfg(all(test, not(feature = "onnx")))]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn fbank_onnx_extractor_new_without_onnx_fails() {
+        let result = FbankOnnxExtractor::new(Path::new("dummy.onnx"), 256, 1);
+        assert!(result.is_err());
+        let err = match result {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("expected error"),
+        };
+        assert!(
+            err.contains("onnx") || err.contains("not enabled"),
+            "expected onnx-related error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn fbank_onnx_extractor_stub_exists() {
+        // Ensure the stub type is constructible (even if useless).
+        let _ = FbankOnnxExtractor;
     }
 }

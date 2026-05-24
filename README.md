@@ -38,7 +38,7 @@ Speaker_0: 31.2s - 45.0s
 
 ```bash
 # Rust
-cargo add polyvoice --features onnx
+cargo add polyvoice --features "onnx,download"
 
 # Python
 pip install polyvoice

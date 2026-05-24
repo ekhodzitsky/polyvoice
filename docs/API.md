@@ -10,7 +10,7 @@ The crate exposes two pipeline layers:
 | Layer | Entry point | Status | Best for |
 |-------|-------------|--------|----------|
 | **Legacy** (`polyvoice::Pipeline`) | `Pipeline::new(DiarizationConfig, VadConfig)` | Stable, used by CLI & Python | General use, proven DER |
-| **v2 / Hybrid** (`polyvoice::pipeline_v2`) | `HybridPipeline::new(...)` or `PipelineBuilder` | API-only (v0.6.3) | Long-form multi-speaker audio, overlap detection |
+| **v2 / Hybrid** (`polyvoice::pipeline_v2`) | `HybridPipeline::new(...)` or `PipelineBuilder` | Stable (v0.6.5) | Long-form multi-speaker audio, overlap detection |
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -96,8 +96,8 @@ ONNX-based VAD used by the legacy pipeline and CLI.
 
 ## Pipeline v2 & Hybrid (API-only, v0.6.3)
 
-> **Note**: These APIs are available in Rust only. The CLI and Python bindings
-> continue to use the legacy pipeline for stability.
+> **Note**: These APIs are available in Rust, FFI, Python, and CLI. All
+> interfaces use Pipeline v2 as of v0.6.5.
 
 ### `HybridPipeline`
 
