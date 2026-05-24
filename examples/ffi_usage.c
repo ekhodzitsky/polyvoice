@@ -1,4 +1,4 @@
-/* C FFI usage example.
+/* C FFI usage example for polyvoice ABI v3.
  *
  * Build the shared library first:
  *     cargo build --features ffi
@@ -16,38 +16,45 @@
 #include "polyvoice.h"
 
 int main(void) {
-    printf("polyvoice version: %s\n", polyvoice_version());
+    PolyvoicePipeline* handle = NULL;
 
-    PolyvoiceDiarizer *d = polyvoice_diarizer_new(0.5f, 64);
-    if (!d) {
-        fprintf(stderr, "failed to create diarizer\n");
+    int rc = polyvoice_pipeline_create(
+        POLYVOICE_PROFILE_BALANCED,
+        NULL,  /* use default model cache */
+        &handle
+    );
+    if (rc != POLYVOICE_OK || !handle) {
+        fprintf(stderr, "failed to create pipeline (status=%d)\n", rc);
         return 1;
     }
 
     /* 2 seconds of silence @ 16 kHz */
     size_t sample_count = 16000 * 2;
-    float *samples = calloc(sample_count, sizeof(float));
+    float* samples = calloc(sample_count, sizeof(float));
     if (!samples) {
-        polyvoice_diarizer_free(d);
+        polyvoice_pipeline_destroy(handle);
         return 1;
     }
 
-    PolyvoiceResult *r = polyvoice_diarizer_run(d, samples, sample_count);
+    char* json = NULL;
+    size_t json_len = 0;
+    rc = polyvoice_pipeline_run(
+        handle,
+        samples,
+        sample_count,
+        16000,  /* sample rate */
+        &json,
+        &json_len
+    );
     free(samples);
 
-    if (r) {
-        printf("Detected %zu turn(s):\n", r->num_turns);
-        for (size_t i = 0; i < r->num_turns; i++) {
-            printf("  %s: %.2f - %.2f\n",
-                   r->turns[i].speaker,
-                   r->turns[i].start,
-                   r->turns[i].end);
-        }
-        polyvoice_result_free(r);
+    if (rc == POLYVOICE_OK && json) {
+        printf("Result (first 256 chars): %.256s\n", json);
+        polyvoice_free_string(json, json_len);
     } else {
-        printf("No turns detected (audio too short or error).\n");
+        fprintf(stderr, "pipeline run failed (status=%d)\n", rc);
     }
 
-    polyvoice_diarizer_free(d);
+    polyvoice_pipeline_destroy(handle);
     return 0;
 }

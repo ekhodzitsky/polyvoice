@@ -113,12 +113,12 @@ jobs:
         with:
           tool: cargo-llvm-cov
       - name: Generate coverage
-        run: cargo llvm-cov --all-features --lib --tests --cobertura --output-path cobertura.xml
+        run: cargo llvm-cov --all-features --lib --tests --doctests --cobertura --output-path cobertura.xml --fail-under-lines 70
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           files: ./cobertura.xml
-          fail_ci_if_error: false
+          fail_ci_if_error: true
 
   miri:
     runs-on: ubuntu-latest

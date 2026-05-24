@@ -1,5 +1,4 @@
-/* polyvoice.h — C FFI for the legacy v0.5.2 Pipeline.
- * Architecture: SileroVAD + WeSpeaker embeddings + AHC clustering.
+/* polyvoice.h — C FFI ABI v3 for polyvoice Pipeline (v0.6.5+).
  * Threading: PolyvoicePipeline is Send. Each handle must be destroyed exactly once.
  */
 #ifndef POLYVOICE_H
@@ -23,6 +22,7 @@ typedef enum {
     POLYVOICE_OK = 0,
     POLYVOICE_ERR_INVALID_ARG = 1,
     POLYVOICE_ERR_AUDIO_TOO_SHORT = 2,
+    POLYVOICE_ERR_AUDIO_TOO_LONG = 3,
     POLYVOICE_ERR_MODEL_LOAD = 10,
     POLYVOICE_ERR_INFERENCE = 11,
     POLYVOICE_ERR_OUT_OF_MEMORY = 20,
