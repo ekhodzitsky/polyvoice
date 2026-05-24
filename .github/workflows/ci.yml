@@ -113,7 +113,7 @@ jobs:
         with:
           tool: cargo-llvm-cov
       - name: Generate coverage
-        run: cargo llvm-cov --all-features --tests --doctests --cobertura --output-path cobertura.xml --fail-under-lines 70
+        run: cargo llvm-cov --all-features --cobertura --output-path cobertura.xml --fail-under-lines 70
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
