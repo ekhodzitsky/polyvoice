@@ -266,6 +266,7 @@ mod tests {
     use crate::pipeline_v2::mocks::{MockClusterer, MockEmbedder, MockSegmenter, raw_segment};
     use crate::resegmentation::OverlapResegmenter;
     use crate::types::Profile;
+    use proptest::prelude::*;
 
     fn pipeline_with_segments(segs: Vec<crate::segmentation::RawSegment>) -> Pipeline {
         let cfg = PipelineConfig {
@@ -331,5 +332,36 @@ mod tests {
             .run(&vec![0.0_f32; 16000 * 3], SampleRate::new(16000).unwrap())
             .unwrap();
         assert!(result.num_speakers <= 1);
+    }
+
+    // Pipeline output turns must be monotonically ordered by start time
+    // regardless of input segment order.
+    proptest! {
+        #[test]
+        fn pipeline_turns_are_monotonically_ordered(
+            segments in prop::collection::vec(
+                (0.0f64..=10.0, 0.0f64..=10.0, 0u8..=2u8, prop::bool::ANY),
+                0..=20usize,
+            ),
+        ) {
+            let segs: Vec<_> = segments
+                .into_iter()
+                .map(|(s, e, spk, overlap)| {
+                    let (start, end) = if s < e { (s, e) } else { (e, s) };
+                    raw_segment(start, end, spk, overlap)
+                })
+                .collect();
+            let p = pipeline_with_segments(segs);
+            let result = p
+                .run(&vec![0.0_f32; 16000 * 10], SampleRate::new(16000).unwrap())
+                .unwrap();
+
+            for i in 1..result.turns.len() {
+                assert!(
+                    result.turns[i - 1].time.start <= result.turns[i].time.start,
+                    "turns must be monotonically ordered by start time"
+                );
+            }
+        }
     }
 }

@@ -136,6 +136,22 @@ jobs:
         env:
           MIRIFLAGS: "-Zmiri-disable-isolation"
 
+  valgrind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: Build FFI smoke test
+        run: cargo test --features ffi --test ffi_smoke_test --no-run
+      - name: Run under valgrind
+        run: |
+          BIN=$(find target/debug/deps -maxdepth 1 -name 'ffi_smoke_test-*' -type f -executable | head -1)
+          valgrind --leak-check=full --error-exitcode=1 \
+            "$BIN" ffi_create_invalid_profile_returns_invalid_arg ffi_create_null_out_handle_returns_error
+
   loom:
     runs-on: ubuntu-latest
     steps:
