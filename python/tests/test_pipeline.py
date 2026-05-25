@@ -18,7 +18,7 @@ def pipeline():
 def test_version():
     import polyvoice
 
-    assert polyvoice.__version__ == "0.6.5"
+    assert polyvoice.__version__ == "0.6.6"
 
 
 def test_pipeline_repr(pipeline):
