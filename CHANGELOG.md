@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-05-25
+
+### Changed
+
+- **Python and FFI bindings migrated to Pipeline v2** (`polyvoice::pipeline_v2`).
+  `Pipeline::balanced()` / `.mobile()` now build via `PipelineBuilder`.
+- Python `run()` releases the GIL during inference.
+- Python exception mapping improved: `ValueError` for bad sample rate, `OSError`
+  for model/registry errors.
+
+### Added
+
+- Property test: pipeline output turns are always monotonically ordered.
+- CI: Valgrind job for FFI memory safety.
+- CI: Miri job restricted to focused targets (3 min instead of 6+ hours).
+
+### Fixed
+
+- FFI: eliminated UB on invalid C enum discriminant (`profile` now `c_int`).
+- FFI: `ConfigError` variants correctly map to `InvalidArg(1)` instead of
+  `Internal(99)`.
+- FFI: path-traversal guard strengthened (`starts_with('/')`).
+- `ecapa` test now skips under `feature = "onnx"` to avoid failure with
+  `--all-features`.
+- VAD property test now uses generated `min_speech_frames`.
+- Mock E2E tests deduplicated and misleading names corrected.
+
 ## [0.6.5] - 2026-05-21
 
 ### Fixed
