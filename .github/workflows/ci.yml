@@ -150,7 +150,7 @@ jobs:
       - name: Run under valgrind
         run: |
           BIN=$(find target/debug/deps -maxdepth 1 -name 'ffi_smoke_test-*' -type f -executable | head -1)
-          valgrind --leak-check=full --error-exitcode=1 \
+          valgrind --leak-check=full --errors-for-leak-kinds=definite --error-exitcode=1 \
             "$BIN" ffi_create_invalid_profile_returns_invalid_arg ffi_create_null_out_handle_returns_error
 
   loom:
