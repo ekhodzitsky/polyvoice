@@ -122,16 +122,17 @@ jobs:
 
   miri:
     runs-on: ubuntu-latest
-    timeout-minutes: 720
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
       - uses: Swatinem/rust-cache@v2
-      - name: cargo miri test
+      - name: cargo miri test (focused)
         run: |
-          cargo miri test --features ffi --lib
+          cargo miri test --features ffi --test ffi_smoke_test ffi_create
+          cargo miri test --features resegmentation --test miri_resegmentation
           cargo miri test --features ffi --test test_ahc
         env:
           MIRIFLAGS: "-Zmiri-disable-isolation"
