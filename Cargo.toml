@@ -120,6 +120,7 @@ loom = "0.7.2"
 mockall = "0.13"
 assert_cmd = "2"
 predicates = "3"
+insta = { version = "1.47.2", features = ["json"] }
 
 [[example]]
 name = "hybrid_benchmark"
@@ -140,7 +141,7 @@ path = "src/bin/polyvoice-bench.rs"
 required-features = ["cli"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(kani)'] }
 
 [lints.clippy]
 unwrap_used = "deny"
