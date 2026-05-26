@@ -95,10 +95,10 @@ pub fn compute_der(
         // Count correctly matched pairs
         let mut n_correct = 0u64;
         for h in hyp_spk {
-            if let Some(&mapped_ref) = mapping.get(h)
-                && ref_spk.contains(&mapped_ref)
-            {
-                n_correct += 1;
+            if let Some(&mapped_ref) = mapping.get(h) {
+                if ref_spk.contains(&mapped_ref) {
+                    n_correct += 1;
+                }
             }
         }
         n_correct = n_correct.min(n_ref);

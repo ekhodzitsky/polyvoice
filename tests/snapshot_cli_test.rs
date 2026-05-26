@@ -14,7 +14,7 @@ fn polyvoice() -> Command {
 #[test]
 fn snapshot_help_top_level() {
     let output = polyvoice().arg("--help").output().unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = String::from_utf8_lossy(&output.stdout).replace("polyvoice.exe", "polyvoice");
     insta::assert_snapshot!(stdout);
 }
 
@@ -25,4 +25,3 @@ fn snapshot_version() {
     // Version changes with releases — snapshot only the prefix.
     assert!(stdout.starts_with("polyvoice "));
 }
-

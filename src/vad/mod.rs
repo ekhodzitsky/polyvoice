@@ -86,7 +86,7 @@ impl VoiceActivityDetector for EnergyVad {
     fn reset(&mut self) {}
 
     fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, VadError> {
-        if !samples.len().is_multiple_of(self.frame_size) {
+        if samples.len() % self.frame_size != 0 {
             return Err(VadError::InvalidChunkSize {
                 expected: self.frame_size,
                 got: samples.len(),

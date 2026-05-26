@@ -227,7 +227,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85.0
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --all-features
+      # MSRV applies to the core library (default features). ONNX-dependent
+      # features pull ort which requires a newer Rust compiler.
+      - run: cargo check --lib
 
   machete:
     runs-on: ubuntu-latest
