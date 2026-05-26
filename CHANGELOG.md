@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-05-26
+
+### Changed
+
+- **CI SOTA overhaul**: release gate, parallel DER matrix, cargo-deny, caching, permissions
+- **Testing**: cargo-nextest with retries, insta snapshot tests, Kani formal proofs
+- **Quality**: unwrap_used = "deny", cargo-hack feature powerset (120 combos), cargo-machete
+- **Infrastructure**: MSRV CI job (1.85.0), cargo-mutants nightly, fuzz on PR
+
 ## [0.6.6] - 2026-05-25
 
 ### Changed

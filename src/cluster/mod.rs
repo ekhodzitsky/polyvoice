@@ -82,11 +82,11 @@ impl SpeakerCluster {
             return (SpeakerId(id as u32), best_sim);
         }
 
-        if let Some(id) = best_id
-            && best_sim > self.config.threshold
-        {
-            self.update_centroid(id, embedding, best_sim);
-            return (SpeakerId(id as u32), best_sim);
+        if let Some(id) = best_id {
+            if best_sim > self.config.threshold {
+                self.update_centroid(id, embedding, best_sim);
+                return (SpeakerId(id as u32), best_sim);
+            }
         }
 
         // New speaker
