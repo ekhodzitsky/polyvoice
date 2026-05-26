@@ -97,7 +97,7 @@ impl VoiceActivityDetector for SileroVad {
     }
 
     fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, VadError> {
-        if !samples.len().is_multiple_of(self.chunk_size) {
+        if samples.len() % self.chunk_size != 0 {
             return Err(VadError::InvalidChunkSize {
                 expected: self.chunk_size,
                 got: samples.len(),

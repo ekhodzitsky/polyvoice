@@ -334,11 +334,11 @@ fn extract_speech_regions_filtered(
 
     let mut merged: Vec<(f64, f64)> = Vec::new();
     for &(start, end) in &intervals {
-        if let Some(last) = merged.last_mut()
-            && start <= last.1
-        {
-            last.1 = last.1.max(end);
-            continue;
+        if let Some(last) = merged.last_mut() {
+            if start <= last.1 {
+                last.1 = last.1.max(end);
+                continue;
+            }
         }
         merged.push((start, end));
     }

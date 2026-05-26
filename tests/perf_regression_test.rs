@@ -103,7 +103,8 @@ fn perf_regression_legacy_pipeline() {
     let embedding_dim = Profile::Balanced.embedding_dim();
     let extractor =
         FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("load embedder");
-    let mut vad = SileroVad::new(&models.segmenter_path, 512).expect("load vad");
+    let vad_path = registry.ensure("silero_vad").expect("silero_vad model");
+    let mut vad = SileroVad::new(&vad_path, 512).expect("load vad");
 
     let config = DiarizationConfig::default();
     let vad_config = VadConfig::default();

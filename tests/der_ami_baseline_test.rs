@@ -34,7 +34,8 @@ fn ami_single_file_der_below_30_percent() {
     let extractor =
         FbankOnnxExtractor::new(&models.embedder_path, Profile::Balanced.embedding_dim(), 1)
             .expect("embedder");
-    let mut vad = SileroVad::new(&models.segmenter_path, 512).expect("vad");
+    let vad_path = registry.ensure("silero_vad").expect("silero_vad model");
+    let mut vad = SileroVad::new(&vad_path, 512).expect("vad");
     let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
 
     let result = pipeline

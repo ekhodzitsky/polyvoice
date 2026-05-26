@@ -59,7 +59,8 @@ fn run_legacy_pipeline(wav_path: &Path, rttm_path: &Path) -> (f64, String) {
     let embedding_dim = Profile::Balanced.embedding_dim();
     let extractor =
         FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("embedder");
-    let mut vad = SileroVad::new(Path::new("models/silero_vad.onnx"), 512).expect("vad");
+    let vad_path = registry.ensure("silero_vad").expect("silero_vad model");
+    let mut vad = SileroVad::new(&vad_path, 512).expect("vad");
 
     let config = DiarizationConfig::default();
     let vad_config = VadConfig::default();

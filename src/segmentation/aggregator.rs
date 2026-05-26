@@ -179,24 +179,24 @@ impl Aggregator {
         let mut b_masks = vec![vec![false; grid_len]; 3];
         for k in 0..grid_len {
             let t = overlap_start + k as f32 * stride;
-            if let Some(idx_a) = self.frame_index_at(a, t)
-                && idx_a < a_labels.len()
-            {
-                for s in a_labels[idx_a].class.speakers() {
-                    if (s as usize) < 3 {
-                        let permuted = a_perm_so_far[s as usize] as usize;
-                        if permuted < 3 {
-                            a_masks[permuted][k] = true;
+            if let Some(idx_a) = self.frame_index_at(a, t) {
+                if idx_a < a_labels.len() {
+                    for s in a_labels[idx_a].class.speakers() {
+                        if (s as usize) < 3 {
+                            let permuted = a_perm_so_far[s as usize] as usize;
+                            if permuted < 3 {
+                                a_masks[permuted][k] = true;
+                            }
                         }
                     }
                 }
             }
-            if let Some(idx_b) = self.frame_index_at(b, t)
-                && idx_b < b_labels.len()
-            {
-                for s in b_labels[idx_b].class.speakers() {
-                    if (s as usize) < 3 {
-                        b_masks[s as usize][k] = true;
+            if let Some(idx_b) = self.frame_index_at(b, t) {
+                if idx_b < b_labels.len() {
+                    for s in b_labels[idx_b].class.speakers() {
+                        if (s as usize) < 3 {
+                            b_masks[s as usize][k] = true;
+                        }
                     }
                 }
             }
