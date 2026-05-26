@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Property tests for Agglomerative Hierarchical Clustering.
 //!
 //! Verified invariants:

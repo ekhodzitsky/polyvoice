@@ -345,6 +345,7 @@ fn extract_speech_regions_filtered(
     merged
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

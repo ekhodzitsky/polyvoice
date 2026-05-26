@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Performance regression test for the legacy v0.5 pipeline.
 //!
 //! Tracks RTF (Real-Time Factor) and peak RSS memory over a fixed subset of

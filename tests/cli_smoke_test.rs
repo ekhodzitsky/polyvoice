@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! M6b — smoke tests for the polyvoice CLI using assert_cmd + predicates.
 
 #![cfg(feature = "cli")]

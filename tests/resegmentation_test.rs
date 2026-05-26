@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration test for the M4 OverlapResegmenter on synthetic data.
 //! Pure-CPU; runs in normal `cargo test` (no model required).
 

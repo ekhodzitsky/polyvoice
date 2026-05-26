@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Pipeline v2 with AHC clusterer on aorju (release build recommended).
 //!
 //! Run with:

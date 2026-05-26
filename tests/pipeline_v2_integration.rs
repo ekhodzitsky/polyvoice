@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration test for Pipeline v2 with ResNet34 + AHC.
 //!
 //! Ensures the v2 pipeline achieves DER < 10% on the e2e-smoke test audio.

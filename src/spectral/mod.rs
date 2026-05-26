@@ -275,6 +275,7 @@ fn compute_bic(features: &[Vec<f64>], labels: &[usize], k: usize) -> f64 {
     -2.0 * log_likelihood + p as f64 * (n as f64).ln()
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

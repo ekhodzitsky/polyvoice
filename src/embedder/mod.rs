@@ -166,6 +166,7 @@ impl<E: Embedder> EmbedderPool<E> {
 /// Parallel batch embedding using `std::thread::scope`.
 /// Spawns up to `available_parallelism` threads, each processing a chunk
 /// of the input via `embedder.embed()`.
+#[cfg(feature = "onnx")]
 fn parallel_embed_batch<E: Embedder>(
     embedder: &E,
     audios: &[&[f32]],
@@ -310,6 +311,7 @@ mod onnx_adapters {
 #[cfg(all(feature = "onnx", feature = "embedder"))]
 pub use onnx_adapters::{CamPlusPlusExtractor, ResNet34Adapter};
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod overlap_mask_tests {
     use super::*;
@@ -382,6 +384,7 @@ mod overlap_mask_tests {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod trait_tests {
     use super::*;
@@ -440,6 +443,7 @@ mod trait_tests {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod pool_tests {
     use super::*;

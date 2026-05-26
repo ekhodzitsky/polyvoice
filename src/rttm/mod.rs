@@ -165,6 +165,7 @@ pub fn write_rttm<W: Write>(
     Ok(())
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

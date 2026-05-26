@@ -92,6 +92,7 @@ pub fn solve(cost: &[Vec<f32>]) -> Option<Vec<usize>> {
     Some(result)
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Mock-based E2E integration tests for the pipeline.
 //!
 //! These tests run the full diarization pipeline without any ONNX models,

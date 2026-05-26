@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! M5 — manifest smoke tests over the production `src/models/manifest.toml`.
 //!
 //! Verifies that after the M5 publish step:

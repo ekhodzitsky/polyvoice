@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Chaos / malformed-input tests for the legacy polyvoice pipeline.
 //!
 //! These tests verify that the pipeline, VAD, AHC, and WAV I/O handle
