@@ -525,3 +525,6 @@ mod profile_tests {
         assert!("nope".parse::<Profile>().is_err());
     }
 }
+
+#[cfg(kani)]
+mod kani_proofs;

@@ -1,0 +1,5 @@
+---
+source: tests/snapshot_der_test.rs
+expression: "format!(\"{:.6?}\", der)"
+---
+DerResult { der: 3.000000, miss_rate: 1.000000, false_alarm_rate: 2.000000, confusion_rate: 0.000000, total_speech: 0.500000 }
