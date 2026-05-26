@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration test for ModelRegistry against the real upstream URLs.
 //!
 //! Runs only when explicitly invoked:

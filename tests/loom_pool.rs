@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Loom model-checking for the session-pool checkout/drop pattern.
 //!
 //! This test verifies that the `PooledSession`-style guard (checkout from a

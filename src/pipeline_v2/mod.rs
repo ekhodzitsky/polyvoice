@@ -17,6 +17,7 @@ pub mod builder;
 pub mod config;
 pub mod hybrid;
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 pub mod mocks;
 
@@ -260,6 +261,7 @@ impl Pipeline {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

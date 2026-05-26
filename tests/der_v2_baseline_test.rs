@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! DER baseline measurement for Pipeline v2.
 //!
 //! Run with:

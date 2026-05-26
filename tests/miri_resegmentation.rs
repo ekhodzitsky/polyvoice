@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Miri-friendly subset of M4 resegmenter tests. Covers no-overlap pass-through,
 //! single-overlap cosine matching, and centroid math. ONNX-free, deterministic.
 

@@ -169,6 +169,7 @@ pub fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment>
     merged
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

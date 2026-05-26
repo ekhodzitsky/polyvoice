@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Compare ResNet34 vs CAM++ embedders on aorju via Hybrid pipeline.
 //!
 //! Run with:

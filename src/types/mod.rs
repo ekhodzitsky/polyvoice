@@ -482,6 +482,7 @@ impl DiarizationConfig {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod profile_tests {
     use super::*;

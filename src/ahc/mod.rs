@@ -208,6 +208,7 @@ fn estimate_threshold_from_similarities(embeddings: &[Vec<f32>]) -> f32 {
     th.clamp(0.2, 0.7)
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

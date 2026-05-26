@@ -263,6 +263,7 @@ pub fn kmeans_auto_k(
     best_labels
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

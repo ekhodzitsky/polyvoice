@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use polyvoice::wav;
 use std::io::Cursor;
 

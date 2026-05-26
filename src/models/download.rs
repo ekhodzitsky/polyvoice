@@ -236,6 +236,7 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), DownloadError> {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

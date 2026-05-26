@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration test for `AhcClusterer` and `NmeScClusterer` on synthetic
 //! clusters. Pure-CPU; runs in normal `cargo test` (no network or model required).
 

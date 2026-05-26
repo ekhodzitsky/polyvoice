@@ -99,7 +99,6 @@ serde_json = "1"
 # Math / numerics
 ndarray = { version = "0.17", default-features = false }
 realfft = "3.5"
-num-complex = "0.4"
 
 # CLI (optional)
 clap = { version = "4", features = ["derive", "env"], optional = true }
@@ -142,6 +141,9 @@ required-features = ["cli"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+
+[lints.clippy]
+unwrap_used = "deny"
 
 [profile.release]
 lto = true

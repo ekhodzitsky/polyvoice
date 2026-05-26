@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Pipeline v2 long-form audio diagnostics.
 //!
 //! Run with:

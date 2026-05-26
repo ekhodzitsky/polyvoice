@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Hybrid pipeline window/hop sweep on aorju.
 //!
 //! Run with:

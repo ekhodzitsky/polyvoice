@@ -305,6 +305,7 @@ struct Aggregate {
     count: usize,
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod prop_tests {
     use super::*;

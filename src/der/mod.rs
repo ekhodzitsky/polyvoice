@@ -243,6 +243,7 @@ pub fn compute_der_from_rttm(
     compute_der(&ref_turns, hypothesis, collar)
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

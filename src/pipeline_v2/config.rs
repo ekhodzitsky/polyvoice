@@ -78,6 +78,7 @@ fn default_pool_size() -> usize {
         .clamp(1, 4)
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

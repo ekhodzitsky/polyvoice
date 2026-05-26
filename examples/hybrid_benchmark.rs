@@ -84,7 +84,7 @@ fn main() {
         .iter()
         .filter(|e| {
             let path = e.path();
-            let stem = path.file_stem().unwrap().to_str().unwrap();
+            let stem = path.file_stem().expect("wav has stem").to_str().expect("stem is valid utf-8");
             !done.contains(stem)
         })
         .count();
@@ -96,7 +96,7 @@ fn main() {
 
     for (idx, entry) in entries.iter().enumerate() {
         let wav_path = entry.path();
-        let stem = wav_path.file_stem().unwrap().to_str().unwrap().to_string();
+        let stem = wav_path.file_stem().expect("wav has stem").to_str().expect("stem is valid utf-8").to_string();
 
         if done.contains(&stem) {
             continue;
@@ -113,7 +113,7 @@ fn main() {
 
         let t0 = std::time::Instant::now();
         let result = pipeline
-            .run(&samples, SampleRate::new(16000).unwrap())
+            .run(&samples, SampleRate::new(16000).expect("16000 is valid sample rate"))
             .expect("run");
         let elapsed = t0.elapsed().as_secs_f64();
 
