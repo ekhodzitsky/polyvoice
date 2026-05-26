@@ -1,0 +1,15 @@
+[profile.default]
+# Fail tests that hang for more than 2 minutes.
+slow-timeout = "120s"
+# Show failure output immediately, then again at the end.
+failure-output = "immediate-final"
+
+[profile.ci]
+# Retry once on failure — catches flaky tests (network, ONNX init) without hiding real bugs.
+retries = { count = 1, backoff = "fixed", delay = "1s" }
+# Emit JUnit XML for GitHub Actions test annotations.
+junit = { path = "junit.xml" }
+# Only show slow and failed tests in the summary line.
+status-level = "slow"
+# Show failure output immediately and at the end.
+failure-output = "immediate-final"
