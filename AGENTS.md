@@ -82,7 +82,7 @@ Run verification before every commit:
 
 ```bash
 # Full verification
-cargo test
+cargo nextest run --profile ci --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo doc --no-deps
 cargo deny check advisories licenses
