@@ -1,0 +1,26 @@
+---
+source: tests/snapshot_rttm_test.rs
+expression: "format!(\"{turns:#?}\")"
+---
+[
+    SpeakerTurn {
+        speaker: SpeakerId(
+            0,
+        ),
+        time: TimeRange {
+            start: 0.0,
+            end: 1.0,
+        },
+        text: None,
+    },
+    SpeakerTurn {
+        speaker: SpeakerId(
+            1,
+        ),
+        time: TimeRange {
+            start: 1.5,
+            end: 3.5,
+        },
+        text: None,
+    },
+]
