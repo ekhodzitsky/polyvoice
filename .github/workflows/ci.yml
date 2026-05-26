@@ -3,11 +3,18 @@ name: CI
 on:
   push:
     branches: [master, main]
+    tags: ["v*"]
   pull_request:
     branches: [master, main]
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,6 +22,7 @@ env:
 jobs:
   check:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -28,8 +36,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: cargo check
-        run: cargo check ${{ matrix.flags }}
+      - run: cargo check ${{ matrix.flags }}
 
   fmt:
     runs-on: ubuntu-latest
@@ -38,11 +45,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: cargo fmt
-        run: cargo fmt --check
+      - run: cargo fmt --check
 
   clippy:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -61,11 +68,9 @@ jobs:
         with:
           key: clippy-${{ matrix.os }}-${{ hashFiles('Cargo.toml', '**/Cargo.toml', '**/Cargo.lock') }}
           cache-on-failure: false
-      - name: cargo clippy
-        shell: bash
+      - shell: bash
         run: cargo clippy ${{ matrix.flags }} -- -D warnings 2>&1 | tee clippy.log
-      - name: upload clippy log
-        if: failure()
+      - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: clippy-log-${{ matrix.os }}
@@ -73,6 +78,7 @@ jobs:
 
   test:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -86,8 +92,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: cargo test
-        run: cargo test ${{ matrix.flags }}
+      - run: cargo test ${{ matrix.flags }}
 
   doc:
     runs-on: ubuntu-latest
@@ -95,14 +100,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: cargo doc
-        run: cargo doc --no-deps --all-features
+      - run: cargo doc --no-deps --all-features
         env:
           RUSTDOCFLAGS: "-D warnings"
 
   coverage:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -112,25 +118,30 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
-      - name: Generate coverage
-        run: cargo llvm-cov --all-features --cobertura --output-path cobertura.xml --fail-under-lines 70
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+      - run: cargo llvm-cov --all-features --cobertura --output-path cobertura.xml --fail-under-lines 70
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: cobertura.xml
+      - uses: codecov/codecov-action@v4
         with:
           files: ./cobertura.xml
           fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   miri:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
       - uses: Swatinem/rust-cache@v2
-      - name: cargo miri test (focused)
-        run: |
+      - run: |
           cargo miri test --features ffi --test ffi_smoke_test ffi_create
           cargo miri test --features resegmentation --test miri_resegmentation
           cargo miri test --features ffi --test test_ahc
@@ -143,10 +154,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install valgrind
-        run: sudo apt-get update && sudo apt-get install -y valgrind
-      - name: Build FFI smoke test
-        run: cargo test --features ffi --test ffi_smoke_test --no-run
+      - run: sudo apt-get update && sudo apt-get install -y valgrind
+      - run: cargo test --features ffi --test ffi_smoke_test --no-run
       - name: Run under valgrind
         run: |
           BIN=$(find target/debug/deps -maxdepth 1 -name 'ffi_smoke_test-*' -type f -executable | head -1)
@@ -159,8 +168,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: cargo test (loom)
-        run: cargo test --test loom_pool
+      - run: cargo test --test loom_pool
         env:
           LOOM_MAX_PREEMPTIONS: 3
 
@@ -173,8 +181,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-semver-checks
-      - name: cargo semver-checks
-        run: cargo semver-checks check-release
+      - run: cargo semver-checks check-release
 
   audit:
     runs-on: ubuntu-latest
@@ -185,8 +192,17 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
-      - name: cargo audit
-        run: cargo audit
+      - run: cargo audit
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - run: cargo deny check advisories licenses
 
   cross-aarch64-linux:
     runs-on: ubuntu-latest
@@ -198,12 +214,9 @@ jobs:
         with:
           targets: aarch64-unknown-linux-gnu
       - uses: Swatinem/rust-cache@v2
-      - name: Install gcc-aarch64-linux-gnu (linker for cross-compile)
-        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-      - name: cargo check (aarch64-linux, default features)
-        run: cargo check --target aarch64-unknown-linux-gnu
-      - name: cargo check (aarch64-linux, download feature)
-        run: cargo check --target aarch64-unknown-linux-gnu --features download
+      - run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - run: cargo check --target aarch64-unknown-linux-gnu
+      - run: cargo check --target aarch64-unknown-linux-gnu --features download
 
   wasm32-smoke:
     runs-on: ubuntu-latest
@@ -213,8 +226,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - name: cargo check (wasm32, no default features, no onnx)
-        run: cargo check --target wasm32-unknown-unknown --no-default-features --lib
+      - run: cargo check --target wasm32-unknown-unknown --no-default-features --lib
 
   e2e-smoke:
     runs-on: ubuntu-latest
@@ -224,6 +236,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/polyvoice/models
+          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
       - name: Download ONNX models
         run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
       - name: Run E2E smoke test
@@ -231,51 +247,65 @@ jobs:
 
   e2e-der-regression:
     runs-on: ubuntu-latest
+    needs: [test]
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: legacy-e2e-smoke
+            test: der_regression_e2e_smoke
+            test_flags: "--test der_regression_test --features onnx,download"
+            data_key: e2e-smoke-bundled
+            data_path: tests/data/e2e-smoke
+          - name: legacy-voxconverse-10
+            test: der_regression_voxconverse_10_file_subset
+            test_flags: "--test der_regression_test --features onnx,download"
+            data_script: scripts/download-voxconverse-test.sh
+            data_key: voxconverse-test
+            data_path: data/voxconverse-test
+          - name: legacy-ami-single
+            test: der_regression_ami_test_single
+            test_flags: "--test der_regression_test --features onnx,download"
+            data_script: scripts/download-ami-test-single.sh
+            data_key: ami-test-single
+            data_path: data/ami-test-single
+          - name: pipeline-v2
+            test_flags: "--test pipeline_v2_integration --features onnx,segmentation,embedder,clusterer,resegmentation,download"
+            data_key: e2e-smoke-bundled
+            data_path: tests/data/e2e-smoke
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/cache@v4
         with:
-          path: data/ami-test-single
-          key: ami-test-single-${{ hashFiles('scripts/download-ami-test-single.sh') }}
+          path: ~/.cache/polyvoice/models
+          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
       - uses: actions/cache@v4
+        if: matrix.data_script
         with:
-          path: data/voxconverse-test
-          key: voxconverse-test-${{ hashFiles('scripts/download-voxconverse-test.sh') }}
-      - name: Download e2e-smoke test data
-        run: bash scripts/download-ami-test-single.sh
-      - name: Download VoxConverse test data
-        run: bash scripts/download-voxconverse-test.sh
+          path: ${{ matrix.data_path }}
+          key: ${{ matrix.data_key }}-${{ hashFiles(format('{0}.sh', matrix.data_script)) }}
+      - name: Download external test data
+        if: matrix.data_script
+        run: bash ${{ matrix.data_script }}
       - name: Download ONNX models
         run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
-      - name: Run DER regression — legacy e2e_smoke
-        run: cargo test --test der_regression_test --features "onnx download" der_regression_e2e_smoke -- --ignored --nocapture 2>&1 | tee -a der-regression.log
-      - name: Run DER regression — legacy VoxConverse 10-file
-        run: cargo test --test der_regression_test --features "onnx download" der_regression_voxconverse_10_file_subset -- --ignored --nocapture 2>&1 | tee -a der-regression.log
-      - name: Run DER regression — pipeline v2 e2e_smoke
-        run: cargo test --test pipeline_v2_integration --features "onnx,segmentation,embedder,clusterer,resegmentation,download" -- --ignored --nocapture 2>&1 | tee -a der-regression.log
-      - name: Upload DER regression log
-        if: always()
+      - name: Run DER regression — ${{ matrix.name }}
+        shell: bash
+        run: cargo test ${{ matrix.test_flags }} ${{ matrix.test }} -- --ignored --nocapture 2>&1 | tee der-regression.log
+      - if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
-          name: der-regression-log
+          name: der-regression-log-${{ matrix.name }}
           path: der-regression.log
-
-  sign-manifest-dry-run:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install minisign
-        run: |
-          sudo apt-get update && sudo apt-get install -y minisign
-      - name: Run sign-models.sh --dry-run
-        run: ./scripts/sign-models.sh --dry-run
+        continue-on-error: true
 
   perf-regression:
     runs-on: ubuntu-latest
+    needs: [test]
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 15
     steps:
@@ -286,15 +316,25 @@ jobs:
         with:
           path: data/voxconverse-test
           key: voxconverse-test-${{ hashFiles('scripts/download-voxconverse-test.sh') }}
-      - name: Download VoxConverse test data
-        run: bash scripts/download-voxconverse-test.sh
-      - name: Download ONNX models
-        run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/polyvoice/models
+          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
+      - run: bash scripts/download-voxconverse-test.sh
+      - run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
       - name: Run perf regression test
+        shell: bash
         run: cargo test --test perf_regression_test --features "onnx download" -- --ignored --nocapture 2>&1 | tee perf-regression.log
-      - name: Upload perf regression log
-        if: always()
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: perf-regression-log
           path: perf-regression.log
+
+  sign-manifest-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get update && sudo apt-get install -y minisign
+      - run: ./scripts/sign-models.sh --dry-run

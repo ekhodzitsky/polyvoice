@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [master, main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
 jobs:
   build:
     strategy:
@@ -24,12 +30,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Install maturin
-        run: pip install maturin pytest
-      - name: Build wheel
-        run: maturin build --release --out dist
-      - name: Install wheel
+      - run: pip install maturin pytest
+      - run: maturin build --release --out dist
+      - name: Install wheel (unix)
+        if: runner.os != 'Windows'
         run: pip install dist/*.whl
-        shell: bash
-      - name: Run tests
-        run: pytest tests/ -v
+      - name: Install wheel (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pip install (Get-ChildItem dist/*.whl | Select-Object -First 1).FullName
+      - run: pytest tests/ -v
