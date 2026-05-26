@@ -5,6 +5,12 @@ on:
     - cron: "0 3 * * *"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
 jobs:
   fuzz:
     runs-on: ubuntu-latest
@@ -14,13 +20,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "fuzz -> target"
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
-      - name: Fuzz compute_fbank
-        run: cargo fuzz run fuzz_compute_fbank -- -max_total_time=300
-      - name: Fuzz segment_speech
-        run: cargo fuzz run fuzz_segment_speech -- -max_total_time=300
-      - name: Fuzz detect_overlaps
-        run: cargo fuzz run fuzz_detect_overlaps -- -max_total_time=300
-      - name: Fuzz cluster_assign
-        run: cargo fuzz run fuzz_cluster_assign -- -max_total_time=300
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - run: cargo fuzz run fuzz_compute_fbank -- -max_total_time=300
+      - run: cargo fuzz run fuzz_segment_speech -- -max_total_time=300
+      - run: cargo fuzz run fuzz_detect_overlaps -- -max_total_time=300
+      - run: cargo fuzz run fuzz_cluster_assign -- -max_total_time=300

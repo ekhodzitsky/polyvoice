@@ -85,6 +85,7 @@ Run verification before every commit:
 cargo test
 cargo clippy --all-targets --all-features -- -D warnings
 cargo doc --no-deps
+cargo deny check advisories licenses
 ```
 
 ---
