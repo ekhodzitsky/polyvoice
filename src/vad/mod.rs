@@ -287,6 +287,7 @@ pub fn segment_speech<V: VoiceActivityDetector>(
     Ok(segments)
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,6 +461,7 @@ mod tests {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod prop_tests {
     use super::*;

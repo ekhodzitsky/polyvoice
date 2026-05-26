@@ -1,6 +1,8 @@
 name: Fuzz
 
 on:
+  pull_request:
+    branches: [master, main]
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
@@ -14,6 +16,9 @@ permissions: {}
 jobs:
   fuzz:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [fuzz_compute_fbank, fuzz_segment_speech, fuzz_detect_overlaps, fuzz_cluster_assign]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -23,7 +28,11 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
-      - run: cargo fuzz run fuzz_compute_fbank -- -max_total_time=300
-      - run: cargo fuzz run fuzz_segment_speech -- -max_total_time=300
-      - run: cargo fuzz run fuzz_detect_overlaps -- -max_total_time=300
-      - run: cargo fuzz run fuzz_cluster_assign -- -max_total_time=300
+      - name: Run fuzz target (PR — 60s, schedule — 300s)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            TIME=60
+          else
+            TIME=300
+          fi
+          cargo fuzz run ${{ matrix.target }} -- -max_total_time=$TIME

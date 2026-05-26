@@ -282,6 +282,7 @@ fn mel_to_hz(mel: f32) -> f32 {
     700.0 * (10.0f32.powf(mel / 2595.0) - 1.0)
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

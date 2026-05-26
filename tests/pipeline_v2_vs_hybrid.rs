@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Compare Pipeline v2 (overlap-aware) vs Hybrid on long-form audio.
 //!
 //! Run with:

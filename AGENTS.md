@@ -130,9 +130,12 @@ Before editing, identify the relevant workcell and read its
 Before claiming completion:
 
 ```bash
-cargo test
+cargo nextest run --profile ci --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo doc --no-deps
+cargo deny check advisories licenses
+cargo hack check --feature-powerset --depth 2 --lib --bins
+cargo machete
 ```
 
 One leaf workcell may have only one active write agent. Read-only agents may

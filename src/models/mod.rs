@@ -248,6 +248,7 @@ impl ModelRegistry {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 pub(crate) mod tests_helpers {
     /// Minimal manifest used by registry unit tests. SHA-256 below is hash of "hello":
@@ -268,6 +269,7 @@ pub(crate) mod tests_helpers {
     "#;
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

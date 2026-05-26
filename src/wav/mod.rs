@@ -84,6 +84,7 @@ pub fn read_wav(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
     Ok((mono, sample_rate))
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

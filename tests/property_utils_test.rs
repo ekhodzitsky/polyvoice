@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Property tests for utility function invariants.
 
 use polyvoice::utils::{cosine_similarity, l2_normalize, mean_vector};

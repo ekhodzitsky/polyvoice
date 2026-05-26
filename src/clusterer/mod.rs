@@ -176,6 +176,7 @@ impl Clusterer for KMeansClusterer {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod trait_tests {
     use super::*;
@@ -221,6 +222,7 @@ mod trait_tests {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod ahc_tests {
     use super::*;
@@ -419,6 +421,7 @@ impl Clusterer for NmeScClusterer {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 #[cfg(feature = "spectral")]
 mod nme_sc_tests {

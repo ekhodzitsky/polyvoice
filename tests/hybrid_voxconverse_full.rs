@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Full VoxConverse-test regression for Hybrid pipeline (232 files).
 //!
 //! Run with:

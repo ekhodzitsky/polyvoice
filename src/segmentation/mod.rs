@@ -88,6 +88,7 @@ pub enum SegmentationError {
     },
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod trait_tests {
     use super::*;

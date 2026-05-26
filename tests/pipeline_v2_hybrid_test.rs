@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Hybrid pipeline integration test.
 //!
 //! PowersetSegmenter as VAD → sliding window → ResNet34 → AHC.

@@ -131,6 +131,7 @@ fn truncate_for_display(s: &str) -> String {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -97,6 +97,6 @@ pub fn raw_segment(start: f64, end: f64, spk: u8, overlap: bool) -> RawSegment {
         time: TimeRange { start, end },
         local_speaker_idx: spk,
         is_overlap: overlap,
-        confidence: Confidence::new(0.9).unwrap(),
+        confidence: Confidence::new(0.9).expect("0.9 is within valid confidence range"),
     }
 }

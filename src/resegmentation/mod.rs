@@ -314,6 +314,7 @@ impl Resegmenter for OverlapResegmenter {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod trait_tests {
     use super::*;
@@ -400,6 +401,7 @@ mod trait_tests {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod centroid_tests {
     use super::*;
@@ -459,6 +461,7 @@ mod centroid_tests {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 #[cfg(feature = "segmentation")]
 mod overlap_extract_tests {
@@ -539,6 +542,7 @@ mod overlap_extract_tests {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod resegmenter_tests {
     use super::*;
