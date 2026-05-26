@@ -92,7 +92,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test ${{ matrix.flags }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - run: cargo nextest run --profile ci ${{ matrix.flags }}
 
   doc:
     runs-on: ubuntu-latest
@@ -118,7 +121,10 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
-      - run: cargo llvm-cov --all-features --cobertura --output-path cobertura.xml --fail-under-lines 70
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - run: cargo llvm-cov nextest --profile ci --all-features --cobertura --output-path cobertura.xml --fail-under-lines 70
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -242,8 +248,11 @@ jobs:
           key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
       - name: Download ONNX models
         run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: Run E2E smoke test
-        run: cargo test --test e2e_smoke_test --features "onnx download" -- --ignored --nocapture
+        run: cargo nextest run --profile ci --run-ignored only --test e2e_smoke_test --features "onnx download" --nocapture
 
   e2e-der-regression:
     runs-on: ubuntu-latest
@@ -293,9 +302,12 @@ jobs:
         run: bash ${{ matrix.data_script }}
       - name: Download ONNX models
         run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: Run DER regression — ${{ matrix.name }}
         shell: bash
-        run: cargo test ${{ matrix.test_flags }} ${{ matrix.test }} -- --ignored --nocapture 2>&1 | tee der-regression.log
+        run: cargo nextest run --profile ci --run-ignored only ${{ matrix.test_flags }} ${{ matrix.test }} --nocapture 2>&1 | tee der-regression.log
       - if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
@@ -322,9 +334,12 @@ jobs:
           key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
       - run: bash scripts/download-voxconverse-test.sh
       - run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: Run perf regression test
         shell: bash
-        run: cargo test --test perf_regression_test --features "onnx download" -- --ignored --nocapture 2>&1 | tee perf-regression.log
+        run: cargo nextest run --profile ci --run-ignored only --test perf_regression_test --features "onnx download" --nocapture 2>&1 | tee perf-regression.log
       - if: always()
         uses: actions/upload-artifact@v4
         with:
