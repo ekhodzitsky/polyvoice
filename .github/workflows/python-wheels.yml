@@ -18,9 +18,9 @@ jobs:
           - os: ubuntu-latest
             target: x86_64
             manylinux: auto
-          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
             target: aarch64
-            manylinux: manylinux_2_28
+            manylinux: auto
           - os: windows-latest
             target: x64
           - os: macos-latest

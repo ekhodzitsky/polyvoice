@@ -100,8 +100,18 @@ jobs:
           name: wheels-${{ matrix.os }}
           path: python/dist/*.whl
 
+  crates-io:
+    needs: [gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
   github-release:
-    needs: [cli-binaries, python-wheels]
+    needs: [cli-binaries, python-wheels, crates-io]
     runs-on: ubuntu-latest
     permissions:
       contents: write

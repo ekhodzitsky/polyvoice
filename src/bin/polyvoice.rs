@@ -1,14 +1,12 @@
-//! polyvoice — speaker diarization CLI (legacy v0.5 pipeline).
+//! polyvoice — speaker diarization CLI.
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::Pipeline;
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
 use polyvoice::rttm::write_rttm;
-use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate};
-use polyvoice::vad::VadConfig;
+use polyvoice::types::{Profile, SampleRate};
 use polyvoice::wav::read_wav;
-use polyvoice::{FbankOnnxExtractor, SileroVad};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -94,29 +92,22 @@ fn cmd_diarize(
         eprintln!("Loading {profile:?} profile from registry...");
     }
 
-    let models = registry
-        .ensure_for_profile(profile)
-        .context("ensure models")?;
-    let embedding_dim = profile.embedding_dim();
-    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
-        .context("load embedder")?;
-    let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
-
-    let config = DiarizationConfig {
-        cluster: ClusterConfig {
-            threshold,
-            ..Default::default()
-        },
-        ..DiarizationConfig::default()
+    let config = PipelineConfig {
+        profile,
+        clusterer: ClustererKind::Ahc { threshold },
+        ..PipelineConfig::default()
     };
-    let vad_config = VadConfig::default();
-    let pipeline = Pipeline::new(config, vad_config);
+    let pipeline = Pipeline::builder()
+        .config(config)
+        .with_models_from(registry)
+        .build()
+        .context("build pipeline")?;
 
     if !quiet {
         eprintln!("Reading {}...", wav.display());
     }
     let (samples, sr_hz) = read_wav(&wav).with_context(|| format!("read WAV {}", wav.display()))?;
-    let _sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
+    let sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
 
     if !quiet {
         eprintln!(
@@ -125,9 +116,7 @@ fn cmd_diarize(
             sr_hz
         );
     }
-    let result = pipeline
-        .run(&samples, &extractor, &mut vad)
-        .context("pipeline.run failed")?;
+    let result = pipeline.run(&samples, sr).context("pipeline.run failed")?;
     if !quiet {
         eprintln!(
             "Done — {} turns, {} speakers",
