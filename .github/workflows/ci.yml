@@ -307,13 +307,7 @@ jobs:
             test_flags: "--test der_regression_test --features onnx,download"
             data_key: e2e-smoke-bundled
             data_path: tests/data/e2e-smoke
-          - name: legacy-voxconverse-10
-            test: der_regression_voxconverse_10_file_subset
-            test_flags: "--test der_regression_test --features onnx,download"
-            data_script: scripts/download-voxconverse-test.sh
-            data_key: voxconverse-test
-            data_path: data/voxconverse-test
-          - name: legacy-ami-single
+              - name: legacy-ami-single
             test: der_regression_ami_test_single
             test_flags: "--test der_regression_test --features onnx,download"
             data_script: scripts/download-ami-test-single.sh
@@ -384,6 +378,38 @@ jobs:
         with:
           name: perf-regression-log
           path: perf-regression.log
+
+  e2e-der-regression-voxconverse:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name == 'schedule'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/polyvoice/models
+          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
+      - uses: actions/cache@v4
+        with:
+          path: data/voxconverse-test
+          key: voxconverse-test-${{ hashFiles('scripts/download-voxconverse-test.sh') }}
+      - run: bash scripts/download-voxconverse-test.sh
+      - run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Run DER regression — VoxConverse 10-file
+        shell: bash
+        run: cargo nextest run --profile ci --run-ignored only --test der_regression_test --features onnx,download der_regression_voxconverse_10_file_subset --nocapture 2>&1 | tee der-regression.log
+      - if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: der-regression-log-voxconverse-10
+          path: der-regression.log
+        continue-on-error: true
 
   sign-manifest-dry-run:
     runs-on: ubuntu-latest
