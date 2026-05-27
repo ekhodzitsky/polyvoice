@@ -307,7 +307,7 @@ jobs:
             test_flags: "--test der_regression_test --features onnx,download"
             data_key: e2e-smoke-bundled
             data_path: tests/data/e2e-smoke
-              - name: legacy-ami-single
+          - name: legacy-ami-single
             test: der_regression_ami_test_single
             test_flags: "--test der_regression_test --features onnx,download"
             data_script: scripts/download-ami-test-single.sh
