@@ -20,6 +20,17 @@ exclude = [
   "scripts/__pycache__/",
 ]
 
+[package.metadata.release]
+sign-tag = true
+tag-name = "v{{version}}"
+pre-release-commit-message = "chore(release): prepare for {{version}}"
+tag-message = "chore(release): {{version}}"
+pre-release-replacements = [
+    { file = "python/Cargo.toml", search = "^version = \".*\"", replace = "version = \"{{version}}\"" },
+    { file = "python/pyproject.toml", search = "^version = \".*\"", replace = "version = \"{{version}}\"" },
+    { file = "tests/cli_smoke_test.rs", search = "polyvoice [0-9]+\\.[0-9]+\\.[0-9]+", replace = "polyvoice {{version}}" },
+]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
