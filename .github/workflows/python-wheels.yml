@@ -17,12 +17,12 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64
+            manylinux: auto
           - os: ubuntu-latest
             target: aarch64
+            manylinux: manylinux_2_28
           - os: windows-latest
             target: x64
-          - os: macos-latest
-            target: x86_64
           - os: macos-latest
             target: aarch64
 
@@ -37,7 +37,7 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist
           sccache: 'true'
-          manylinux: auto
+          manylinux: ${{ matrix.manylinux || 'auto' }}
           working-directory: python
       - name: Upload wheels
         uses: actions/upload-artifact@v4
