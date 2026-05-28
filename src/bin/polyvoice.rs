@@ -1,12 +1,20 @@
 //! polyvoice — speaker diarization CLI.
+//!
+//! Default pipeline: legacy v0.5 (Silero VAD + sliding-window embeddings + AHC).
+//! Use `--v2` to opt into pipeline v2 (Powerset segmentation + overlap masking +
+//! resegmentation). Pipeline v2 is not yet validated as default on long-form
+//! audio — see `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md`.
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
+use polyvoice::pipeline::Pipeline as LegacyPipeline;
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig};
 use polyvoice::rttm::write_rttm;
-use polyvoice::types::{Profile, SampleRate};
+use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate};
+use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
+use polyvoice::{FbankOnnxExtractor, SileroVad};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -33,6 +41,9 @@ enum Command {
         threshold: f32,
         #[arg(long)]
         quiet: bool,
+        /// Use pipeline v2 (experimental; not recommended for long-form audio).
+        #[arg(long)]
+        v2: bool,
     },
     /// Download Mobile/Balanced ONNX models.
     DownloadModels {
@@ -68,6 +79,7 @@ fn parse_profile(name: &str) -> Result<Profile> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_diarize(
     wav: PathBuf,
     profile: String,
@@ -76,6 +88,7 @@ fn cmd_diarize(
     models_cache: Option<PathBuf>,
     threshold: f32,
     quiet: bool,
+    v2: bool,
 ) -> Result<()> {
     let profile = parse_profile(&profile)?;
     let registry = match models_cache {
@@ -92,38 +105,11 @@ fn cmd_diarize(
         eprintln!("Loading {profile:?} profile from registry...");
     }
 
-    let config = PipelineConfig {
-        profile,
-        clusterer: ClustererKind::Ahc { threshold },
-        ..PipelineConfig::default()
+    let result = if v2 {
+        run_v2_pipeline(&wav, profile, &registry, threshold, quiet)?
+    } else {
+        run_legacy_pipeline(&wav, profile, &registry, threshold, quiet)?
     };
-    let pipeline = Pipeline::builder()
-        .config(config)
-        .with_models_from(registry)
-        .build()
-        .context("build pipeline")?;
-
-    if !quiet {
-        eprintln!("Reading {}...", wav.display());
-    }
-    let (samples, sr_hz) = read_wav(&wav).with_context(|| format!("read WAV {}", wav.display()))?;
-    let sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
-
-    if !quiet {
-        eprintln!(
-            "Running diarization on {} samples ({} Hz)...",
-            samples.len(),
-            sr_hz
-        );
-    }
-    let result = pipeline.run(&samples, sr).context("pipeline.run failed")?;
-    if !quiet {
-        eprintln!(
-            "Done — {} turns, {} speakers",
-            result.turns.len(),
-            result.num_speakers
-        );
-    }
 
     match format {
         OutputFormat::Rttm => {
@@ -155,6 +141,102 @@ fn cmd_diarize(
     }
 
     Ok(())
+}
+
+fn run_legacy_pipeline(
+    wav: &std::path::Path,
+    profile: Profile,
+    registry: &ModelRegistry,
+    threshold: f32,
+    quiet: bool,
+) -> Result<polyvoice::types::DiarizationResult> {
+    let models = registry
+        .ensure_for_profile(profile)
+        .context("ensure models")?;
+    let embedding_dim = profile.embedding_dim();
+    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
+        .context("load embedder")?;
+    let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
+    let mut vad = SileroVad::new(&vad_path, 512).context("load vad")?;
+
+    let config = DiarizationConfig {
+        cluster: ClusterConfig {
+            threshold,
+            ..Default::default()
+        },
+        ..DiarizationConfig::default()
+    };
+    let vad_config = VadConfig::default();
+    let pipeline = LegacyPipeline::new(config, vad_config);
+
+    if !quiet {
+        eprintln!("Reading {}...", wav.display());
+    }
+    let (samples, sr_hz) = read_wav(wav).with_context(|| format!("read WAV {}", wav.display()))?;
+    let _sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
+
+    if !quiet {
+        eprintln!(
+            "Running diarization on {} samples ({} Hz)...",
+            samples.len(),
+            sr_hz
+        );
+    }
+    let result = pipeline
+        .run(&samples, &extractor, &mut vad)
+        .context("pipeline.run failed")?;
+    if !quiet {
+        eprintln!(
+            "Done — {} turns, {} speakers",
+            result.turns.len(),
+            result.num_speakers
+        );
+    }
+    Ok(result)
+}
+
+fn run_v2_pipeline(
+    wav: &std::path::Path,
+    profile: Profile,
+    registry: &ModelRegistry,
+    threshold: f32,
+    quiet: bool,
+) -> Result<polyvoice::types::DiarizationResult> {
+    let config = PipelineConfig {
+        profile,
+        clusterer: ClustererKind::Ahc { threshold },
+        ..PipelineConfig::default()
+    };
+    let pipeline = V2Pipeline::builder()
+        .config(config)
+        .with_models_from(registry.clone())
+        .build()
+        .context("build pipeline v2")?;
+
+    if !quiet {
+        eprintln!("Reading {}...", wav.display());
+    }
+    let (samples, sr_hz) = read_wav(wav).with_context(|| format!("read WAV {}", wav.display()))?;
+    let sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
+
+    if !quiet {
+        eprintln!(
+            "Running diarization on {} samples ({} Hz)...",
+            samples.len(),
+            sr_hz
+        );
+    }
+    let result = pipeline
+        .run(&samples, sr)
+        .context("pipeline v2 run failed")?;
+    if !quiet {
+        eprintln!(
+            "Done — {} turns, {} speakers",
+            result.turns.len(),
+            result.num_speakers
+        );
+    }
+    Ok(result)
 }
 
 fn cmd_download_models(profile: String) -> Result<()> {
@@ -240,7 +322,17 @@ fn main() -> Result<()> {
             models_cache,
             threshold,
             quiet,
-        } => cmd_diarize(wav, profile, output, format, models_cache, threshold, quiet),
+            v2,
+        } => cmd_diarize(
+            wav,
+            profile,
+            output,
+            format,
+            models_cache,
+            threshold,
+            quiet,
+            v2,
+        ),
         Command::DownloadModels { profile } => cmd_download_models(profile),
         Command::Models { sub } => match sub {
             ModelsCommand::List => cmd_models_list(),
@@ -271,6 +363,7 @@ mod prop_tests {
             profile in "(mobile|balanced)",
             format in "(rttm|json)",
             threshold in 0.0f32..2.0f32,
+            v2 in prop::bool::ANY,
         ) {
             let args = vec![
                 "polyvoice".to_string(),
@@ -280,6 +373,13 @@ mod prop_tests {
                 "--format".to_string(), format,
                 "--threshold".to_string(), threshold.to_string(),
             ];
+            let args = if v2 {
+                let mut a = args;
+                a.push("--v2".to_string());
+                a
+            } else {
+                args
+            };
             let result = Cli::try_parse_from(&args);
             prop_assert!(result.is_ok());
         }
