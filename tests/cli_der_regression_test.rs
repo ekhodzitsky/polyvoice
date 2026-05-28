@@ -59,6 +59,7 @@ fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (f64, String) {
         wav_path.to_str().expect("wav path is valid utf-8"),
         "--profile",
         "balanced",
+        "--v2",
         "--output",
         output_path.to_str().expect("output path is valid utf-8"),
     ]);
