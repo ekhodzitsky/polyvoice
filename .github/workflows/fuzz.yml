@@ -35,4 +35,4 @@ jobs:
           else
             TIME=300
           fi
-          cargo fuzz run ${{ matrix.target }} -- -max_total_time=$TIME
+          cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} -- -max_total_time=$TIME
