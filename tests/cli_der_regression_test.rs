@@ -71,15 +71,13 @@ fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (f64, f64, usize, Strin
     let hyp_turns = {
         let raw = parse_rttm_file(&output_path).expect("parse CLI output rttm");
         let grouped = group_by_file(&raw);
-        let rttm_key = if stem.contains(".Mix-Headset") {
-            stem.trim_end_matches(".Mix-Headset")
-        } else {
-            &stem
-        };
+        // The CLI output RTTM holds a single file's segments, but writes the file
+        // id as the input stem ("EN2002a.Mix-Headset"), which differs from the ref
+        // key ("EN2002a") — so collect every segment regardless of id.
         let segs: Vec<_> = grouped
-            .get(rttm_key)
-            .map(|v| v.iter().map(|s| (*s).clone()).collect())
-            .unwrap_or_default();
+            .values()
+            .flat_map(|v| v.iter().map(|s| (*s).clone()))
+            .collect();
         let (turns, _map) = to_speaker_turns(&segs);
         turns
     };
