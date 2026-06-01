@@ -35,6 +35,14 @@ use crate::utils::{l2_normalize, merge_segments};
 pub use builder::{ConfigError, PipelineBuilder};
 pub use config::{ClustererKind, ExecutionProvider, PipelineConfig};
 
+/// Minimum segment length (seconds) accepted for embedding. WeSpeaker ResNet34
+/// downsamples the time axis ~8×, so a segment shorter than ~0.11s (≈10 fbank
+/// frames at win=400/hop=160) leaves ≤1 frame after downsampling and the
+/// temporal statistics-pooling std collapses to sqrt(≈0) → NaN. Empirically the
+/// clean boundary is 0.119s; 0.20s keeps a safe margin while still feeding the
+/// clusterer every segment below the 0.25s min_speech output filter.
+const MIN_EMBED_SECS: f64 = 0.20;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PipelineError {
     #[error("audio sample rate {actual} unsupported, expected 16000")]
@@ -118,6 +126,10 @@ impl Pipeline {
             if end_idx <= start_idx {
                 continue;
             }
+            // Skip segments too short to embed without NaN (see MIN_EMBED_SECS).
+            if (end_idx - start_idx) as f64 / sample_rate < MIN_EMBED_SECS {
+                continue;
+            }
             let chunk = &samples[start_idx..end_idx];
             // Fix 2: zero-fill any overlap regions inside this primary chunk before embedding.
             let seg_start = seg.time.start;
@@ -136,6 +148,15 @@ impl Pipeline {
                 .collect();
             let masked = apply_overlap_mask(chunk, &local_overlaps, self.config.sample_rate.get());
             let mut emb = self.embedder.embed(&masked)?;
+            // Defense in depth: never let a non-finite embedding reach the clusterer.
+            if !emb.iter().all(|v| v.is_finite()) {
+                tracing::warn!(
+                    "skipping non-finite embedding for segment {:.3}-{:.3}s",
+                    seg.time.start,
+                    seg.time.end
+                );
+                continue;
+            }
             l2_normalize(&mut emb);
             embeddings.push(emb);
             valid_segments.push(seg);
@@ -248,8 +269,15 @@ impl Pipeline {
             if end_idx <= start_idx {
                 continue;
             }
+            // Skip overlap chunks too short to embed without NaN (see MIN_EMBED_SECS).
+            if (end_idx - start_idx) as f64 / sample_rate < MIN_EMBED_SECS {
+                continue;
+            }
             let chunk = &samples[start_idx..end_idx];
             let mut emb = self.embedder.embed(chunk)?;
+            if !emb.iter().all(|v| v.is_finite()) {
+                continue;
+            }
             l2_normalize(&mut emb);
             out.push(OverlapRegionInput {
                 time: *time,
@@ -334,6 +362,97 @@ mod tests {
             .run(&vec![0.0_f32; 16000 * 3], SampleRate::new(16000).unwrap())
             .unwrap();
         assert!(result.num_speakers <= 1);
+    }
+
+    fn pipeline_with_embedder(
+        segs: Vec<crate::segmentation::RawSegment>,
+        embedder: Box<dyn Embedder>,
+    ) -> Pipeline {
+        let cfg = PipelineConfig {
+            profile: Profile::Custom,
+            resegment_overlap: false,
+            min_speech_secs: 0.0,
+            max_gap_secs: 0.0,
+            ..PipelineConfig::default()
+        };
+        Pipeline::from_components(
+            cfg,
+            Box::new(MockSegmenter { segments: segs }),
+            embedder,
+            Box::new(MockClusterer::default()),
+            Box::new(OverlapResegmenter::default()),
+        )
+    }
+
+    /// Records the shortest audio slice the embedder was asked to embed.
+    struct RecordingEmbedder {
+        min_samples_seen: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl Embedder for RecordingEmbedder {
+        fn dim(&self) -> usize {
+            192
+        }
+        fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            self.min_samples_seen
+                .fetch_min(audio.len(), std::sync::atomic::Ordering::SeqCst);
+            let mut v = vec![0.0_f32; 192];
+            v[0] = 1.0;
+            Ok(v)
+        }
+    }
+
+    /// Always emits a non-finite embedding.
+    struct NanEmbedder;
+
+    impl Embedder for NanEmbedder {
+        fn dim(&self) -> usize {
+            192
+        }
+        fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            let mut v = vec![0.1_f32; 192];
+            v[0] = f32::NAN;
+            Ok(v)
+        }
+    }
+
+    #[test]
+    fn pipeline_skips_segments_below_min_embed_secs() {
+        // One sub-threshold segment (0.05s) and one well above it (1.0s).
+        let segs = vec![
+            raw_segment(0.0, 0.05, 0, false),
+            raw_segment(1.0, 2.0, 0, false),
+        ];
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(usize::MAX));
+        let embedder = Box::new(RecordingEmbedder {
+            min_samples_seen: counter.clone(),
+        });
+        let p = pipeline_with_embedder(segs, embedder);
+        let _ = p
+            .run(&vec![0.0_f32; 16000 * 3], SampleRate::new(16000).unwrap())
+            .unwrap();
+        let min_seen = counter.load(std::sync::atomic::Ordering::SeqCst);
+        // The 0.05s (800-sample) segment must never have reached the embedder.
+        assert!(
+            min_seen as f64 / 16000.0 >= MIN_EMBED_SECS,
+            "shortest embedded slice was {min_seen} samples, below MIN_EMBED_SECS floor"
+        );
+    }
+
+    #[test]
+    fn pipeline_skips_non_finite_embeddings() {
+        // Two long-enough segments, but the embedder emits NaN for both, so
+        // every embedding is dropped and nothing poisons the clusterer.
+        let segs = vec![
+            raw_segment(0.0, 1.0, 0, false),
+            raw_segment(2.0, 3.0, 0, false),
+        ];
+        let p = pipeline_with_embedder(segs, Box::new(NanEmbedder));
+        let result = p
+            .run(&vec![0.0_f32; 16000 * 4], SampleRate::new(16000).unwrap())
+            .unwrap();
+        assert!(result.turns.is_empty());
+        assert_eq!(result.num_speakers, 0);
     }
 
     // Pipeline output turns must be monotonically ordered by start time
