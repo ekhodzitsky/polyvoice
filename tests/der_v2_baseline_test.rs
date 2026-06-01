@@ -25,7 +25,11 @@ const SUBSET_10: &[&str] = &[
     "aepyx", "aggyz", "aiqwk", "aorju", "auzru", "bgvvt", "bidnq", "bjruf", "bmsyn", "bpzsc",
 ];
 
-fn run_v2_pipeline_on_file(stem: &str, audio_dir: &Path, rttm_dir: &Path) -> (f64, usize, usize) {
+fn run_v2_pipeline_on_file(
+    stem: &str,
+    audio_dir: &Path,
+    rttm_dir: &Path,
+) -> (f64, f64, usize, usize) {
     let registry = ModelRegistry::default().expect("registry");
     let config = PipelineConfig {
         profile: Profile::Balanced,
@@ -76,6 +80,7 @@ fn run_v2_pipeline_on_file(stem: &str, audio_dir: &Path, rttm_dir: &Path) -> (f6
     let der = compute_der(&ref_turns, &result.turns, 0.25);
     (
         der.der,
+        der.confusion_rate,
         result.num_speakers,
         ref_turns
             .iter()
@@ -88,7 +93,7 @@ fn run_v2_pipeline_on_file(stem: &str, audio_dir: &Path, rttm_dir: &Path) -> (f6
 #[test]
 #[ignore = "requires cached ONNX bundle + wav/rttm files"]
 fn v2_der_e2e_smoke() {
-    let (der, num_speakers, ref_speakers) = run_v2_pipeline_on_file(
+    let (der, _confusion, num_speakers, ref_speakers) = run_v2_pipeline_on_file(
         "fuzfh",
         Path::new("tests/data/e2e-smoke/audio"),
         Path::new("tests/data/e2e-smoke/rttm"),
@@ -111,7 +116,8 @@ fn v2_der_voxconverse_10_file_subset() {
     let mut count = 0_usize;
 
     for stem in SUBSET_10 {
-        let (der, num_speakers, ref_speakers) = run_v2_pipeline_on_file(stem, audio_dir, rttm_dir);
+        let (der, _confusion, num_speakers, ref_speakers) =
+            run_v2_pipeline_on_file(stem, audio_dir, rttm_dir);
         println!(
             "{stem}: DER={:.2}% speakers={} ref_speakers={}",
             der * 100.0,
@@ -130,15 +136,32 @@ fn v2_der_voxconverse_10_file_subset() {
 #[test]
 #[ignore = "requires cached ONNX bundle + wav/rttm files under data/ami-test-single/"]
 fn v2_der_ami_test_single() {
-    let (der, num_speakers, ref_speakers) = run_v2_pipeline_on_file(
+    let (der, confusion, num_speakers, ref_speakers) = run_v2_pipeline_on_file(
         "EN2002a",
         Path::new("data/ami-test-single/audio"),
         Path::new("data/ami-test-single/rttm"),
     );
     println!(
-        "ami_test_single: DER={:.2}% speakers={} ref_speakers={}",
+        "ami_test_single: DER={:.2}% confusion={:.2}% speakers={} ref_speakers={}",
         der * 100.0,
+        confusion * 100.0,
         num_speakers,
         ref_speakers
+    );
+    // The NaN-embedding collapse manifested as num_speakers=1 — every segment merged
+    // into a single cluster. Total DER is deliberately NOT gated here: AMI EN2002a is
+    // ~79% overlapping speech, and with single-speaker-per-frame output the miss term
+    // alone holds DER near 88% whether the bug is present or fixed, so a DER ceiling
+    // cannot tell the two apart. Gate instead on the signals that actually move when
+    // the bug regresses: the speaker count must not collapse, and clustering confusion
+    // must stay low (post-fix it is ~11%).
+    assert!(
+        num_speakers >= 2,
+        "pipeline_v2 collapsed to {num_speakers} speaker(s) on EN2002a (NaN-embedding regression?)"
+    );
+    assert!(
+        confusion < 0.25,
+        "pipeline_v2 clustering regressed on EN2002a: confusion={:.1}% exceeds 25%",
+        confusion * 100.0
     );
 }

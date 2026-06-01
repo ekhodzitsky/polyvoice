@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **pipeline_v2 NaN-embedding collapse**: segments shorter than ~0.11s made
+  WeSpeaker ResNet34's statistics-pooling emit NaN embeddings, which slipped past
+  the `< 1e-8` guards in `l2_normalize`/`cosine_similarity` and poisoned AHC
+  clustering (AMI `EN2002a` collapsed to 1 speaker). Sub-0.20s segments and any
+  non-finite embedding are now skipped before clustering, in both the primary and
+  overlap embed loops.
+- `utils::l2_normalize`, `cosine_similarity`, and `cosine_similarity_f32_f64` now
+  guarantee finite output for any (possibly non-finite) input — a latent bug that
+  affected every caller, not just Pipeline v2.
+
+### Added
+
+- NaN-safety unit tests for the shared math utils and deterministic mock tests
+  asserting Pipeline v2 skips short/non-finite-embedding segments.
+- CI: scheduled `pipeline-v2-ami` DER regression entry. The AMI v2 baseline test
+  now gates on speaker count (`>= 2`) and clustering confusion (`< 25%`) rather
+  than total DER, which on ~79%-overlap AMI is miss-bound and cannot detect the
+  collapse.
+
 ## [0.6.7] - 2026-05-26
 
 ### Changed
