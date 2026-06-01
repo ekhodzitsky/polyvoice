@@ -18,8 +18,6 @@ use std::path::Path;
 struct Baseline {
     #[serde(rename = "v2_e2e_smoke")]
     v2_e2e_smoke: DatasetBaseline,
-    #[serde(rename = "hybrid_ami_test_single")]
-    hybrid_ami_test_single: DatasetBaseline,
 }
 
 #[derive(Deserialize)]
@@ -35,8 +33,8 @@ fn load_baseline() -> Baseline {
     serde_json::from_str(&raw).expect("parse der_baseline.json")
 }
 
-/// Run CLI `polyvoice diarize` on a WAV and return (DER, stem).
-fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (f64, String) {
+/// Run CLI `polyvoice diarize --v2` and return (DER, confusion, num_speakers, stem).
+fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (f64, f64, usize, String) {
     let stem = wav_path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -103,7 +101,12 @@ fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (f64, String) {
     };
 
     let der = compute_der(&ref_turns, &hyp_turns, 0.25);
-    (der.der, stem)
+    let num_speakers = hyp_turns
+        .iter()
+        .map(|t| t.speaker.0)
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    (der.der, der.confusion_rate, num_speakers, stem)
 }
 
 #[ignore = "requires cached ONNX bundle + tests/data/e2e-smoke/"]
@@ -118,7 +121,7 @@ fn cli_der_regression_v2_e2e_smoke() {
         return;
     }
 
-    let (der, stem) = run_cli_diarize(wav_path, rttm_path);
+    let (der, _confusion, _num_speakers, stem) = run_cli_diarize(wav_path, rttm_path);
     println!("{stem}: DER={:.2}%", der * 100.0);
 
     let expected = baseline.v2_e2e_smoke.der_collar_0_25 / 100.0;
@@ -136,7 +139,6 @@ fn cli_der_regression_v2_e2e_smoke() {
 #[ignore = "requires cached ONNX bundle + data/ami-test-single/"]
 #[test]
 fn cli_der_regression_v2_ami_single() {
-    let baseline = load_baseline();
     let audio_dir = Path::new("data/ami-test-single/audio");
     let rttm_dir = Path::new("data/ami-test-single/rttm");
 
@@ -160,17 +162,26 @@ fn cli_der_regression_v2_ami_single() {
         return;
     }
 
-    let (der, stem) = run_cli_diarize(&wav_path, &rttm_path);
-    println!("{stem}: DER={:.2}%", der * 100.0);
-
-    let expected = baseline.hybrid_ami_test_single.der_collar_0_25 / 100.0;
-    let tolerance = baseline.hybrid_ami_test_single.tolerance / 100.0;
-    assert!(
-        der <= expected + tolerance,
-        "DER regression: expected <= {:.2}%, got {:.2}% (baseline {:.2}% + tolerance {:.2}%)",
-        (expected + tolerance) * 100.0,
+    let (der, confusion, num_speakers, stem) = run_cli_diarize(&wav_path, &rttm_path);
+    println!(
+        "{stem}: DER={:.2}% confusion={:.2}% speakers={}",
         der * 100.0,
-        expected * 100.0,
-        tolerance * 100.0,
+        confusion * 100.0,
+        num_speakers
+    );
+    // Total DER is deliberately NOT gated here: AMI EN2002a is ~79% overlapping
+    // speech, and pipeline v2 emits one speaker per frame, so the miss term alone
+    // holds DER near 88% whether diarization is healthy or collapsed — a DER ceiling
+    // cannot tell the two apart. Gate instead on the signals that move when
+    // diarization regresses: speaker count must not collapse and clustering confusion
+    // must stay low. Mirrors der_v2_baseline_test::v2_der_ami_test_single.
+    assert!(
+        num_speakers >= 2,
+        "pipeline_v2 collapsed to {num_speakers} speaker(s) on EN2002a (NaN-embedding regression?)"
+    );
+    assert!(
+        confusion < 0.25,
+        "pipeline_v2 clustering regressed on EN2002a: confusion={:.1}% exceeds 25%",
+        confusion * 100.0
     );
 }
