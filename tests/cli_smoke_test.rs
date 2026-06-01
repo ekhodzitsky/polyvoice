@@ -46,7 +46,10 @@ fn version_prints_correctly() {
         .arg("--version")
         .assert()
         .success()
-        .stdout(predicate::str::contains("polyvoice 0.6.7"));
+        .stdout(predicate::str::contains(format!(
+            "polyvoice {}",
+            env!("CARGO_PKG_VERSION")
+        )));
 }
 
 #[test]
