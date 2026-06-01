@@ -36,10 +36,11 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         norm_a += x * x;
         norm_b += y * y;
     }
-    if norm_a < 1e-8 || norm_b < 1e-8 {
+    if !norm_a.is_finite() || !norm_b.is_finite() || norm_a < 1e-8 || norm_b < 1e-8 {
         return 0.0;
     }
-    dot / (norm_a.sqrt() * norm_b.sqrt())
+    let sim = dot / (norm_a.sqrt() * norm_b.sqrt());
+    if sim.is_finite() { sim } else { 0.0 }
 }
 
 /// { true }
@@ -58,7 +59,10 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 /// ```
 pub fn l2_normalize(vec: &mut [f32]) {
     let norm: f32 = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm > 1e-8 {
+    if !norm.is_finite() {
+        // NaN/inf norm: zero the vector so downstream cosine math stays finite.
+        vec.fill(0.0);
+    } else if norm > 1e-8 {
         for v in vec.iter_mut() {
             *v /= norm;
         }
@@ -89,10 +93,11 @@ pub fn cosine_similarity_f32_f64(a: &[f32], b: &[f64]) -> f32 {
         norm_a += x * x;
         norm_b += y * y;
     }
-    if norm_a < 1e-8 || norm_b < 1e-8 {
+    if !norm_a.is_finite() || !norm_b.is_finite() || norm_a < 1e-8 || norm_b < 1e-8 {
         return 0.0;
     }
-    dot / (norm_a.sqrt() * norm_b.sqrt())
+    let sim = dot / (norm_a.sqrt() * norm_b.sqrt());
+    if sim.is_finite() { sim } else { 0.0 }
 }
 
 /// { true }
@@ -212,5 +217,48 @@ mod tests {
         let mean = mean_vector(&vectors).unwrap();
         assert!((mean[0] - 2.0).abs() < 1e-5);
         assert!((mean[1] - 3.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn cosine_similarity_nan_input_returns_finite_zero() {
+        let a = vec![f32::NAN, 1.0, 0.0];
+        let b = vec![1.0, 0.0, 0.0];
+        let sim = cosine_similarity(&a, &b);
+        assert!(sim.is_finite());
+        assert_eq!(sim, 0.0);
+    }
+
+    #[test]
+    fn cosine_similarity_inf_input_returns_finite_zero() {
+        let a = vec![f32::INFINITY, 1.0, 0.0];
+        let b = vec![1.0, 2.0, 3.0];
+        let sim = cosine_similarity(&a, &b);
+        assert!(sim.is_finite());
+        assert_eq!(sim, 0.0);
+    }
+
+    #[test]
+    fn cosine_similarity_f32_f64_nan_input_returns_finite_zero() {
+        let a = vec![f32::NAN, 1.0, 0.0];
+        let b = vec![1.0_f64, 0.0, 0.0];
+        let sim = cosine_similarity_f32_f64(&a, &b);
+        assert!(sim.is_finite());
+        assert_eq!(sim, 0.0);
+    }
+
+    #[test]
+    fn l2_normalize_nan_input_yields_finite_vector() {
+        let mut v = vec![f32::NAN, 1.0, 2.0];
+        l2_normalize(&mut v);
+        assert!(v.iter().all(|x| x.is_finite()));
+        assert!(v.iter().all(|&x| x == 0.0));
+    }
+
+    #[test]
+    fn l2_normalize_inf_input_yields_finite_vector() {
+        let mut v = vec![f32::INFINITY, 1.0, 2.0];
+        l2_normalize(&mut v);
+        assert!(v.iter().all(|x| x.is_finite()));
+        assert!(v.iter().all(|&x| x == 0.0));
     }
 }
