@@ -36,7 +36,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist
-          sccache: 'true'
+          sccache: ${{ matrix.os != 'macos-latest' }}
           manylinux: ${{ matrix.manylinux || 'auto' }}
           working-directory: python
       - name: Upload wheels
