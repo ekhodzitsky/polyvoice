@@ -91,6 +91,9 @@ fn cmd_diarize(
     v2: bool,
 ) -> Result<()> {
     let profile = parse_profile(&profile)?;
+    if !wav.is_file() {
+        anyhow::bail!("No such file: {}", wav.display());
+    }
     let registry = match models_cache {
         Some(p) => {
             if p.to_str().is_some_and(|s| s.contains("..")) {
