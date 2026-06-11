@@ -31,6 +31,7 @@ Speaker_0: 31.2s - 45.0s
 | **Streaming** | **Yes** | No | No |
 
 ~80% of pyannote's accuracy at **10× less RAM** and **no GPU**.
+Runs at **~10× realtime** on CPU — 9.3× average over a VoxConverse subset ([artifact](benchmarks/results/voxconverse-test-10files-20260516.json)).
 
 ---
 
