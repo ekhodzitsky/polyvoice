@@ -46,7 +46,8 @@ surface:
     kind: enum
     visibility: public
     contract: >
-      Error type for pipeline failures (VAD, embedding, clustering).
+      Error type for pipeline failures (VAD, embedding, clustering, WAV I/O,
+      and sample-rate mismatch).
     proof:
       kind: integration-test
       target: tests/e2e_smoke_test.rs
@@ -93,6 +94,13 @@ invariants:
       kind: unit-test
       target: src/pipeline::mod::tests::audio_too_long_error
       command: cargo test --lib pipeline
+  - id: wav-sample-rate-match
+    rule: run_from_wav rejects WAV files whose sample rate differs from
+      config.window.sample_rate.
+    proof:
+      kind: unit-test
+      target: src/pipeline::mod::tests::wav_sample_rate_mismatch_error
+      command: cargo test --lib wav_sample_rate_mismatch_error
   - id: pipeline-result-valid
     rule: Pipeline output turns are monotonically ordered and non-overlapping
       (before overlap detection).

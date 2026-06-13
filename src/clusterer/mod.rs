@@ -40,6 +40,26 @@ pub enum ClustererError {
     AlgorithmFailed { detail: String },
 }
 
+/// Verifies that every embedding in `embeddings` has the same dimension.
+///
+/// { !embeddings.is_empty() }
+/// fn uniform_dim(embeddings: &[Vec<f32>]) -> Result<(), ClustererError>
+/// { ret.is_ok() -> embeddings.iter().all(|e| e.len() == embeddings[0].len()) }
+fn uniform_dim(embeddings: &[Vec<f32>]) -> Result<(), ClustererError> {
+    let expected = embeddings[0].len();
+    for (index, emb) in embeddings.iter().enumerate().skip(1) {
+        let actual = emb.len();
+        if actual != expected {
+            return Err(ClustererError::DimMismatch {
+                expected,
+                actual,
+                index,
+            });
+        }
+    }
+    Ok(())
+}
+
 /// AHC (agglomerative hierarchical clustering) wrapper exposing the legacy
 /// `crate::ahc::agglomerative_cluster_auto` through the v1.0 `Clusterer` trait.
 pub struct AhcClusterer {
@@ -85,6 +105,7 @@ impl Clusterer for AhcClusterer {
         if embeddings.len() == 1 {
             return Ok(vec![0]);
         }
+        uniform_dim(embeddings)?;
         let labels = match self.threshold {
             Some(t) => {
                 crate::ahc::agglomerative_cluster_max_clusters(embeddings, t, self.max_clusters)
@@ -155,6 +176,7 @@ impl Clusterer for KMeansClusterer {
         if embeddings.len() == 1 {
             return Ok(vec![0]);
         }
+        uniform_dim(embeddings)?;
         // Fallback to AHC for tiny inputs where k-means is unstable.
         if embeddings.len() < 8 {
             return AhcClusterer::new(self.max_clusters).cluster(embeddings);
@@ -322,6 +344,7 @@ impl Clusterer for NmeScClusterer {
         if n == 1 {
             return Ok(vec![0]);
         }
+        uniform_dim(embeddings)?;
         // Fallback: tiny k-NN graphs collapse to 1 cluster; delegate to AHC.
         const FALLBACK_N: usize = 8;
         if n < FALLBACK_N {
@@ -487,5 +510,67 @@ mod nme_sc_tests {
         let labels = c.cluster(&embeddings).unwrap();
         let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
         assert_eq!(unique.len(), 3, "AHC fallback should preserve 3 clusters");
+    }
+}
+
+#[cfg(test)]
+mod dim_uniformity_tests {
+    use super::*;
+
+    fn mismatched_embeddings() -> Vec<Vec<f32>> {
+        vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 1.0, 0.0], // dimension 4 at index 2
+        ]
+    }
+
+    #[test]
+    fn ahc_rejects_dim_mismatch() {
+        let c = AhcClusterer::default();
+        let err = c
+            .cluster(&mismatched_embeddings())
+            .expect_err("mismatched dims must fail");
+        assert!(matches!(
+            err,
+            ClustererError::DimMismatch {
+                expected: 3,
+                actual: 4,
+                index: 2,
+            }
+        ));
+    }
+
+    #[test]
+    fn kmeans_rejects_dim_mismatch() {
+        let c = KMeansClusterer::default();
+        let err = c
+            .cluster(&mismatched_embeddings())
+            .expect_err("mismatched dims must fail");
+        assert!(matches!(
+            err,
+            ClustererError::DimMismatch {
+                expected: 3,
+                actual: 4,
+                index: 2,
+            }
+        ));
+    }
+
+    #[cfg(feature = "spectral")]
+    #[test]
+    fn nme_sc_rejects_dim_mismatch() {
+        let c = NmeScClusterer::default();
+        let err = c
+            .cluster(&mismatched_embeddings())
+            .expect_err("mismatched dims must fail");
+        assert!(matches!(
+            err,
+            ClustererError::DimMismatch {
+                expected: 3,
+                actual: 4,
+                index: 2,
+            }
+        ));
     }
 }

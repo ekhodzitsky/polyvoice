@@ -137,15 +137,10 @@ impl Aggregator {
                 &window_labels[i],
                 &permutations[i - 1],
             )?;
-            // Compose: window i's labels are *first* permuted by `perm`, *then*
-            // by the cumulative permutation up to window i-1.
-            let prev = permutations[i - 1];
-            let composed: [u8; 3] = [
-                prev[perm[0] as usize],
-                prev[perm[1] as usize],
-                prev[perm[2] as usize],
-            ];
-            permutations[i] = composed;
+            // `window_permutation` already built A's masks using
+            // `a_perm_so_far`, so `perm` maps window i's local indices directly
+            // onto the file-global speaker frame. No extra composition needed.
+            permutations[i] = perm;
         }
 
         // 3-5) For every audio frame across the file, average per-class logits over
@@ -594,6 +589,77 @@ mod tests {
         let first = sorted.first().unwrap();
         let last = sorted.last().unwrap();
         assert_ne!(first.local_speaker_idx, last.local_speaker_idx);
+    }
+
+    /// Regression test for the cumulative-permutation double-application bug.
+    /// Windows 0 and 1 are swapped once; window 2 is swapped once relative to
+    /// window 1. Because `window_permutation` already applies the cumulative
+    /// permutation when building A-masks, the returned `perm` is already
+    /// file-global. Before the fix the code composed `prev[perm[...]]`, which
+    /// double-applied the permutation and produced inconsistent global speaker
+    /// indices across window boundaries.
+    #[test]
+    fn three_windows_keep_global_speaker_indices_consistent() {
+        // Window 0: spk0 in 0-3.0s and 4.0-4.5s; spk1 in 3.0-4.0s and 4.5-5.0s.
+        // The 4.0-5.0s overlap with window 1 contains both speakers.
+        let w0 = synthetic_window(
+            0.0,
+            5.0,
+            50,
+            &[
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
+            ],
+        );
+        // Window 1 overlaps 4-5s. In the overlap it swaps local indices
+        // relative to window 0, so local spk1 = global spk0 and local spk0 =
+        // global spk1. Both speakers remain active through the window so the
+        // overlap with window 2 also contains both global speakers.
+        let w1 = synthetic_window(
+            4.0,
+            9.0,
+            50,
+            &[
+                2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
+            ],
+        );
+        // Window 2 overlaps 8-9s. In the overlap it swaps local indices
+        // relative to window 1, so local spk1 = global spk0 and local spk0 =
+        // global spk1. In the non-overlap region only global spk1 continues.
+        let w2 = synthetic_window(
+            8.0,
+            13.0,
+            50,
+            &[
+                2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            ],
+        );
+
+        let agg = Aggregator::new(AggregationConfig::default());
+        let segs = agg.stitch(&[w0, w1, w2]).unwrap();
+
+        fn speaker_at(segs: &[RawSegment], t: f64) -> Option<u8> {
+            segs.iter()
+                .find(|s| s.time.start <= t && t < s.time.end)
+                .map(|s| s.local_speaker_idx)
+        }
+
+        let spk_0_early = speaker_at(&segs, 1.0).expect("segment expected around 1.0s");
+        let spk_0_late = speaker_at(&segs, 8.25).expect("segment expected around 8.25s");
+        let spk_1_early = speaker_at(&segs, 7.5).expect("segment expected around 7.5s");
+        let spk_1_late = speaker_at(&segs, 11.0).expect("segment expected around 11.0s");
+
+        assert_eq!(
+            spk_0_early, spk_0_late,
+            "global speaker 0 must keep the same index across window 2 boundary"
+        );
+        assert_eq!(
+            spk_1_early, spk_1_late,
+            "global speaker 1 must keep the same index across window 2 boundary"
+        );
+        assert_ne!(spk_0_early, spk_1_early, "two distinct speakers expected");
     }
 
     #[test]
