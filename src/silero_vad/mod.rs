@@ -25,6 +25,9 @@ impl SileroVad {
     /// `pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error>`
     /// { true }
     pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error> {
+        if chunk_size == 0 {
+            anyhow::bail!("SileroVad::new: chunk_size must be > 0");
+        }
         crate::onnx::validate_onnx_header(model_path).map_err(|e| anyhow::anyhow!("{e}"))?;
         let session = ort::session::Session::builder()
             .map_err(|e| anyhow::anyhow!("session builder: {e}"))?
@@ -65,6 +68,12 @@ impl SileroVad {
             .session
             .run(ort::inputs!["input" => input_tensor, "state" => state_tensor, "sr" => sr_tensor])
             .map_err(|e| VadError::Model(e.to_string()))?;
+
+        if outputs.len() < 2 {
+            return Err(VadError::Model(
+                "Silero VAD model produced fewer than 2 outputs".to_string(),
+            ));
+        }
 
         let (_, prob_data) = outputs[0]
             .try_extract_tensor::<f32>()

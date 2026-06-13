@@ -24,7 +24,21 @@ impl WindowIter {
     /// * `total` — total number of samples in the audio region.
     /// * `win`   — window size in samples.
     /// * `hop`   — hop size in samples.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `win == 0`, `hop == 0`, or `hop > win`.
+    #[allow(clippy::panic)] // Intentional precondition panic.
     pub fn new(total: usize, win: usize, hop: usize) -> Self {
+        if win == 0 {
+            panic!("WindowIter::new: win must be > 0");
+        }
+        if hop == 0 {
+            panic!("WindowIter::new: hop must be > 0");
+        }
+        if hop > win {
+            panic!("WindowIter::new: hop ({hop}) must be <= win ({win})");
+        }
         Self {
             start: 0,
             total,
@@ -85,7 +99,21 @@ impl WindowBuffer {
     ///
     /// * `win` — window size in samples.
     /// * `hop` — hop size in samples.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `win == 0`, `hop == 0`, or `hop > win`.
+    #[allow(clippy::panic)] // Intentional precondition panic.
     pub fn new(win: usize, hop: usize) -> Self {
+        if win == 0 {
+            panic!("WindowBuffer::new: win must be > 0");
+        }
+        if hop == 0 {
+            panic!("WindowBuffer::new: hop must be > 0");
+        }
+        if hop > win {
+            panic!("WindowBuffer::new: hop ({hop}) must be <= win ({win})");
+        }
         Self {
             buf: Vec::new(),
             win,
@@ -234,6 +262,42 @@ mod tests {
         let mut buf = WindowBuffer::new(4, 2);
         assert!(buf.flush().is_none());
     }
+
+    #[test]
+    #[should_panic(expected = "WindowIter::new: win must be > 0")]
+    fn window_iter_rejects_zero_win() {
+        let _ = WindowIter::new(10, 0, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "WindowIter::new: hop must be > 0")]
+    fn window_iter_rejects_zero_hop() {
+        let _ = WindowIter::new(10, 2, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "WindowIter::new: hop (3) must be <= win (2)")]
+    fn window_iter_rejects_hop_greater_than_win() {
+        let _ = WindowIter::new(10, 2, 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "WindowBuffer::new: win must be > 0")]
+    fn window_buffer_rejects_zero_win() {
+        let _ = WindowBuffer::new(0, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "WindowBuffer::new: hop must be > 0")]
+    fn window_buffer_rejects_zero_hop() {
+        let _ = WindowBuffer::new(4, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "WindowBuffer::new: hop (5) must be <= win (4)")]
+    fn window_buffer_rejects_hop_greater_than_win() {
+        let _ = WindowBuffer::new(4, 5);
+    }
 }
 
 #[allow(clippy::unwrap_used)]
@@ -252,8 +316,8 @@ mod prop_tests {
         #[test]
         fn window_iter_start_less_than_end(
             total in 0usize..10000,
-            win in 1usize..5000,
-            hop in 1usize..5000,
+            (win, hop) in (1usize..5000)
+                .prop_flat_map(|w| (Just(w), 1usize..=w)),
             include_partial in any::<bool>(),
         ) {
             let iter = if include_partial {
@@ -270,8 +334,8 @@ mod prop_tests {
         #[test]
         fn window_iter_end_le_total(
             total in 0usize..10000,
-            win in 1usize..5000,
-            hop in 1usize..5000,
+            (win, hop) in (1usize..5000)
+                .prop_flat_map(|w| (Just(w), 1usize..=w)),
             include_partial in any::<bool>(),
         ) {
             let iter = if include_partial {
@@ -288,8 +352,8 @@ mod prop_tests {
         #[test]
         fn window_iter_no_partial(
             total in 0usize..10000,
-            win in 1usize..5000,
-            hop in 1usize..5000,
+            (win, hop) in (1usize..5000)
+                .prop_flat_map(|w| (Just(w), 1usize..=w)),
         ) {
             for (start, end) in WindowIter::new(total, win, hop) {
                 prop_assert_eq!(
@@ -307,8 +371,8 @@ mod prop_tests {
         #[test]
         fn window_iter_partial_last(
             total in 0usize..10000,
-            win in 1usize..5000,
-            hop in 1usize..5000,
+            (win, hop) in (1usize..5000)
+                .prop_flat_map(|w| (Just(w), 1usize..=w)),
         ) {
             let ranges: Vec<_> = WindowIter::new(total, win, hop).include_partial().collect();
             for (start, end) in &ranges {
@@ -318,9 +382,6 @@ mod prop_tests {
                     start, end, start, win, total
                 );
             }
-            // Note: with hop > win, the final window may not reach total;
-            // include_partial only ensures that a partial window is yielded
-            // when the current start is still inside the total range.
         }
     }
 }

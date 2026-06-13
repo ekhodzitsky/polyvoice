@@ -40,6 +40,12 @@ impl std::fmt::Display for DerResult {
 ///
 /// Speaker IDs between ref and hyp are mapped optimally via greedy matching
 /// on co-occurrence counts.
+///
+/// # Defensive behaviour
+///
+/// Returns an all-zero result if `collar` is non-finite or negative, or if any
+/// turn end time is non-finite or negative. This prevents panics/DoS on
+/// malformed input rather than propagating NaN/Infinity.
 pub fn compute_der(
     reference: &[SpeakerTurn],
     hypothesis: &[SpeakerTurn],
@@ -55,7 +61,18 @@ pub fn compute_der(
         };
     }
 
+    if !collar.is_finite() || collar < 0.0 {
+        return DerResult {
+            der: 0.0,
+            miss_rate: 0.0,
+            false_alarm_rate: 0.0,
+            confusion_rate: 0.0,
+            total_speech: 0.0,
+        };
+    }
+
     let resolution = 0.01; // 10ms frames
+    const MAX_FRAMES: usize = 24 * 3600 * 100; // 24 hours at 10ms resolution
 
     let max_time = reference
         .iter()
@@ -63,7 +80,17 @@ pub fn compute_der(
         .map(|t| t.time.end)
         .fold(0.0f64, f64::max);
 
-    let n_frames = (max_time / resolution).ceil() as usize + 1;
+    if !max_time.is_finite() || max_time < 0.0 {
+        return DerResult {
+            der: 0.0,
+            miss_rate: 0.0,
+            false_alarm_rate: 0.0,
+            confusion_rate: 0.0,
+            total_speech: 0.0,
+        };
+    }
+
+    let n_frames = ((max_time / resolution).ceil() as usize + 1).min(MAX_FRAMES);
 
     // Build collar mask: true = inside collar (ignored).
     let collar_mask = build_collar_mask(reference, collar, resolution, n_frames);
@@ -324,6 +351,25 @@ mod tests {
     #[test]
     fn empty_reference() {
         let result = compute_der(&[], &[turn(0, 0.0, 5.0)], 0.0);
+        assert_eq!(result.der, 0.0);
+    }
+
+    #[test]
+    fn non_finite_collar_returns_zero() {
+        let reference = vec![turn(0, 0.0, 5.0)];
+        let hypothesis = vec![turn(0, 0.0, 5.0)];
+        let result = compute_der(&reference, &hypothesis, f64::NAN);
+        assert_eq!(result.der, 0.0);
+        let result = compute_der(&reference, &hypothesis, f64::NEG_INFINITY);
+        assert_eq!(result.der, 0.0);
+    }
+
+    #[test]
+    fn huge_max_time_is_capped() {
+        let reference = vec![turn(0, 0.0, 1e12)];
+        let hypothesis = vec![turn(0, 0.0, 1e12)];
+        // Should not panic or allocate unbounded memory.
+        let result = compute_der(&reference, &hypothesis, 0.0);
         assert_eq!(result.der, 0.0);
     }
 }

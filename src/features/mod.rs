@@ -112,7 +112,13 @@ impl FbankExtractor {
     /// let config = FbankConfig::default();
     /// let extractor = FbankExtractor::new(config);
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if `config` is invalid (see [`FbankConfig`] fields).
+    #[allow(clippy::panic)] // Intentional precondition panic.
     pub fn new(config: FbankConfig) -> Self {
+        Self::validate_config(&config);
         let mut planner = RealFftPlanner::<f32>::new();
         let r2c = planner.plan_fft_forward(config.n_fft);
         let window = hamming_window(config.win_length);
@@ -128,6 +134,40 @@ impl FbankExtractor {
             r2c,
             window,
             mel_filters,
+        }
+    }
+
+    #[allow(clippy::panic)]
+    fn validate_config(config: &FbankConfig) {
+        if config.sample_rate == 0 {
+            panic!("FbankConfig::sample_rate must be > 0");
+        }
+        if config.n_fft == 0 {
+            panic!("FbankConfig::n_fft must be > 0");
+        }
+        if config.win_length == 0 {
+            panic!("FbankConfig::win_length must be > 0");
+        }
+        if config.hop_length == 0 {
+            panic!("FbankConfig::hop_length must be > 0");
+        }
+        if config.win_length > config.n_fft {
+            panic!(
+                "FbankConfig::win_length ({}) must be <= n_fft ({})",
+                config.win_length, config.n_fft
+            );
+        }
+        if config.n_mels == 0 {
+            panic!("FbankConfig::n_mels must be > 0");
+        }
+        if !config.f_min.is_finite() || config.f_min < 0.0 {
+            panic!("FbankConfig::f_min must be finite and non-negative");
+        }
+        if !config.f_max.is_finite() || config.f_max <= config.f_min {
+            panic!(
+                "FbankConfig::f_max must be finite and greater than f_min ({})",
+                config.f_min
+            );
         }
     }
 
@@ -341,5 +381,26 @@ mod tests {
         let frames: Vec<Vec<f32>> = vec![];
         let normalized = apply_cmvn(&frames);
         assert!(normalized.is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "FbankConfig::hop_length must be > 0")]
+    fn fbank_extractor_rejects_zero_hop_length() {
+        let config = FbankConfig {
+            hop_length: 0,
+            ..Default::default()
+        };
+        let _ = FbankExtractor::new(config);
+    }
+
+    #[test]
+    #[should_panic(expected = "FbankConfig::win_length (500) must be <= n_fft (400)")]
+    fn fbank_extractor_rejects_win_longer_than_n_fft() {
+        let config = FbankConfig {
+            n_fft: 400,
+            win_length: 500,
+            ..Default::default()
+        };
+        let _ = FbankExtractor::new(config);
     }
 }

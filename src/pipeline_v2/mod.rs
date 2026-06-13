@@ -4,13 +4,14 @@
 
 #[cfg(not(all(
     feature = "onnx",
+    feature = "download",
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",
     feature = "resegmentation",
 )))]
 compile_error!(
-    "pipeline_v2 requires onnx + segmentation + embedder + clusterer + resegmentation features"
+    "pipeline_v2 requires onnx + download + segmentation + embedder + clusterer + resegmentation features"
 );
 
 pub mod builder;

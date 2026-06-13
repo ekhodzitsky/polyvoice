@@ -64,13 +64,29 @@ impl HybridPipeline {
     }
 
     /// Set the window size in samples. Default is 2 seconds (32000 @ 16 kHz).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `samples == 0`.
+    #[allow(clippy::panic)] // Intentional precondition panic.
     pub fn with_window_samples(mut self, samples: usize) -> Self {
+        if samples == 0 {
+            panic!("HybridPipeline::with_window_samples: samples must be > 0");
+        }
         self.window_samples = samples;
         self
     }
 
     /// Set the hop size in samples. Default is 1.5 seconds (24000 @ 16 kHz).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `samples == 0`.
+    #[allow(clippy::panic)] // Intentional precondition panic.
     pub fn with_hop_samples(mut self, samples: usize) -> Self {
+        if samples == 0 {
+            panic!("HybridPipeline::with_hop_samples: samples must be > 0");
+        }
         self.hop_samples = samples;
         self
     }
@@ -107,8 +123,19 @@ impl HybridPipeline {
         let mut time_ranges: Vec<TimeRange> = Vec::new();
 
         for &(start_sec, end_sec) in &speech_regions {
+            if !(start_sec.is_finite()
+                && end_sec.is_finite()
+                && start_sec >= 0.0
+                && end_sec >= 0.0
+                && start_sec <= end_sec)
+            {
+                continue;
+            }
             let start = (start_sec * sr_f) as usize;
             let end = (end_sec * sr_f) as usize;
+            if start > samples.len() || start > end {
+                continue;
+            }
             let region = &samples[start..end.min(samples.len())];
 
             if region.len() < self.window_samples {
@@ -234,8 +261,19 @@ impl HybridPipeline {
         let mut raw_chunk_lengths: Vec<usize> = Vec::new();
 
         for &(start_sec, end_sec) in &speech_regions {
+            if !(start_sec.is_finite()
+                && end_sec.is_finite()
+                && start_sec >= 0.0
+                && end_sec >= 0.0
+                && start_sec <= end_sec)
+            {
+                continue;
+            }
             let start = (start_sec * sr_f) as usize;
             let end = (end_sec * sr_f) as usize;
+            if start > samples.len() || start > end {
+                continue;
+            }
             let region = &samples[start..end.min(samples.len())];
 
             if region.len() < self.window_samples {
@@ -389,5 +427,29 @@ mod tests {
     fn extract_speech_regions_empty() {
         let regions = extract_speech_regions(&[]);
         assert!(regions.is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "HybridPipeline::with_window_samples: samples must be > 0")]
+    fn hybrid_pipeline_rejects_zero_window_samples() {
+        use crate::pipeline_v2::mocks::{MockClusterer, MockEmbedder, MockSegmenter};
+        let _ = HybridPipeline::new(
+            Box::new(MockSegmenter::default()),
+            Box::new(MockEmbedder::default()),
+            Box::new(MockClusterer::default()),
+        )
+        .with_window_samples(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "HybridPipeline::with_hop_samples: samples must be > 0")]
+    fn hybrid_pipeline_rejects_zero_hop_samples() {
+        use crate::pipeline_v2::mocks::{MockClusterer, MockEmbedder, MockSegmenter};
+        let _ = HybridPipeline::new(
+            Box::new(MockSegmenter::default()),
+            Box::new(MockEmbedder::default()),
+            Box::new(MockClusterer::default()),
+        )
+        .with_hop_samples(0);
     }
 }

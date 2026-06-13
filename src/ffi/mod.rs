@@ -69,7 +69,14 @@ polyvoice_pipeline_create(
                     .map_err(|_| PolyvoiceStatus::InvalidArg as c_int)?;
                 // Reject path-traversal attempts (e.g. "../../evil") before the
                 // path is passed to ModelRegistry::with_cache_dir.  FFI-002.
-                if s.contains("..") || s.starts_with('/') {
+                let cache_path = std::path::Path::new(s);
+                if cache_path.is_absolute() {
+                    return Err(PolyvoiceStatus::InvalidArg as c_int);
+                }
+                if cache_path
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+                {
                     return Err(PolyvoiceStatus::InvalidArg as c_int);
                 }
                 ModelRegistry::with_cache_dir(s)
@@ -113,6 +120,8 @@ polyvoice_pipeline_create(
 /// - `samples` must point to at least `n_samples` valid f32 values.
 /// - `out_json` and `out_json_len` must be valid non-null pointers.
 /// - The returned `*out_json` string must be freed with `polyvoice_free_string`.
+/// - Must not be called concurrently with another call to `polyvoice_pipeline_run`
+///   or `polyvoice_pipeline_destroy` on the same handle.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
 #[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
@@ -181,6 +190,8 @@ polyvoice_pipeline_run(
 /// # Safety
 /// `pipeline` must be a valid pointer returned by `polyvoice_pipeline_create`, or null.
 /// Must be called exactly once per handle.
+/// Must not be called concurrently with any `polyvoice_pipeline_run` call on the
+/// same handle.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
 #[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
