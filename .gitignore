@@ -50,6 +50,23 @@ models/int8/*.onnx.data
 id_rsa
 id_rsa.pub
 
+# AI agent working directories (keep repo self-contained regardless of global gitignore)
+.claude/
+.cody/
+.cursor/
+.omc/
+.omx/
+.continue/
+.aider*
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Design specs / plans that should not be committed
+/docs/superpowers/
+
 # Python stale native extensions
 python/polyvoice/_polyvoice.cpython-*.so
 python/polyvoice/_polyvoice.cpython-*.dylib
