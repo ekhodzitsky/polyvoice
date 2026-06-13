@@ -20,6 +20,8 @@ pub enum PipelineError {
     Embedding(#[from] crate::embedding::EmbeddingError),
     #[error("WAV error: {0}")]
     Wav(#[from] wav::WavError),
+    #[error("unsupported WAV sample rate: {actual}, expected: {expected}")]
+    UnsupportedSampleRate { expected: u32, actual: u32 },
     #[error("no speech detected in audio")]
     NoSpeech,
     #[error("audio too long: {actual_secs:.1}s > max {max_secs:.1}s")]
@@ -149,13 +151,24 @@ impl Pipeline {
     /// `pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
     /// { ret.as_ref().map_or(true, |r| r.num_speakers <= r.segments.len()) }
     /// Run the pipeline from a WAV file path.
+    ///
+    /// Returns [`PipelineError::UnsupportedSampleRate`] if the WAV sample rate
+    /// does not match [`crate::types::WindowConfig::sample_rate`] in
+    /// [`DiarizationConfig::window`].
     pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>(
         &self,
         path: &Path,
         extractor: &E,
         vad: &mut V,
     ) -> Result<DiarizationResult, PipelineError> {
-        let (samples, _sample_rate) = wav::read_wav(path)?;
+        let (samples, sample_rate) = wav::read_wav(path)?;
+        let expected = self.config.window.sample_rate.get();
+        if sample_rate != expected {
+            return Err(PipelineError::UnsupportedSampleRate {
+                expected,
+                actual: sample_rate,
+            });
+        }
         self.run(&samples, extractor, vad)
     }
 }
@@ -164,6 +177,7 @@ impl Pipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn pipeline_new_with_defaults() {
@@ -192,6 +206,47 @@ mod tests {
         assert!(
             matches!(result, Err(PipelineError::AudioTooLong { .. })),
             "expected AudioTooLong error, got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn wav_sample_rate_mismatch_error() {
+        // Create a 1-second mono WAV at 22050 Hz while the pipeline expects 16000 Hz.
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 22050,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut buf = Vec::new();
+        {
+            let cursor = Cursor::new(&mut buf);
+            let mut writer = hound::WavWriter::new(cursor, spec).unwrap();
+            for i in 0..22050 {
+                let sample = ((i as f32 / 22050.0) * std::f32::consts::TAU * 440.0).sin();
+                writer.write_sample((sample * 32767.0) as i16).unwrap();
+            }
+            writer.finalize().unwrap();
+        }
+
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), &buf).unwrap();
+
+        let config = DiarizationConfig::default();
+        let pipeline = Pipeline::new(config, VadConfig::default());
+        let extractor = crate::embedding::DummyExtractor::new(256);
+        let mut vad = crate::vad::EnergyVad::new(-40.0, 16000, 512);
+        let result = pipeline.run_from_wav(tmp.path(), &extractor, &mut vad);
+        assert!(
+            matches!(
+                result,
+                Err(PipelineError::UnsupportedSampleRate {
+                    expected: 16000,
+                    actual: 22050,
+                })
+            ),
+            "expected UnsupportedSampleRate error, got {:?}",
             result
         );
     }

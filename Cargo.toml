@@ -1,6 +1,6 @@
 [package]
 name = "polyvoice"
-version = "0.6.8"
+version = "0.6.9"
 edition = "2024"
 rust-version = "1.85.0"
 description = "Speaker diarization for Rust — who spoke when. ONNX-powered: Silero VAD, WeSpeaker embeddings, Pyannote segmentation, K-means/AHC clustering, overlap detection."

@@ -198,7 +198,7 @@ impl SpeakerCluster {
             };
             mapping.push((SpeakerId(old_id as u32), SpeakerId(new_id as u32)));
         }
-        Some(SpeakerIdRemap::from_mapping(mapping))
+        SpeakerIdRemap::from_mapping(mapping)
     }
 
     fn update_centroid(&mut self, id: usize, embedding: &[f32], sim: f32) {
