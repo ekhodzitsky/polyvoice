@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bump version across all project files.
-# Usage: bash scripts/bump-version.sh 0.6.8
+# Usage: bash scripts/bump-version.sh 0.6.9
 set -euo pipefail
 
 VERSION="${1:?Usage: bump-version.sh <new-version>}"

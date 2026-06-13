@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.9] - 2026-06-13
+
+### Fixed
+
+- **segmentation/aggregator**: cumulative speaker permutation was double-applied
+  across window boundaries in `stitch`. `window_permutation` already maps onto the
+  global frame via `a_perm_so_far`, so the extra `prev[perm[...]]` composition was
+  removed. Added a 3-window regression test guarding global speaker-index
+  consistency.
+- **pipeline**: `run_from_wav` now validates the WAV sample rate against
+  `config.window.sample_rate` and returns `PipelineError::UnsupportedSampleRate`
+  instead of silently discarding the file's rate.
+- **embedder**: `EmbedderPool::new` now returns `Result` and rejects embedders
+  with differing output dimensions via `EmbedderError::DimMismatch`. Empty-pool
+  behavior is unchanged.
+- **types**: `SpeakerIdRemap::from_mapping` now performs a runtime check for
+  duplicate old `SpeakerId`s and returns `Option<Self>` (`None` on duplicates)
+  instead of relying on `debug_assert!`.
+- **clusterer**: `AhcClusterer`, `KMeansClusterer`, and `NmeScClusterer` now
+  validate embedding dimension uniformity up front and return
+  `ClustererError::DimMismatch` on mismatch.
+
 ## [0.6.8] - 2026-06-01
 
 ### Fixed

@@ -105,24 +105,33 @@ pub struct EmbedderPool<E: Embedder> {
 
 impl<E: Embedder> EmbedderPool<E> {
     /// { true }
-    /// `pub fn new(embedders: Vec<E>) -> Self`
-    /// { true }
+    /// `pub fn new(embedders: Vec<E>) -> Result<Self, EmbedderError>`
+    /// { ret.is_ok() => ret.as_ref().unwrap().dim() == embedders.first().map_or(0, |e| e.dim()) }
     /// Build a pool from a list of embedders. All must share the same `dim()`.
     /// An empty list constructs a pool that fails on every call (returns
     /// `EmbedderError::Legacy("empty pool")`).
-    pub fn new(embedders: Vec<E>) -> Self {
+    pub fn new(embedders: Vec<E>) -> Result<Self, EmbedderError> {
         let dim = embedders.first().map(|e| e.dim()).unwrap_or(0);
+        for e in embedders.iter().skip(1) {
+            let actual = e.dim();
+            if actual != dim {
+                return Err(EmbedderError::DimMismatch {
+                    expected: dim,
+                    actual,
+                });
+            }
+        }
         let capacity = embedders.len().max(1);
         let queue = Arc::new(ArrayQueue::new(capacity));
         for e in embedders {
             // ArrayQueue::push only fails if full; capacity == count, so push always succeeds.
             let _ = queue.push(e);
         }
-        Self {
+        Ok(Self {
             queue,
             dim,
             capacity,
-        }
+        })
     }
 
     /// { true }
@@ -475,7 +484,7 @@ mod pool_tests {
                 dim: 192,
             });
         }
-        let pool = EmbedderPool::new(embedders);
+        let pool = EmbedderPool::new(embedders).unwrap();
         (pool, counter)
     }
 
@@ -504,10 +513,39 @@ mod pool_tests {
 
     #[test]
     fn pool_with_zero_embedders_errors() {
-        let pool: EmbedderPool<CountingEmbedder> = EmbedderPool::new(Vec::new());
+        let pool: EmbedderPool<CountingEmbedder> = EmbedderPool::new(Vec::new()).unwrap();
         let err = pool
             .embed(&[0.0_f32; 100])
             .expect_err("empty pool must fail");
         assert!(matches!(err, EmbedderError::Legacy(_)));
+    }
+
+    #[test]
+    fn pool_rejects_mismatched_embedder_dims() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let embedders = vec![
+            CountingEmbedder {
+                counter: counter.clone(),
+                dim: 192,
+            },
+            CountingEmbedder {
+                counter: counter.clone(),
+                dim: 256,
+            },
+        ];
+        let err = match EmbedderPool::new(embedders) {
+            Err(e) => e,
+            Ok(_) => panic!("mismatched dims must fail"),
+        };
+        assert!(
+            matches!(
+                err,
+                EmbedderError::DimMismatch {
+                    expected: 192,
+                    actual: 256
+                }
+            ),
+            "expected DimMismatch(192, 256), got {err}"
+        );
     }
 }

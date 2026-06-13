@@ -4,6 +4,7 @@
 //! evaluation code. Start with [`DiarizationResult`] and [`SpeakerId`].
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt;
 
 /// Opaque identifier for a speaker cluster.
@@ -24,20 +25,17 @@ pub struct SpeakerIdRemap {
 impl SpeakerIdRemap {
     /// Create a remap from a raw vector of (old, new) pairs.
     ///
-    /// { mapping.iter().all(|(old, new)| old != new) }
-    /// `fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Self`
-    /// { ret.mapping.len() == mapping.len() }
-    pub fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Self {
-        debug_assert!(
-            mapping
-                .iter()
-                .map(|(old, _)| old)
-                .collect::<std::collections::HashSet<_>>()
-                .len()
-                == mapping.len(),
-            "duplicate old SpeakerIds in mapping"
-        );
-        Self { mapping }
+    /// { true }
+    /// `fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Option<Self>`
+    /// { ret.is_some() == (mapping.iter().map(|(old, _)| old).collect::<HashSet<_>>().len() == mapping.len()) }
+    pub fn from_mapping(mapping: Vec<(SpeakerId, SpeakerId)>) -> Option<Self> {
+        let mut seen = HashSet::with_capacity(mapping.len());
+        for (old, _) in &mapping {
+            if !seen.insert(old) {
+                return None;
+            }
+        }
+        Some(Self { mapping })
     }
 
     /// { true }
@@ -479,6 +477,33 @@ impl DiarizationConfig {
     /// { ret == self.window.hop_samples() }
     pub fn hop_samples(&self) -> usize {
         self.window.hop_samples()
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod speaker_id_remap_tests {
+    use super::*;
+
+    #[test]
+    fn from_mapping_accepts_unique_old_ids() {
+        let mapping = vec![
+            (SpeakerId(0), SpeakerId(0)),
+            (SpeakerId(1), SpeakerId(0)),
+            (SpeakerId(2), SpeakerId(1)),
+        ];
+        let remap = SpeakerIdRemap::from_mapping(mapping).unwrap();
+        assert_eq!(remap.len(), 3);
+        assert_eq!(remap.remap(SpeakerId(0)), SpeakerId(0));
+        assert_eq!(remap.remap(SpeakerId(1)), SpeakerId(0));
+        assert_eq!(remap.remap(SpeakerId(2)), SpeakerId(1));
+        assert_eq!(remap.remap(SpeakerId(99)), SpeakerId(99));
+    }
+
+    #[test]
+    fn from_mapping_rejects_duplicate_old_ids() {
+        let mapping = vec![(SpeakerId(0), SpeakerId(1)), (SpeakerId(0), SpeakerId(2))];
+        assert!(SpeakerIdRemap::from_mapping(mapping).is_none());
     }
 }
 
