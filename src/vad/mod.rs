@@ -73,7 +73,15 @@ impl EnergyVad {
     /// let vad = EnergyVad::new(-40.0, 16000, 512);
     /// assert_eq!(vad.sample_rate(), 16000);
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if `frame_size == 0`.
+    #[allow(clippy::panic)] // Intentional precondition panic.
     pub fn new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Self {
+        if frame_size == 0 {
+            panic!("EnergyVad::new: frame_size must be > 0");
+        }
         Self {
             threshold: 10f32.powf(threshold_db / 20.0),
             sample_rate,
@@ -242,6 +250,12 @@ pub fn segment_speech<V: VoiceActivityDetector>(
 ) -> Result<Vec<(usize, usize)>, VadError> {
     vad.reset();
     let frame_size = vad_config.frame_size;
+    if frame_size == 0 {
+        return Err(VadError::InvalidChunkSize {
+            expected: 1,
+            got: 0,
+        });
+    }
     let num_frames = samples.len() / frame_size;
     let mut probs = Vec::with_capacity(num_frames);
     for i in 0..num_frames {
@@ -458,6 +472,25 @@ mod tests {
         // enough for a segment depending on min_speech_frames. The key point is that
         // it does NOT error and the trailing partial chunk is silently ignored.
         assert!(segs.iter().all(|(s, e)| s < e));
+    }
+
+    #[test]
+    fn segment_speech_rejects_zero_frame_size() {
+        let mut vad = EnergyVad::new(-40.0, 16000, 512);
+        let samples = vec![0.5f32; 512];
+        let config = DiarizationConfig::default();
+        let vad_config = VadConfig {
+            frame_size: 0,
+            ..Default::default()
+        };
+        let err = segment_speech(&mut vad, &samples, &config, &vad_config).unwrap_err();
+        assert!(matches!(err, VadError::InvalidChunkSize { got: 0, .. }));
+    }
+
+    #[test]
+    #[should_panic(expected = "EnergyVad::new: frame_size must be > 0")]
+    fn energy_vad_rejects_zero_frame_size() {
+        let _ = EnergyVad::new(-40.0, 16000, 0);
     }
 }
 

@@ -59,9 +59,16 @@ pub fn read_wav(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
         });
     }
 
+    let bps = spec.bits_per_sample;
+    if bps == 0 || bps > 32 {
+        return Err(WavError::UnsupportedFormat(format!(
+            "bits_per_sample {bps} out of supported range 1..=32"
+        )));
+    }
+
     let interleaved: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Int => {
-            let max_val = (1i64 << (spec.bits_per_sample - 1)) as f32;
+            let max_val = (1i64 << (bps - 1)) as f32;
             reader
                 .into_samples::<i32>()
                 .map(|s| s.map(|v| v as f32 / max_val))
