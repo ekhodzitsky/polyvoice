@@ -138,7 +138,8 @@ fn main() -> Result<()> {
     let embedding_dim = profile.embedding_dim();
     let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
         .context("load embedder")?;
-    let mut vad = SileroVad::new(&models.segmenter_path, 512).context("load vad")?;
+    let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
+    let mut vad = SileroVad::new(&vad_path, 512).context("load vad")?;
 
     let config = DiarizationConfig {
         cluster: ClusterConfig {

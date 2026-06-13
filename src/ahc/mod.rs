@@ -60,6 +60,12 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
     if n == 0 {
         return (Vec::new(), 0.0);
     }
+    let dim = embeddings[0].len();
+    if !embeddings.iter().all(|e| e.len() == dim) {
+        // Defensive fallback: mixed dimensions would break similarity math.
+        // Return a single cluster rather than panicking.
+        return (vec![0; n], 0.0);
+    }
 
     let mut labels: Vec<usize> = (0..n).collect();
     let mut centroids: Vec<Vec<f32>> = embeddings.to_vec();
@@ -272,5 +278,15 @@ mod tests {
             2,
             "max_clusters=2 must produce exactly 2 clusters"
         );
+    }
+
+    #[test]
+    fn test_agglomerative_cluster_mismatched_dimensions() {
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.9, 0.1],
+        ];
+        let labels = agglomerative_cluster(&embeddings, 0.5);
+        assert_eq!(labels, vec![0, 0]);
     }
 }

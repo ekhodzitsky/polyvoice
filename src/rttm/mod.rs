@@ -77,6 +77,13 @@ pub fn parse_rttm<R: BufRead>(reader: R) -> Result<Vec<RttmSegment>, RttmError> 
                 reason: format!("invalid duration: {}", duration),
             });
         }
+        let end = start + duration;
+        if !end.is_finite() {
+            return Err(RttmError::Parse {
+                line: idx + 1,
+                reason: format!("non-finite segment end time: {}", end),
+            });
+        }
 
         segments.push(RttmSegment {
             file_id: fields[1].to_string(),
@@ -254,5 +261,16 @@ SPEAKER file1 1 2.0 1.0 <NA> <NA> B <NA> <NA>
         assert_eq!(turns[0].speaker, turns[2].speaker);
         assert_ne!(turns[0].speaker, turns[1].speaker);
         assert_eq!(map.len(), 2);
+    }
+
+    #[test]
+    fn reject_non_finite_end_time() {
+        let input = format!(
+            "SPEAKER f 1 {:.3} {:.3} <NA> <NA> A <NA> <NA>\n",
+            f64::MAX,
+            f64::MAX
+        );
+        let result = parse_rttm(input.as_bytes());
+        assert!(result.is_err());
     }
 }

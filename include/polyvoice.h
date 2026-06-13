@@ -35,7 +35,10 @@ int polyvoice_pipeline_create(polyvoice_profile_t profile,
                               const char* models_cache_dir,
                               PolyvoicePipeline** out_handle);
 
-/** Run diarization on f32 samples. Returns JSON via out_json. */
+/**
+ * Run diarization on f32 samples. Returns JSON via out_json.
+ * Must not be called concurrently with another run or destroy on the same handle.
+ */
 int polyvoice_pipeline_run(PolyvoicePipeline* pipeline,
                            const float* samples,
                            size_t n_samples,
@@ -43,7 +46,10 @@ int polyvoice_pipeline_run(PolyvoicePipeline* pipeline,
                            char** out_json,
                            size_t* out_json_len);
 
-/** Destroy a pipeline. Must be called exactly once per handle. */
+/**
+ * Destroy a pipeline. Must be called exactly once per handle.
+ * Must not be called concurrently with run on the same handle.
+ */
 void polyvoice_pipeline_destroy(PolyvoicePipeline* pipeline);
 
 /** Free a JSON string returned by polyvoice_pipeline_run. */

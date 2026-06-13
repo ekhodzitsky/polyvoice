@@ -26,6 +26,9 @@ impl FbankOnnxExtractor {
     /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> Result<Self, anyhow::Error>`
     /// { ret.pool.len() == pool_size }
     pub fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> anyhow::Result<Self> {
+        if pool_size == 0 {
+            anyhow::bail!("pool_size must be > 0");
+        }
         crate::onnx::validate_onnx_header(model_path)
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
         let pool = crossbeam_queue::ArrayQueue::new(pool_size);

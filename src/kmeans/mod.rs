@@ -29,12 +29,25 @@ fn kmeans_pp_with_seed(
             wcss: 0.0,
         };
     }
-    let k = k.min(n);
+    if k == 0 {
+        // Defensive fallback: caller asked for zero clusters, treat as one.
+        return KmeansResult {
+            labels: vec![0; n],
+            centroids: Vec::new(),
+            wcss: 0.0,
+        };
+    }
     let dim = embeddings[0].len();
-    debug_assert!(
-        embeddings.iter().all(|e| e.len() == dim),
-        "kmeans_pp precondition violated: all embeddings must have the same dimension"
-    );
+    if !embeddings.iter().all(|e| e.len() == dim) {
+        // Defensive fallback: mixed dimensions would break distance math.
+        // Return a single cluster rather than panicking.
+        return KmeansResult {
+            labels: vec![0; n],
+            centroids: Vec::new(),
+            wcss: 0.0,
+        };
+    }
+    let k = k.min(n);
 
     // K-means++ initialization.
     let mut centroids: Vec<Vec<f64>> = Vec::with_capacity(k);
@@ -302,5 +315,19 @@ mod tests {
         for &l in &labels {
             assert!(l < 2);
         }
+    }
+
+    #[test]
+    fn k_zero_returns_single_cluster() {
+        let embeddings = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let labels = kmeans_pp(&embeddings, 0, 10);
+        assert_eq!(labels, vec![0, 0]);
+    }
+
+    #[test]
+    fn mismatched_dimensions_returns_single_cluster() {
+        let embeddings = vec![vec![1.0, 0.0], vec![0.0, 1.0, 0.0]];
+        let labels = kmeans_pp(&embeddings, 2, 10);
+        assert_eq!(labels, vec![0, 0]);
     }
 }

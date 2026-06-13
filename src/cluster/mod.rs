@@ -38,7 +38,15 @@ impl SpeakerCluster {
     /// let cluster = SpeakerCluster::new(ClusterConfig::default());
     /// assert_eq!(cluster.num_speakers(), 0);
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if `config.max_speakers == 0`.
+    #[allow(clippy::panic)] // Intentional precondition panic.
     pub fn new(config: ClusterConfig) -> Self {
+        if config.max_speakers == 0 {
+            panic!("SpeakerCluster::new: max_speakers must be > 0");
+        }
         Self {
             centroids: Vec::new(),
             config,
@@ -346,5 +354,15 @@ mod tests {
         // Merge out of range.
         assert!(cluster.merge(SpeakerId(5), SpeakerId(0)).is_none());
         assert!(cluster.merge(SpeakerId(0), SpeakerId(5)).is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "SpeakerCluster::new: max_speakers must be > 0")]
+    fn speaker_cluster_rejects_zero_max_speakers() {
+        let config = ClusterConfig {
+            max_speakers: 0,
+            ..Default::default()
+        };
+        let _ = SpeakerCluster::new(config);
     }
 }

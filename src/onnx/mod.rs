@@ -105,6 +105,9 @@ impl OnnxEmbeddingExtractor {
         window_samples: usize,
         pool_size: usize,
     ) -> anyhow::Result<Self> {
+        if pool_size == 0 {
+            anyhow::bail!("pool_size must be > 0");
+        }
         validate_onnx_header(model_path)
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
         let pool = crossbeam_queue::ArrayQueue::new(pool_size);

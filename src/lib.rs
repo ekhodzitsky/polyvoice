@@ -86,6 +86,7 @@ pub use pipeline::{Pipeline, PipelineError};
 
 #[cfg(all(
     feature = "onnx",
+    feature = "download",
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",
