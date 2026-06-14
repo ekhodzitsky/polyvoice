@@ -1,6 +1,4 @@
 //! M6a — `PipelineConfig`, `ClustererKind`, `ExecutionProvider`.
-//!
-//! Spec: `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md` §3.
 
 use crate::types::{Profile, SampleRate};
 

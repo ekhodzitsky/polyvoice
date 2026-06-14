@@ -16,6 +16,9 @@ None (self-contained).
 ## Invariants
 
 - Output labels are in 0..k.
+- Degenerate/collapsed embeddings (fewer distinct points than `k`) yield no
+  duplicate centroids: the effective cluster count is capped at the number of
+  distinct points.
 
 ## Verification
 
@@ -25,4 +28,8 @@ cargo test --lib kmeans
 
 ## Notes
 
-- Uses Euclidean distance on f32 vectors.
+- Uses cosine distance on f32 vectors (`crate::utils::cosine_similarity_f32_f64`).
+- Degenerate-seeding guard: when the candidate-distance total is non-finite or
+  `<= 0` (all remaining points sit on a chosen centroid), k-means++ stops
+  seeding early and Lloyd's runs on the centroids gathered so far, instead of
+  sampling duplicate/garbage centroids. Mirrors the guard in `src/spectral`.

@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! Speaker embedding extraction trait.
 //!
 //! Use this module to turn audio windows into fixed-dimension speaker vectors
@@ -8,6 +9,10 @@ use crate::types::DiarizationConfig;
 
 /// Error type for embedding extraction failures.
 #[derive(thiserror::Error, Debug)]
+#[deprecated(
+    since = "0.7.0",
+    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+)]
 pub enum EmbeddingError {
     #[error("model not loaded: {0}")]
     ModelNotLoaded(String),
@@ -30,6 +35,10 @@ pub enum EmbeddingError {
 /// let emb = extractor.extract(&samples, &config).unwrap();
 /// assert_eq!(emb.len(), 256);
 /// ```
+#[deprecated(
+    since = "0.7.0",
+    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+)]
 pub trait EmbeddingExtractor: Send + Sync {
     /// Extract an embedding from raw 16 kHz (or `config.sample_rate`) mono f32 samples.
     ///
@@ -48,6 +57,10 @@ pub trait EmbeddingExtractor: Send + Sync {
 
 /// A no-op extractor that returns random-ish unit vectors.
 /// Useful for tests and benchmarks where the real model is not available.
+#[deprecated(
+    since = "0.7.0",
+    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+)]
 pub struct DummyExtractor {
     dim: usize,
     seed: std::sync::atomic::AtomicU64,

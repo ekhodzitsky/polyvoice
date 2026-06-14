@@ -11,4 +11,4 @@
 
 ## Deferred
 
-- [ ] Pipeline v2 builder API (see docs/superpowers/plans/).
+- [ ] Pipeline v2 builder API.

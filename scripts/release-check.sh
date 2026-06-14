@@ -5,17 +5,44 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The DER regression steps below must actually run on real audio. Require the
+# data to be present (and make the in-test guards hard-fail on absence) so a
+# partial cache/download miss can never silently green-light a release.
+export POLYVOICE_REQUIRE_DATA=1
+
 echo "=== 1. Format check ==="
 cargo fmt -- --check
 
 echo "=== 2. Clippy ==="
 cargo clippy --all-targets --all-features -- -D warnings
 
+echo "=== 2b. Supply-chain audit (advisories, licenses, bans, sources) ==="
+# Block publish on any advisory/license/source/ban violation — run early so it
+# fails fast, before the long DER regression steps. Reads the committed Cargo.lock.
+cargo audit
+cargo deny check
+
 echo "=== 3. Doc ==="
 cargo doc --no-deps --all-features
 
 echo "=== 4. Unit + integration tests (fast) ==="
 cargo nextest run --profile ci --all-features
+
+echo "=== 4b. Required DER test data present ==="
+require_file() {
+  if [ ! -f "$1" ]; then
+    echo "FATAL: required DER test data missing: $1" >&2
+    exit 1
+  fi
+}
+require_file "tests/data/e2e-smoke/audio/fuzfh.wav"
+require_file "data/voxconverse-test/audio/aepyx.wav"
+# AMI single uses either the .Mix-Headset or the bare filename.
+if [ ! -f "data/ami-test-single/audio/EN2002a.Mix-Headset.wav" ] \
+   && [ ! -f "data/ami-test-single/audio/EN2002a.wav" ]; then
+  echo "FATAL: required DER test data missing: data/ami-test-single/audio/EN2002a(.Mix-Headset).wav" >&2
+  exit 1
+fi
 
 echo "=== 5. DER regression — legacy e2e_smoke ==="
 cargo nextest run --profile ci --run-ignored only --test der_regression_test --features "onnx,download" der_regression_e2e_smoke --nocapture

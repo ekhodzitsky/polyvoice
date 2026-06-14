@@ -1,6 +1,7 @@
 # Rust
 /target
-/Cargo.lock
+# Cargo.lock is committed: polyvoice ships CLI binaries, Python wheels, and C FFI
+# artifacts, so reproducible, lockfile-pinned builds and supply-chain checks matter.
 
 # IDEs
 .idea/
@@ -26,6 +27,9 @@ Thumbs.db
 
 # ONNX model files (should be downloaded, not committed)
 *.onnx
+# External-weight blobs (e.g. ecapa_tdnn*.onnx.data) — route via manifest+signing,
+# never commit. Were ~252 MB of orphan in-tree weights (F22).
+*.onnx.data
 
 # M5 — quantization tooling artifacts (downloaded data + INT8 build outputs + venv)
 .venv-m5/

@@ -15,6 +15,25 @@
 //!
 //! Build a diarization pipeline using `Pipeline` and `ModelRegistry`.
 //! See the `pipeline` module for details.
+//!
+//! ## Module organization
+//!
+//! polyvoice carries two parallel module families from an in-progress migration
+//! to a trait-based v1.0 architecture. This is deliberate (shared math, a
+//! compile-time feature guard), not accidental duplication:
+//!
+//! - **v1.0 trait-based (current architecture):** `embedder` (the migration
+//!   target trait), `clusterer`, `segmentation`, `resegmentation`,
+//!   `silero_vad`, and `pipeline_v2` (experimental — see its README).
+//! - **Legacy:** `embedding`, `ecapa`, `onnx` are `#[deprecated]` — migrate
+//!   to the `embedder` trait. `cluster` and `vad` are the legacy
+//!   clustering/VAD surfaces.
+//! - **Pipeline status (note the inversion):** the legacy `pipeline` is the
+//!   *validated default* for the CLI and Python bindings; `pipeline_v2` is
+//!   *experimental* (opt-in via `--v2`), reverted from default after the 0.6.1
+//!   long-form DER regression.
+//! - **Shared math, reused by both families:** `ahc`, `kmeans`, `spectral`,
+//!   `features`, `der`, `utils`.
 
 pub mod ahc;
 pub mod cluster;
@@ -23,6 +42,10 @@ pub mod embedding;
 pub mod features;
 #[cfg(feature = "ffi")]
 pub mod ffi;
+/// Kuhn-Munkres assignment solver. Always compiled (pure Rust, wasm32-clean):
+/// shared by `der` (optimal speaker mapping) and `segmentation` (window
+/// permutation alignment).
+pub(crate) mod hungarian;
 pub mod kmeans;
 #[cfg(feature = "spectral")]
 pub mod spectral;
@@ -105,6 +128,7 @@ pub use silero_vad::SileroVad;
 #[cfg(feature = "onnx")]
 pub mod onnx;
 #[cfg(feature = "onnx")]
+#[allow(deprecated)] // re-export of legacy API (F09); consumers still warned at use site
 pub use onnx::OnnxEmbeddingExtractor;
 
 #[cfg(feature = "onnx")]
@@ -112,6 +136,7 @@ pub mod ecapa;
 
 // Public re-exports for ergonomic use.
 pub use cluster::SpeakerCluster;
+#[allow(deprecated)] // re-export of legacy API (F09); consumers still warned at use site
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
@@ -124,4 +149,5 @@ pub use types::{
 pub use window::{WindowBuffer, WindowIter};
 
 #[cfg(feature = "onnx")]
+#[allow(deprecated)] // re-export of legacy API (F09); consumers still warned at use site
 pub use ecapa::FbankOnnxExtractor;

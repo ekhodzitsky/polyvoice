@@ -140,6 +140,10 @@ use crate::types::Segment;
 /// Merge adjacent segments with the same speaker if the gap between them
 /// is less than `max_gap_secs`.
 ///
+/// The merged confidence is the arithmetic mean of the present (`Some`)
+/// confidences across the whole run — order-independent; `None` values are not
+/// counted, and a run with no confidences stays `None`.
+///
 /// ```rust
 /// use polyvoice::{merge_segments, Segment, SpeakerId, TimeRange};
 /// let segs = vec![
@@ -157,21 +161,45 @@ pub fn merge_segments(segments: Vec<Segment>, max_gap_secs: f64) -> Vec<Segment>
     }
     let mut merged = Vec::new();
     let mut current = segments[0].clone();
+    // Accumulate confidence over the whole run and take the arithmetic mean once
+    // at flush: order-independent (vs the old pairwise (c1+c2)/2 that recency-
+    // weighted earlier segments by 2^-(n-1)) and not poisoned by a single `None`
+    // (a None segment is simply not counted instead of forcing the run to None).
+    let (mut conf_sum, mut conf_count) = match current.confidence {
+        Some(c) => (c, 1u32),
+        None => (0.0, 0u32),
+    };
 
     for next in segments.into_iter().skip(1) {
         if current.speaker == next.speaker && next.time.start - current.time.end <= max_gap_secs {
             current.time.end = next.time.end;
-            // Average confidence when both sides have it.
-            if let (Some(c1), Some(c2)) = (current.confidence, next.confidence) {
-                current.confidence = Some((c1 + c2) / 2.0);
+            if let Some(c) = next.confidence {
+                conf_sum += c;
+                conf_count += 1;
             }
         } else {
+            current.confidence = mean_confidence(conf_sum, conf_count);
             merged.push(current);
             current = next;
+            (conf_sum, conf_count) = match current.confidence {
+                Some(c) => (c, 1u32),
+                None => (0.0, 0u32),
+            };
         }
     }
+    current.confidence = mean_confidence(conf_sum, conf_count);
     merged.push(current);
     merged
+}
+
+/// Arithmetic mean of the accumulated `Some` confidences in a merged run, or
+/// `None` when the run carried no confidence values.
+fn mean_confidence(sum: f32, count: u32) -> Option<f32> {
+    if count > 0 {
+        Some(sum / count as f32)
+    } else {
+        None
+    }
 }
 
 #[allow(clippy::unwrap_used)]
@@ -260,5 +288,57 @@ mod tests {
         l2_normalize(&mut v);
         assert!(v.iter().all(|x| x.is_finite()));
         assert!(v.iter().all(|&x| x == 0.0));
+    }
+
+    fn seg(start: f64, end: f64, spk: u32, conf: Option<f32>) -> Segment {
+        Segment {
+            time: crate::types::TimeRange { start, end },
+            speaker: Some(crate::types::SpeakerId(spk)),
+            confidence: conf,
+        }
+    }
+
+    #[test]
+    fn merge_confidence_is_order_independent_mean() {
+        // Three same-speaker segments merge into one run. Confidence must be the
+        // arithmetic mean (0.8), not the old recency-weighted pairwise fold
+        // ((0.6+0.9)/2 + 0.9)/2 = 0.825.
+        let segs = vec![
+            seg(0.0, 1.0, 0, Some(0.6)),
+            seg(1.0, 2.0, 0, Some(0.9)),
+            seg(2.0, 3.0, 0, Some(0.9)),
+        ];
+        let merged = merge_segments(segs, 0.5);
+        assert_eq!(merged.len(), 1);
+        let c = merged[0].confidence.expect("merged run has confidence");
+        assert!(
+            (c - 0.8).abs() < 1e-6,
+            "expected arithmetic mean 0.8, got {c}"
+        );
+    }
+
+    #[test]
+    fn merge_confidence_ignores_none_no_poisoning() {
+        // First segment has no confidence; the run mean must come from the
+        // present values (0.7), not be poisoned to None by the leading None.
+        let segs = vec![
+            seg(0.0, 1.0, 0, None),
+            seg(1.0, 2.0, 0, Some(0.8)),
+            seg(2.0, 3.0, 0, Some(0.6)),
+        ];
+        let merged = merge_segments(segs, 0.5);
+        assert_eq!(merged.len(), 1);
+        let c = merged[0]
+            .confidence
+            .expect("present values must yield a mean");
+        assert!((c - 0.7).abs() < 1e-6, "expected 0.7, got {c}");
+    }
+
+    #[test]
+    fn merge_confidence_all_none_stays_none() {
+        let segs = vec![seg(0.0, 1.0, 0, None), seg(1.0, 2.0, 0, None)];
+        let merged = merge_segments(segs, 0.5);
+        assert_eq!(merged.len(), 1);
+        assert!(merged[0].confidence.is_none());
     }
 }

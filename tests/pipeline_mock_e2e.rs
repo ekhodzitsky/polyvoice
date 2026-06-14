@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 #![allow(clippy::unwrap_used)]
 //! Mock-based E2E integration tests for the pipeline.
 //!

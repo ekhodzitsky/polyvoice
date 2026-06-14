@@ -9,15 +9,28 @@
 
 #![cfg(all(feature = "cli", feature = "download"))]
 
-use polyvoice::der::compute_der;
+use polyvoice::der::{DerDecomposition, compute_der_decomposition};
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
 use serde::Deserialize;
 use std::path::Path;
+
+/// Release-gate signal: when `POLYVOICE_REQUIRE_DATA=1` is set (the release gate
+/// exports it), missing test data is a hard failure instead of a silent skip —
+/// so a partial cache/download miss can never green-light a release without
+/// actually running DER. Unset (local dev) keeps the soft-skip ergonomics.
+fn require_data() -> bool {
+    std::env::var("POLYVOICE_REQUIRE_DATA")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
 
 #[derive(Deserialize)]
 struct Baseline {
     #[serde(rename = "v2_e2e_smoke")]
     v2_e2e_smoke: DatasetBaseline,
+    // v2-family AMI entry; hosts the overlap-excluded long-form floor (task 110/F37).
+    #[serde(rename = "hybrid_ami_test_single")]
+    ami_v2: AmiBaseline,
 }
 
 #[derive(Deserialize)]
@@ -27,14 +40,23 @@ struct DatasetBaseline {
     tolerance: f64,
 }
 
+#[derive(Deserialize)]
+struct AmiBaseline {
+    /// Overlap-excluded DER floor. `None` (JSON null) = not yet measured → the
+    /// numeric long-form gate stays inactive; set it to activate the gate.
+    der_single_speaker: Option<f64>,
+    der_single_speaker_tolerance: Option<f64>,
+}
+
 fn load_baseline() -> Baseline {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/der_baseline.json");
     let raw = std::fs::read_to_string(&path).expect("read der_baseline.json");
     serde_json::from_str(&raw).expect("parse der_baseline.json")
 }
 
-/// Run CLI `polyvoice diarize --v2` and return (DER, confusion, num_speakers, stem).
-fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (f64, f64, usize, String) {
+/// Run CLI `polyvoice diarize --v2` and return
+/// (DER decomposition, num_speakers, stem).
+fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (DerDecomposition, usize, String) {
     let stem = wav_path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -98,13 +120,13 @@ fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (f64, f64, usize, Strin
         turns
     };
 
-    let der = compute_der(&ref_turns, &hyp_turns, 0.25);
+    let decomp = compute_der_decomposition(&ref_turns, &hyp_turns, 0.25);
     let num_speakers = hyp_turns
         .iter()
         .map(|t| t.speaker.0)
         .collect::<std::collections::HashSet<_>>()
         .len();
-    (der.der, der.confusion_rate, num_speakers, stem)
+    (decomp, num_speakers, stem)
 }
 
 #[ignore = "requires cached ONNX bundle + tests/data/e2e-smoke/"]
@@ -115,11 +137,17 @@ fn cli_der_regression_v2_e2e_smoke() {
     let rttm_path = Path::new("tests/data/e2e-smoke/rttm/fuzfh.rttm");
 
     if !wav_path.is_file() {
-        println!("e2e-smoke WAV not found — skipping");
+        assert!(
+            !require_data(),
+            "release gate requires e2e-smoke data but it is missing: {}",
+            wav_path.display()
+        );
+        println!("e2e-smoke WAV not found — skipping (set POLYVOICE_REQUIRE_DATA=1 to require it)");
         return;
     }
 
-    let (der, _confusion, _num_speakers, stem) = run_cli_diarize(wav_path, rttm_path);
+    let (decomp, _num_speakers, stem) = run_cli_diarize(wav_path, rttm_path);
+    let der = decomp.total.der;
     println!("{stem}: DER={:.2}%", der * 100.0);
 
     let expected = baseline.v2_e2e_smoke.der_collar_0_25 / 100.0;
@@ -156,17 +184,38 @@ fn cli_der_regression_v2_ami_single() {
     };
 
     if !wav_path.is_file() {
-        println!("AMI WAV not found — skipping");
+        assert!(
+            !require_data(),
+            "release gate requires AMI test data but it is missing: {}",
+            wav_path.display()
+        );
+        println!("AMI WAV not found — skipping (set POLYVOICE_REQUIRE_DATA=1 to require it)");
         return;
     }
 
-    let (der, confusion, num_speakers, stem) = run_cli_diarize(&wav_path, &rttm_path);
+    let (decomp, num_speakers, stem) = run_cli_diarize(&wav_path, &rttm_path);
+    let der = decomp.total.der;
+    let single_der = decomp.single_speaker.der;
+    let confusion = decomp.total.confusion_rate;
+    // Overlap-aware decomposition (task 111/F37): the AMI gate references the split so
+    // a regression is interpretable — total DER hides where the error comes from.
     println!(
-        "{stem}: DER={:.2}% confusion={:.2}% speakers={}",
+        "{stem}: DER={:.2}% overlap-excluded DER={:.2}% overlap-region DER={:.2}% confusion={:.2}% speakers={}",
         der * 100.0,
+        single_der * 100.0,
+        decomp.overlap.der * 100.0,
         confusion * 100.0,
         num_speakers
     );
+    for r in &decomp.per_speaker_recall {
+        println!(
+            "  ref spk {} recall={:.1}% ({}/{} frames)",
+            r.speaker,
+            r.recall * 100.0,
+            r.recalled_frames,
+            r.ref_frames
+        );
+    }
     // Total DER is deliberately NOT gated here: AMI EN2002a is ~79% overlapping
     // speech, and pipeline v2 emits one speaker per frame, so the miss term alone
     // holds DER near 88% whether diarization is healthy or collapsed — a DER ceiling
@@ -182,4 +231,30 @@ fn cli_der_regression_v2_ami_single() {
         "pipeline_v2 clustering regressed on EN2002a: confusion={:.1}% exceeds 25%",
         confusion * 100.0
     );
+    // Numeric long-form floor (task 110/F37): overlap-excluded DER DOES discriminate
+    // healthy vs collapsed diarization on high-overlap audio, unlike total DER. The
+    // gate activates only once a baseline is measured and recorded in
+    // tests/der_baseline.json (hybrid_ami_test_single.der_single_speaker); until then
+    // the printed value above is the measurement to record.
+    let baseline = load_baseline();
+    match (
+        baseline.ami_v2.der_single_speaker,
+        baseline.ami_v2.der_single_speaker_tolerance,
+    ) {
+        (Some(floor), Some(tol)) => {
+            let ceiling = (floor + tol) / 100.0;
+            assert!(
+                single_der <= ceiling,
+                "long-form floor regressed: overlap-excluded DER={:.2}% exceeds {:.2}% (baseline {:.2}% + tol {:.2}%)",
+                single_der * 100.0,
+                ceiling * 100.0,
+                floor,
+                tol,
+            );
+        }
+        _ => println!(
+            "  overlap-excluded DER baseline not yet measured — record {:.2}% in tests/der_baseline.json to activate the long-form floor",
+            single_der * 100.0
+        ),
+    }
 }

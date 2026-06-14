@@ -21,7 +21,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest,cargo-audit,cargo-deny
       - uses: actions/cache@v4
         with:
           path: data/ami-test-single
@@ -111,7 +111,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      # TODO(follow-up): migrate to crates.io trusted publishing (OIDC).
+      # Token supplied via env so it never appears in the process argv / command logs.
+      - run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   github-release:
     needs: [cli-binaries, python-wheels, crates-io]

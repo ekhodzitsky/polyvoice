@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-14
+
+Audit-driven correctness, packaging, and CI-hardening release. Bumped to a new
+minor (major in 0.x terms) because of two source-breaking API additions, both
+flagged by `cargo-semver-checks`:
+
+- `DerResult` gained four public frame-count fields (struct-literal construction
+  must be updated).
+- `DownloadError` gained the `InsecureScheme` and `TooLarge` variants (exhaustive
+  match arms must be updated).
+
+### Added
+
+- **DER overlap-aware decomposition**: `compute_der_decomposition` returns a
+  `DerDecomposition` (headline / single-speaker-region / overlap-region DER plus
+  per-speaker recall via `SpeakerRecall`), and `compute_der_single_speaker_regions`
+  exposes the overlap-excluded DER — a numeric long-form floor that discriminates
+  healthy vs collapsed diarization where total DER cannot.
+- **`DerResult` raw frame counts** (`total_ref_frames`, `missed_frames`,
+  `false_alarm_frames`, `confusion_frames`) for correct duration-weighted
+  (micro) averaging across files.
+- **`polyvoice-bench`**: collar and no-collar DER at both macro and micro
+  averaging, plus overlap-region DER and per-speaker recall in the per-file
+  artifacts (schema `polyvoice-bench-v0.8`).
+- **Model download hardening**: HTTPS-scheme enforcement and a streaming size
+  cap (`DownloadError::InsecureScheme`, `DownloadError::TooLarge`, 1 GiB default).
+- **CI/supply chain**: committed `Cargo.lock` with `--locked` everywhere,
+  `cargo deny check advisories licenses bans sources`, an advisory
+  contract-drift nudge, and a release publish gated on `cargo audit` + `cargo deny`.
+
+### Changed
+
+- **Optimal DER speaker mapping**: `compute_der` now uses Kuhn-Munkres
+  (Hungarian) assignment instead of a greedy match, matching `pyannote.metrics`
+  semantics — this lowers confusion/DER on cross-talk and fragmented files
+  (reported DER figures may shift downward).
+- **Unified spectral eigengap**: `spectral_cluster` and `NmeScClusterer` now
+  share a single Park et al. NME-SC normalized-maximum-eigengap implementation.
+- **Deterministic AHC labels**: cluster ids are assigned canonically (descending
+  size, tie-break by smallest member index).
+- **`merge_segments`** confidence is the arithmetic mean of the merged segments.
+- **Packaging**: switched to an `include` allowlist (ship only build-required
+  files), docs.rs builds the full feature surface, refreshed crates.io keywords.
+- **Docs honesty**: collar-disclosed, provenance-stamped DER numbers and revised
+  positioning across `README.md` and `PRODUCTION-READINESS.md`.
+
+### Fixed
+
+- **k-means++** degenerate-seeding guard on collinear/zero embeddings.
+- **streaming**: `StreamingPipeline::turns()` accumulates emitted turns across
+  `feed()`/`flush()` instead of dropping them.
+- **release gate** hard-fails on missing required DER data instead of silently
+  passing (`POLYVOICE_REQUIRE_DATA`).
+
+### Deprecated
+
+- Legacy embedding API — `EmbeddingExtractor`, `DummyExtractor`, `EmbeddingError`,
+  `OnnxEmbeddingExtractor`, and `FbankOnnxExtractor` — migrate to the v1.0
+  `Embedder` trait in `polyvoice::embedder`.
+
+### Removed
+
+- The `VERSION` file (Cargo.toml is the single source of version truth).
+- Tracked `models/*.onnx.data` weight blobs (now git-ignored).
+
 ## [0.6.9] - 2026-06-13
 
 ### Fixed

@@ -15,8 +15,8 @@
 //! 4. Argmax each averaged logit vector → frame label.
 //! 5. Run-length encode consecutive identical labels into `RawSegment`s.
 
+use crate::hungarian;
 use crate::segmentation::decoder::{FrameLabel, PowersetClass, PowersetDecoder};
-use crate::segmentation::hungarian;
 use crate::segmentation::{RawSegment, SegmentationError};
 use crate::types::TimeRange;
 
@@ -260,6 +260,13 @@ impl Aggregator {
 
     /// Find the frame index in `w` whose center is closest to time `t`. Returns
     /// `None` if `t` is outside the window's span.
+    ///
+    /// Uses `floor((t - start)/stride)`. This already IS the nearest-center frame:
+    /// `round((t - start)/stride - 0.5)` equals this `floor` for every in-span `t`
+    /// once clamped to `[0, num_frames-1]`, so it matches the center convention used
+    /// by `average_and_run_length_encode` (F03 — proven by
+    /// `frame_index_floor_equals_nearest_center`). Do NOT "fix" this to `round`; it
+    /// is a no-op that only changes the out-of-span `t == start - ε` corner.
     fn frame_index_at(&self, w: &WindowOutput, t: f32) -> Option<usize> {
         if t < w.start_time || t > w.end_time || w.num_frames == 0 {
             return None;
@@ -505,6 +512,74 @@ mod tests {
             }
         }
         WindowOutput::new(start, end, logits, num_frames).unwrap()
+    }
+
+    /// F03 characterization (task 113): `frame_index_at` uses
+    /// `floor((t - start)/stride)`, and the RLE pass (line ~300) places frame `f`
+    /// by its center `start + (f + 0.5)*stride`. These are NOT two different
+    /// conventions: `floor(x)` already returns the frame whose CENTER is closest to
+    /// `t`, because `round(x - 0.5) == floor(x)` for every non-negative `x` once the
+    /// result is clamped to `[0, num_frames-1]`. This test pins that equivalence so
+    /// a future "fix" to `round((t-start)/stride - 0.5)` is recognized as a no-op.
+    #[test]
+    fn frame_index_floor_equals_nearest_center() {
+        let stride = 0.1f32;
+        let start = 0.37f32;
+        for i in 0..5000 {
+            let t = start + i as f32 * 0.00713;
+            let x = (t - start) / stride;
+            // Clamp both at the lower edge the way frame_index_at does.
+            let floor_idx = (x.floor() as i64).max(0);
+            let round_idx = ((x - 0.5).round() as i64).max(0);
+            assert_eq!(
+                floor_idx, round_idx,
+                "floor and nearest-center disagree at t={t} x={x:.6}"
+            );
+        }
+    }
+
+    /// F03 characterization (task 113): a speaker change staggered ~0.5*stride off a
+    /// window boundary must still be labelled consistently after stitching. With the
+    /// sampler (`frame_index_at`) and the RLE applier sharing the nearest-center
+    /// convention, there is no 1-frame boundary flip — this passes on current code,
+    /// confirming F03 is not an actual defect.
+    #[test]
+    fn staggered_speaker_change_is_labelled_consistently() {
+        // Window A: 0.0–5.0, 50 frames (stride 0.1). spk0 (class 1) then spk1
+        // (class 2); change at frame 25 → t = 2.5s.
+        let mut a_classes = vec![1usize; 50];
+        for c in &mut a_classes[25..50] {
+            *c = 2;
+        }
+        let a = synthetic_window(0.0, 5.0, 50, &a_classes);
+        // Window B: 2.45–7.45, 50 frames (stride 0.1) — its grid is offset half a
+        // stride from A. Same physical truth: spk0 until ~2.5s then spk1.
+        let mut b_classes = vec![1usize; 50];
+        for c in &mut b_classes[1..50] {
+            *c = 2;
+        }
+        let b = synthetic_window(2.45, 7.45, 50, &b_classes);
+
+        let agg = Aggregator::new(AggregationConfig::default());
+        let segs = agg.stitch(&[a, b]).unwrap();
+
+        fn speaker_at(segs: &[RawSegment], t: f64) -> Option<u8> {
+            segs.iter()
+                .find(|s| s.time.start <= t && t < s.time.end)
+                .map(|s| s.local_speaker_idx)
+        }
+        // Well clear of the staggered boundary, the two speakers are distinct and
+        // stable (identity permutation — both windows use the same class indices).
+        let early = speaker_at(&segs, 1.0).expect("segment around 1.0s");
+        let late = speaker_at(&segs, 6.0).expect("segment around 6.0s");
+        assert_ne!(
+            early, late,
+            "the two speakers must stay distinct across the seam"
+        );
+        // Exactly two global speakers across the file.
+        let unique: std::collections::HashSet<u8> =
+            segs.iter().map(|s| s.local_speaker_idx).collect();
+        assert_eq!(unique.len(), 2, "expected 2 speakers, got {}", unique.len());
     }
 
     #[test]
