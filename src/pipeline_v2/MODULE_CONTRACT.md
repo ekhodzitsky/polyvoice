@@ -162,7 +162,7 @@ invariants:
       long-form audio. Graduating v2 to default requires a migration lease.
     proof:
       kind: doc-invariant
-      target: src/bin/polyvoice.rs (--v2 help text) + AGENTS.md (0.6.1 incident)
+      target: src/bin/polyvoice.rs (--v2 help text) + CHANGELOG.md (0.6.1 incident)
       command: grep -n "not recommended for long-form" src/bin/polyvoice.rs
   - id: sample-rate-guard
     rule: run() returns UnsupportedSampleRate when sr != config.sample_rate.
