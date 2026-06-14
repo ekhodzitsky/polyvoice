@@ -1,6 +1,6 @@
 //! v1.0 `Clusterer` trait + concrete clusterers (NME-SC, AHC).
 //!
-//! Added in v0.6 (M3). See `docs/superpowers/specs/2026-05-07-perfect-diarization-roadmap-v1-design.md` §3.1, §5.3.
+//! Added in v0.6 (M3).
 
 /// Speaker clusterer — turns a batch of L2-normalized speaker embeddings into
 /// per-embedding cluster labels in the range `0..K` where `K` is the inferred
@@ -397,25 +397,11 @@ impl Clusterer for NmeScClusterer {
         let mut eig_pairs: Vec<(f64, usize)> = (0..n).map(|i| (s[i], i)).collect();
         eig_pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
 
-        // Normalized Maximum Eigengap: pick k that maximises
-        // (λ_{k+1} - λ_k) / λ_{k+1}  for k in 1..max_k.
+        // Normalized Maximum Eigengap (Park et al. 2020) — single shared
+        // implementation so this path and spectral_cluster cannot diverge (F05).
         let max_k = self.max_clusters.min(n).min(20);
-        let mut best_k = 1usize;
-        let mut best_gap = 0.0f64;
-        for k in 1..max_k {
-            let lam_k = eig_pairs[k - 1].0;
-            let lam_k1 = eig_pairs[k].0;
-            let gap = if lam_k1.abs() > 1e-10 {
-                (lam_k1 - lam_k) / lam_k1.abs()
-            } else {
-                0.0
-            };
-            if gap > best_gap {
-                best_gap = gap;
-                best_k = k;
-            }
-        }
-        let k = best_k.max(1);
+        let eig_asc: Vec<f64> = eig_pairs.iter().map(|p| p.0).collect();
+        let k = crate::spectral::select_k_by_normalized_eigengap(&eig_asc, max_k).max(1);
 
         // Extract spectral embedding (top-k eigenvectors, row-normalised).
         let mut spectral: Vec<Vec<f32>> = vec![vec![0.0f32; k]; n];

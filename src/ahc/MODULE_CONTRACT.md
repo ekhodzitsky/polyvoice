@@ -66,10 +66,10 @@ consumers:
       - agglomerative_cluster
 invariants:
   - id: labels-contiguous
-    rule: Output labels are contiguous integers starting from 0.
+    rule: Output labels are contiguous integers from 0, canonically ordered by descending cluster size (tie-break smallest member index) — deterministic per partition, independent of input order.
     proof:
       kind: unit-test
-      target: src/ahc::mod::tests
+      target: src/ahc::mod::tests::cluster_ids_are_canonical_and_shuffle_invariant
       command: cargo test --lib ahc
 verification:
   pre_change:

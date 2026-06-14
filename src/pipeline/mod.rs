@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! High-level diarization pipeline.
 //!
 //! Wires together VAD, embedding extraction, and AHC clustering into a

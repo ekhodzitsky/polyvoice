@@ -22,6 +22,10 @@ Hungarian assignment, and segmenter trait.
 
 - PowersetDecoder is deterministic for identical logits.
 - Hungarian assignment minimizes total cost across windows.
+- One frame-time convention: `frame_index_at` uses `floor((t-start)/stride)`, which
+  is the nearest-center frame (it equals `round((t-start)/stride - 0.5)` after the
+  `[0, num_frames-1]` clamp), matching the run-length encoder's center placement —
+  the IoU sampler and the applier agree (F03; no half-stride off-by-one).
 
 ## Verification
 

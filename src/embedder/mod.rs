@@ -1,7 +1,8 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! v1.0 `Embedder` trait + concrete extractors (CAM++, ResNet34) + pool +
 //! overlap-mask helper.
 //!
-//! Added in v0.6 (M2). See `docs/superpowers/specs/2026-05-07-perfect-diarization-roadmap-v1-design.md` §3.1, §5.3.
+//! Added in v0.6 (M2).
 
 /// Speaker embedding extractor — turns a slice of 16 kHz mono audio into a
 /// fixed-dimension embedding vector. Implementations are expected to L2-normalize

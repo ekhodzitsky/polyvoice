@@ -2,6 +2,7 @@
 //! Property tests for utility function invariants.
 
 use polyvoice::utils::{cosine_similarity, l2_normalize, mean_vector};
+use polyvoice::{Segment, SpeakerId, TimeRange, merge_segments};
 use proptest::prelude::*;
 
 fn non_zero_vec() -> impl Strategy<Value = Vec<f32>> {
@@ -64,5 +65,45 @@ proptest! {
             dim,
             "mean_vector output dimension must match input dimension"
         );
+    }
+
+    /// merge_segments collapses a same-speaker contiguous run into one segment
+    /// whose confidence is the arithmetic mean of the Some() members (None
+    /// ignored), or None if no member carries a confidence — independent of how
+    /// many fold steps the merge performs. Pins the F07 fix (task 120 / D-3).
+    #[test]
+    fn merge_confidence_is_mean_of_some_members(
+        items in prop::collection::vec(
+            (0.0f64..=0.5f64, prop_oneof![Just(None::<f32>), (0.0f32..1.0f32).prop_map(Some)]),
+            2..8usize,
+        )
+    ) {
+        const MAX_GAP: f64 = 0.5;
+        // Build a contiguous, same-speaker run: each segment starts within
+        // MAX_GAP of the previous end, so the whole run merges into one.
+        let mut segs = Vec::new();
+        let mut t = 0.0f64;
+        for (gap, conf) in &items {
+            let start = t + *gap;
+            let end = start + 1.0;
+            segs.push(Segment {
+                time: TimeRange { start, end },
+                speaker: Some(SpeakerId(0)),
+                confidence: *conf,
+            });
+            t = end;
+        }
+        let merged = merge_segments(segs, MAX_GAP);
+        prop_assert_eq!(merged.len(), 1, "contiguous same-speaker run must merge to one");
+
+        let some: Vec<f32> = items.iter().filter_map(|(_, c)| *c).collect();
+        match merged[0].confidence {
+            None => prop_assert!(some.is_empty(), "None only when no member had a confidence"),
+            Some(c) => {
+                prop_assert!(!some.is_empty(), "Some implies at least one member had a confidence");
+                let mean = some.iter().sum::<f32>() / some.len() as f32;
+                prop_assert!((c - mean).abs() < 1e-5, "confidence {} != arithmetic mean {}", c, mean);
+            }
+        }
     }
 }

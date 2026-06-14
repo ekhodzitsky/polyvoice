@@ -47,6 +47,9 @@
     "profile": "balanced",
     "der_collar_0_25": 36.30,
     "der_no_collar": 44.73,
+    "der_single_speaker": null,
+    "der_single_speaker_tolerance": 2.0,
+    "_der_single_speaker_status": "PLACEHOLDER (task 110/F37) — overlap-excluded (single-speaker-region) DER. Run the AMI regression test with --ignored, read the printed 'overlap-excluded DER', then set this value to activate the long-form numeric floor.",
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "silero_vad",
@@ -112,6 +115,9 @@
     "profile": "balanced",
     "der_collar_0_25": 24.95,
     "der_no_collar": null,
+    "der_single_speaker": null,
+    "der_single_speaker_tolerance": 3.0,
+    "_der_single_speaker_status": "PLACEHOLDER (task 110/F37) — overlap-excluded (single-speaker-region) DER for the v2/hybrid pipeline on EN2002a. Measure via --ignored, then set to activate the long-form numeric floor.",
     "tolerance": 3.0,
     "model_versions": {
       "segmenter": "powerset_fp32",

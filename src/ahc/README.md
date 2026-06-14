@@ -17,7 +17,9 @@ threshold or automatic elbow-based threshold selection.
 
 ## Invariants
 
-- Output labels are contiguous integers starting from 0.
+- Output labels are contiguous integers from 0, **canonically ordered** by
+  descending cluster size (ties broken by smallest member index) — the same
+  partition yields the same ids regardless of input/merge order.
 - All embeddings are L2-normalized before similarity computation.
 
 ## Verification

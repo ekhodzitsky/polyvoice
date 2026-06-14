@@ -104,7 +104,7 @@ long-form audio) must never repeat. Follow this checklist verbatim:
    - Legacy pipeline e2e_smoke: DER ≤ 7.62% (baseline 6.62% + 1.0%)
    - Legacy pipeline VoxConverse 10-file: DER ≤ 18.43% (baseline 17.43% + 1.0%)
    - Legacy pipeline AMI single: DER ≤ 37.30% (baseline 36.30% + 1.0%)
-   - Pipeline v2 e2e_smoke: DER ≤ 5.79% (baseline 4.79% + 1.0%)
+   - Pipeline v2 e2e_smoke: DER ≤ 5.43% (baseline 4.43% + 1.0%)
 3. **If DER improved** — update `tests/der_baseline.json` with the new numbers
    and lower tolerance if appropriate. Never silence a regression test.
 4. **If the default pipeline changed** — the release gate script will catch
