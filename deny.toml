@@ -1,3 +1,7 @@
+# CI enforces all four checks: `cargo deny check advisories licenses bans sources`
+# (.github/workflows/ci.yml). Do not loosen the [sources] unknown-registry /
+# unknown-git denials or the [licenses] allow-list without review.
+
 [graph]
 targets = []
 all-features = true

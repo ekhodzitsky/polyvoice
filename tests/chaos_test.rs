@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 #![allow(clippy::unwrap_used)]
 //! Chaos / malformed-input tests for the legacy polyvoice pipeline.
 //!

@@ -80,6 +80,14 @@ invariants:
       kind: unit-test
       target: src/streaming::mod::tests
       command: cargo test --lib streaming
+  - id: turns-cumulative
+    rule: >
+      turns() returns the cumulative history of every turn emitted across
+      feed()/flush() calls in order; flush() does not reset it.
+    proof:
+      kind: unit-test
+      target: src/streaming::mod::tests::turns_accumulates_across_feed_and_flush
+      command: cargo test --lib streaming
 verification:
   pre_change:
     - cargo test --lib streaming

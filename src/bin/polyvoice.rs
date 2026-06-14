@@ -1,9 +1,10 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! polyvoice — speaker diarization CLI.
 //!
 //! Default pipeline: legacy v0.5 (Silero VAD + sliding-window embeddings + AHC).
 //! Use `--v2` to opt into pipeline v2 (Powerset segmentation + overlap masking +
 //! resegmentation). Pipeline v2 is not yet validated as default on long-form
-//! audio — see `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md`.
+//! audio — see PRODUCTION-READINESS.md.
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};

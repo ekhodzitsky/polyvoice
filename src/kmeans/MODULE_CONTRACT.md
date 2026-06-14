@@ -79,6 +79,15 @@ invariants:
       kind: unit-test
       target: tests/property_kmeans_test.rs::k_one_all_zero
       command: cargo test --test property_kmeans_test
+  - id: degenerate-seeding-no-duplicate-centroids
+    rule: >
+      Collapsed/homogeneous embeddings with fewer distinct points than k yield no
+      duplicate centroids; the effective cluster count is capped at the number of
+      distinct points (seeding stops on a non-finite or <= 0 distance total).
+    proof:
+      kind: unit-test
+      target: src/kmeans::mod::tests::identical_embeddings_yield_single_cluster
+      command: cargo test --lib kmeans
 verification:
   pre_change:
     - cargo test --lib kmeans

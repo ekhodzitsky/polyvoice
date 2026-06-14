@@ -155,16 +155,32 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
         }
     }
 
-    // Make labels contiguous (0, 1, 2, ...).
-    let mut label_map = HashMap::new();
-    let mut next_label = 0usize;
+    // Canonicalize cluster ids: relabel by descending cluster size, ties broken
+    // by smallest member index, into a contiguous 0..K range. This makes the
+    // integer ids a deterministic function of the PARTITION (independent of
+    // embedding/merge order), so golden/DER tests are not brittle to input
+    // ordering. The partition itself is unchanged; downstream treats ids as
+    // opaque and DER maps speakers optimally (order-invariant).
+    let mut group: HashMap<usize, (usize, usize)> = HashMap::new(); // raw label -> (size, min_index)
+    for (idx, &label) in labels.iter().enumerate() {
+        let e = group.entry(label).or_insert((0, idx));
+        e.0 += 1;
+        if idx < e.1 {
+            e.1 = idx;
+        }
+    }
+    let mut order: Vec<(usize, usize, usize)> = group
+        .iter()
+        .map(|(&label, &(size, min_idx))| (size, min_idx, label))
+        .collect();
+    // Descending size, then ascending smallest-member index (stable tie-break).
+    order.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    let mut canonical: HashMap<usize, usize> = HashMap::new();
+    for (new_id, &(_, _, label)) in order.iter().enumerate() {
+        canonical.insert(label, new_id);
+    }
     for label in &mut labels {
-        let entry = label_map.entry(*label).or_insert_with(|| {
-            let l = next_label;
-            next_label += 1;
-            l
-        });
-        *label = *entry;
+        *label = canonical[label];
     }
 
     (labels, threshold)
@@ -282,11 +298,35 @@ mod tests {
 
     #[test]
     fn test_agglomerative_cluster_mismatched_dimensions() {
-        let embeddings = vec![
-            vec![1.0, 0.0, 0.0],
-            vec![0.9, 0.1],
-        ];
+        let embeddings = vec![vec![1.0, 0.0, 0.0], vec![0.9, 0.1]];
         let labels = agglomerative_cluster(&embeddings, 0.5);
         assert_eq!(labels, vec![0, 0]);
+    }
+
+    #[test]
+    fn cluster_ids_are_canonical_and_shuffle_invariant() {
+        // A 3-member cluster near [1,0,0] and a 2-member cluster near [0,1,0].
+        let a = vec![1.0, 0.0, 0.0];
+        let a2 = vec![0.95, 0.05, 0.0];
+        let a3 = vec![0.9, 0.1, 0.0];
+        let b = vec![0.0, 1.0, 0.0];
+        let b2 = vec![0.05, 0.95, 0.0];
+
+        // Canonical ordering: the larger cluster (3 members) must get id 0,
+        // regardless of input order — descending size, tie-break min index.
+        let base = vec![a.clone(), a2.clone(), a3.clone(), b.clone(), b2.clone()];
+        let l1 = agglomerative_cluster(&base, 0.5);
+        assert_eq!(l1, vec![0, 0, 0, 1, 1], "big cluster must be id 0");
+
+        // Shuffled copy of the SAME points: the 3-member cluster (a-points at
+        // shuffled indices 1,3,4) must still be id 0. The old first-appearance
+        // relabel would have made the first-seen cluster id 0 instead.
+        let shuffled = vec![b2.clone(), a3.clone(), b.clone(), a.clone(), a2.clone()];
+        let l2 = agglomerative_cluster(&shuffled, 0.5);
+        assert_eq!(l2[1], 0, "a3 is in the big cluster -> id 0");
+        assert_eq!(l2[3], 0, "a is in the big cluster -> id 0");
+        assert_eq!(l2[4], 0, "a2 is in the big cluster -> id 0");
+        assert_eq!(l2[0], 1, "b2 is in the small cluster -> id 1");
+        assert_eq!(l2[2], 1, "b is in the small cluster -> id 1");
     }
 }

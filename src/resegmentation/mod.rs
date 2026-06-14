@@ -1,7 +1,6 @@
 //! v1.0 OverlapResegmenter — overlap-aware post-clustering pass.
 //!
-//! Added in v0.6 (M4). See `docs/superpowers/specs/2026-05-07-m4-overlap-resegmenter-design.md`
-//! and `docs/superpowers/specs/2026-05-07-perfect-diarization-roadmap-v1-design.md` §3.1.
+//! Added in v0.6 (M4).
 //!
 //! Pure Rust, wasm32-clean. Operates on already-computed speaker centroids and
 //! overlap-region embeddings supplied by the caller. M6 (`Pipeline`) wires the

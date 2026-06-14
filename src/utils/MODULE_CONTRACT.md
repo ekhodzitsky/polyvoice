@@ -62,7 +62,9 @@ surface:
     kind: function
     visibility: public
     contract: >
-      Merges adjacent segments with same speaker if gap <= max_gap_secs.
+      Merges adjacent segments with same speaker if gap <= max_gap_secs. Merged
+      confidence is the arithmetic mean of present (Some) confidences across the
+      run (order-independent; None values are ignored).
     proof:
       kind: unit-test
       target: src/utils::mod::tests

@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! E2E smoke test for the legacy v0.5 pipeline.
 //!
 //! Requires the Balanced ONNX bundle to be cached (run

@@ -124,6 +124,24 @@ invariants:
       kind: unit-test
       target: src/models::verify::tests
       command: cargo test --lib models --features download
+  - id: download-https-only
+    rule: >
+      Model downloads are fetched only over https:// — a non-https URL is
+      rejected with DownloadError::InsecureScheme before any network access.
+      Cache hits (which transmit nothing) are exempt.
+    proof:
+      kind: unit-test
+      target: src/models::download::tests::rejects_non_https_url
+      command: cargo test --lib models --features download
+  - id: download-size-capped
+    rule: >
+      A streamed download exceeding its byte cap aborts, deletes the .partial,
+      and returns DownloadError::TooLarge (default ceiling 1 GiB, well above any
+      shipped model).
+    proof:
+      kind: unit-test
+      target: src/models::download::tests::aborts_when_stream_exceeds_cap
+      command: cargo test --lib models --features download
 verification:
   pre_change:
     - cargo test --lib models --features download

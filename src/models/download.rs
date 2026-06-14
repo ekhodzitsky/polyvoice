@@ -33,6 +33,10 @@ pub enum DownloadError {
         #[source]
         source: SignatureError,
     },
+    #[error("refusing to fetch model over a non-https URL: {url}")]
+    InsecureScheme { url: String },
+    #[error("download for {path} exceeded the {max_bytes}-byte cap")]
+    TooLarge { path: PathBuf, max_bytes: u64 },
 }
 
 impl From<SignatureError> for DownloadError {
@@ -80,7 +84,40 @@ pub fn download_with_checksum_and_signature(
     signature: Option<&str>,
     dest: &Path,
 ) -> Result<bool, DownloadError> {
-    // Cache hit: verify SHA-256, then signature if present.
+    download_with_checksum_signature_and_cap(
+        url,
+        expected_sha256,
+        signature,
+        dest,
+        DEFAULT_MAX_MODEL_BYTES,
+    )
+}
+
+/// Default absolute ceiling for a single streamed model download (1 GiB).
+///
+/// Bounds a disk-exhaustion DoS for manifest entries that do not declare a
+/// `size`. It sits well above any real polyvoice model (the largest shipped
+/// weights are ~250 MiB), so legitimate downloads are unaffected.
+pub(crate) const DEFAULT_MAX_MODEL_BYTES: u64 = 1024 * 1024 * 1024;
+
+/// Like [`download_with_checksum_and_signature`] but with an explicit streaming
+/// size cap and an enforced `https://` scheme.
+///
+/// * Rejects any non-`https://` URL with [`DownloadError::InsecureScheme`]
+///   before opening the network. Cache hits transmit nothing and are still
+///   served — the scheme is only required when bytes are actually fetched.
+/// * Aborts and deletes the `.partial` file if the stream exceeds `max_bytes`,
+///   returning [`DownloadError::TooLarge`], so a hostile or buggy endpoint
+///   cannot fill the disk before the SHA-256 check runs.
+pub(crate) fn download_with_checksum_signature_and_cap(
+    url: &str,
+    expected_sha256: &str,
+    signature: Option<&str>,
+    dest: &Path,
+    max_bytes: u64,
+) -> Result<bool, DownloadError> {
+    // Cache hit: verify SHA-256, then signature if present. No network here, so
+    // the URL scheme is irrelevant.
     if dest.exists() && verify_sha256(dest, expected_sha256).is_ok() {
         if let Some(sig) = signature {
             verify_minisign(dest, sig).map_err(|e| DownloadError::SignatureInvalid {
@@ -89,6 +126,17 @@ pub fn download_with_checksum_and_signature(
             })?;
         }
         return Ok(false);
+    }
+
+    // A real fetch will happen: require https:// so weights are never pulled in
+    // cleartext (integrity must not rest on the same-manifest hash alone).
+    if !url
+        .get(..8)
+        .is_some_and(|s| s.eq_ignore_ascii_case("https://"))
+    {
+        return Err(DownloadError::InsecureScheme {
+            url: url.to_owned(),
+        });
     }
 
     if let Some(parent) = dest.parent() {
@@ -142,32 +190,25 @@ pub fn download_with_checksum_and_signature(
         url: url.to_owned(),
         source: Box::new(e),
     })?;
-    let reader = resp.into_body().into_reader();
-    let mut reader = BufReader::new(reader);
+    let reader = BufReader::new(resp.into_body().into_reader());
     let mut file = fs::File::create(&tmp).map_err(|e| DownloadError::Io {
         path: tmp.clone(),
         source: e,
     })?;
     let mut hasher = Sha256::new();
-    let mut buf = [0u8; 64 * 1024];
 
-    loop {
-        let n = reader.read(&mut buf).map_err(|e| DownloadError::Io {
-            path: tmp.clone(),
-            source: e,
-        })?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-        file.write_all(&buf[..n]).map_err(|e| DownloadError::Io {
-            path: tmp.clone(),
-            source: e,
-        })?;
-        if let Some(ref mut v) = verifier {
-            v.update(&buf[..n]);
-        }
+    {
+        // Hash + (optionally) signature-verify each chunk as it streams; the
+        // helper enforces the byte cap and deletes the .partial on overflow.
+        let mut on_chunk = |chunk: &[u8]| {
+            hasher.update(chunk);
+            if let Some(v) = verifier.as_mut() {
+                v.update(chunk);
+            }
+        };
+        write_capped(reader, &mut file, &tmp, max_bytes, &mut on_chunk)?;
     }
+
     file.flush().map_err(|e| DownloadError::Io {
         path: tmp.clone(),
         source: e,
@@ -199,6 +240,45 @@ pub fn download_with_checksum_and_signature(
         source: e,
     })?;
     Ok(true)
+}
+
+/// Stream `reader` into `file` in 64 KiB chunks, calling `on_chunk` for each
+/// chunk (used for SHA-256 and signature updates), and aborting with
+/// [`DownloadError::TooLarge`] — after deleting `tmp` — if more than `max_bytes`
+/// are read. The cap is checked before each write, so the on-disk `.partial`
+/// never exceeds the limit.
+fn write_capped<R: Read>(
+    mut reader: R,
+    file: &mut fs::File,
+    tmp: &Path,
+    max_bytes: u64,
+    on_chunk: &mut dyn FnMut(&[u8]),
+) -> Result<(), DownloadError> {
+    let mut buf = [0u8; 64 * 1024];
+    let mut written: u64 = 0;
+    loop {
+        let n = reader.read(&mut buf).map_err(|e| DownloadError::Io {
+            path: tmp.to_path_buf(),
+            source: e,
+        })?;
+        if n == 0 {
+            break;
+        }
+        written += n as u64;
+        if written > max_bytes {
+            let _ = fs::remove_file(tmp);
+            return Err(DownloadError::TooLarge {
+                path: tmp.to_path_buf(),
+                max_bytes,
+            });
+        }
+        file.write_all(&buf[..n]).map_err(|e| DownloadError::Io {
+            path: tmp.to_path_buf(),
+            source: e,
+        })?;
+        on_chunk(&buf[..n]);
+    }
+    Ok(())
 }
 
 /// { expected.len() == 64 }
@@ -332,5 +412,48 @@ mod tests {
             result2.err()
         );
         assert!(!result2.unwrap(), "wrapper should also be cached");
+    }
+
+    #[test]
+    fn rejects_non_https_url() {
+        // dest does not exist, so the call goes past the cache-hit branch into
+        // the scheme check. An http:// URL must be rejected before any network
+        // or filesystem side effect.
+        let dir = TempDir::new().unwrap();
+        let dest = dir.path().join("model.bin");
+        let err = download_with_checksum_and_signature(
+            "http://unreachable.invalid/model.bin",
+            &test_bytes_sha256(),
+            None,
+            &dest,
+        )
+        .expect_err("non-https URL must be rejected");
+        assert!(matches!(err, DownloadError::InsecureScheme { .. }));
+        assert!(!dest.exists(), "no file should be created");
+        assert!(
+            !dir.path().join(".model.bin.partial").exists(),
+            "no .partial should be created"
+        );
+    }
+
+    #[test]
+    fn aborts_when_stream_exceeds_cap() {
+        // 100 bytes through a 10-byte cap: write_capped must abort with TooLarge
+        // and delete the .partial.
+        let dir = TempDir::new().unwrap();
+        let tmp = dir.path().join(".big.partial");
+        let mut file = fs::File::create(&tmp).unwrap();
+        let mut noop = |_: &[u8]| {};
+        let err = write_capped(
+            std::io::Cursor::new(vec![0u8; 100]),
+            &mut file,
+            &tmp,
+            10,
+            &mut noop,
+        )
+        .expect_err("stream over the cap must abort");
+        assert!(matches!(err, DownloadError::TooLarge { max_bytes: 10, .. }));
+        drop(file);
+        assert!(!tmp.exists(), ".partial must be deleted on cap overflow");
     }
 }

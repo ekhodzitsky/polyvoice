@@ -1,14 +1,14 @@
 # Production Readiness Assessment
 
-> **Version:** 0.6.0 | **Date:** 2026-05-18 | **Scope:** Rust library + Python bindings + FFI
+> **Version:** 0.7.0 | **Date:** 2026-06-14 | **Scope:** Rust library + Python bindings + FFI
 >
-> **Last updated:** 2026-05-11 — M6b dead code removed, property tests expanded, cross-dataset DER infrastructure in place, streaming pipeline MVP (`StreamingPipeline`) implemented, `ahc_impl` recursion eliminated, deprecated `OnlineDiarizer` removed, dead code cleaned.
+> **Last updated:** 2026-06-14 — refreshed for 0.7.0. The legacy v0.5 pipeline is the validated CLI/Python default; pipeline v2 was reverted from the CLI default after the 0.6.1 long-form DER regression and remains opt-in (`--v2`). No longer an alpha — this is a 0.7.x pre-1.0 release.
 
 ## Executive Summary
 
 **Status: NOT production-ready.**
 
-The project is hardened against common attack vectors and passes an extensive CI matrix, but the `alpha.3` version signals API instability, a key dependency (`ort`) is a release candidate, and cross-dataset validation is thin. It is suitable for **controlled internal deployments** where the audio pipeline and environment are known. It is not yet suitable for **public APIs** or **unattended production services**.
+**(As of 0.7.0.)** The project is hardened against common attack vectors and passes an extensive CI matrix, but it is a pre-1.0 (`0.7.x`) release with no backward-compatibility commitment until `1.0.0`, a key dependency (`ort`) is still a release candidate (`2.0.0-rc.12`), and cross-dataset validation is thin. It is suitable for **controlled internal deployments** where the audio pipeline and environment are known. It is not yet suitable for **public APIs** or **unattended production services**.
 
 ---
 
@@ -18,13 +18,13 @@ The project is hardened against common attack vectors and passes an extensive CI
 
 | Item | Status | Risk |
 |------|--------|------|
-| Semantic version | `0.6.0` | Stable — API follows semver |
-| `semver-checks` | Passes in CI | Only checks public API surface; alpha allows breaking changes |
-| CHANGELOG | Exists | Good, but alpha changes are rapid |
+| Semantic version | `0.7.0` | Pre-1.0 — API may change between `0.x` minors |
+| `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 allows breaking changes |
+| CHANGELOG | Exists | Good; the `0.6.x` patch cadence is rapid |
 
-**Gap:** No commitment to backward compatibility until `1.0.0`. Consumers must pin to exact alpha versions.
+**Gap:** No commitment to backward compatibility until `1.0.0`. Consumers should pin to a `0.7.x` minor and review the CHANGELOG before upgrading.
 
-**Remediation:** Ship `0.6.0` stable, then adhere to semver.
+**Remediation:** Stabilize the public API toward `1.0.0`, then adhere to semver.
 
 ---
 
@@ -67,7 +67,7 @@ The project is hardened against common attack vectors and passes an extensive CI
 | Unit tests | 175+ tests in `src/` | Good structural coverage |
 | Miri | Runs on `--lib`, `--test test_ahc` | **Takes ~2 hours on CI** (see §6) |
 | Loom | `loom_pool.rs` | Concurrency model checking for session pool |
-| Proptest | Not yet | No property-based tests in CI |
+| Proptest | In CI | `property_der_test`, `property_kmeans_test` run in the `test` job |
 
 **Gap:** Miri runtime is a CI bottleneck. If it is skipped or times out, UB coverage is lost.
 
@@ -75,15 +75,19 @@ The project is hardened against common attack vectors and passes an extensive CI
 
 ### 5. Dataset Validation ❌
 
-| Dataset | Files | DER | Used in CI? |
-|---------|-------|-----|-------------|
-| VoxConverse test | 232 | ~14% | Yes (e2e-smoke) |
-| AMI test | 16 meetings | ~23% | No (perf-regression only) |
+| Dataset | Files | DER (0.25 s collar) | Used in CI? |
+|---------|-------|---------------------|-------------|
+| VoxConverse test (legacy) | 232 | 13.83% (no-collar not measured) | No (232-file not gated) |
+| VoxConverse test (legacy) | 10 | 17.43% collar / 25.99% no-collar | Yes (10-file gated) |
+| e2e smoke (legacy) | 1 | 6.62% | Yes (gated) |
+| AMI EN2002a (legacy, 1 meeting) | 1 | 36.30% collar / 44.73% no-collar | Yes (gated) |
 | CALLHOME | — | — | Not measured |
 | CHiME | — | — | Not measured |
 | VoxCeleb1 | Subset only | — | Speaker ID, not diarization |
 
-**Gap:** DER numbers exist for only two datasets. No cross-corpora validation. The default pipeline is the legacy v0.5.2 (DER 13.83%) — the experimental M6b `pipeline_v1` was demoted due to DER 52–64%.
+All DER figures are sourced from `tests/der_baseline.json`.
+
+**Gap:** DER numbers exist for only VoxConverse + a single AMI meeting; the AMI figure is **one** meeting (EN2002a, ~79% overlap), **not** a 16-meeting average (the older "~23%" claim had no committed backing and is withdrawn). No cross-corpora validation. The default pipeline is the legacy v0.5.2 (DER 13.83%, 232-file collar=0.25) — the experimental M6b `pipeline_v1` was demoted due to DER 52–64%.
 
 **Remediation:**
 - Run AMI full-test DER in CI (currently `perf-regression` is schedule-only).
@@ -135,7 +139,7 @@ The project is hardened against common attack vectors and passes an extensive CI
 
 | Asset | Status |
 |-------|--------|
-| README | Star-worthy, 79 lines, badges, quick start |
+| README | Badges, multi-language quick starts, canonical benchmark table |
 | `docs/` | Formalism, glossary, pipeline, severity, migrating guides |
 | `AGENTS.md` | Coding guidelines for contributors |
 | FFI examples | C header + Python tests |
@@ -143,6 +147,8 @@ The project is hardened against common attack vectors and passes an extensive CI
 ---
 
 ## Go/No-Go Matrix
+
+_As of 0.7.0 — `ort` is still `2.0.0-rc.12` and cross-corpora validation is still thin, so the NO-GO verdicts below stand._
 
 | Scenario | Verdict | Rationale |
 |----------|---------|-----------|
@@ -154,7 +160,7 @@ The project is hardened against common attack vectors and passes an extensive CI
 
 ---
 
-## Recommended Blockers for `0.6.0` Stable
+## Recommended Blockers for `1.0.0` Stable
 
 1. [ ] `ort` 2.0 stable released and integrated
 2. [ ] Miri CI split into parallel jobs or moved to nightly
@@ -171,7 +177,7 @@ The project is hardened against common attack vectors and passes an extensive CI
 | Crate size (crates.io) | 1.5 MiB |
 | Runtime memory (Balanced profile) | ~30 MB |
 | Speed (CPU) | 10× RT |
-| VoxConverse DER | ~14% |
-| AMI DER | ~23% |
+| VoxConverse DER (legacy, 232, 0.25 s collar) | 13.83% |
+| AMI DER (legacy, EN2002a single, 0.25 s collar) | 36.30% (44.73% no-collar) |
 | CI checks | 30 |
 | Security audit | 0 HIGH, 0 MEDIUM, 0 CVE |

@@ -4,7 +4,6 @@
 
 use crate::types::{SpeakerTurn, TimeRange};
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 /// DER evaluation result.
 #[derive(Debug, Clone, Copy)]
@@ -14,6 +13,14 @@ pub struct DerResult {
     pub false_alarm_rate: f64,
     pub confusion_rate: f64,
     pub total_speech: f64,
+    /// Raw frame counts (10 ms frames, collar-excluded) behind the ratios above.
+    /// Expose them so callers can compute a correct duration-weighted
+    /// micro-average across files (sum of error frames / sum of reference
+    /// frames) — an average of per-file ratios cannot.
+    pub total_ref_frames: u64,
+    pub missed_frames: u64,
+    pub false_alarm_frames: u64,
+    pub confusion_frames: u64,
 }
 
 impl std::fmt::Display for DerResult {
@@ -38,8 +45,15 @@ impl std::fmt::Display for DerResult {
 /// `collar` is the forgiveness window (in seconds) around each reference
 /// boundary. Standard value is 0.25s. Frames within the collar are ignored.
 ///
-/// Speaker IDs between ref and hyp are mapped optimally via greedy matching
-/// on co-occurrence counts.
+/// Speaker IDs between ref and hyp are mapped optimally via max-weight bipartite
+/// (Hungarian / Kuhn-Munkres) matching on co-occurrence counts.
+///
+/// **Approximate DER.** Frame-based at 10 ms resolution with a forgiveness
+/// boundary collar: frames within `collar` of any reference boundary are
+/// excluded from BOTH the numerator and the denominator. There is no UEM
+/// support. It is therefore **not bit-identical to `pyannote.metrics`** — always
+/// quote it alongside the collar value used. Raw frame counts are exposed on
+/// [`DerResult`] for duration-weighted micro-averaging across files.
 ///
 /// # Defensive behaviour
 ///
@@ -51,6 +65,55 @@ pub fn compute_der(
     hypothesis: &[SpeakerTurn],
     collar: f64,
 ) -> DerResult {
+    der_core(reference, hypothesis, collar, Region::All)
+}
+
+/// { collar >= 0.0 }
+/// pub fn compute_der_single_speaker_regions( reference: &[SpeakerTurn], hypothesis: &[SpeakerTurn], collar: f64, ) -> DerResult
+/// { ret.der >= 0.0 && ret.der <= 1.0 }
+/// Overlap-excluded DER: DER computed only over reference frames where exactly
+/// ONE speaker is active.
+///
+/// Reference frames whose label set has `>= 2` speakers (overlapping speech) are
+/// excluded from BOTH the speaker mapping and the error counts, on top of the
+/// usual forgiveness collar. This removes the overlap-miss term that pins total
+/// DER near ~88% on high-overlap audio (e.g. AMI EN2002a, ~79% overlap), giving
+/// a numeric quality floor that discriminates healthy vs collapsed diarization on
+/// long-form recordings — where total [`compute_der`] cannot (the miss term holds
+/// DER near 88% whether diarization is healthy or collapsed).
+///
+/// **Never conflate this with the headline DER.** [`compute_der`] is
+/// overlap-inclusive; this metric is a single-speaker-region subset. Always
+/// report it under a distinct name.
+pub fn compute_der_single_speaker_regions(
+    reference: &[SpeakerTurn],
+    hypothesis: &[SpeakerTurn],
+    collar: f64,
+) -> DerResult {
+    der_core(reference, hypothesis, collar, Region::SingleSpeaker)
+}
+
+/// Reference-region selector for [`der_core`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Region {
+    /// Score every non-collar frame (standard overlap-inclusive DER).
+    All,
+    /// Score only frames where the reference has exactly one active speaker.
+    SingleSpeaker,
+    /// Score only frames where the reference has >= 2 concurrent speakers.
+    Overlap,
+}
+
+/// Shared DER core. `region` selects which non-collar reference frames are scored:
+/// all of them, single-speaker regions only, or overlap regions only. The excluded
+/// frames are dropped from BOTH the speaker mapping and the error counts so each
+/// metric is self-consistent on its scored subset.
+fn der_core(
+    reference: &[SpeakerTurn],
+    hypothesis: &[SpeakerTurn],
+    collar: f64,
+    region: Region,
+) -> DerResult {
     if reference.is_empty() {
         return DerResult {
             der: 0.0,
@@ -58,6 +121,10 @@ pub fn compute_der(
             false_alarm_rate: 0.0,
             confusion_rate: 0.0,
             total_speech: 0.0,
+            total_ref_frames: 0,
+            missed_frames: 0,
+            false_alarm_frames: 0,
+            confusion_frames: 0,
         };
     }
 
@@ -68,6 +135,10 @@ pub fn compute_der(
             false_alarm_rate: 0.0,
             confusion_rate: 0.0,
             total_speech: 0.0,
+            total_ref_frames: 0,
+            missed_frames: 0,
+            false_alarm_frames: 0,
+            confusion_frames: 0,
         };
     }
 
@@ -87,20 +158,46 @@ pub fn compute_der(
             false_alarm_rate: 0.0,
             confusion_rate: 0.0,
             total_speech: 0.0,
+            total_ref_frames: 0,
+            missed_frames: 0,
+            false_alarm_frames: 0,
+            confusion_frames: 0,
         };
     }
 
     let n_frames = ((max_time / resolution).ceil() as usize + 1).min(MAX_FRAMES);
 
-    // Build collar mask: true = inside collar (ignored).
-    let collar_mask = build_collar_mask(reference, collar, resolution, n_frames);
+    // Frames to ignore: always those inside the forgiveness collar.
+    let mut ignore_mask = build_collar_mask(reference, collar, resolution, n_frames);
 
     // Build frame-level speaker labels.
     let ref_frames = build_speaker_frames(reference, resolution, n_frames);
     let hyp_frames = build_speaker_frames(hypothesis, resolution, n_frames);
 
-    // Greedy speaker mapping based on co-occurrence.
-    let mapping = greedy_speaker_mapping(&ref_frames, &hyp_frames, &collar_mask);
+    // Restrict the scored subset by region. SingleSpeaker drops overlap frames
+    // (removing the overlap-miss term); Overlap drops single/zero-speaker frames
+    // (isolating the overlap-region error). Either way the dropped frames leave
+    // both the mapping and the counts so each metric is self-consistent.
+    match region {
+        Region::All => {}
+        Region::SingleSpeaker => {
+            for (i, frame) in ref_frames.iter().enumerate() {
+                if frame.len() >= 2 {
+                    ignore_mask[i] = true;
+                }
+            }
+        }
+        Region::Overlap => {
+            for (i, frame) in ref_frames.iter().enumerate() {
+                if frame.len() < 2 {
+                    ignore_mask[i] = true;
+                }
+            }
+        }
+    }
+
+    // Optimal (Hungarian) speaker mapping based on co-occurrence.
+    let mapping = optimal_speaker_mapping(&ref_frames, &hyp_frames, &ignore_mask);
 
     let mut total_ref = 0u64;
     let mut missed = 0u64;
@@ -108,7 +205,7 @@ pub fn compute_der(
     let mut confusion = 0u64;
 
     for i in 0..n_frames {
-        if collar_mask[i] {
+        if ignore_mask[i] {
             continue;
         }
 
@@ -144,6 +241,10 @@ pub fn compute_der(
             false_alarm_rate: 0.0,
             confusion_rate: 0.0,
             total_speech: 0.0,
+            total_ref_frames: 0,
+            missed_frames: 0,
+            false_alarm_frames: 0,
+            confusion_frames: 0,
         };
     }
 
@@ -155,6 +256,10 @@ pub fn compute_der(
         false_alarm_rate: false_alarm as f64 / total_ref_f,
         confusion_rate: confusion as f64 / total_ref_f,
         total_speech: total_speech_secs,
+        total_ref_frames: total_ref,
+        missed_frames: missed,
+        false_alarm_frames: false_alarm,
+        confusion_frames: confusion,
     }
 }
 
@@ -204,8 +309,14 @@ fn build_speaker_frames(turns: &[SpeakerTurn], resolution: f64, n_frames: usize)
     frames
 }
 
-/// Greedy 1-to-1 mapping from hypothesis speaker IDs to reference speaker IDs.
-fn greedy_speaker_mapping(
+/// Optimal 1-to-1 mapping from hypothesis speaker IDs to reference speaker IDs.
+///
+/// Maximizes total frame co-occurrence via Kuhn-Munkres (Hungarian) assignment,
+/// matching pyannote.metrics semantics. Greedy 1-to-1 assignment is provably
+/// suboptimal — e.g. co-occurrence (X,A)=10,(X,B)=9,(Y,A)=8 yields 10 correct
+/// frames greedily vs 17 optimally (X→B, Y→A) — which inflated confusion/DER on
+/// cross-talk and fragmented files.
+fn optimal_speaker_mapping(
     ref_frames: &[Vec<u32>],
     hyp_frames: &[Vec<u32>],
     collar_mask: &[bool],
@@ -223,16 +334,43 @@ fn greedy_speaker_mapping(
         }
     }
 
-    let mut pairs: Vec<((u32, u32), u64)> = cooccurrence.into_iter().collect();
-    pairs.sort_by_key(|a| std::cmp::Reverse(a.1));
+    if cooccurrence.is_empty() {
+        return HashMap::new();
+    }
+
+    // Distinct hyp ids (rows) and ref ids (cols), sorted for deterministic output.
+    let mut hyp_ids: Vec<u32> = cooccurrence.keys().map(|&(h, _)| h).collect();
+    hyp_ids.sort_unstable();
+    hyp_ids.dedup();
+    let mut ref_ids: Vec<u32> = cooccurrence.keys().map(|&(_, r)| r).collect();
+    ref_ids.sort_unstable();
+    ref_ids.dedup();
+
+    // Square cost matrix: cost = -co-occurrence so minimizing cost maximizes
+    // agreement; padding cells stay 0.0. Counts cast to f32 are exact below
+    // ~16.7M frames (f32 has a 24-bit mantissa); 10ms frames capped at 24h
+    // (MAX_FRAMES) stay within that range.
+    let n = hyp_ids.len().max(ref_ids.len());
+    let mut cost = vec![vec![0.0_f32; n]; n];
+    for (&(h, r), &count) in &cooccurrence {
+        if let (Ok(i), Ok(j)) = (hyp_ids.binary_search(&h), ref_ids.binary_search(&r)) {
+            cost[i][j] = -(count as f32);
+        }
+    }
+
+    let assignment = match crate::hungarian::solve(&cost) {
+        Some(a) => a,
+        None => return HashMap::new(),
+    };
 
     let mut mapping: HashMap<u32, u32> = HashMap::new();
-    let mut used_ref: HashSet<u32> = HashSet::new();
-
-    for ((h, r), _) in pairs {
-        if !mapping.contains_key(&h) && !used_ref.contains(&r) {
-            mapping.insert(h, r);
-            used_ref.insert(r);
+    for (row, &col) in assignment.iter().enumerate() {
+        // Map only real (non-padding) speakers that actually co-occur — the
+        // solver may pair leftover rows/cols through zero-cost padding cells.
+        if let (Some(&h), Some(&r)) = (hyp_ids.get(row), ref_ids.get(col)) {
+            if cooccurrence.get(&(h, r)).copied().unwrap_or(0) > 0 {
+                mapping.insert(h, r);
+            }
         }
     }
 
@@ -268,6 +406,124 @@ pub fn compute_der_from_rttm(
         .collect();
 
     compute_der(&ref_turns, hypothesis, collar)
+}
+
+/// Per-speaker recall: how much of one reference speaker's speech the mapped
+/// hypothesis speaker recovered.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpeakerRecall {
+    /// Reference speaker id.
+    pub speaker: u32,
+    /// Reference frames (10 ms, collar-excluded) for this speaker.
+    pub ref_frames: u64,
+    /// Of those, frames also covered by the mapped hypothesis speaker.
+    pub recalled_frames: u64,
+    /// `recalled_frames / ref_frames`, in [0, 1].
+    pub recall: f64,
+}
+
+/// Overlap-aware DER decomposition: the headline DER plus single-speaker- and
+/// overlap-region DERs and per-speaker recall.
+///
+/// Headline DER hides where error comes from — on overlap-heavy audio the miss
+/// term dominates, so a total-DER ceiling cannot tell healthy diarization from
+/// collapse. This split makes accuracy targets interpretable (finding F37).
+#[derive(Debug, Clone)]
+pub struct DerDecomposition {
+    /// Headline overlap-inclusive DER (== [`compute_der`]).
+    pub total: DerResult,
+    /// DER over single-speaker reference regions only
+    /// (== [`compute_der_single_speaker_regions`]).
+    pub single_speaker: DerResult,
+    /// DER over overlap reference regions only (>= 2 concurrent reference speakers).
+    pub overlap: DerResult,
+    /// Per-speaker recall, sorted by reference speaker id.
+    pub per_speaker_recall: Vec<SpeakerRecall>,
+}
+
+/// { collar >= 0.0 }
+/// pub fn compute_der_decomposition( reference: &[SpeakerTurn], hypothesis: &[SpeakerTurn], collar: f64, ) -> DerDecomposition
+/// { ret.total.der >= 0.0 && ret.total.der <= 1.0 }
+/// Compute the overlap-aware DER decomposition (total / single-speaker / overlap
+/// DER + per-speaker recall) in one call. Intended for bench artifacts and the
+/// long-form AMI gate; the headline path stays on [`compute_der`].
+pub fn compute_der_decomposition(
+    reference: &[SpeakerTurn],
+    hypothesis: &[SpeakerTurn],
+    collar: f64,
+) -> DerDecomposition {
+    DerDecomposition {
+        total: der_core(reference, hypothesis, collar, Region::All),
+        single_speaker: der_core(reference, hypothesis, collar, Region::SingleSpeaker),
+        overlap: der_core(reference, hypothesis, collar, Region::Overlap),
+        per_speaker_recall: compute_per_speaker_recall(reference, hypothesis, collar),
+    }
+}
+
+/// Per-reference-speaker recall over non-collar frames, using the same optimal
+/// hyp->ref mapping as [`compute_der`].
+fn compute_per_speaker_recall(
+    reference: &[SpeakerTurn],
+    hypothesis: &[SpeakerTurn],
+    collar: f64,
+) -> Vec<SpeakerRecall> {
+    if reference.is_empty() || !collar.is_finite() || collar < 0.0 {
+        return Vec::new();
+    }
+
+    let resolution = 0.01;
+    const MAX_FRAMES: usize = 24 * 3600 * 100;
+    let max_time = reference
+        .iter()
+        .chain(hypothesis.iter())
+        .map(|t| t.time.end)
+        .fold(0.0f64, f64::max);
+    if !max_time.is_finite() || max_time < 0.0 {
+        return Vec::new();
+    }
+    let n_frames = ((max_time / resolution).ceil() as usize + 1).min(MAX_FRAMES);
+
+    let collar_mask = build_collar_mask(reference, collar, resolution, n_frames);
+    let ref_frames = build_speaker_frames(reference, resolution, n_frames);
+    let hyp_frames = build_speaker_frames(hypothesis, resolution, n_frames);
+    let mapping = optimal_speaker_mapping(&ref_frames, &hyp_frames, &collar_mask);
+
+    // Invert the 1-to-1 hyp->ref mapping to ref->hyp.
+    let mut ref_to_hyp: HashMap<u32, u32> = HashMap::new();
+    for (&h, &r) in &mapping {
+        ref_to_hyp.insert(r, h);
+    }
+
+    let mut ref_count: HashMap<u32, u64> = HashMap::new();
+    let mut recalled: HashMap<u32, u64> = HashMap::new();
+    for i in 0..n_frames {
+        if collar_mask[i] {
+            continue;
+        }
+        for &r in &ref_frames[i] {
+            *ref_count.entry(r).or_insert(0) += 1;
+            if let Some(&h) = ref_to_hyp.get(&r) {
+                if hyp_frames[i].contains(&h) {
+                    *recalled.entry(r).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+
+    let mut out: Vec<SpeakerRecall> = ref_count
+        .into_iter()
+        .map(|(speaker, ref_frames)| {
+            let recalled_frames = recalled.get(&speaker).copied().unwrap_or(0);
+            SpeakerRecall {
+                speaker,
+                ref_frames,
+                recalled_frames,
+                recall: recalled_frames as f64 / ref_frames as f64,
+            }
+        })
+        .collect();
+    out.sort_by_key(|s| s.speaker);
+    out
 }
 
 #[allow(clippy::unwrap_used)]
@@ -371,5 +627,136 @@ mod tests {
         // Should not panic or allocate unbounded memory.
         let result = compute_der(&reference, &hypothesis, 0.0);
         assert_eq!(result.der, 0.0);
+    }
+
+    #[test]
+    fn der_result_frame_counts_are_consistent() {
+        // Two reference speakers, hypothesis covers only the first → real miss
+        // frames, so the counts are non-trivial.
+        let reference = vec![turn(0, 0.0, 3.0), turn(1, 3.0, 6.0)];
+        let hypothesis = vec![turn(0, 0.0, 3.0)];
+        let r = compute_der(&reference, &hypothesis, 0.0);
+        assert!(
+            r.total_ref_frames > 0,
+            "expected non-empty reference frames"
+        );
+        // der == sum(error frames) / total_ref_frames
+        let expected = (r.missed_frames + r.false_alarm_frames + r.confusion_frames) as f64
+            / r.total_ref_frames as f64;
+        assert!(
+            (r.der - expected).abs() < 1e-9,
+            "der {} != error-frames/ref-frames {expected}",
+            r.der
+        );
+        // total_ref_frames are 10 ms frames, so * 0.01 == total_speech seconds.
+        assert!(
+            (r.total_ref_frames as f64 * 0.01 - r.total_speech).abs() < 1e-9,
+            "frame count * 0.01 ({}) != total_speech ({})",
+            r.total_ref_frames as f64 * 0.01,
+            r.total_speech
+        );
+    }
+
+    #[test]
+    fn single_speaker_der_excludes_overlap_frames() {
+        // ref: spk0 [0,4), spk1 [2,6) → [2,4) is a 2-speaker overlap region.
+        let reference = vec![turn(0, 0.0, 4.0), turn(1, 2.0, 6.0)];
+        // Empty hypothesis → everything in the scored subset is a miss.
+        let hypothesis: Vec<SpeakerTurn> = vec![];
+        let full = compute_der(&reference, &hypothesis, 0.0);
+        let single = compute_der_single_speaker_regions(&reference, &hypothesis, 0.0);
+        // Overlap frames contribute 2 ref speakers/frame to the headline metric but
+        // are entirely excluded from the single-speaker metric.
+        assert!(
+            single.total_ref_frames < full.total_ref_frames,
+            "overlap frames must be excluded: single={} full={}",
+            single.total_ref_frames,
+            full.total_ref_frames
+        );
+        // Single-speaker regions are [0,2) and [4,6) ≈ 400 frames at 10 ms.
+        assert!(
+            (380..=420).contains(&single.total_ref_frames),
+            "expected ~400 single-speaker frames, got {}",
+            single.total_ref_frames
+        );
+        // Still a full miss over the single-speaker subset.
+        assert!(
+            (single.miss_rate - 1.0).abs() < 1e-9,
+            "miss={}",
+            single.miss_rate
+        );
+    }
+
+    #[test]
+    fn single_speaker_der_ignores_overlap_mismatch() {
+        // ref: spk0 [0,6) with spk1 also active on [4,6) → [4,6) is the overlap.
+        let reference = vec![turn(0, 0.0, 6.0), turn(1, 4.0, 6.0)];
+        // hyp: spk0 over the whole span. It is correct on the single-speaker region
+        // [0,4) and only "wrong" (misses spk1) inside the excluded overlap [4,6).
+        let hypothesis = vec![turn(0, 0.0, 6.0)];
+        let single = compute_der_single_speaker_regions(&reference, &hypothesis, 0.0);
+        assert!(
+            single.der < 0.01,
+            "single-speaker DER must ignore the overlap-region mismatch, got {single}"
+        );
+    }
+
+    #[test]
+    fn decomposition_splits_overlap_and_recall() {
+        // ref: spk0 [0,6), spk1 [3,6) → [3,6) is overlap, [0,3) is single (spk0).
+        let reference = vec![turn(0, 0.0, 6.0), turn(1, 3.0, 6.0)];
+        // hyp: spk0 over the whole span — never recovers spk1.
+        let hypothesis = vec![turn(0, 0.0, 6.0)];
+        let d = compute_der_decomposition(&reference, &hypothesis, 0.0);
+
+        // Total DER: spk1 missed across the overlap half → ~1/3.
+        assert!((d.total.der - 1.0 / 3.0).abs() < 0.02, "total {}", d.total);
+        // The single-speaker region [0,3) is perfectly diarized.
+        assert!(d.single_speaker.der < 0.02, "single {}", d.single_speaker);
+        // Overlap region [3,6): one of two speakers is missed every frame → ~0.5.
+        assert!((d.overlap.der - 0.5).abs() < 0.02, "overlap {}", d.overlap);
+
+        // Per-speaker recall: spk0 fully recovered, spk1 entirely missed.
+        let r0 = d
+            .per_speaker_recall
+            .iter()
+            .find(|s| s.speaker == 0)
+            .expect("spk0 recall");
+        let r1 = d
+            .per_speaker_recall
+            .iter()
+            .find(|s| s.speaker == 1)
+            .expect("spk1 recall");
+        assert!((r0.recall - 1.0).abs() < 0.02, "spk0 recall {}", r0.recall);
+        assert!(r1.recall < 0.02, "spk1 recall {}", r1.recall);
+    }
+
+    #[test]
+    fn optimal_mapping_beats_greedy_on_counterexample() {
+        // Co-occurrence (hyp, ref): (0,0)=10, (0,1)=9, (1,0)=8.
+        // Greedy picks 0->0 (10 correct) and leaves hyp 1 unmapped.
+        // Optimal picks 0->1 (9) + 1->0 (8) = 17 correct.
+        let mut ref_frames: Vec<Vec<u32>> = Vec::new();
+        let mut hyp_frames: Vec<Vec<u32>> = Vec::new();
+        for _ in 0..10 {
+            ref_frames.push(vec![0]);
+            hyp_frames.push(vec![0]);
+        }
+        for _ in 0..9 {
+            ref_frames.push(vec![1]);
+            hyp_frames.push(vec![0]);
+        }
+        for _ in 0..8 {
+            ref_frames.push(vec![0]);
+            hyp_frames.push(vec![1]);
+        }
+        let collar_mask = vec![false; ref_frames.len()];
+        let mapping = optimal_speaker_mapping(&ref_frames, &hyp_frames, &collar_mask);
+        assert_eq!(
+            mapping.get(&0),
+            Some(&1),
+            "hyp 0 must map to ref 1 (optimal), not ref 0 (greedy)"
+        );
+        assert_eq!(mapping.get(&1), Some(&0), "hyp 1 must map to ref 0");
     }
 }

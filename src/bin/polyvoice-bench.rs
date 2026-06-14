@@ -1,8 +1,9 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! polyvoice-bench — DER on a {audio,rttm} dataset directory using the legacy v0.5 Pipeline.
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use polyvoice::der::compute_der;
+use polyvoice::der::{compute_der, compute_der_decomposition};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline;
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
@@ -40,6 +41,12 @@ struct ModelHash {
 }
 
 #[derive(Serialize)]
+struct PerSpeakerRecall {
+    speaker: u32,
+    recall: f64,
+}
+
+#[derive(Serialize)]
 struct PerFileResult {
     filename: String,
     der_collar: f64,
@@ -47,6 +54,12 @@ struct PerFileResult {
     miss_rate: f64,
     false_alarm_rate: f64,
     confusion_rate: f64,
+    /// Overlap-aware decomposition (F37): DER over single-speaker reference regions
+    /// only, DER over overlap regions only (>= 2 ref speakers), and per-speaker
+    /// recall. All at the requested collar. Makes overlap-heavy DER interpretable.
+    der_single_speaker: f64,
+    der_overlap: f64,
+    per_speaker_recall: Vec<PerSpeakerRecall>,
     rt_factor: f64,
     ref_speakers: usize,
     hyp_speakers: usize,
@@ -74,8 +87,15 @@ struct BenchReport {
     profile: String,
     files_processed: usize,
     files_skipped: usize,
-    der_collar: f64,
-    der_no_collar: f64,
+    /// Mean of per-file DER (macro) at the requested collar and at collar=0.
+    der_collar_macro: f64,
+    der_no_collar_macro: f64,
+    /// Duration-weighted DER (micro): sum of error frames / sum of reference
+    /// frames — comparable to pyannote/speakrs headline numbers.
+    der_collar_micro: f64,
+    der_no_collar_micro: f64,
+    collar_secs: f64,
+    averaging_policy: &'static str,
     miss: f64,
     false_alarm: f64,
     confusion: f64,
@@ -210,7 +230,8 @@ fn main() -> Result<()> {
             turns
         };
 
-        let der = compute_der(&ref_turns, &result.turns, args.collar);
+        let decomp = compute_der_decomposition(&ref_turns, &result.turns, args.collar);
+        let der = decomp.total;
         let der_no_collar = compute_der(&ref_turns, &result.turns, 0.0);
 
         let ref_speakers: HashSet<_> = ref_turns.iter().map(|t| t.speaker.0).collect();
@@ -230,6 +251,16 @@ fn main() -> Result<()> {
         totals.false_alarm += der.false_alarm_rate;
         totals.confusion += der.confusion_rate;
         totals.count += 1;
+        // Frame sums for duration-weighted micro-averages — kept strictly
+        // separate per collar pass (collar and no-collar frames must not mix).
+        totals.collar_missed_frames += der.missed_frames;
+        totals.collar_fa_frames += der.false_alarm_frames;
+        totals.collar_confusion_frames += der.confusion_frames;
+        totals.collar_ref_frames += der.total_ref_frames;
+        totals.no_collar_missed_frames += der_no_collar.missed_frames;
+        totals.no_collar_fa_frames += der_no_collar.false_alarm_frames;
+        totals.no_collar_confusion_frames += der_no_collar.confusion_frames;
+        totals.no_collar_ref_frames += der_no_collar.total_ref_frames;
         total_audio_secs += audio_secs;
         total_runtime_secs += runtime_secs;
 
@@ -253,6 +284,16 @@ fn main() -> Result<()> {
             miss_rate: der.miss_rate * 100.0,
             false_alarm_rate: der.false_alarm_rate * 100.0,
             confusion_rate: der.confusion_rate * 100.0,
+            der_single_speaker: decomp.single_speaker.der * 100.0,
+            der_overlap: decomp.overlap.der * 100.0,
+            per_speaker_recall: decomp
+                .per_speaker_recall
+                .iter()
+                .map(|s| PerSpeakerRecall {
+                    speaker: s.speaker,
+                    recall: s.recall,
+                })
+                .collect(),
             rt_factor,
             ref_speakers: ref_count,
             hyp_speakers: hyp_count,
@@ -263,8 +304,30 @@ fn main() -> Result<()> {
     }
 
     let n = totals.count.max(1) as f64;
+    let der_collar_macro = (totals.der_total / n) * 100.0;
+    let der_no_collar_macro = (totals.der_no_collar_total / n) * 100.0;
+    let der_collar_micro = micro_der(
+        totals.collar_missed_frames,
+        totals.collar_fa_frames,
+        totals.collar_confusion_frames,
+        totals.collar_ref_frames,
+    );
+    let der_no_collar_micro = micro_der(
+        totals.no_collar_missed_frames,
+        totals.no_collar_fa_frames,
+        totals.no_collar_confusion_frames,
+        totals.no_collar_ref_frames,
+    );
+
+    println!(
+        "\n=== Aggregate DER over {} files (collar={:.2}s) ===",
+        totals.count, args.collar
+    );
+    println!("  der_collar    : macro={der_collar_macro:.2}%  micro={der_collar_micro:.2}%");
+    println!("  der_no_collar : macro={der_no_collar_macro:.2}%  micro={der_no_collar_micro:.2}%");
+
     let report = BenchReport {
-        schema: "polyvoice-bench-v0.6",
+        schema: "polyvoice-bench-v0.8",
         crate_version: env!("CARGO_PKG_VERSION"),
         git_sha: git_sha(),
         host_arch: std::env::consts::ARCH.to_owned(),
@@ -274,8 +337,12 @@ fn main() -> Result<()> {
         profile: args.profile.clone(),
         files_processed: totals.count,
         files_skipped,
-        der_collar: (totals.der_total / n) * 100.0,
-        der_no_collar: (totals.der_no_collar_total / n) * 100.0,
+        der_collar_macro,
+        der_no_collar_macro,
+        der_collar_micro,
+        der_no_collar_micro,
+        collar_secs: args.collar,
+        averaging_policy: "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
         miss: (totals.miss / n) * 100.0,
         false_alarm: (totals.false_alarm / n) * 100.0,
         confusion: (totals.confusion / n) * 100.0,
@@ -304,6 +371,27 @@ struct Aggregate {
     false_alarm: f64,
     confusion: f64,
     count: usize,
+    // Frame sums for duration-weighted micro-averages (collar pass).
+    collar_missed_frames: u64,
+    collar_fa_frames: u64,
+    collar_confusion_frames: u64,
+    collar_ref_frames: u64,
+    // Frame sums (no-collar pass).
+    no_collar_missed_frames: u64,
+    no_collar_fa_frames: u64,
+    no_collar_confusion_frames: u64,
+    no_collar_ref_frames: u64,
+}
+
+/// Duration-weighted micro-average DER as a percentage: total error frames over
+/// total reference frames (not a mean of per-file ratios). Returns 0.0 when no
+/// reference frames were seen.
+fn micro_der(missed: u64, false_alarm: u64, confusion: u64, ref_frames: u64) -> f64 {
+    if ref_frames == 0 {
+        0.0
+    } else {
+        (missed + false_alarm + confusion) as f64 / ref_frames as f64 * 100.0
+    }
 }
 
 #[allow(clippy::unwrap_used)]

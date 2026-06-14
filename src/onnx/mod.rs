@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! ONNX-based speaker embedding extractor with a session pool.
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
@@ -88,6 +89,10 @@ pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
 /// Wraps `ort::session::Session` in a [`crossbeam_queue::ArrayQueue`]
 /// so that multiple threads can extract embeddings concurrently without lock contention.
 #[cfg(feature = "onnx")]
+#[deprecated(
+    since = "0.7.0",
+    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+)]
 pub struct OnnxEmbeddingExtractor {
     pool: crossbeam_queue::ArrayQueue<ort::session::Session>,
     embedding_dim: usize,
@@ -217,6 +222,10 @@ impl Drop for PooledSession<'_> {
 
 /// Stub when the `onnx` feature is disabled.
 #[cfg(not(feature = "onnx"))]
+#[deprecated(
+    since = "0.7.0",
+    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+)]
 pub struct OnnxEmbeddingExtractor;
 
 #[cfg(not(feature = "onnx"))]
