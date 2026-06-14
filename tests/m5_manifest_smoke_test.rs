@@ -12,8 +12,7 @@
 //! M5 calibration discovered that powerset's SincNet rank-1 weights resist
 //! per-channel quantization (compression ratio ~1.04× instead of ~4×). The
 //! actual Mobile bundle lands around 14 MB; we cap at 15 MB to retain a hard
-//! ceiling without papering over the regression. See
-//! `docs/strategy/m5-quantization-notes.md` for the trade-off rationale.
+//! ceiling without papering over the regression.
 
 #![cfg(feature = "download")]
 
