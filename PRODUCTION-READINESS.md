@@ -139,9 +139,9 @@ All DER figures are sourced from `tests/der_baseline.json`.
 
 | Asset | Status |
 |-------|--------|
-| README | Badges, multi-language quick starts, canonical benchmark table |
-| `docs/` | Formalism, glossary, pipeline, severity, migrating guides |
-| `AGENTS.md` | Coding guidelines for contributors |
+| README | Hook, install, usage, and links to the detailed docs |
+| `docs/` | Formalism, glossary, pipeline, severity, migrating guides, benchmarks |
+| `CONTRIBUTING.md` | Setup, test, and contribution guidelines |
 | FFI examples | C header + Python tests |
 
 ---

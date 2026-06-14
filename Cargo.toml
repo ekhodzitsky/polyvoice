@@ -9,9 +9,9 @@ repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "onnx", "audio", "streaming"]
 categories = ["multimedia::audio", "science"]
 # Allowlist (F28/F50): ship only what a consumer needs to build/use the crate.
-# Everything else — per-module COAD docs (MODULE_CONTRACT/README/TODO), .coad/,
-# docs/, scripts/, tests/, benchmarks/, demo.gif, VERSION, AGENTS.md, models/*.onnx —
-# is excluded automatically. NOTE: src/models/{manifest.toml,signing.pub.base64}
+# Everything else — per-module COAD docs (MODULE_CONTRACT/README/TODO), docs/,
+# scripts/, tests/, benchmarks/, demo.gif, models/*.onnx — is excluded
+# automatically. NOTE: src/models/{manifest.toml,signing.pub.base64}
 # are include_str!'d at compile time, and examples/hybrid_benchmark.rs +
 # benches/der_ami.rs are declared targets — all MUST stay listed or the published
 # crate fails to build/package.
