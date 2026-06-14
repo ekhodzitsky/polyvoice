@@ -149,8 +149,7 @@ let sr = SampleRate::new(16000).unwrap();
 let result = pipeline.run(&samples, sr)?;
 ```
 
-See `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md` for the full
-builder specification.
+See the `PipelineBuilder` rustdoc for the full builder API.
 
 ## Overlap Detection
 

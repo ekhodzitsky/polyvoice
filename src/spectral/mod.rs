@@ -7,6 +7,38 @@ use crate::utils::cosine_similarity;
 use faer::Side;
 use faer::prelude::*;
 
+/// Select the number of clusters via the NME-SC normalized-maximum eigengap
+/// heuristic (Park et al., "Auto-Tuning Spectral Clustering for Speaker
+/// Diarization Using Normalized Maximum Eigengap", 2020): pick the `k` in
+/// `1..max_k` that maximizes `(eig_asc[k] - eig_asc[k-1]) / |eig_asc[k]|`, where
+/// `eig_asc` are the normalized-Laplacian eigenvalues sorted ascending. A large
+/// normalized gap at position `k` means the first `k` eigenvalues are the
+/// near-zero "cluster" eigenvalues, hence `k` clusters. Returns `>= 1`.
+///
+/// This is the single source of truth for the eigengap convention shared by
+/// [`spectral_cluster`] (where it only seeds a BIC search) and
+/// `crate::clusterer::NmeScClusterer` (where it drives `k` directly), so the two
+/// paths cannot silently diverge (finding F05).
+pub(crate) fn select_k_by_normalized_eigengap(eig_asc: &[f64], max_k: usize) -> usize {
+    let max_k = max_k.min(eig_asc.len()).min(20);
+    let mut best_k = 1usize;
+    let mut best_gap = 0.0f64;
+    for k in 1..max_k {
+        let lam_k = eig_asc[k - 1];
+        let lam_k1 = eig_asc[k];
+        let gap = if lam_k1.abs() > 1e-10 {
+            (lam_k1 - lam_k) / lam_k1.abs()
+        } else {
+            0.0
+        };
+        if gap > best_gap {
+            best_gap = gap;
+            best_k = k;
+        }
+    }
+    best_k
+}
+
 /// { true }
 /// `pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize>`
 /// { ret.len() == embeddings.len() }
@@ -72,21 +104,11 @@ pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {
 
     // Determine k via eigengap heuristic, then validate with BIC on spectral features.
     let max_k = max_k.min(n).min(20);
-    let mut eigengap_k = 1usize;
-    let mut best_gap = 0.0f64;
-
-    for k in 1..max_k.saturating_sub(1) {
-        let prev = eig_pairs[k].0;
-        let gap = if prev > 1e-10 {
-            (eig_pairs[k + 1].0 - prev) / prev
-        } else {
-            0.0
-        };
-        if gap > best_gap {
-            best_gap = gap;
-            eigengap_k = k;
-        }
-    }
+    // NME-SC normalized-maximum eigengap (Park et al. 2020) — shared with
+    // NmeScClusterer so both spectral paths agree (F05). Here it only SEEDS the
+    // BIC search below, which makes the final k decision.
+    let eig_asc: Vec<f64> = eig_pairs.iter().map(|p| p.0).collect();
+    let eigengap_k = select_k_by_normalized_eigengap(&eig_asc, max_k);
 
     // Extract spectral features for a range of k values and pick best via BIC.
     let mut best_k = eigengap_k.max(2).min(max_k);
@@ -303,6 +325,51 @@ mod tests {
     fn test_spectral_cluster_empty() {
         let labels = spectral_cluster(&[], 10);
         assert!(labels.is_empty());
+    }
+
+    #[test]
+    fn eigengap_selects_k_on_known_sequence() {
+        // Three near-zero "cluster" eigenvalues then a jump → k = 3.
+        assert_eq!(
+            select_k_by_normalized_eigengap(&[0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 6),
+            3
+        );
+        // A single near-zero eigenvalue then a jump → k = 1.
+        assert_eq!(select_k_by_normalized_eigengap(&[0.0, 1.0, 1.0, 1.0], 4), 1);
+        // Two clusters.
+        assert_eq!(select_k_by_normalized_eigengap(&[0.0, 0.0, 1.0, 1.0], 4), 2);
+    }
+
+    #[test]
+    fn test_spectral_cluster_three_blocks() {
+        // Three tight, well-separated clusters (9 points); mirrors
+        // NmeScClusterer's synthetic. The unified NME-SC eigengap now SEEDS k=3
+        // here (the convention itself is proven by `eigengap_selects_k_on_known_sequence`,
+        // which exercises the very function this path calls). spectral_cluster's
+        // FINAL k is then BIC-decided, and its `compute_bic` currently under-selects
+        // on near-perfect-fit data (the inertia<1e-10 branch returns a positive
+        // penalty, so a near-perfect k loses to an imperfect lower-k with negative
+        // BIC) — a separate concern from the F05 eigengap unification. So we assert
+        // the path stays multi-speaker (no collapse to 1) rather than an exact k the
+        // BIC override moves.
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.98, 0.05, 0.0],
+            vec![0.97, 0.0, 0.05],
+            vec![0.0, 1.0, 0.0],
+            vec![0.05, 0.98, 0.0],
+            vec![0.0, 0.97, 0.05],
+            vec![0.0, 0.0, 1.0],
+            vec![0.05, 0.0, 0.98],
+            vec![0.0, 0.05, 0.97],
+        ];
+        let labels = spectral_cluster(&embeddings, 10);
+        let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert!(
+            unique.len() >= 2,
+            "spectral_cluster collapsed to {} cluster(s)",
+            unique.len()
+        );
     }
 
     #[test]

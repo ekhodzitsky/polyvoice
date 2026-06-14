@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! ONNX speaker embedding extractor (WeSpeaker, ECAPA-TDNN, etc.).
 //!
 //! Loads an ONNX model and runs log-mel filterbank + CMVN preprocessing
@@ -14,6 +15,10 @@ use crate::utils::l2_normalize;
 use std::path::Path;
 
 #[cfg(feature = "onnx")]
+#[deprecated(
+    since = "0.7.0",
+    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+)]
 pub struct FbankOnnxExtractor {
     pool: crossbeam_queue::ArrayQueue<ort::session::Session>,
     embedding_dim: usize,
@@ -160,6 +165,10 @@ impl Drop for PooledSession<'_> {
 
 #[cfg(not(feature = "onnx"))]
 #[derive(Debug)]
+#[deprecated(
+    since = "0.7.0",
+    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+)]
 pub struct FbankOnnxExtractor;
 
 #[cfg(not(feature = "onnx"))]

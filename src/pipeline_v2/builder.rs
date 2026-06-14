@@ -1,6 +1,4 @@
 //! M6a — `PipelineBuilder` + `ConfigError`.
-//!
-//! Spec: `docs/superpowers/specs/2026-05-07-m6a-pipeline-v2-design.md` §4.
 
 use crate::clusterer::Clusterer;
 use crate::embedder::Embedder;

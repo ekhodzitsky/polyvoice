@@ -106,7 +106,7 @@ impl fmt::Display for SpeakerId {
 /// `Custom` defers all model selection to the caller and is used by `PipelineBuilder`
 /// when individual `Segmenter`/`Embedder`/`Clusterer` instances are supplied directly.
 ///
-/// Added in v0.6 (M0). See `docs/superpowers/specs/2026-05-07-perfect-diarization-roadmap-v1-design.md`
+/// Added in v0.6 (M0).
 /// §5.1 for the full motivation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Profile {

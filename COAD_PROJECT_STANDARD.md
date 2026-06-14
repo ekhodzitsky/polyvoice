@@ -140,3 +140,19 @@ cargo test
 cargo clippy --all-targets --all-features -- -D warnings
 cargo doc --no-deps
 ```
+
+## Contract-drift nudge (advisory)
+
+CI runs `scripts/check-contract-drift.sh` as a **non-blocking** job: when a PR
+changes `src/<module>/mod.rs` without also touching the sibling
+`src/<module>/MODULE_CONTRACT.md`, it emits a GitHub `::warning::` as a reminder
+to re-check the contract. It never fails the build.
+
+- Run locally: `bash scripts/check-contract-drift.sh [diff-base]` (default
+  base `origin/master`).
+- Opt out for a change that genuinely does not affect the contract: include
+  `[skip-contract-drift]` in the commit message.
+
+This is a *nudge*, not a gate. It deliberately does **not** enforce the
+`context_budget` advisory fields (`max_source_lines` etc.) — those count inline
+`#[cfg(test)]` modules and would produce noise.

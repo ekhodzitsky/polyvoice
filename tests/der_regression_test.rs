@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! DER regression test against committed `tests/der_baseline.json`.
 //!
 //! Uses the legacy v0.5 pipeline. Must stay within `tolerance` of the baseline
@@ -19,6 +20,16 @@ use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
 use serde::Deserialize;
 use std::path::Path;
+
+/// Release-gate signal: when `POLYVOICE_REQUIRE_DATA=1` is set (the release gate
+/// exports it), missing test data is a hard failure instead of a silent skip —
+/// so a partial cache/download miss can never green-light a release without
+/// actually running DER. Unset (local dev) keeps the soft-skip ergonomics.
+fn require_data() -> bool {
+    std::env::var("POLYVOICE_REQUIRE_DATA")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
 
 #[derive(Deserialize)]
 struct Baseline {
@@ -145,7 +156,12 @@ fn der_regression_e2e_smoke() {
     let rttm_path = Path::new("tests/data/e2e-smoke/rttm/fuzfh.rttm");
 
     if !wav_path.is_file() {
-        println!("e2e-smoke WAV not found — skipping");
+        assert!(
+            !require_data(),
+            "release gate requires e2e-smoke data but it is missing: {}",
+            wav_path.display()
+        );
+        println!("e2e-smoke WAV not found — skipping (set POLYVOICE_REQUIRE_DATA=1 to require it)");
         return;
     }
 
@@ -187,7 +203,12 @@ fn der_regression_ami_test_single() {
     };
 
     if !wav_path.is_file() {
-        println!("AMI WAV not found — skipping");
+        assert!(
+            !require_data(),
+            "release gate requires AMI test data but it is missing: {}",
+            wav_path.display()
+        );
+        println!("AMI WAV not found — skipping (set POLYVOICE_REQUIRE_DATA=1 to require it)");
         return;
     }
 

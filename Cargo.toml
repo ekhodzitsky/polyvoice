@@ -1,23 +1,33 @@
 [package]
 name = "polyvoice"
-version = "0.6.9"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.85.0"
 description = "Speaker diarization for Rust — who spoke when. ONNX-powered: Silero VAD, WeSpeaker embeddings, Pyannote segmentation, K-means/AHC clustering, overlap detection."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
-keywords = ["diarization", "speaker", "onnx", "stt", "voice"]
+keywords = ["diarization", "speaker", "onnx", "audio", "streaming"]
 categories = ["multimedia::audio", "science"]
-exclude = [
-  "models/*.onnx",
-  "models/*.onnx.data",
-  "models/int8/*.onnx",
-  "models/int8/*.onnx.data",
-  "data/",
-  "fuzz/",
-  "python/",
-  "docs/superpowers/",
-  "scripts/__pycache__/",
+# Allowlist (F28/F50): ship only what a consumer needs to build/use the crate.
+# Everything else — per-module COAD docs (MODULE_CONTRACT/README/TODO), .coad/,
+# docs/, scripts/, tests/, benchmarks/, demo.gif, VERSION, AGENTS.md, models/*.onnx —
+# is excluded automatically. NOTE: src/models/{manifest.toml,signing.pub.base64}
+# are include_str!'d at compile time, and examples/hybrid_benchmark.rs +
+# benches/der_ami.rs are declared targets — all MUST stay listed or the published
+# crate fails to build/package.
+include = [
+  "src/**/*.rs",
+  "src/models/manifest.toml",
+  "src/models/signing.pub.base64",
+  "benches/der_ami.rs",
+  "examples/hybrid_benchmark.rs",
+  "include/*.h",
+  # Leading slash anchors to the package root — a bare name matches at ANY depth
+  # (gitignore globbing), which would drag in every per-module README.md etc.
+  "/Cargo.toml",
+  "/README.md",
+  "/LICENSE",
+  "/CHANGELOG.md",
 ]
 
 [package.metadata.release]
@@ -30,6 +40,12 @@ pre-release-replacements = [
     { file = "python/pyproject.toml", search = "^version = \".*\"", replace = "version = \"{{version}}\"" },
     { file = "tests/cli_smoke_test.rs", search = "polyvoice [0-9]+\\.[0-9]+\\.[0-9]+", replace = "polyvoice {{version}}" },
 ]
+
+# docs.rs builds with default features (default = []), which would hide the
+# entire ONNX / pipeline_v2 API. Document the v1.0 surface explicitly (F30).
+# TODO: drop the ort RC pin once ort 2.0.0 stable lands.
+[package.metadata.docs.rs]
+features = ["onnx", "segmentation", "embedder", "clusterer", "resegmentation", "download", "spectral"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

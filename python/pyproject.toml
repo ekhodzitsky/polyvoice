@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "polyvoice"
-version = "0.6.9"
+version = "0.7.0"
 description = "Speaker diarization for Python — who spoke when. Rust + ONNX, no Python runtime overhead. K-means/AHC clustering, overlap detection."
 readme = "README.md"
 license = {text = "MIT"}

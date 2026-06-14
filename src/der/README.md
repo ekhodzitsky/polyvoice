@@ -6,8 +6,8 @@ Computes Diarization Error Rate (DER) between reference and hypothesis speaker
 annotations. This is the single source of DER truth for the polyvoice project.
 
 Uses frame-based evaluation at 10ms resolution with a configurable forgiveness
-collar around reference boundaries. Speaker IDs are mapped optimally via greedy
-1-to-1 matching on co-occurrence counts.
+collar around reference boundaries. Speaker IDs are mapped optimally via
+Hungarian (Kuhn-Munkres) 1-to-1 matching on co-occurrence counts.
 
 ## Surfaces
 
@@ -46,5 +46,13 @@ cargo clippy --all-targets --all-features -- -D warnings
 - The `benches/der_ami.rs` benchmark currently duplicates a simplified DER
   implementation instead of using this module. See TODO.md.
 - Standard collar value is 0.25s (per NIST evaluation protocol).
-- Greedy mapping is not globally optimal but is fast and sufficient for
-  diarization evaluation.
+- **Approximate DER:** the boundary collar excludes frames within `collar` of any
+  reference boundary from BOTH numerator and denominator, and there is no UEM
+  support, so the DER is not bit-identical to `pyannote.metrics` — quote it with
+  the collar used. `DerResult` exposes raw 10ms-frame counts
+  (`total_ref_frames`, `missed_frames`, `false_alarm_frames`, `confusion_frames`)
+  for duration-weighted micro-averaging across files.
+- Speaker mapping uses the shared Kuhn-Munkres solver (`crate::hungarian`),
+  giving the globally optimal label assignment (matching pyannote.metrics).
+  Greedy 1-to-1 mapping was replaced in task B-1 because it over-counted
+  confusion on cross-talk/fragmented files.

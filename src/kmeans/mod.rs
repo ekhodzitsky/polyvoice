@@ -64,6 +64,14 @@ fn kmeans_pp_with_seed(
             }
         }
         let total: f64 = dists.iter().sum();
+        // Degenerate-seeding guard (mirrors src/spectral/mod.rs): when every
+        // remaining point already sits on a chosen centroid (collapsed /
+        // homogeneous embeddings) the cumulative-sum sampler would fall through
+        // and pick duplicate centroids; a non-finite total would do the same.
+        // Stop seeding and let Lloyd's run on the centroids gathered so far.
+        if !total.is_finite() || total <= 0.0 {
+            break;
+        }
         let target = rng.f64() * total;
         let mut cumsum = 0.0;
         let mut chosen = 0;
@@ -329,5 +337,36 @@ mod tests {
         let embeddings = vec![vec![1.0, 0.0], vec![0.0, 1.0, 0.0]];
         let labels = kmeans_pp(&embeddings, 2, 10);
         assert_eq!(labels, vec![0, 0]);
+    }
+
+    #[test]
+    fn identical_embeddings_yield_single_cluster() {
+        // All embeddings collapse to one point (F04): the degenerate-seeding
+        // guard must keep this to a single effective cluster, with no panic.
+        let embeddings: Vec<Vec<f32>> = vec![vec![1.0, 0.0]; 12];
+        let labels = kmeans_pp(&embeddings, 4, 20);
+        assert_eq!(labels.len(), 12);
+        let distinct: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(
+            distinct.len(),
+            1,
+            "identical embeddings must form one cluster"
+        );
+    }
+
+    #[test]
+    fn fewer_distinct_points_than_k_caps_effective_clusters() {
+        // Only two distinct values but k=4 requested: the guard prevents
+        // duplicate centroids, so exactly two effective clusters result.
+        let mut embeddings: Vec<Vec<f32>> = vec![vec![1.0, 0.0]; 6];
+        embeddings.extend(vec![vec![0.0, 1.0]; 6]);
+        let labels = kmeans_pp(&embeddings, 4, 20);
+        assert_eq!(labels.len(), 12);
+        let distinct: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(
+            distinct.len(),
+            2,
+            "two distinct points must form two clusters"
+        );
     }
 }

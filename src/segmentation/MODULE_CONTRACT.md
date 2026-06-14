@@ -116,6 +116,17 @@ invariants:
       kind: unit-test
       target: src/segmentation::aggregator::tests
       command: cargo test --lib segmentation
+  - id: frame-time-nearest-center
+    rule: >
+      The aggregator uses ONE frame-time convention. frame_index_at maps time->frame
+      via floor((t-start)/stride), which is the nearest-CENTER frame: it equals
+      round((t-start)/stride - 0.5) for every in-span t after the [0, num_frames-1]
+      clamp. The run-length encoder places frame f by its center start+(f+0.5)*stride,
+      so the permutation sampler and the applier agree (F03 — no half-stride off-by-one).
+    proof:
+      kind: unit-test
+      target: src/segmentation::aggregator::tests::frame_index_floor_equals_nearest_center
+      command: cargo test --lib segmentation
 verification:
   pre_change:
     - cargo test --lib segmentation

@@ -1,3 +1,4 @@
+#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
 //! Real-time streaming diarization pipeline.
 //!
 //! Processes audio incrementally chunk-by-chunk with bounded latency.
@@ -169,6 +170,10 @@ where
             }
         }
 
+        // Accumulate into the cumulative history exposed by `turns()`. Turns are
+        // produced in increasing start-time order (windows pop sequentially) and
+        // feed() is called in stream order, so global monotonicity is preserved.
+        self.turns.extend(new_turns.iter().cloned());
         Ok(new_turns)
     }
 
@@ -198,6 +203,11 @@ where
             }
         }
 
+        // Accumulate into the cumulative history exposed by `turns()` (same
+        // monotonicity reasoning as feed()). We deliberately do NOT clear
+        // self.turns here: turns() promises cumulative history; callers wanting a
+        // fresh history construct a new pipeline.
+        self.turns.extend(new_turns.iter().cloned());
         Ok(new_turns)
     }
 
@@ -213,6 +223,9 @@ where
     /// `pub fn turns(&self) -> &[SpeakerTurn]`
     /// { ret.iter().all(|t| t.time.start <= t.time.end) }
     /// Return all turns emitted so far (including those from prior `feed` calls).
+    ///
+    /// History is cumulative across `feed`/`flush`; `flush` does not reset it.
+    /// Construct a new pipeline for a fresh history.
     pub fn turns(&self) -> &[SpeakerTurn] {
         &self.turns
     }
@@ -304,6 +317,7 @@ mod tests {
 
     #[test]
     fn streaming_pipeline_new_is_empty() {
+        // Empty case: a fresh pipeline (no feed yet) has empty cumulative history.
         let p = pipeline();
         assert_eq!(p.num_speakers(), 0);
         assert!(p.turns().is_empty());
@@ -311,6 +325,8 @@ mod tests {
 
     #[test]
     fn feed_silence_returns_no_turns() {
+        // No-speech case: silence emits nothing and leaves the cumulative
+        // history empty (the populated path is covered below).
         let mut p = pipeline();
         let turns = p.feed(&silent_samples(2.0)).unwrap();
         assert!(turns.is_empty());
@@ -343,8 +359,21 @@ mod tests {
     #[test]
     fn turns_are_monotonically_ordered() {
         let mut p = pipeline();
-        let _ = p.feed(&loud_samples(5.0)).unwrap();
-        let _ = p.flush().unwrap();
+        let mut emitted: Vec<SpeakerTurn> = Vec::new();
+        emitted.extend(p.feed(&loud_samples(5.0)).unwrap());
+        emitted.extend(p.flush().unwrap());
+        // turns() must expose the cumulative history, not an always-empty slice
+        // (F01/F33): assert it is populated and equals what feed()/flush() emitted
+        // BEFORE the ordering loop, so the loop is never vacuous.
+        assert!(
+            !p.turns().is_empty(),
+            "turns() must be populated after feeding speech"
+        );
+        assert_eq!(
+            p.turns(),
+            emitted.as_slice(),
+            "turns() must equal the concatenation of feed()/flush() returns"
+        );
         let turns = p.turns();
         for i in 1..turns.len() {
             assert!(
@@ -352,5 +381,23 @@ mod tests {
                 "turns must be monotonically ordered"
             );
         }
+    }
+
+    #[test]
+    fn turns_accumulates_across_feed_and_flush() {
+        let mut p = pipeline();
+        let mut emitted: Vec<SpeakerTurn> = Vec::new();
+        emitted.extend(p.feed(&loud_samples(3.0)).unwrap());
+        emitted.extend(p.feed(&loud_samples(3.0)).unwrap());
+        emitted.extend(p.flush().unwrap());
+        assert!(
+            !emitted.is_empty(),
+            "expected turns across two feeds plus a flush"
+        );
+        assert_eq!(
+            p.turns(),
+            emitted.as_slice(),
+            "turns() must accumulate every feed()/flush() return in order"
+        );
     }
 }
