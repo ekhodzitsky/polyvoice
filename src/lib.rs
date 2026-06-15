@@ -50,6 +50,7 @@ pub mod kmeans;
 #[cfg(feature = "spectral")]
 pub mod spectral;
 pub use features::{FbankConfig, FbankExtractor};
+pub mod format;
 pub mod overlap;
 pub mod rttm;
 pub mod streaming;
