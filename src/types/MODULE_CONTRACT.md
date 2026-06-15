@@ -54,13 +54,20 @@ surface:
       kind: unit-test
       target: src/types::mod::tests
       command: cargo test --lib types
-  - name: SpeakerTurn / Segment / TimeRange / WordAlignment / DiarizationResult
+  - name: SpeakerTurn / Segment / TimeRange / WordAlignment / DiarizationResult / AudioMeta / Provenance / SpeakerSummary
     kind: struct
     visibility: public
-    contract: Time-annotated speaker segments, alignments, and pipeline output.
+    contract: >
+      Time-annotated speaker segments, alignments, and the canonical v1
+      DiarizationResult (segments/turns/num_speakers + additive schema_version,
+      audio, provenance, speakers[] rollup exposing both numeric id and SPEAKER_NN
+      label). Build via DiarizationResult::new (stamps speakers[]/schema_version/
+      provenance.version); with_audio/with_provenance refine metadata. RTTM/JSON/
+      SRT/VTT/TXT are projections of it. Metadata fields are serde(default), so
+      pre-v1 JSON still deserializes.
     proof:
       kind: unit-test
-      target: src/types::mod::tests
+      target: src/types::mod::diarization_result_tests
       command: cargo test --lib types
   - name: SampleRate / Confidence / Seconds
     kind: struct

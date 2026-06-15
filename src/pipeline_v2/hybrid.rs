@@ -98,11 +98,7 @@ impl HybridPipeline {
 
         let raw_segments = self.segmenter.segment(samples)?;
         if raw_segments.is_empty() {
-            return Ok(DiarizationResult {
-                segments: Vec::new(),
-                turns: Vec::new(),
-                num_speakers: 0,
-            });
+            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
         let speech_regions = if self.exclude_overlap {
@@ -111,11 +107,7 @@ impl HybridPipeline {
             extract_speech_regions(&raw_segments)
         };
         if speech_regions.is_empty() {
-            return Ok(DiarizationResult {
-                segments: Vec::new(),
-                turns: Vec::new(),
-                num_speakers: 0,
-            });
+            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
         let sr_f = self.sample_rate as f64;
@@ -176,11 +168,7 @@ impl HybridPipeline {
         let embeddings = self.embedder.embed_batch(&chunk_refs)?;
 
         if embeddings.is_empty() {
-            return Ok(DiarizationResult {
-                segments: Vec::new(),
-                turns: Vec::new(),
-                num_speakers: 0,
-            });
+            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
         let labels = self.clusterer.cluster(&embeddings)?;
@@ -210,11 +198,8 @@ impl HybridPipeline {
             })
             .collect();
 
-        Ok(DiarizationResult {
-            segments,
-            turns,
-            num_speakers,
-        })
+        Ok(DiarizationResult::new(segments, turns, num_speakers)
+            .with_audio(samples.len() as f64 / sr.get() as f64, sr.get()))
     }
 
     /// Run the pipeline and return raw embeddings + timing for diagnostics.
