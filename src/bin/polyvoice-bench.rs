@@ -1,19 +1,20 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! polyvoice-bench — DER on a {audio,rttm} dataset directory using the legacy v0.5 Pipeline.
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use polyvoice::der::{compute_der, compute_der_decomposition};
+use polyvoice::der::{compute_der, compute_der_decomposition, compute_der_with_uem, parse_uem};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline;
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
-use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate};
+use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate, TimeRange};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
 use serde::Serialize;
-use std::collections::HashSet;
-use std::path::PathBuf;
+use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -32,6 +33,10 @@ struct Args {
     max_files: Option<usize>,
     #[arg(long, default_value = "0.45")]
     threshold: f32,
+    /// Optional .uem file. Restricts DER to the scored regions per file (frames
+    /// outside the UEM are dropped from both mapping and counts).
+    #[arg(long)]
+    uem: Option<PathBuf>,
 }
 
 #[derive(Serialize)]
@@ -54,7 +59,7 @@ struct PerFileResult {
     miss_rate: f64,
     false_alarm_rate: f64,
     confusion_rate: f64,
-    /// Overlap-aware decomposition (F37): DER over single-speaker reference regions
+    /// Overlap-aware decomposition: DER over single-speaker reference regions
     /// only, DER over overlap regions only (>= 2 ref speakers), and per-speaker
     /// recall. All at the requested collar. Makes overlap-heavy DER interpretable.
     der_single_speaker: f64,
@@ -147,6 +152,48 @@ fn model_hashes(registry: &ModelRegistry, profile: Profile) -> Vec<ModelHash> {
     out
 }
 
+/// Hard-fail unless the on-disk embedder + VAD match the manifest sha256, so a DER
+/// number can never be silently attributed to a swapped/corrupted/non-FP32 model.
+fn verify_model_integrity(
+    registry: &ModelRegistry,
+    profile: Profile,
+    embedder_path: &Path,
+    vad_path: &Path,
+) -> Result<()> {
+    let manifest = registry.manifest();
+    let prof = manifest
+        .profile(profile.manifest_id())
+        .ok_or_else(|| anyhow::anyhow!("profile {} not in manifest", profile.manifest_id()))?;
+    check_model_sha256(registry, &prof.embedder, embedder_path)?;
+    check_model_sha256(registry, "silero_vad", vad_path)?;
+    Ok(())
+}
+
+fn check_model_sha256(registry: &ModelRegistry, model_id: &str, path: &Path) -> Result<()> {
+    let manifest = registry.manifest();
+    let entry = manifest
+        .model(model_id)
+        .ok_or_else(|| anyhow::anyhow!("model {model_id} not in manifest"))?;
+    let bytes = std::fs::read(path).with_context(|| format!("read model {}", path.display()))?;
+    let got = hex_lower(&Sha256::digest(&bytes));
+    if !got.eq_ignore_ascii_case(&entry.sha256) {
+        anyhow::bail!(
+            "model integrity FAIL for {model_id}: on-disk sha256 {got} != manifest {}",
+            entry.sha256
+        );
+    }
+    Ok(())
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        let _ = write!(s, "{b:02x}");
+    }
+    s
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let profile = parse_profile(&args.profile)?;
@@ -160,6 +207,21 @@ fn main() -> Result<()> {
         .context("load embedder")?;
     let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
     let mut vad = SileroVad::new(&vad_path, 512).context("load vad")?;
+
+    // Integrity gate: a DER number is only trustworthy if produced by
+    // the EXACT shipped artifact — hard-fail if the on-disk embedder/VAD sha256
+    // disagrees with the manifest (swapped, corrupted, or non-FP32 cache).
+    verify_model_integrity(&registry, profile, &models.embedder_path, &vad_path)?;
+
+    // Optional UEM scoped regions, keyed by file id.
+    let uem_map: Option<HashMap<String, Vec<TimeRange>>> = match &args.uem {
+        Some(path) => {
+            let text = std::fs::read_to_string(path)
+                .with_context(|| format!("read uem {}", path.display()))?;
+            Some(parse_uem(&text))
+        }
+        None => None,
+    };
 
     let config = DiarizationConfig {
         cluster: ClusterConfig {
@@ -230,9 +292,25 @@ fn main() -> Result<()> {
             turns
         };
 
+        // Headline collar + no-collar DER, restricted to the UEM scope when present
+        // (AMI-style id fallback like the RTTM lookup). The overlap decomposition
+        // below is a diagnostic and stays over the full file.
+        let scored: Option<&[TimeRange]> = uem_map.as_ref().and_then(|m| {
+            m.get(stem)
+                .or_else(|| stem.split('.').next().and_then(|s| m.get(s)))
+                .map(|v| v.as_slice())
+        });
+        let (der, der_no_collar) = match scored {
+            Some(s) => (
+                compute_der_with_uem(&ref_turns, &result.turns, args.collar, s),
+                compute_der_with_uem(&ref_turns, &result.turns, 0.0, s),
+            ),
+            None => (
+                compute_der(&ref_turns, &result.turns, args.collar),
+                compute_der(&ref_turns, &result.turns, 0.0),
+            ),
+        };
         let decomp = compute_der_decomposition(&ref_turns, &result.turns, args.collar);
-        let der = decomp.total;
-        let der_no_collar = compute_der(&ref_turns, &result.turns, 0.0);
 
         let ref_speakers: HashSet<_> = ref_turns.iter().map(|t| t.speaker.0).collect();
         let hyp_speakers: HashSet<_> = result.turns.iter().map(|t| t.speaker.0).collect();

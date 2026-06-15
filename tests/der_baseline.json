@@ -16,6 +16,19 @@
     "_status": "operational — filled 2026-05-08 by v0.5.2 legacy pipeline (threshold=0.45)",
     "_filled_by": "polyvoice-bench-v052"
   },
+  "voxconverse_dev": {
+    "files": null,
+    "profile": "balanced",
+    "der_collar_0_25": null,
+    "der_no_collar": null,
+    "tolerance": 1.0,
+    "model_versions": {
+      "segmenter": "silero_vad",
+      "embedder": "wespeaker_resnet34"
+    },
+    "_status": "PLACEHOLDER — dev split for TUNING the fixed AHC threshold and VBx parameters. Fill from scripts/run-der-sweep.sh on the shipped FP32 artifact; tune on dev, report on voxconverse_test.",
+    "_filled_by": "scripts/run-der-sweep.sh"
+  },
   "voxconverse_test_10files": {
     "files": 10,
     "profile": "balanced",
@@ -49,7 +62,7 @@
     "der_no_collar": 44.73,
     "der_single_speaker": null,
     "der_single_speaker_tolerance": 2.0,
-    "_der_single_speaker_status": "PLACEHOLDER (task 110/F37) — overlap-excluded (single-speaker-region) DER. Run the AMI regression test with --ignored, read the printed 'overlap-excluded DER', then set this value to activate the long-form numeric floor.",
+    "_der_single_speaker_status": "PLACEHOLDER — overlap-excluded (single-speaker-region) DER. Run the AMI regression test with --ignored, read the printed 'overlap-excluded DER', then set this value to activate the long-form numeric floor.",
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "silero_vad",
@@ -117,7 +130,7 @@
     "der_no_collar": null,
     "der_single_speaker": null,
     "der_single_speaker_tolerance": 3.0,
-    "_der_single_speaker_status": "PLACEHOLDER (task 110/F37) — overlap-excluded (single-speaker-region) DER for the v2/hybrid pipeline on EN2002a. Measure via --ignored, then set to activate the long-form numeric floor.",
+    "_der_single_speaker_status": "PLACEHOLDER — overlap-excluded (single-speaker-region) DER for the v2/hybrid pipeline on EN2002a. Measure via --ignored, then set to activate the long-form numeric floor.",
     "tolerance": 3.0,
     "model_versions": {
       "segmenter": "powerset_fp32",

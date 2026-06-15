@@ -18,7 +18,7 @@ use faer::prelude::*;
 /// This is the single source of truth for the eigengap convention shared by
 /// [`spectral_cluster`] (where it only seeds a BIC search) and
 /// `crate::clusterer::NmeScClusterer` (where it drives `k` directly), so the two
-/// paths cannot silently diverge (finding F05).
+/// paths cannot silently diverge.
 pub(crate) fn select_k_by_normalized_eigengap(eig_asc: &[f64], max_k: usize) -> usize {
     let max_k = max_k.min(eig_asc.len()).min(20);
     let mut best_k = 1usize;
@@ -105,7 +105,7 @@ pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {
     // Determine k via eigengap heuristic, then validate with BIC on spectral features.
     let max_k = max_k.min(n).min(20);
     // NME-SC normalized-maximum eigengap (Park et al. 2020) — shared with
-    // NmeScClusterer so both spectral paths agree (F05). Here it only SEEDS the
+    // NmeScClusterer so both spectral paths agree. Here it only SEEDS the
     // BIC search below, which makes the final k decision.
     let eig_asc: Vec<f64> = eig_pairs.iter().map(|p| p.0).collect();
     let eigengap_k = select_k_by_normalized_eigengap(&eig_asc, max_k);
@@ -349,7 +349,7 @@ mod tests {
         // FINAL k is then BIC-decided, and its `compute_bic` currently under-selects
         // on near-perfect-fit data (the inertia<1e-10 branch returns a positive
         // penalty, so a near-perfect k loses to an imperfect lower-k with negative
-        // BIC) — a separate concern from the F05 eigengap unification. So we assert
+        // BIC) — a separate concern from the eigengap unification. So we assert
         // the path stays multi-speaker (no collapse to 1) rather than an exact k the
         // BIC override moves.
         let embeddings = vec![

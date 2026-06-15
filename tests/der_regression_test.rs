@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! DER regression test against committed `tests/der_baseline.json`.
 //!
 //! Uses the legacy v0.5 pipeline. Must stay within `tolerance` of the baseline

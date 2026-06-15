@@ -70,7 +70,7 @@ proptest! {
     /// merge_segments collapses a same-speaker contiguous run into one segment
     /// whose confidence is the arithmetic mean of the Some() members (None
     /// ignored), or None if no member carries a confidence — independent of how
-    /// many fold steps the merge performs. Pins the F07 fix (task 120 / D-3).
+    /// many fold steps the merge performs. Pins the order-independent mean-confidence fix.
     #[test]
     fn merge_confidence_is_mean_of_some_members(
         items in prop::collection::vec(
