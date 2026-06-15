@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **DER**: `compute_der_with_uem` + `parse_uem` for UEM-scoped scoring — frames
+  outside the scored regions are dropped from both the speaker mapping and the
+  error counts (no UEM == `compute_der`).
+- **`polyvoice-bench`**: `--uem` flag and a model-integrity gate that hard-fails
+  if the on-disk embedder/VAD sha256 disagrees with the manifest.
+- `scripts/run-der-sweep.sh` — reproducible VoxConverse-dev/test + AMI DER sweep
+  (no-collar and 0.25 s-collar from one report).
+
+### Changed
+
+- Dropped internal tracker indices (roadmap task / finding / audit IDs) from
+  shipped code comments and docs in favor of self-contained wording.
+
 ## [0.7.0] - 2026-06-14
 
 Audit-driven correctness, packaging, and CI-hardening release. Bumped to a new

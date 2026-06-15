@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! ONNX speaker embedding extractor (WeSpeaker, ECAPA-TDNN, etc.).
 //!
 //! Loads an ONNX model and runs log-mel filterbank + CMVN preprocessing

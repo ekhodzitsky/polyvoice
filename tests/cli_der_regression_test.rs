@@ -28,7 +28,7 @@ fn require_data() -> bool {
 struct Baseline {
     #[serde(rename = "v2_e2e_smoke")]
     v2_e2e_smoke: DatasetBaseline,
-    // v2-family AMI entry; hosts the overlap-excluded long-form floor (task 110/F37).
+    // v2-family AMI entry; hosts the overlap-excluded long-form floor.
     #[serde(rename = "hybrid_ami_test_single")]
     ami_v2: AmiBaseline,
 }
@@ -197,7 +197,7 @@ fn cli_der_regression_v2_ami_single() {
     let der = decomp.total.der;
     let single_der = decomp.single_speaker.der;
     let confusion = decomp.total.confusion_rate;
-    // Overlap-aware decomposition (task 111/F37): the AMI gate references the split so
+    // Overlap-aware decomposition: the AMI gate references the split so
     // a regression is interpretable — total DER hides where the error comes from.
     println!(
         "{stem}: DER={:.2}% overlap-excluded DER={:.2}% overlap-region DER={:.2}% confusion={:.2}% speakers={}",
@@ -231,7 +231,7 @@ fn cli_der_regression_v2_ami_single() {
         "pipeline_v2 clustering regressed on EN2002a: confusion={:.1}% exceeds 25%",
         confusion * 100.0
     );
-    // Numeric long-form floor (task 110/F37): overlap-excluded DER DOES discriminate
+    // Numeric long-form floor: overlap-excluded DER DOES discriminate
     // healthy vs collapsed diarization on high-overlap audio, unlike total DER. The
     // gate activates only once a baseline is measured and recorded in
     // tests/der_baseline.json (hybrid_ami_test_single.der_single_speaker); until then

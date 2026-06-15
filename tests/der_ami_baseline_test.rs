@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! AMI DER baseline — long-running, ignored by default.
 //!
 //! Run manually after downloading models:

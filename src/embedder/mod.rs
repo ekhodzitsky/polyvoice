@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! v1.0 `Embedder` trait + concrete extractors (CAM++, ResNet34) + pool +
 //! overlap-mask helper.
 //!

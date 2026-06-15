@@ -181,7 +181,7 @@ impl ModelRegistry {
     #[doc(hidden)]
     /// Same as `ensure` but never makes a network call. Returns `OfflineMissing`
     /// if the file is not in cache or has a wrong hash.
-    #[cfg(test)] // test-only: bypasses SHA-256/signature verification — never reachable in release (F23)
+    #[cfg(test)] // test-only: bypasses SHA-256/signature verification — never reachable in release
     pub fn ensure_in_cache_only(&self, model_id: &str) -> Result<PathBuf, RegistryError> {
         let entry = self
             .manifest

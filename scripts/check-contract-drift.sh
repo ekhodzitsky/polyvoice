@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Advisory, NON-BLOCKING contract-drift nudge (F13).
+# Advisory, NON-BLOCKING contract-drift nudge.
 #
 # Warns when a module's `src/<m>/mod.rs` changes in a diff without its sibling
 # `src/<m>/MODULE_CONTRACT.md` being updated in the same diff — a hint that the

@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! Integration test for `CamPlusPlusExtractor` and `ResNet34Adapter` against
 //! real upstream ONNX models.
 //!

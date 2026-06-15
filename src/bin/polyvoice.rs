@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! polyvoice — speaker diarization CLI.
 //!
 //! Default pipeline: legacy v0.5 (Silero VAD + sliding-window embeddings + AHC).

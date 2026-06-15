@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! Pipeline v2 debug test — compares legacy pipeline vs v1.0 components on real audio.
 //!
 //! Requires ONNX models in `models/`:

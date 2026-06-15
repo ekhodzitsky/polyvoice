@@ -122,7 +122,7 @@ invariants:
       via floor((t-start)/stride), which is the nearest-CENTER frame: it equals
       round((t-start)/stride - 0.5) for every in-span t after the [0, num_frames-1]
       clamp. The run-length encoder places frame f by its center start+(f+0.5)*stride,
-      so the permutation sampler and the applier agree (F03 — no half-stride off-by-one).
+      so the permutation sampler and the applier agree (no half-stride off-by-one).
     proof:
       kind: unit-test
       target: src/segmentation::aggregator::tests::frame_index_floor_equals_nearest_center

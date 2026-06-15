@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn identical_embeddings_yield_single_cluster() {
-        // All embeddings collapse to one point (F04): the degenerate-seeding
+        // All embeddings collapse to one point: the degenerate-seeding
         // guard must keep this to a single effective cluster, with no panic.
         let embeddings: Vec<Vec<f32>> = vec![vec![1.0, 0.0]; 12];
         let labels = kmeans_pp(&embeddings, 4, 20);
