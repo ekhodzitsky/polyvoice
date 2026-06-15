@@ -12,7 +12,7 @@ the type foundation that all other modules build on.
 - `Profile`
 - `SampleRate`, `Confidence`, `Seconds`
 - `TimeRange`, `Segment`, `SpeakerTurn`, `WordAlignment`
-- `DiarizationResult`
+- `DiarizationResult` (canonical v1: + `schema_version`, `audio`, `provenance`, `speakers[]`), `AudioMeta`, `Provenance`, `SpeakerSummary`
 - `remap_segments`, `remap_turns`
 
 ## Dependencies

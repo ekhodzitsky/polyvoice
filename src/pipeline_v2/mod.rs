@@ -102,11 +102,7 @@ impl Pipeline {
 
         let raw_segments = self.segmenter.segment(samples)?;
         if raw_segments.is_empty() {
-            return Ok(DiarizationResult {
-                segments: Vec::new(),
-                turns: Vec::new(),
-                num_speakers: 0,
-            });
+            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
         let overlap_ranges = extract_overlap_time_ranges(&raw_segments);
@@ -162,11 +158,7 @@ impl Pipeline {
         }
 
         if embeddings.is_empty() {
-            return Ok(DiarizationResult {
-                segments: Vec::new(),
-                turns: Vec::new(),
-                num_speakers: 0,
-            });
+            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
         let labels = self.clusterer.cluster(&embeddings)?;
@@ -233,11 +225,14 @@ impl Pipeline {
             .collect::<std::collections::HashSet<_>>()
             .len();
 
-        Ok(DiarizationResult {
-            segments: merged_segments,
-            turns: merged_turns,
-            num_speakers,
-        })
+        Ok(
+            DiarizationResult::new(merged_segments, merged_turns, num_speakers)
+                .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
+                .with_provenance(crate::types::Provenance {
+                    profile: self.config.profile.manifest_id().to_owned(),
+                    ..Default::default()
+                }),
+        )
     }
 
     fn build_overlap_inputs(
