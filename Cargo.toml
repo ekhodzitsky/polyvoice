@@ -59,7 +59,7 @@ ffi = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentat
 # Library-level model registry with HTTP downloads + SHA-256 verification.
 download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
 # CLI binary (polyvoice command).
-cli = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "dep:clap"]
+cli = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "dep:clap", "dep:clap_complete"]
 
 # Execution providers (forward `ort` features). Used by Pipeline implementations from M1+.
 coreml = ["onnx", "ort/coreml"]
@@ -130,6 +130,7 @@ realfft = "3.5"
 
 # CLI (optional)
 clap = { version = "4", features = ["derive", "env"], optional = true }
+clap_complete = { version = "4", optional = true }
 ureq = { version = "3", default-features = false, features = ["rustls"], optional = true }
 dirs = { version = "6", optional = true }
 faer = { version = "0.24.0", features = ["std"], optional = true }

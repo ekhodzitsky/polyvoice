@@ -4,14 +4,29 @@ expression: stdout
 ---
 Speaker diarization toolkit
 
-Usage: polyvoice <COMMAND>
+Usage: polyvoice [OPTIONS] [WAV]
+       polyvoice <COMMAND>
 
 Commands:
-  diarize          Run diarization on a WAV file
+  diarize          Run diarization on a WAV file (same as the bare `polyvoice <wav>` form)
   download-models  Download Mobile/Balanced ONNX models
   models           Inspect models registry
+  completions      Generate shell completions to stdout
   help             Print this message or the help of the given subcommand(s)
 
+Arguments:
+  [WAV]  WAV file to diarize. `polyvoice meeting.wav` diarizes it directly
+
 Options:
-  -h, --help     Print help
-  -V, --version  Print version
+      --profile <PROFILE>            [default: balanced]
+      --output <OUTPUT>              Write output to a file instead of stdout
+      --format <FORMAT>              Output format [default: rttm] [possible values: rttm, json, srt, vtt, txt]
+      --models-cache <MODELS_CACHE>  
+      --threshold <THRESHOLD>        [default: 0.45]
+      --speakers <SPEAKERS>          Target speaker count (caps clustering at N speakers)
+      --max-speakers <MAX_SPEAKERS>  Maximum number of speakers (clustering ceiling)
+      --quiet                        Suppress progress/info on stderr
+      --json                         Machine mode: emit only the structured JSON result on stdout; route all human-readable output to stderr. Implies `--format json --quiet`
+      --v2                           Use pipeline v2 (experimental; not recommended for long-form audio)
+  -h, --help                         Print help
+  -V, --version                      Print version
