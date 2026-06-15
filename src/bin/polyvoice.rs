@@ -1,51 +1,87 @@
 #![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! polyvoice — speaker diarization CLI.
 //!
-//! Default pipeline: legacy v0.5 (Silero VAD + sliding-window embeddings + AHC).
-//! Use `--v2` to opt into pipeline v2 (Powerset segmentation + overlap masking +
-//! resegmentation). Pipeline v2 is not yet validated as default on long-form
-//! audio — see PRODUCTION-READINESS.md.
+//! `polyvoice meeting.wav` diarizes a file (implicit `diarize`); subcommands
+//! `models` / `download-models` / `completions` are still available. Default
+//! pipeline: legacy v0.5 (Silero VAD + sliding-window embeddings + AHC). Use
+//! `--v2` to opt into pipeline v2 (Powerset segmentation + overlap masking +
+//! resegmentation); v2 is not yet validated as default on long-form audio — see
+//! PRODUCTION-READINESS.md.
+//!
+//! STDOUT discipline: only the diarization result goes to stdout (so `--format
+//! json` / `--json` and downstream pipes stay clean); all progress and info go to
+//! stderr.
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
+use polyvoice::format::{write_srt, write_txt, write_vtt};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline as LegacyPipeline;
 use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig};
 use polyvoice::rttm::write_rttm;
-use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate};
+use polyvoice::types::{
+    ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate,
+};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
-#[command(name = "polyvoice", version, about = "Speaker diarization toolkit")]
+#[command(
+    name = "polyvoice",
+    version,
+    about = "Speaker diarization toolkit",
+    args_conflicts_with_subcommands = true
+)]
 struct Cli {
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
+    /// Default (implicit-`diarize`) arguments, used when no subcommand is given.
+    #[command(flatten)]
+    diarize: DiarizeArgs,
+}
+
+/// Diarization arguments, shared by `polyvoice <wav>` and `polyvoice diarize <wav>`.
+#[derive(Args, Debug)]
+struct DiarizeArgs {
+    /// WAV file to diarize. `polyvoice meeting.wav` diarizes it directly.
+    wav: Option<PathBuf>,
+    #[arg(long, default_value = "balanced")]
+    profile: String,
+    /// Write output to a file instead of stdout.
+    #[arg(long)]
+    output: Option<PathBuf>,
+    /// Output format.
+    #[arg(long, default_value = "rttm")]
+    format: OutputFormat,
+    #[arg(long)]
+    models_cache: Option<PathBuf>,
+    #[arg(long, default_value = "0.45")]
+    threshold: f32,
+    /// Target speaker count (caps clustering at N speakers).
+    #[arg(long)]
+    speakers: Option<usize>,
+    /// Maximum number of speakers (clustering ceiling).
+    #[arg(long)]
+    max_speakers: Option<usize>,
+    /// Suppress progress/info on stderr.
+    #[arg(long)]
+    quiet: bool,
+    /// Machine mode: emit only the structured JSON result on stdout; route all
+    /// human-readable output to stderr. Implies `--format json --quiet`.
+    #[arg(long)]
+    json: bool,
+    /// Use pipeline v2 (experimental; not recommended for long-form audio).
+    #[arg(long)]
+    v2: bool,
 }
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Run diarization on a WAV file.
-    Diarize {
-        wav: PathBuf,
-        #[arg(long, default_value = "balanced")]
-        profile: String,
-        #[arg(long)]
-        output: Option<PathBuf>,
-        #[arg(long, default_value = "rttm")]
-        format: OutputFormat,
-        #[arg(long)]
-        models_cache: Option<PathBuf>,
-        #[arg(long, default_value = "0.45")]
-        threshold: f32,
-        #[arg(long)]
-        quiet: bool,
-        /// Use pipeline v2 (experimental; not recommended for long-form audio).
-        #[arg(long)]
-        v2: bool,
-    },
+    /// Run diarization on a WAV file (same as the bare `polyvoice <wav>` form).
+    Diarize(DiarizeArgs),
     /// Download Mobile/Balanced ONNX models.
     DownloadModels {
         #[arg(long, default_value = "balanced")]
@@ -55,6 +91,11 @@ enum Command {
     Models {
         #[command(subcommand)]
         sub: ModelsCommand,
+    },
+    /// Generate shell completions to stdout.
+    Completions {
+        /// Shell to generate completions for (bash, zsh, fish, powershell, elvish).
+        shell: clap_complete::Shell,
     },
 }
 
@@ -70,6 +111,9 @@ enum ModelsCommand {
 enum OutputFormat {
     Rttm,
     Json,
+    Srt,
+    Vtt,
+    Txt,
 }
 
 fn parse_profile(name: &str) -> Result<Profile> {
@@ -80,17 +124,30 @@ fn parse_profile(name: &str) -> Result<Profile> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cmd_diarize(
-    wav: PathBuf,
-    profile: String,
-    output: Option<PathBuf>,
-    format: OutputFormat,
-    models_cache: Option<PathBuf>,
-    threshold: f32,
-    quiet: bool,
-    v2: bool,
-) -> Result<()> {
+fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
+    let DiarizeArgs {
+        wav,
+        profile,
+        output,
+        format,
+        models_cache,
+        threshold,
+        speakers,
+        max_speakers,
+        quiet,
+        json,
+        v2,
+    } = args;
+
+    let wav = wav.ok_or_else(|| {
+        anyhow::anyhow!(
+            "no input: provide a WAV file (e.g. `polyvoice meeting.wav`) or a subcommand (see --help)"
+        )
+    })?;
+    // Machine mode forces JSON to stdout and silences human chatter on stderr.
+    let format = if json { OutputFormat::Json } else { format };
+    let quiet = quiet || json;
+
     let profile = parse_profile(&profile)?;
     if !wav.is_file() {
         anyhow::bail!("No such file: {}", wav.display());
@@ -106,54 +163,69 @@ fn cmd_diarize(
     };
 
     if !quiet {
-        eprintln!("Loading {profile:?} profile from registry...");
+        eprintln!("Loading {profile:?} profile from registry (models auto-download on first run)...");
     }
+
+    // `--speakers N` is an exact target; both it and `--max-speakers` cap the
+    // clusterer ceiling (`--speakers` wins when both are set).
+    let max_clusters = speakers.or(max_speakers);
 
     let result = if v2 {
         run_v2_pipeline(&wav, profile, &registry, threshold, quiet)?
     } else {
-        run_legacy_pipeline(&wav, profile, &registry, threshold, quiet)?
+        run_legacy_pipeline(&wav, profile, &registry, threshold, max_clusters, quiet)?
     };
 
+    write_output(&result, &wav, format, output)
+}
+
+/// Project the result into the requested format and write it to a file or stdout.
+/// The bytes are built in a buffer first, so stdout receives ONLY the result.
+fn write_output(
+    result: &DiarizationResult,
+    wav: &Path,
+    format: OutputFormat,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    let file_id = wav
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("audio")
+        .to_string();
+
+    let mut buf: Vec<u8> = Vec::new();
     match format {
-        OutputFormat::Rttm => {
-            let file_id = wav
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("audio")
-                .to_string();
-            match output {
-                Some(path) => {
-                    let mut f = std::fs::File::create(&path)
-                        .with_context(|| format!("create {}", path.display()))?;
-                    write_rttm(&mut f, &file_id, &result.turns).context("rttm write")?;
-                }
-                None => {
-                    let mut stdout = std::io::stdout().lock();
-                    write_rttm(&mut stdout, &file_id, &result.turns).context("rttm write")?;
-                }
-            }
-        }
+        OutputFormat::Rttm => write_rttm(&mut buf, &file_id, &result.turns).context("write RTTM")?,
+        OutputFormat::Srt => write_srt(&mut buf, &result.turns).context("write SRT")?,
+        OutputFormat::Vtt => write_vtt(&mut buf, &result.turns).context("write VTT")?,
+        OutputFormat::Txt => write_txt(&mut buf, &result.turns).context("write TXT")?,
         OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&result).context("serialize JSON")?;
-            match output {
-                Some(path) => std::fs::write(&path, json)
-                    .with_context(|| format!("write JSON to {}", path.display()))?,
-                None => println!("{json}"),
-            }
+            let json = serde_json::to_string_pretty(result).context("serialize JSON")?;
+            buf.extend_from_slice(json.as_bytes());
+            buf.push(b'\n');
         }
     }
 
+    match output {
+        Some(path) => {
+            std::fs::write(&path, &buf).with_context(|| format!("write {}", path.display()))?
+        }
+        None => std::io::stdout()
+            .lock()
+            .write_all(&buf)
+            .context("write to stdout")?,
+    }
     Ok(())
 }
 
 fn run_legacy_pipeline(
-    wav: &std::path::Path,
+    wav: &Path,
     profile: Profile,
     registry: &ModelRegistry,
     threshold: f32,
+    max_clusters: Option<usize>,
     quiet: bool,
-) -> Result<polyvoice::types::DiarizationResult> {
+) -> Result<DiarizationResult> {
     let models = registry
         .ensure_for_profile(profile)
         .context("ensure models")?;
@@ -163,11 +235,15 @@ fn run_legacy_pipeline(
     let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
     let mut vad = SileroVad::new(&vad_path, 512).context("load vad")?;
 
+    let mut cluster = ClusterConfig {
+        threshold,
+        ..Default::default()
+    };
+    if let Some(n) = max_clusters {
+        cluster.max_speakers = n;
+    }
     let config = DiarizationConfig {
-        cluster: ClusterConfig {
-            threshold,
-            ..Default::default()
-        },
+        cluster,
         ..DiarizationConfig::default()
     };
     let vad_config = VadConfig::default();
@@ -200,12 +276,12 @@ fn run_legacy_pipeline(
 }
 
 fn run_v2_pipeline(
-    wav: &std::path::Path,
+    wav: &Path,
     profile: Profile,
     registry: &ModelRegistry,
     threshold: f32,
     quiet: bool,
-) -> Result<polyvoice::types::DiarizationResult> {
+) -> Result<DiarizationResult> {
     let config = PipelineConfig {
         profile,
         clusterer: ClustererKind::Ahc { threshold },
@@ -230,9 +306,7 @@ fn run_v2_pipeline(
             sr_hz
         );
     }
-    let result = pipeline
-        .run(&samples, sr)
-        .context("pipeline v2 run failed")?;
+    let result = pipeline.run(&samples, sr).context("pipeline v2 run failed")?;
     if !quiet {
         eprintln!(
             "Done — {} turns, {} speakers",
@@ -241,6 +315,12 @@ fn run_v2_pipeline(
         );
     }
     Ok(result)
+}
+
+fn cmd_completions(shell: clap_complete::Shell) -> Result<()> {
+    let mut cmd = Cli::command();
+    clap_complete::generate(shell, &mut cmd, "polyvoice", &mut std::io::stdout());
+    Ok(())
 }
 
 fn cmd_download_models(profile: String) -> Result<()> {
@@ -318,30 +398,14 @@ fn cmd_models_info(name: String) -> Result<()> {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Diarize {
-            wav,
-            profile,
-            output,
-            format,
-            models_cache,
-            threshold,
-            quiet,
-            v2,
-        } => cmd_diarize(
-            wav,
-            profile,
-            output,
-            format,
-            models_cache,
-            threshold,
-            quiet,
-            v2,
-        ),
-        Command::DownloadModels { profile } => cmd_download_models(profile),
-        Command::Models { sub } => match sub {
+        Some(Command::Diarize(d)) => cmd_diarize(d),
+        Some(Command::DownloadModels { profile }) => cmd_download_models(profile),
+        Some(Command::Models { sub }) => match sub {
             ModelsCommand::List => cmd_models_list(),
             ModelsCommand::Info { name } => cmd_models_info(name),
         },
+        Some(Command::Completions { shell }) => cmd_completions(shell),
+        None => cmd_diarize(cli.diarize),
     }
 }
 
@@ -350,6 +414,34 @@ fn main() -> Result<()> {
 mod prop_tests {
     use super::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn bare_wav_is_implicit_diarize() {
+        let cli = Cli::try_parse_from(["polyvoice", "meeting.wav", "--format", "srt"]).unwrap();
+        assert!(cli.command.is_none());
+        assert_eq!(cli.diarize.wav.as_deref(), Some(Path::new("meeting.wav")));
+        assert_eq!(cli.diarize.format, OutputFormat::Srt);
+    }
+
+    #[test]
+    fn subcommands_are_not_shadowed_by_default_diarize() {
+        assert!(matches!(
+            Cli::try_parse_from(["polyvoice", "models", "list"]).unwrap().command,
+            Some(Command::Models { .. })
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["polyvoice", "download-models"]).unwrap().command,
+            Some(Command::DownloadModels { .. })
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["polyvoice", "completions", "bash"]).unwrap().command,
+            Some(Command::Completions { .. })
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["polyvoice", "diarize", "x.wav"]).unwrap().command,
+            Some(Command::Diarize(_))
+        ));
+    }
 
     proptest! {
         #[test]
@@ -363,13 +455,13 @@ mod prop_tests {
         }
 
         #[test]
-        fn cli_diarize_parses_with_valid_args(
+        fn cli_diarize_parses_all_formats(
             profile in "(mobile|balanced)",
-            format in "(rttm|json)",
+            format in "(rttm|json|srt|vtt|txt)",
             threshold in 0.0f32..2.0f32,
             v2 in prop::bool::ANY,
         ) {
-            let args = vec![
+            let mut args = vec![
                 "polyvoice".to_string(),
                 "diarize".to_string(),
                 "/tmp/test.wav".to_string(),
@@ -377,15 +469,10 @@ mod prop_tests {
                 "--format".to_string(), format,
                 "--threshold".to_string(), threshold.to_string(),
             ];
-            let args = if v2 {
-                let mut a = args;
-                a.push("--v2".to_string());
-                a
-            } else {
-                args
-            };
-            let result = Cli::try_parse_from(&args);
-            prop_assert!(result.is_ok());
+            if v2 {
+                args.push("--v2".to_string());
+            }
+            prop_assert!(Cli::try_parse_from(&args).is_ok());
         }
 
         #[test]
@@ -396,8 +483,7 @@ mod prop_tests {
                 "info".to_string(),
                 name,
             ];
-            let result = Cli::try_parse_from(&args);
-            prop_assert!(result.is_ok());
+            prop_assert!(Cli::try_parse_from(&args).is_ok());
         }
     }
 }
