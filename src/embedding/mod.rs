@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! Speaker embedding extraction trait.
 //!
 //! Use this module to turn audio windows into fixed-dimension speaker vectors

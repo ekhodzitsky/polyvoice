@@ -54,5 +54,5 @@ cargo clippy --all-targets --all-features -- -D warnings
   for duration-weighted micro-averaging across files.
 - Speaker mapping uses the shared Kuhn-Munkres solver (`crate::hungarian`),
   giving the globally optimal label assignment (matching pyannote.metrics).
-  Greedy 1-to-1 mapping was replaced in task B-1 because it over-counted
+  Greedy 1-to-1 mapping was replaced with optimal Hungarian mapping because it over-counted
   confusion on cross-talk/fragmented files.

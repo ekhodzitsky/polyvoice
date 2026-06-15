@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! Real-time streaming diarization pipeline.
 //!
 //! Processes audio incrementally chunk-by-chunk with bounded latency.
@@ -363,7 +363,7 @@ mod tests {
         emitted.extend(p.feed(&loud_samples(5.0)).unwrap());
         emitted.extend(p.flush().unwrap());
         // turns() must expose the cumulative history, not an always-empty slice
-        // (F01/F33): assert it is populated and equals what feed()/flush() emitted
+        // Regression: assert it is populated and equals what feed()/flush() emitted
         // BEFORE the ordering loop, so the loop is never vacuous.
         assert!(
             !p.turns().is_empty(),

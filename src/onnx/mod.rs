@@ -1,4 +1,4 @@
-#![allow(deprecated)] // legacy embedding API (F09); see polyvoice::embedder
+#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! ONNX-based speaker embedding extractor with a session pool.
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};

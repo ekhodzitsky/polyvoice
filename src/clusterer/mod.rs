@@ -398,7 +398,7 @@ impl Clusterer for NmeScClusterer {
         eig_pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
 
         // Normalized Maximum Eigengap (Park et al. 2020) — single shared
-        // implementation so this path and spectral_cluster cannot diverge (F05).
+        // implementation so this path and spectral_cluster cannot diverge.
         let max_k = self.max_clusters.min(n).min(20);
         let eig_asc: Vec<f64> = eig_pairs.iter().map(|p| p.0).collect();
         let k = crate::spectral::select_k_by_normalized_eigengap(&eig_asc, max_k).max(1);

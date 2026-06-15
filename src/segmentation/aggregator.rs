@@ -264,7 +264,7 @@ impl Aggregator {
     /// Uses `floor((t - start)/stride)`. This already IS the nearest-center frame:
     /// `round((t - start)/stride - 0.5)` equals this `floor` for every in-span `t`
     /// once clamped to `[0, num_frames-1]`, so it matches the center convention used
-    /// by `average_and_run_length_encode` (F03 — proven by
+    /// by `average_and_run_length_encode` (proven by
     /// `frame_index_floor_equals_nearest_center`). Do NOT "fix" this to `round`; it
     /// is a no-op that only changes the out-of-span `t == start - ε` corner.
     fn frame_index_at(&self, w: &WindowOutput, t: f32) -> Option<usize> {
@@ -514,7 +514,7 @@ mod tests {
         WindowOutput::new(start, end, logits, num_frames).unwrap()
     }
 
-    /// F03 characterization (task 113): `frame_index_at` uses
+    /// Frame-time convention check: `frame_index_at` uses
     /// `floor((t - start)/stride)`, and the RLE pass (line ~300) places frame `f`
     /// by its center `start + (f + 0.5)*stride`. These are NOT two different
     /// conventions: `floor(x)` already returns the frame whose CENTER is closest to
@@ -538,11 +538,11 @@ mod tests {
         }
     }
 
-    /// F03 characterization (task 113): a speaker change staggered ~0.5*stride off a
+    /// Frame-time convention check: a speaker change staggered ~0.5*stride off a
     /// window boundary must still be labelled consistently after stitching. With the
     /// sampler (`frame_index_at`) and the RLE applier sharing the nearest-center
     /// convention, there is no 1-frame boundary flip — this passes on current code,
-    /// confirming F03 is not an actual defect.
+    /// confirming the two conventions already coincide (no off-by-one).
     #[test]
     fn staggered_speaker_change_is_labelled_consistently() {
         // Window A: 0.0–5.0, 50 frames (stride 0.1). spk0 (class 1) then spk1

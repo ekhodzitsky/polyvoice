@@ -128,7 +128,7 @@ pub use silero_vad::SileroVad;
 #[cfg(feature = "onnx")]
 pub mod onnx;
 #[cfg(feature = "onnx")]
-#[allow(deprecated)] // re-export of legacy API (F09); consumers still warned at use site
+#[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
 pub use onnx::OnnxEmbeddingExtractor;
 
 #[cfg(feature = "onnx")]
@@ -136,7 +136,7 @@ pub mod ecapa;
 
 // Public re-exports for ergonomic use.
 pub use cluster::SpeakerCluster;
-#[allow(deprecated)] // re-export of legacy API (F09); consumers still warned at use site
+#[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
@@ -149,5 +149,5 @@ pub use types::{
 pub use window::{WindowBuffer, WindowIter};
 
 #[cfg(feature = "onnx")]
-#[allow(deprecated)] // re-export of legacy API (F09); consumers still warned at use site
+#[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
 pub use ecapa::FbankOnnxExtractor;

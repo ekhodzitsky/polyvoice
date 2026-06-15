@@ -50,10 +50,10 @@ impl std::fmt::Display for DerResult {
 ///
 /// **Approximate DER.** Frame-based at 10 ms resolution with a forgiveness
 /// boundary collar: frames within `collar` of any reference boundary are
-/// excluded from BOTH the numerator and the denominator. There is no UEM
-/// support. It is therefore **not bit-identical to `pyannote.metrics`** — always
-/// quote it alongside the collar value used. Raw frame counts are exposed on
-/// [`DerResult`] for duration-weighted micro-averaging across files.
+/// excluded from BOTH the numerator and the denominator. For UEM scoring (restrict
+/// to a scored timeline) use [`compute_der_with_uem`]. It is **not bit-identical
+/// to `pyannote.metrics`** — always quote it alongside the collar value used. Raw
+/// frame counts are exposed on [`DerResult`] for duration-weighted micro-averaging.
 ///
 /// # Defensive behaviour
 ///
@@ -65,7 +65,7 @@ pub fn compute_der(
     hypothesis: &[SpeakerTurn],
     collar: f64,
 ) -> DerResult {
-    der_core(reference, hypothesis, collar, Region::All)
+    der_core(reference, hypothesis, collar, Region::All, None)
 }
 
 /// { collar >= 0.0 }
@@ -90,7 +90,26 @@ pub fn compute_der_single_speaker_regions(
     hypothesis: &[SpeakerTurn],
     collar: f64,
 ) -> DerResult {
-    der_core(reference, hypothesis, collar, Region::SingleSpeaker)
+    der_core(reference, hypothesis, collar, Region::SingleSpeaker, None)
+}
+
+/// { collar >= 0.0 }
+/// pub fn compute_der_with_uem( reference: &[SpeakerTurn], hypothesis: &[SpeakerTurn], collar: f64, scored: &[TimeRange], ) -> DerResult
+/// { ret.der >= 0.0 && ret.der <= 1.0 }
+/// DER restricted to the UEM (Un-partitioned Evaluation Map) scored regions.
+///
+/// Frames whose center falls outside every `scored` region are excluded from BOTH
+/// the speaker mapping and the error counts (on top of the forgiveness collar),
+/// matching `pyannote.metrics` UEM semantics. An empty `scored` slice scores
+/// nothing (all-zero result); use [`compute_der`] when there is no UEM. Parse a
+/// `.uem` file into the per-file `scored` regions with [`parse_uem`].
+pub fn compute_der_with_uem(
+    reference: &[SpeakerTurn],
+    hypothesis: &[SpeakerTurn],
+    collar: f64,
+    scored: &[TimeRange],
+) -> DerResult {
+    der_core(reference, hypothesis, collar, Region::All, Some(scored))
 }
 
 /// Reference-region selector for [`der_core`].
@@ -113,6 +132,7 @@ fn der_core(
     hypothesis: &[SpeakerTurn],
     collar: f64,
     region: Region,
+    uem: Option<&[TimeRange]>,
 ) -> DerResult {
     if reference.is_empty() {
         return DerResult {
@@ -192,6 +212,24 @@ fn der_core(
                 if frame.len() < 2 {
                     ignore_mask[i] = true;
                 }
+            }
+        }
+    }
+
+    // UEM (Un-partitioned Evaluation Map): when scored regions are supplied, any
+    // frame whose center falls outside every scored region is ignored — dropped
+    // from BOTH the mapping and the counts, exactly like a collar frame. `None`
+    // (or an empty mask) leaves the whole file scored, so the no-UEM path is
+    // byte-identical to before.
+    if let Some(scored) = uem {
+        for (i, slot) in ignore_mask.iter_mut().enumerate() {
+            if *slot {
+                continue;
+            }
+            let center = (i as f64 + 0.5) * resolution;
+            let in_scope = scored.iter().any(|r| center >= r.start && center < r.end);
+            if !in_scope {
+                *slot = true;
             }
         }
     }
@@ -408,6 +446,37 @@ pub fn compute_der_from_rttm(
     compute_der(&ref_turns, hypothesis, collar)
 }
 
+/// Parse a UEM (Un-partitioned Evaluation Map) file body into per-file scored
+/// regions, keyed by file id. Lines are `<file-id> <channel> <start> <end>`;
+/// blank lines and `;`/`#` comments are skipped, and malformed/degenerate lines
+/// are ignored. Pure-Rust and wasm-clean — callers read the file and pass the
+/// text here, then feed the per-file `Vec<TimeRange>` to [`compute_der_with_uem`].
+pub fn parse_uem(text: &str) -> HashMap<String, Vec<TimeRange>> {
+    let mut out: HashMap<String, Vec<TimeRange>> = HashMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(file), Some(_channel), Some(start), Some(end)) =
+            (it.next(), it.next(), it.next(), it.next())
+        else {
+            continue;
+        };
+        let (Ok(start), Ok(end)) = (start.parse::<f64>(), end.parse::<f64>()) else {
+            continue;
+        };
+        if !start.is_finite() || !end.is_finite() || end <= start {
+            continue;
+        }
+        out.entry(file.to_owned())
+            .or_default()
+            .push(TimeRange { start, end });
+    }
+    out
+}
+
 /// Per-speaker recall: how much of one reference speaker's speech the mapped
 /// hypothesis speaker recovered.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -427,7 +496,7 @@ pub struct SpeakerRecall {
 ///
 /// Headline DER hides where error comes from — on overlap-heavy audio the miss
 /// term dominates, so a total-DER ceiling cannot tell healthy diarization from
-/// collapse. This split makes accuracy targets interpretable (finding F37).
+/// collapse. This split makes accuracy targets interpretable.
 #[derive(Debug, Clone)]
 pub struct DerDecomposition {
     /// Headline overlap-inclusive DER (== [`compute_der`]).
@@ -453,9 +522,9 @@ pub fn compute_der_decomposition(
     collar: f64,
 ) -> DerDecomposition {
     DerDecomposition {
-        total: der_core(reference, hypothesis, collar, Region::All),
-        single_speaker: der_core(reference, hypothesis, collar, Region::SingleSpeaker),
-        overlap: der_core(reference, hypothesis, collar, Region::Overlap),
+        total: der_core(reference, hypothesis, collar, Region::All, None),
+        single_speaker: der_core(reference, hypothesis, collar, Region::SingleSpeaker, None),
+        overlap: der_core(reference, hypothesis, collar, Region::Overlap, None),
         per_speaker_recall: compute_per_speaker_recall(reference, hypothesis, collar),
     }
 }
@@ -729,6 +798,98 @@ mod tests {
             .expect("spk1 recall");
         assert!((r0.recall - 1.0).abs() < 0.02, "spk0 recall {}", r0.recall);
         assert!(r1.recall < 0.02, "spk1 recall {}", r1.recall);
+    }
+
+    #[test]
+    fn uem_excludes_out_of_scope_frames() {
+        // ref: one speaker over [0,10); hyp empty → full miss.
+        let reference = vec![turn(0, 0.0, 10.0)];
+        let hypothesis: Vec<SpeakerTurn> = vec![];
+        let full = compute_der(&reference, &hypothesis, 0.0);
+        let scoped = compute_der_with_uem(
+            &reference,
+            &hypothesis,
+            0.0,
+            &[TimeRange { start: 0.0, end: 5.0 }],
+        );
+        // Only the [0,5) half is scored → ~half the reference frames count.
+        assert!(
+            scoped.total_ref_frames < full.total_ref_frames,
+            "UEM must drop out-of-scope frames: scoped={} full={}",
+            scoped.total_ref_frames,
+            full.total_ref_frames
+        );
+        assert!(
+            (480..=520).contains(&scoped.total_ref_frames),
+            "expected ~500 scored frames, got {}",
+            scoped.total_ref_frames
+        );
+        assert!((scoped.miss_rate - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn uem_ignores_error_outside_scope() {
+        // ref: spk0 [0,10). hyp: correct spk0 on [0,5), wrong speaker on [5,10).
+        let reference = vec![turn(0, 0.0, 10.0)];
+        let hypothesis = vec![turn(0, 0.0, 5.0), turn(1, 5.0, 10.0)];
+        let full = compute_der(&reference, &hypothesis, 0.0);
+        let scoped = compute_der_with_uem(
+            &reference,
+            &hypothesis,
+            0.0,
+            &[TimeRange { start: 0.0, end: 5.0 }],
+        );
+        assert!(full.der > 0.4, "headline DER should see the [5,10) error, got {full}");
+        assert!(
+            scoped.der < 0.01,
+            "UEM-scoped DER must ignore the out-of-scope error, got {scoped}"
+        );
+    }
+
+    #[test]
+    fn uem_full_scope_matches_no_uem() {
+        let reference = vec![turn(0, 0.0, 3.0), turn(1, 3.0, 6.0)];
+        let hypothesis = vec![turn(0, 0.0, 3.0)];
+        let plain = compute_der(&reference, &hypothesis, 0.0);
+        let scoped = compute_der_with_uem(
+            &reference,
+            &hypothesis,
+            0.0,
+            &[TimeRange { start: 0.0, end: 100.0 }],
+        );
+        assert_eq!(plain.total_ref_frames, scoped.total_ref_frames);
+        assert!((plain.der - scoped.der).abs() < 1e-12, "full UEM must equal no-UEM");
+    }
+
+    #[test]
+    fn uem_empty_scope_scores_nothing() {
+        let reference = vec![turn(0, 0.0, 5.0)];
+        let hypothesis = vec![turn(0, 0.0, 5.0)];
+        let scoped = compute_der_with_uem(&reference, &hypothesis, 0.0, &[]);
+        assert_eq!(scoped.total_ref_frames, 0);
+        assert_eq!(scoped.der, 0.0);
+    }
+
+    #[test]
+    fn parse_uem_reads_regions_and_skips_junk() {
+        let text = "\
+; a comment
+# another comment
+
+EN2002a 1 0.00 1234.56
+EN2002a 1 1300.0 1400.0
+fuzfh 1 0.5 25.9
+bad line with too few
+EN2002a 1 50.0 10.0
+";
+        let map = parse_uem(text);
+        let en = map.get("EN2002a").expect("EN2002a present");
+        // two valid regions (the 50.0->10.0 degenerate line is dropped)
+        assert_eq!(en.len(), 2);
+        assert!((en[0].start - 0.0).abs() < 1e-9 && (en[0].end - 1234.56).abs() < 1e-9);
+        let fz = map.get("fuzfh").expect("fuzfh present");
+        assert_eq!(fz.len(), 1);
+        assert!(!map.contains_key("bad"));
     }
 
     #[test]

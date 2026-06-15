@@ -45,4 +45,4 @@ jobs:
 
   # NOTE: PyPI publishing is owned SOLELY by release.yml (tag-triggered, OIDC
   # trusted publishing). This workflow is manual (workflow_dispatch) and
-  # BUILD-ONLY — it must never publish, to avoid duplicate-version races (F27).
+  # BUILD-ONLY — it must never publish, to avoid duplicate-version races.

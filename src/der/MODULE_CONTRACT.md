@@ -90,10 +90,33 @@ surface:
       single-speaker-region DER, overlap-region DER (>= 2 ref speakers), and
       per-speaker recall (Vec<SpeakerRecall>). Reuses compute_der's frame machinery,
       collar and Hungarian mapping. Intended for bench artifacts and the AMI gate so
-      accuracy targets are interpretable (F37); the headline path stays on compute_der.
+      accuracy targets are interpretable; the headline path stays on compute_der.
     proof:
       kind: unit-test
       target: src/der::mod::tests::decomposition_splits_overlap_and_recall
+      command: cargo test --lib der
+  - name: compute_der_with_uem
+    kind: function
+    visibility: public
+    contract: >
+      DER restricted to UEM scored regions: same machinery as compute_der but frames
+      whose center is outside every scored TimeRange are excluded from BOTH the
+      mapping and the counts (on top of the collar). Empty scope scores nothing;
+      no UEM == compute_der (byte-identical). Used by the DER harness.
+    proof:
+      kind: unit-test
+      target: src/der::mod::tests::uem_ignores_error_outside_scope
+      command: cargo test --lib der
+  - name: parse_uem
+    kind: function
+    visibility: public
+    contract: >
+      Parse a .uem file body into per-file scored regions (HashMap<String,
+      Vec<TimeRange>>). Skips comments/blank/malformed lines. Pure-Rust, wasm-clean
+      (callers read the file). Feeds compute_der_with_uem.
+    proof:
+      kind: unit-test
+      target: src/der::mod::tests::parse_uem_reads_regions_and_skips_junk
       command: cargo test --lib der
   - name: DerDecomposition
     kind: struct
@@ -159,6 +182,12 @@ invariants:
       kind: unit-test
       target: src/der::mod::tests::collar_reduces_error
       command: cargo test --lib der
+  - id: uem-no-op-when-absent
+    rule: compute_der_with_uem over a scope covering the whole file equals compute_der; out-of-scope frames drop from both mapping and counts.
+    proof:
+      kind: unit-test
+      target: src/der::mod::tests::uem_full_scope_matches_no_uem
+      command: cargo test --lib der
 verification:
   pre_change:
     - cargo test --lib der
@@ -189,6 +218,14 @@ agent_policy:
 
 # src/der
 
-Frame-based Diarization Error Rate computation with forgiveness collar and
-optimal (Hungarian) speaker mapping. This is the single source of DER truth for
-polyvoice.
+Frame-based Diarization Error Rate computation with forgiveness collar, optimal
+(Hungarian) speaker mapping, overlap-aware decomposition, and UEM scoping. This is
+the single source of DER truth for polyvoice.
+
+The reproducible DER harness (`scripts/run-der-sweep.sh` + `polyvoice-bench`)
+is the only sanctioned producer of DER numbers: it reports both no-collar and
+0.25 s-collar on the exact shipped FP32 artifact (sha256-gated) across
+VoxConverse-dev/test + AMI, honoring UEM via `compute_der_with_uem`/`parse_uem`.
+The same harness calibrates the fixed AHC threshold and the VBx
+Fa/Fb/Ploop parameters — never tune those without re-running it on a
+dev split.
