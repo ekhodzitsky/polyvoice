@@ -65,11 +65,7 @@ impl Pipeline {
         let speech_regions = segment_speech(vad, samples, &self.config, &self.vad_config)?;
 
         if speech_regions.is_empty() {
-            return Ok(DiarizationResult {
-                segments: Vec::new(),
-                turns: Vec::new(),
-                num_speakers: 0,
-            });
+            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
         let sr = self.config.window.sample_rate.get() as f64;
@@ -106,11 +102,7 @@ impl Pipeline {
         }
 
         if embeddings.is_empty() {
-            return Ok(DiarizationResult {
-                segments: Vec::new(),
-                turns: Vec::new(),
-                num_speakers: 0,
-            });
+            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
         let labels = agglomerative_cluster(&embeddings, self.config.cluster.threshold);
@@ -141,11 +133,9 @@ impl Pipeline {
             })
             .collect();
 
-        Ok(DiarizationResult {
-            segments,
-            turns,
-            num_speakers,
-        })
+        let sr_hz = self.config.window.sample_rate.get();
+        Ok(DiarizationResult::new(segments, turns, num_speakers)
+            .with_audio(samples.len() as f64 / sr_hz as f64, sr_hz))
     }
 
     /// { true }

@@ -362,12 +362,143 @@ pub struct WordAlignment {
     pub confidence: f32,
 }
 
-/// Result of offline diarization.
+/// Audio metadata for a [`DiarizationResult`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct AudioMeta {
+    /// Audio duration in seconds.
+    pub duration_secs: f64,
+    /// Sample rate in Hz.
+    pub sample_rate: u32,
+}
+
+/// Provenance for a [`DiarizationResult`]: how it was produced.
+///
+/// `version` is always set by [`DiarizationResult::new`]; `profile` is set when the
+/// producing pipeline knows it. The model-id fields (`segmenter`/`embedder`/
+/// `clusterer`) are populated when the model registry is threaded through — an
+/// empty string means "not recorded".
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Provenance {
+    /// Crate version that produced the result.
+    pub version: String,
+    /// Profile id (e.g. "balanced"), or empty if not recorded.
+    pub profile: String,
+    /// Segmentation/VAD model id, or empty.
+    pub segmenter: String,
+    /// Embedding model id, or empty.
+    pub embedder: String,
+    /// Clustering backend id, or empty.
+    pub clusterer: String,
+}
+
+/// Per-speaker rollup for a [`DiarizationResult`], exposing the speaker both as a
+/// numeric `id` and the canonical `SPEAKER_NN` `label`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpeakerSummary {
+    /// Canonical string label, e.g. "SPEAKER_00".
+    pub label: String,
+    /// Numeric speaker id.
+    pub id: u32,
+    /// Total speech attributed to this speaker, in seconds.
+    pub total_speech_s: f64,
+    /// Number of turns for this speaker.
+    pub turn_count: usize,
+}
+
+fn default_schema_version() -> String {
+    "diarization-result-v1".to_owned()
+}
+
+/// Result of offline diarization — the canonical v1 result type that every
+/// surface (RTTM/JSON/SRT/VTT/TXT, CLI, MCP) projects from.
+///
+/// The metadata fields (`schema_version`, `audio`, `provenance`, `speakers`) are
+/// additive and `#[serde(default)]`, so older JSON without them still
+/// deserializes. Construct via [`DiarizationResult::new`] so `speakers` and
+/// `schema_version` are always populated.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DiarizationResult {
     pub segments: Vec<Segment>,
     pub turns: Vec<SpeakerTurn>,
     pub num_speakers: usize,
+    /// Schema identifier for downstream consumers.
+    #[serde(default = "default_schema_version")]
+    pub schema_version: String,
+    /// Audio metadata (duration, sample rate).
+    #[serde(default)]
+    pub audio: AudioMeta,
+    /// How this result was produced.
+    #[serde(default)]
+    pub provenance: Provenance,
+    /// Per-speaker rollup (sorted by id); exposes id AND the SPEAKER_NN label.
+    #[serde(default)]
+    pub speakers: Vec<SpeakerSummary>,
+}
+
+impl DiarizationResult {
+    /// Build a v1 result from the core fields, computing the per-speaker
+    /// `speakers` rollup from `turns` and stamping `schema_version` +
+    /// `provenance.version`. Refine `audio`/`provenance` with
+    /// [`DiarizationResult::with_audio`] / [`DiarizationResult::with_provenance`].
+    pub fn new(segments: Vec<Segment>, turns: Vec<SpeakerTurn>, num_speakers: usize) -> Self {
+        let speakers = speaker_summaries(&turns);
+        Self {
+            segments,
+            turns,
+            num_speakers,
+            schema_version: default_schema_version(),
+            audio: AudioMeta::default(),
+            provenance: Provenance {
+                version: env!("CARGO_PKG_VERSION").to_owned(),
+                ..Provenance::default()
+            },
+            speakers,
+        }
+    }
+
+    /// Attach audio metadata (builder).
+    pub fn with_audio(mut self, duration_secs: f64, sample_rate: u32) -> Self {
+        self.audio = AudioMeta {
+            duration_secs,
+            sample_rate,
+        };
+        self
+    }
+
+    /// Attach producer provenance (builder). Keeps the existing `version` when the
+    /// supplied `provenance.version` is empty.
+    pub fn with_provenance(mut self, provenance: Provenance) -> Self {
+        let version = if provenance.version.is_empty() {
+            self.provenance.version.clone()
+        } else {
+            provenance.version.clone()
+        };
+        self.provenance = Provenance {
+            version,
+            ..provenance
+        };
+        self
+    }
+}
+
+/// Per-speaker rollup (total speech + turn count) from turns, sorted by numeric
+/// speaker id, labelling each via the `SpeakerId` `Display`.
+fn speaker_summaries(turns: &[SpeakerTurn]) -> Vec<SpeakerSummary> {
+    use std::collections::BTreeMap;
+    let mut agg: BTreeMap<u32, (f64, usize)> = BTreeMap::new();
+    for t in turns {
+        let e = agg.entry(t.speaker.0).or_insert((0.0, 0));
+        e.0 += t.time.duration();
+        e.1 += 1;
+    }
+    agg.into_iter()
+        .map(|(id, (total, count))| SpeakerSummary {
+            label: SpeakerId(id).to_string(),
+            id,
+            total_speech_s: total,
+            turn_count: count,
+        })
+        .collect()
 }
 
 /// Configuration for speaker clustering.
@@ -548,6 +679,73 @@ mod profile_tests {
         assert_eq!("Mobile".parse::<Profile>().unwrap(), Profile::Mobile);
         assert_eq!("balanced".parse::<Profile>().unwrap(), Profile::Balanced);
         assert!("nope".parse::<Profile>().is_err());
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod diarization_result_tests {
+    use super::*;
+
+    fn turn(id: u32, start: f64, end: f64) -> SpeakerTurn {
+        SpeakerTurn {
+            speaker: SpeakerId(id),
+            time: TimeRange { start, end },
+            text: None,
+        }
+    }
+
+    #[test]
+    fn new_stamps_schema_version_and_provenance_version() {
+        let r = DiarizationResult::new(vec![], vec![], 0);
+        assert_eq!(r.schema_version, "diarization-result-v1");
+        assert_eq!(r.provenance.version, env!("CARGO_PKG_VERSION"));
+        assert!(r.speakers.is_empty());
+    }
+
+    #[test]
+    fn speakers_rollup_matches_turns_with_dual_id() {
+        let turns = vec![turn(0, 0.0, 2.0), turn(1, 2.0, 5.0), turn(0, 6.0, 7.0)];
+        let r = DiarizationResult::new(vec![], turns, 2);
+        assert_eq!(r.speakers.len(), 2);
+        // Dual representation: numeric id AND canonical string label.
+        assert_eq!(r.speakers[0].id, 0);
+        assert_eq!(r.speakers[0].label, "SPEAKER_00");
+        assert_eq!(r.speakers[0].turn_count, 2);
+        assert!((r.speakers[0].total_speech_s - 3.0).abs() < 1e-9); // 2.0 + 1.0
+        assert_eq!(r.speakers[1].id, 1);
+        assert_eq!(r.speakers[1].label, "SPEAKER_01");
+        assert_eq!(r.speakers[1].turn_count, 1);
+        assert!((r.speakers[1].total_speech_s - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn old_json_without_metadata_deserializes() {
+        // JSON shaped like the pre-v1 result (no metadata fields).
+        let json = r#"{"segments":[],"turns":[],"num_speakers":0}"#;
+        let r: DiarizationResult = serde_json::from_str(json).unwrap();
+        assert_eq!(r.num_speakers, 0);
+        assert_eq!(r.schema_version, "diarization-result-v1"); // serde default
+        assert_eq!(r.audio, AudioMeta::default());
+        assert_eq!(r.provenance, Provenance::default());
+        assert!(r.speakers.is_empty());
+    }
+
+    #[test]
+    fn round_trips_through_json_with_builders() {
+        let r = DiarizationResult::new(vec![], vec![turn(0, 0.0, 1.0)], 1)
+            .with_audio(12.5, 16000)
+            .with_provenance(Provenance {
+                profile: "balanced".to_owned(),
+                ..Provenance::default()
+            });
+        let json = serde_json::to_string(&r).unwrap();
+        let back: DiarizationResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(r, back);
+        assert_eq!(back.audio.sample_rate, 16000);
+        assert_eq!(back.provenance.profile, "balanced");
+        // version preserved by the builder when the supplied one is empty.
+        assert_eq!(back.provenance.version, env!("CARGO_PKG_VERSION"));
     }
 }
 
