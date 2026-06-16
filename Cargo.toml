@@ -107,6 +107,23 @@ profile-mobile = []
 profile-balanced = []
 profile-all = ["profile-mobile", "profile-balanced"]
 
+# MCP stdio server (agent front door). Opt-in only — NEVER in default. Pulls
+# rmcp + schemars + tokio and the full diarization pipeline stack so the `diarize`
+# tool can run. `ort` is the SAME crate dependency as the core (polyvoice-mcp is a
+# bin in this crate, not a separate crate), so the ONNX Runtime version matches
+# automatically — no dual-runtime risk.
+mcp = [
+    "onnx",
+    "download",
+    "segmentation",
+    "embedder",
+    "clusterer",
+    "resegmentation",
+    "dep:rmcp",
+    "dep:schemars",
+    "dep:tokio",
+]
+
 [dependencies]
 # ONNX Runtime — matches the ecosystem version.
 ort = { version = "2.0.0-rc.12", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs"] }
@@ -142,6 +159,9 @@ fastrand = "2.4.1"
 toml = { version = "0.8", optional = true }
 sha2 = { version = "0.10", optional = true }
 minisign-verify = { version = "0.2.5", optional = true }
+rmcp = { version = "1.7.0", default-features = false, features = ["server", "macros", "transport-io"], optional = true }
+schemars = { version = "1.2.1", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std"], optional = true }
 
 [dev-dependencies]
 hound = "3.5"
@@ -172,6 +192,11 @@ required-features = ["cli"]
 name = "polyvoice-bench"
 path = "src/bin/polyvoice-bench.rs"
 required-features = ["cli"]
+
+[[bin]]
+name = "polyvoice-mcp"
+path = "src/bin/polyvoice-mcp.rs"
+required-features = ["mcp"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(kani)'] }
