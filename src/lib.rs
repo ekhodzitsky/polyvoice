@@ -36,6 +36,8 @@
 //!   `features`, `der`, `utils`.
 
 pub mod ahc;
+pub mod asr;
+pub use asr::{Asr, AsrError};
 pub mod cluster;
 pub mod der;
 pub mod embedding;
@@ -145,7 +147,8 @@ pub use overlap::{OverlapRegion, detect_overlaps};
 pub use types::ClusterConfig;
 pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, Profile, SampleRate, Seconds, Segment,
-    SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, WordAlignment, remap_segments, remap_turns,
+    SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, Transcript, Word, WordAlignment,
+    remap_segments, remap_turns,
 };
 pub use window::{WindowBuffer, WindowIter};
 
