@@ -91,6 +91,10 @@ clusterer = []
 # caller (M6 Pipeline wires the embedder pool into this).
 resegmentation = []
 
+# v1.0 word->speaker attribution join (ASR words -> diarization turns).
+# Pure-Rust, wasm32-clean — no onnx/model/IO. Operates only on TimeRange/SpeakerId.
+attribution = []
+
 # v1.0 Pipeline + Profile builder API. Requires the full M1–M5 stack — the
 # builder loads ONNX through ModelRegistry (download feature) for
 # Mobile/Balanced profiles. The module gates itself with a `compile_error!`

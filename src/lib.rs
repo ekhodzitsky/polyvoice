@@ -107,6 +107,11 @@ pub use resegmentation::{
 #[cfg(all(feature = "resegmentation", feature = "segmentation"))]
 pub use resegmentation::extract_overlap_time_ranges;
 
+#[cfg(feature = "attribution")]
+pub mod attribution;
+#[cfg(feature = "attribution")]
+pub use attribution::attribute_words;
+
 pub mod pipeline;
 pub use pipeline::{Pipeline, PipelineError};
 
