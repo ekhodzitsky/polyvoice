@@ -141,10 +141,14 @@ fn model_hashes(registry: &ModelRegistry, profile: Profile) -> Vec<ModelHash> {
         Some(p) => p,
         None => return out,
     };
-    for model_id in [&prof.segmenter, &prof.embedder] {
+    // The legacy bench pipeline segments with Silero VAD (not the profile's
+    // powerset segmenter, which only the v2/hybrid path consumes) and embeds with
+    // the profile embedder. Report exactly those two so the integrity record names
+    // the models actually loaded for this DER number.
+    for model_id in ["silero_vad", prof.embedder.as_str()] {
         if let Some(entry) = manifest.model(model_id) {
             out.push(ModelHash {
-                model_id: model_id.clone(),
+                model_id: model_id.to_string(),
                 sha256: entry.sha256.clone(),
             });
         }

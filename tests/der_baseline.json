@@ -1,20 +1,48 @@
 {
   "schema": "polyvoice-der-baseline-v2",
-  "crate_version": "0.6.3",
-  "git_sha": "6ab2dce",
+  "crate_version": "0.7.0",
+  "git_sha": "20d352f",
   "command_line": "cargo run --release --features cli --bin polyvoice-bench -- data/<dataset> --profile balanced --collar 0.25",
   "voxconverse_test": {
     "files": 232,
     "profile": "balanced",
+    "threshold": 0.45,
     "der_collar_0_25": 13.83,
-    "der_no_collar": null,
+    "der_no_collar": 19.83,
+    "der_collar_macro": 13.60,
+    "der_collar_micro": 13.83,
+    "der_no_collar_macro": 19.55,
+    "der_no_collar_micro": 19.83,
+    "miss": 4.39,
+    "false_alarm": 3.78,
+    "confusion": 5.43,
+    "speaker_count": { "exact": 15, "plus_minus_1": 20, "off_by_2_or_more": 197 },
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — filled 2026-05-08 by v0.5.2 legacy pipeline (threshold=0.45)",
-    "_filled_by": "polyvoice-bench-v052"
+    "_status": "operational — full 232-file split remeasured 2026-06-16 on shipped FP32 (crate 0.7.0, git 20d352f, threshold 0.45) via polyvoice-bench. der_collar_0_25 / der_no_collar are micro (frame-weighted); *_macro are mean-of-per-file. Over-clustering dominates: confusion 5.43%, speaker count off-by-2+ on 197/232 files — the target of tasks 302 (threshold calibration) and 310 (recipe rewrite).",
+    "_filled_by": "polyvoice-bench-v0.8 (legacy pipeline)"
+  },
+  "ami_test": {
+    "files": 16,
+    "profile": "balanced",
+    "threshold": 0.45,
+    "der_collar_0_25": 26.04,
+    "der_no_collar": 33.96,
+    "der_collar_macro": 25.63,
+    "der_collar_micro": 26.04,
+    "der_no_collar_macro": 33.35,
+    "der_no_collar_micro": 33.96,
+    "speaker_count": { "exact": 0, "plus_minus_1": 0, "off_by_2_or_more": 16 },
+    "tolerance": 1.5,
+    "model_versions": {
+      "segmenter": "silero_vad",
+      "embedder": "wespeaker_resnet34"
+    },
+    "_status": "operational — full 16-meeting AMI test split (EN2002/ES2004/IS1009/TS3003 a-d, Mix-Headset) measured 2026-06-16 on shipped FP32 (crate 0.7.0, git 20d352f, threshold 0.45), no UEM (whole file scored). der_collar_0_25 / der_no_collar are micro; *_macro mean-of-per-file. Over-clustering is total on AMI (speaker count off-by-2+ on all 16 meetings) — a second-domain witness for 302/310.",
+    "_filled_by": "polyvoice-bench-v0.8 (legacy pipeline)"
   },
   "voxconverse_dev": {
     "files": null,
