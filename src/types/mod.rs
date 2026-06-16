@@ -362,6 +362,26 @@ pub struct WordAlignment {
     pub confidence: f32,
 }
 
+/// A single transcribed word with its time span and ASR confidence.
+///
+/// This is the raw ASR output (no speaker yet). The word→speaker join attributes
+/// each `Word` to a [`SpeakerTurn`], producing a [`WordAlignment`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Word {
+    /// The recognized word text.
+    pub word: String,
+    /// Time span of the word.
+    pub time: TimeRange,
+    /// ASR confidence in [0.0, 1.0].
+    pub confidence: f32,
+}
+
+/// A raw ASR transcript: an ordered list of [`Word`]s (no speaker labels yet).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Transcript {
+    pub words: Vec<Word>,
+}
+
 /// Audio metadata for a [`DiarizationResult`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AudioMeta {
@@ -746,6 +766,22 @@ mod diarization_result_tests {
         assert_eq!(back.provenance.profile, "balanced");
         // version preserved by the builder when the supplied one is empty.
         assert_eq!(back.provenance.version, env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn word_and_transcript_round_trip() {
+        let t = Transcript {
+            words: vec![
+                Word { word: "hello".into(), time: TimeRange { start: 0.0, end: 0.4 }, confidence: 0.95 },
+                Word { word: "world".into(), time: TimeRange { start: 0.4, end: 0.9 }, confidence: 0.88 },
+            ],
+        };
+        let json = serde_json::to_string(&t).unwrap();
+        let back: Transcript = serde_json::from_str(&json).unwrap();
+        assert_eq!(t, back);
+        assert_eq!(back.words.len(), 2);
+        assert_eq!(back.words[0].word, "hello");
+        assert_eq!(Transcript::default().words.len(), 0);
     }
 }
 
