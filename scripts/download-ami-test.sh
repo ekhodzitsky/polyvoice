@@ -31,23 +31,29 @@ echo "=== AMI Test Set Download ==="
 echo "Output: ${DATA_DIR}"
 echo ""
 
-# 1. Download RTTM ground truth (per-meeting files, concatenated)
+# 1. Download RTTM ground truth.
+# polyvoice-bench pairs each audio file with rttm/<stem>.rttm, where the audio
+# stem is "<MEETING>.Mix-Headset". So write one RTTM per meeting named to match
+# (<MEETING>.Mix-Headset.rttm) — a single concatenated file would be skipped by
+# the bench. A concatenated MixHeadset.test.rttm is also kept for other tooling.
 RTTM_FILE="${RTTM_DIR}/MixHeadset.test.rttm"
-if [ -f "$RTTM_FILE" ] && [ "$(wc -l < "$RTTM_FILE" | tr -d ' ')" -gt 10 ]; then
-    echo "[RTTM] Already exists: ${RTTM_FILE}"
+FIRST_PERFILE="${RTTM_DIR}/${TEST_MEETINGS[0]}.Mix-Headset.rttm"
+if [ -f "$FIRST_PERFILE" ]; then
+    echo "[RTTM] Already exists: per-meeting files in ${RTTM_DIR}"
 else
     echo "[RTTM] Downloading ground-truth annotations (${#TEST_MEETINGS[@]} meetings)..."
-    > "$RTTM_FILE"
+    : > "$RTTM_FILE"
     for MEETING in "${TEST_MEETINGS[@]}"; do
         echo -n "  ${MEETING}... "
-        if curl -sL "${RTTM_BASE}/${MEETING}.rttm" >> "$RTTM_FILE"; then
+        if curl -sL "${RTTM_BASE}/${MEETING}.rttm" -o "${RTTM_DIR}/${MEETING}.Mix-Headset.rttm"; then
+            cat "${RTTM_DIR}/${MEETING}.Mix-Headset.rttm" >> "$RTTM_FILE"
             echo "ok"
         else
             echo "FAILED"
         fi
     done
-    LINES=$(wc -l < "$RTTM_FILE" | tr -d ' ')
-    echo "[RTTM] Done: ${LINES} lines total"
+    COUNT=$(find "$RTTM_DIR" -name '*.Mix-Headset.rttm' | wc -l | tr -d ' ')
+    echo "[RTTM] Done: ${COUNT} per-meeting files (+ concatenated MixHeadset.test.rttm)"
 fi
 echo ""
 
