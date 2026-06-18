@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DER harness sweep (task 300) — the single sanctioned producer of DER numbers.
+# DER harness sweep — the single sanctioned producer of DER numbers.
 #
 # Runs polyvoice-bench on each dataset split SEPARATELY (dev/test never mixed) on
 # the EXACT shipped FP32 artifact, emitting per-split JSON reports that carry BOTH
