@@ -5,10 +5,12 @@ module: src/attribution
 level: leaf
 layer: algorithm
 purpose: >
-  Word->speaker attribution join: maps raw ASR words (Word) onto diarization
-  speaker turns (SpeakerTurn), producing WordAlignment per word. Pure-Rust,
-  wasm-clean, behind the opt-in `attribution` feature. Does NOT run ASR, load
-  models, touch ort, or do I/O — only interval arithmetic on TimeRange/SpeakerId.
+  Word->speaker attribution + the who-said-what cascade: maps raw ASR words
+  (Word) onto diarization speaker turns (SpeakerTurn) producing WordAlignment,
+  fills per-turn transcripts, and orchestrates a single ASR pass via &dyn Asr.
+  Pure-Rust, wasm-clean, behind the opt-in `attribution` feature. Does NOT load
+  models, touch ort, or do I/O of its own — only interval arithmetic on
+  TimeRange/SpeakerId; ASR enters through the core trait, never a model pull.
 status: stable
 owners:
   - polyvoice-core
@@ -45,11 +47,47 @@ surface:
       kind: unit-test
       target: src/attribution::mod::tests
       command: cargo test --features attribution --lib attribution
+  - name: who_said_what
+    kind: function
+    visibility: public
+    contract: >
+      who_said_what(&[SpeakerTurn], &dyn Asr, &[f32], SampleRate) ->
+      Result<WhoSaidWhat, AsrError>. The cascade: ONE asr.transcribe pass over the
+      whole audio, then attribute_and_fill to the supplied (already-diarized)
+      turns. Diarizer-agnostic; per-segment ASR is intentionally not done.
+    proof:
+      kind: unit-test
+      target: src/attribution::mod::tests::who_said_what_runs_one_asr_pass
+      command: cargo test --features attribution --lib attribution
+  - name: attribute_and_fill
+    kind: function
+    visibility: public
+    contract: >
+      attribute_and_fill(&[Word], &[SpeakerTurn]) -> WhoSaidWhat: attribute_words
+      then fill_turn_text. Pure (no ASR/IO).
+    proof:
+      kind: unit-test
+      target: src/attribution::mod::tests::cascade_assigns_speakers_and_fills_turn_text
+      command: cargo test --features attribution --lib attribution
+  - name: fill_turn_text
+    kind: function
+    visibility: public
+    contract: >
+      fill_turn_text(&[SpeakerTurn], &[WordAlignment]) -> Vec<SpeakerTurn>: sets
+      SpeakerTurn.text from words attributed to that turn's speaker whose midpoint
+      lies in the turn span, joined in time order; empty -> text None.
+    proof:
+      kind: unit-test
+      target: src/attribution::mod::tests::cascade_turn_text_is_time_ordered
+      command: cargo test --features attribution --lib attribution
 dependencies:
   internal:
     - module: types
       scope: data-shape
-      reason: Word / SpeakerTurn / WordAlignment / TimeRange / SpeakerId.
+      reason: Word / SpeakerTurn / WordAlignment / TimeRange / SpeakerId / SampleRate.
+    - module: asr
+      scope: trait
+      reason: Asr / AsrError — the cascade runs one ASR pass via &dyn Asr (no model pull).
   external: []
 consumers:
   - path: .
