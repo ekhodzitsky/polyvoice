@@ -98,6 +98,7 @@ where
         let cluster = SpeakerCluster::new(ClusterConfig {
             threshold: config.cluster.threshold,
             max_speakers: config.cluster.max_speakers,
+            ..Default::default()
         });
 
         let vad_state =
