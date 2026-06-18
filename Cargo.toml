@@ -20,14 +20,15 @@ categories = ["multimedia::audio", "science"]
 # Allowlist: ship only what a consumer needs to build/use the crate.
 # Everything else — per-module COAD docs (MODULE_CONTRACT/README/TODO), docs/,
 # scripts/, tests/, benchmarks/, demo.gif, models/*.onnx — is excluded
-# automatically. NOTE: src/models/{manifest.toml,signing.pub.base64}
-# are include_str!'d at compile time, and examples/hybrid_benchmark.rs +
-# benches/der_ami.rs are declared targets — all MUST stay listed or the published
-# crate fails to build/package.
+# automatically. NOTE: src/models/{manifest.toml,signing.pub.base64} and
+# schema/diarization-result-v1.json are include_str!'d at compile time, and
+# examples/hybrid_benchmark.rs + benches/der_ami.rs are declared targets — all
+# MUST stay listed or the published crate fails to build/package.
 include = [
   "src/**/*.rs",
   "src/models/manifest.toml",
   "src/models/signing.pub.base64",
+  "schema/diarization-result-v1.json",
   "benches/der_ami.rs",
   "examples/hybrid_benchmark.rs",
   "include/*.h",
