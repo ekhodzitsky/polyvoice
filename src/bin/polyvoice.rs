@@ -97,6 +97,8 @@ enum Command {
         /// Shell to generate completions for (bash, zsh, fish, powershell, elvish).
         shell: clap_complete::Shell,
     },
+    /// Print the JSON Schema of the diarization result to stdout (agent contract).
+    Schema,
 }
 
 #[derive(Subcommand, Debug)]
@@ -323,6 +325,14 @@ fn cmd_completions(shell: clap_complete::Shell) -> Result<()> {
     Ok(())
 }
 
+/// Print the canonical diarization-result JSON Schema to stdout — the
+/// machine-readable contract agents can read to know the `--json` shape.
+fn cmd_schema() -> Result<()> {
+    const SCHEMA: &str = include_str!("../../schema/diarization-result-v1.json");
+    print!("{SCHEMA}");
+    Ok(())
+}
+
 fn cmd_download_models(profile: String) -> Result<()> {
     let registry = ModelRegistry::default()?;
     match profile.as_str() {
@@ -405,6 +415,7 @@ fn main() -> Result<()> {
             ModelsCommand::Info { name } => cmd_models_info(name),
         },
         Some(Command::Completions { shell }) => cmd_completions(shell),
+        Some(Command::Schema) => cmd_schema(),
         None => cmd_diarize(cli.diarize),
     }
 }

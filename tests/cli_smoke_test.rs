@@ -115,3 +115,19 @@ fn bench_help_shows_args() {
         .stdout(predicate::str::contains("--collar"))
         .stdout(predicate::str::contains("--output"));
 }
+
+#[test]
+fn schema_outputs_valid_json_contract() {
+    let assert = polyvoice().arg("schema").assert().success();
+    let json: serde_json::Value =
+        serde_json::from_slice(&assert.get_output().stdout).expect("schema must be valid JSON");
+    assert_eq!(json["title"], "DiarizationResult");
+    // Core contract fields the agent relies on.
+    let required = json["required"].as_array().unwrap();
+    for f in ["segments", "turns", "num_speakers"] {
+        assert!(required.iter().any(|v| v == f), "missing required: {f}");
+    }
+    // Additive who-said-what fields are documented in the schema.
+    assert!(json["$defs"]["turn"]["properties"]["text"].is_object());
+    assert!(json["$defs"]["word"].is_object());
+}
