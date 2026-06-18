@@ -29,12 +29,35 @@ ort = { version = "=2.0.0-rc.12", default-features = false, features = [
     "copy-dylibs",
 ] }
 
+# CLI-only deps (gated behind the `cli` feature, used by the transcribe binary).
+clap = { version = "4", features = ["derive"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+anyhow = { version = "1", optional = true }
+
 [features]
 default = []
+# transcribe binary: pulls the full diarization stack from the core crate (the
+# legacy pipeline + registry) plus the attribution cascade, and CLI helpers. This
+# resolves the package cycle — the who-said-what CLI lives here, not in the core
+# crate (which cannot depend on this companion).
+cli = [
+    "polyvoice/cli",
+    "polyvoice/attribution",
+    "dep:clap",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:anyhow",
+]
 # Execution providers forwarded into parakeet-rs sessions — mirror core's EP set.
 coreml = ["ort/coreml"]
 xnnpack = ["ort/xnnpack"]
 nnapi = ["ort/nnapi"]
+
+[[bin]]
+name = "polyvoice-transcribe"
+path = "src/bin/transcribe.rs"
+required-features = ["cli"]
 
 # `ort` is a deliberate version-pin + feature-activation dependency (it forces the
 # shared ONNX runtime's version and turns on download-binaries), not referenced in

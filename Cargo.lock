@@ -2030,9 +2030,13 @@ dependencies = [
 name = "polyvoice-asr"
 version = "0.7.0"
 dependencies = [
+ "anyhow",
+ "clap",
  "ort",
  "parakeet-rs",
  "polyvoice",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
