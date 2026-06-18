@@ -1,3 +1,12 @@
+[workspace]
+# The core crate is the workspace root package; the opt-in ASR companion is the
+# only added member so they share one ONNX runtime (ort) and one lockfile.
+# python/ (maturin) and fuzz/ stay standalone — excluded so their builds and
+# lockfiles are unaffected.
+members = ["polyvoice-asr"]
+exclude = ["python", "fuzz"]
+resolver = "2"
+
 [package]
 name = "polyvoice"
 version = "0.7.0"
