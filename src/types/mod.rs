@@ -524,10 +524,17 @@ fn speaker_summaries(turns: &[SpeakerTurn]) -> Vec<SpeakerSummary> {
 /// Configuration for speaker clustering.
 #[derive(Debug, Clone, Copy)]
 pub struct ClusterConfig {
-    /// Cosine similarity threshold for assigning to an existing speaker.
+    /// Cosine similarity threshold: clusters whose centroids are at least this
+    /// similar are merged by the agglomerative clusterer. Higher = stricter =
+    /// more (smaller) clusters.
     pub threshold: f32,
     /// Maximum number of speakers to track.
     pub max_speakers: usize,
+    /// Minimum members a cluster must have to survive. After clustering, any
+    /// cluster smaller than this is dissolved and its frames reassigned to the
+    /// nearest large speaker centroid. This prunes spurious tiny clusters that
+    /// inflate the speaker count without hurting frame-DER. `1` disables pruning.
+    pub min_cluster_size: usize,
 }
 
 impl Default for ClusterConfig {
@@ -535,6 +542,15 @@ impl Default for ClusterConfig {
         Self {
             threshold: 0.45,
             max_speakers: 64,
+            // Pruning singleton clusters (size < 2) cuts over-clustering and
+            // lowers DER on real-length audio (VoxConverse-dev collar
+            // 7.97%→7.22%, speaker-count off-by-2+ 58→20 on the dev-80 sweep)
+            // while staying safe on short clips: a fixed min of 3-4 wins more on
+            // long files but wrongly dissolves real minority speakers on short
+            // ones (the bundled 26 s clip regresses 6.62%→9.54% at min 3). A
+            // length-aware / duration-based prune for the larger gain is future
+            // work. `1` disables pruning.
+            min_cluster_size: 2,
         }
     }
 }

@@ -30,6 +30,104 @@ pub fn agglomerative_cluster_max_clusters(
     ahc_impl(embeddings, threshold, max_clusters).0
 }
 
+/// Dissolve clusters smaller than `min_size` by reassigning each of their
+/// members to the nearest surviving (>= `min_size`) cluster centroid by cosine
+/// similarity, returning compact `0..K` labels. If no cluster reaches `min_size`
+/// the single largest is promoted to sole survivor so the result is never empty.
+/// `min_size <= 1` and the "no small clusters" case are pass-throughs.
+///
+/// Fixes over-clustering — speakers fragmented into tiny spurious clusters that
+/// inflate the speaker count — without merging large genuine speakers the way a
+/// lower global merge threshold would. Requires `embeddings.len() == labels.len()`.
+pub fn prune_small_clusters(
+    embeddings: &[Vec<f32>],
+    labels: Vec<usize>,
+    min_size: usize,
+) -> Vec<usize> {
+    if min_size <= 1 {
+        return labels;
+    }
+    let mut sizes: HashMap<usize, usize> = HashMap::new();
+    for &l in &labels {
+        *sizes.entry(l).or_insert(0) += 1;
+    }
+    let mut survivors: Vec<usize> = sizes
+        .iter()
+        .filter(|kv| *kv.1 >= min_size)
+        .map(|kv| *kv.0)
+        .collect();
+    if survivors.is_empty() {
+        // Degenerate: every cluster is below min_size — keep the largest
+        // (tie-break: smallest label) so the output is never empty.
+        let mut best: Option<(usize, usize)> = None; // (size, label)
+        for (&l, &s) in &sizes {
+            best = Some(match best {
+                Some((bs, bl)) if bs > s || (bs == s && bl <= l) => (bs, bl),
+                _ => (s, l),
+            });
+        }
+        match best {
+            Some((_, l)) => survivors.push(l),
+            None => return labels,
+        }
+    }
+    // Nothing to prune — labels are already compact from the clusterer.
+    if survivors.len() == sizes.len() {
+        return labels;
+    }
+    survivors.sort_unstable();
+    let sidx: HashMap<usize, usize> =
+        survivors.iter().enumerate().map(|(i, &l)| (l, i)).collect();
+
+    // L2-normalized centroid per survivor (indexed by survivor position).
+    let dim = embeddings.first().map(Vec::len).unwrap_or(0);
+    let mut centroids: Vec<Vec<f32>> = vec![vec![0.0f32; dim]; survivors.len()];
+    let mut counts: Vec<usize> = vec![0; survivors.len()];
+    for (i, &l) in labels.iter().enumerate() {
+        if let Some(&si) = sidx.get(&l) {
+            for (a, &x) in centroids[si].iter_mut().zip(embeddings[i].iter()) {
+                *a += x;
+            }
+            counts[si] += 1;
+        }
+    }
+    for (c, &n) in centroids.iter_mut().zip(counts.iter()) {
+        if n > 0 {
+            for v in c.iter_mut() {
+                *v /= n as f32;
+            }
+        }
+        let norm = c.iter().map(|x| x * x).sum::<f32>().sqrt();
+        if norm > 1e-12 {
+            for v in c.iter_mut() {
+                *v /= norm;
+            }
+        }
+    }
+
+    // Survivors keep their compact index; others go to the nearest survivor
+    // centroid. Result is compact 0..survivors.len() by construction.
+    let mut out = vec![0usize; labels.len()];
+    for (i, &l) in labels.iter().enumerate() {
+        out[i] = match sidx.get(&l) {
+            Some(&si) => si,
+            None => {
+                let mut best = 0usize;
+                let mut best_sim = f32::NEG_INFINITY;
+                for (si, c) in centroids.iter().enumerate() {
+                    let sim = cosine_similarity(&embeddings[i], c);
+                    if sim > best_sim {
+                        best_sim = sim;
+                        best = si;
+                    }
+                }
+                best
+            }
+        };
+    }
+    out
+}
+
 /// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
 /// `pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32)`
 /// { ret.0.len() == embeddings.len() && ret.0.iter().all(|&l| l < embeddings.len()) && ret.1 >= 0.0 }

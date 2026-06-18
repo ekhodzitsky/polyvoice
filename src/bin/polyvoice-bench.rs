@@ -6,8 +6,11 @@ use clap::Parser;
 use polyvoice::der::{compute_der, compute_der_decomposition, compute_der_with_uem, parse_uem};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline;
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig};
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
-use polyvoice::types::{ClusterConfig, DiarizationConfig, Profile, SampleRate, TimeRange};
+use polyvoice::types::{
+    ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate, TimeRange,
+};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
@@ -33,6 +36,15 @@ struct Args {
     max_files: Option<usize>,
     #[arg(long, default_value = "0.45")]
     threshold: f32,
+    /// Which pipeline to benchmark: `legacy` (Silero VAD + sliding-window
+    /// embeddings + AHC, the shipped default) or `v2` (powerset segmentation +
+    /// overlap-add + masked embeddings + centroid-AHC + min_cluster_size).
+    #[arg(long, default_value = "legacy")]
+    pipeline: String,
+    /// Override the v2 pipeline's min_cluster_size (clusters smaller than this are
+    /// dissolved into the nearest large speaker). Ignored by the legacy pipeline.
+    #[arg(long)]
+    min_cluster_size: Option<usize>,
     /// Optional .uem file. Restricts DER to the scored regions per file (frames
     /// outside the UEM are dropped from both mapping and counts).
     #[arg(long)]
@@ -134,18 +146,19 @@ fn git_sha() -> String {
         .unwrap_or_else(|| "unknown".to_owned())
 }
 
-fn model_hashes(registry: &ModelRegistry, profile: Profile) -> Vec<ModelHash> {
+fn model_hashes(registry: &ModelRegistry, profile: Profile, segmenter_id: &str) -> Vec<ModelHash> {
     let mut out = Vec::new();
     let manifest = registry.manifest();
     let prof = match manifest.profile(profile.manifest_id()) {
         Some(p) => p,
         None => return out,
     };
-    // The legacy bench pipeline segments with Silero VAD (not the profile's
-    // powerset segmenter, which only the v2/hybrid path consumes) and embeds with
-    // the profile embedder. Report exactly those two so the integrity record names
-    // the models actually loaded for this DER number.
-    for model_id in ["silero_vad", prof.embedder.as_str()] {
+    // Report exactly the models the chosen pipeline actually loads: the legacy
+    // path segments with Silero VAD, the v2 path with the profile's powerset
+    // segmenter — `segmenter_id` carries the right one. Both embed with the
+    // profile embedder. This keeps the integrity record honest about what
+    // produced the DER number.
+    for model_id in [segmenter_id, prof.embedder.as_str()] {
         if let Some(entry) = manifest.model(model_id) {
             out.push(ModelHash {
                 model_id: model_id.to_string(),
@@ -198,6 +211,30 @@ fn hex_lower(bytes: &[u8]) -> String {
     s
 }
 
+/// Legacy pipeline + its ONNX sessions (Silero VAD + sliding-window embedder).
+struct LegacyRunner {
+    pipeline: Pipeline,
+    extractor: FbankOnnxExtractor,
+    vad: SileroVad,
+}
+
+/// The pipeline under benchmark. Both arms produce a `DiarizationResult` so all
+/// downstream DER / speaker-count reporting is shared. Both payloads are boxed
+/// so the variants are the same (pointer) size.
+enum Runner {
+    Legacy(Box<LegacyRunner>),
+    V2(Box<V2Pipeline>),
+}
+
+impl Runner {
+    fn run(&mut self, samples: &[f32], sr: SampleRate) -> Result<DiarizationResult> {
+        match self {
+            Runner::Legacy(l) => Ok(l.pipeline.run(samples, &l.extractor, &mut l.vad)?),
+            Runner::V2(p) => Ok(p.run(samples, sr)?),
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let profile = parse_profile(&args.profile)?;
@@ -206,16 +243,74 @@ fn main() -> Result<()> {
         .ensure_for_profile(profile)
         .context("ensure models")?;
 
-    let embedding_dim = profile.embedding_dim();
-    let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
-        .context("load embedder")?;
-    let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
-    let mut vad = SileroVad::new(&vad_path, 512).context("load vad")?;
+    // Build the requested pipeline. Each path verifies the integrity of exactly
+    // the models it loads and returns the segmenter id for the report.
+    let (mut runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
+        "v2" => {
+            let mut cfg = PipelineConfig {
+                profile,
+                clusterer: ClustererKind::Ahc {
+                    threshold: args.threshold,
+                },
+                ..PipelineConfig::default()
+            };
+            if let Some(mcs) = args.min_cluster_size {
+                cfg.min_cluster_size = mcs;
+            }
+            // v2 segments with the profile's powerset model — verify it + embedder.
+            let seg_id = registry
+                .manifest()
+                .profile(profile.manifest_id())
+                .map(|p| p.segmenter.clone())
+                .unwrap_or_else(|| "powerset_fp32".to_owned());
+            let emb_id = registry
+                .manifest()
+                .profile(profile.manifest_id())
+                .map(|p| p.embedder.clone())
+                .unwrap_or_default();
+            check_model_sha256(&registry, &seg_id, &models.segmenter_path)?;
+            check_model_sha256(&registry, &emb_id, &models.embedder_path)?;
+            let pipeline = V2Pipeline::builder()
+                .config(cfg)
+                .with_models_from(registry.clone())
+                .build()
+                .context("build v2 pipeline")?;
+            (Runner::V2(Box::new(pipeline)), seg_id)
+        }
+        other => {
+            if other != "legacy" {
+                anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')");
+            }
+            let embedding_dim = profile.embedding_dim();
+            let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
+                .context("load embedder")?;
+            let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
+            let vad = SileroVad::new(&vad_path, 512).context("load vad")?;
 
-    // Integrity gate: a DER number is only trustworthy if produced by
-    // the EXACT shipped artifact — hard-fail if the on-disk embedder/VAD sha256
-    // disagrees with the manifest (swapped, corrupted, or non-FP32 cache).
-    verify_model_integrity(&registry, profile, &models.embedder_path, &vad_path)?;
+            // Integrity gate: a DER number is only trustworthy if produced by
+            // the EXACT shipped artifact — hard-fail if the on-disk embedder/VAD
+            // sha256 disagrees with the manifest (swapped/corrupted/non-FP32).
+            verify_model_integrity(&registry, profile, &models.embedder_path, &vad_path)?;
+
+            let config = DiarizationConfig {
+                cluster: ClusterConfig {
+                    threshold: args.threshold,
+                    min_cluster_size: args.min_cluster_size.unwrap_or(1),
+                    ..Default::default()
+                },
+                ..DiarizationConfig::default()
+            };
+            let pipeline = Pipeline::new(config, VadConfig::default());
+            (
+                Runner::Legacy(Box::new(LegacyRunner {
+                    pipeline,
+                    extractor,
+                    vad,
+                })),
+                "silero_vad".to_owned(),
+            )
+        }
+    };
 
     // Optional UEM scoped regions, keyed by file id.
     let uem_map: Option<HashMap<String, Vec<TimeRange>>> = match &args.uem {
@@ -226,16 +321,6 @@ fn main() -> Result<()> {
         }
         None => None,
     };
-
-    let config = DiarizationConfig {
-        cluster: ClusterConfig {
-            threshold: args.threshold,
-            ..Default::default()
-        },
-        ..DiarizationConfig::default()
-    };
-    let vad_config = VadConfig::default();
-    let pipeline = Pipeline::new(config, vad_config);
 
     let audio_dir = args.dataset.join("audio");
     let rttm_dir = args.dataset.join("rttm");
@@ -275,12 +360,12 @@ fn main() -> Result<()> {
             continue;
         }
         let (samples, sr_hz) = read_wav(wav)?;
-        let _sr = SampleRate::new(sr_hz)
+        let sr = SampleRate::new(sr_hz)
             .ok_or_else(|| anyhow::anyhow!("invalid sample rate: {sr_hz}"))?;
         let audio_secs = samples.len() as f64 / sr_hz as f64;
 
         let t0 = Instant::now();
-        let result = pipeline.run(&samples, &extractor, &mut vad)?;
+        let result = runner.run(&samples, sr)?;
         let runtime_secs = t0.elapsed().as_secs_f64();
 
         let ref_turns = {
@@ -434,7 +519,7 @@ fn main() -> Result<()> {
             plus_minus_1: speaker_count_pm1,
             off_by_2_or_more: speaker_count_off,
         },
-        model_hashes: model_hashes(&registry, profile),
+        model_hashes: model_hashes(&registry, profile, &segmenter_id),
         per_file,
     };
     let json = serde_json::to_string_pretty(&report)?;
