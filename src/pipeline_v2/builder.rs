@@ -230,6 +230,20 @@ impl PipelineBuilder {
                         ))
                     }
                 };
+                // Activate min_cluster_size pruning (this config field was
+                // previously dead — never read by any clusterer). Dissolves
+                // spurious sub-min clusters into the nearest large speaker: the
+                // over-clustering fix that a global threshold cannot achieve
+                // without over-merging real speakers. Profile path only — Custom
+                // callers own their clusterer and opt in via with_clusterer.
+                let min_size = self.config.min_cluster_size;
+                let clusterer: Box<dyn Clusterer> = if min_size > 1 {
+                    Box::new(crate::clusterer::MinClusterSizeClusterer::new(
+                        clusterer, min_size,
+                    ))
+                } else {
+                    clusterer
+                };
                 Ok(Pipeline::from_components(
                     self.config,
                     segmenter,

@@ -90,7 +90,7 @@ pub use embedder::{CamPlusPlusExtractor, ResNet34Adapter};
 pub mod clusterer;
 
 #[cfg(feature = "clusterer")]
-pub use clusterer::{AhcClusterer, Clusterer, ClustererError};
+pub use clusterer::{AhcClusterer, Clusterer, ClustererError, MinClusterSizeClusterer};
 
 #[cfg(all(feature = "clusterer", feature = "spectral"))]
 pub use clusterer::NmeScClusterer;
