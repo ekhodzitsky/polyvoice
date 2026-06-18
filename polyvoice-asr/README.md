@@ -30,6 +30,23 @@ longer than the chunk window (default 240 s, 5 s overlap) is split into
 overlapping chunks whose word timestamps are stitched at the overlap midpoint —
 no duplicated or dropped words at the seams. Tune with `.with_chunking(secs, overlap)`.
 
+## CLI: who-said-what
+
+The `polyvoice-transcribe` binary (behind the `cli` feature) runs the full
+cascade — diarize (validated legacy pipeline) → one ASR pass → join — and emits
+who-said-what. It lives here rather than in the core `polyvoice` CLI because the
+core crate cannot depend on this companion (package cycle).
+
+```bash
+cargo run -p polyvoice-asr --features cli --bin polyvoice-transcribe -- \
+    meeting.wav --asr-model ./models/parakeet-tdt --format json
+```
+
+- `--format json` — turns with `text` + a per-word array (matches
+  `schema/diarization-result-v1.json`); `srt` / `vtt` / `txt` render
+  `SPEAKER_NN: text`.
+- stdout carries only the result; progress goes to stderr.
+
 ## Model files
 
 Download the TDT ONNX export into one directory and point `from_dir` at it.
