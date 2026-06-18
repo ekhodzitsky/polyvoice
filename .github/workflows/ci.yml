@@ -97,6 +97,21 @@ jobs:
           tool: cargo-nextest
       - run: cargo nextest run --profile ci ${{ matrix.flags }} --locked
 
+  asr-companion:
+    # Opt-in ASR companion (polyvoice-asr). Enforces the shared-runtime invariant
+    # (one ort version across the workspace) and builds/tests the crate.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Single shared ort across the workspace
+        run: bash scripts/check-ort-version.sh
+      - run: cargo clippy -p polyvoice-asr --all-targets --locked -- -D warnings
+      - run: cargo test -p polyvoice-asr --locked
+
   doc:
     runs-on: ubuntu-latest
     steps:

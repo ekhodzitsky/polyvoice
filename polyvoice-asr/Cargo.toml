@@ -1,0 +1,46 @@
+[package]
+name = "polyvoice-asr"
+version = "0.7.0"
+edition = "2024"
+rust-version = "1.85.0"
+description = "Opt-in ASR companion for polyvoice: Parakeet TDT word-level transcription via parakeet-rs, sharing the core ONNX runtime."
+license = "MIT"
+repository = "https://github.com/ekhodzitsky/polyvoice"
+keywords = ["asr", "speech-recognition", "parakeet", "diarization", "onnx"]
+categories = ["multimedia::audio", "science"]
+# Not yet published — the workspace's release pipeline is the sole publisher; flip
+# this when the companion is registered.
+publish = false
+
+[dependencies]
+# Core trait + types only. polyvoice's default features are empty, so NOTHING
+# from the ONNX pipeline leaks in here — we only need Asr/AsrError + Word types.
+polyvoice = { path = "..", default-features = false }
+# Parakeet TDT + native word-level timestamps. MIT OR Apache-2.0.
+parakeet-rs = "0.3.6"
+# MUST stay byte-equal to the core ort pin — ONE shared ONNX runtime, never two.
+# parakeet-rs pins the same 2.0.0-rc.12; the `=` makes a future divergence a hard
+# build error. scripts/check-ort-version.sh asserts a single version in CI.
+ort = { version = "=2.0.0-rc.12", default-features = false, features = [
+    "std",
+    "ndarray",
+    "download-binaries",
+    "tls-rustls",
+    "copy-dylibs",
+] }
+
+[features]
+default = []
+# Execution providers forwarded into parakeet-rs sessions — mirror core's EP set.
+coreml = ["ort/coreml"]
+xnnpack = ["ort/xnnpack"]
+nnapi = ["ort/nnapi"]
+
+# `ort` is a deliberate version-pin + feature-activation dependency (it forces the
+# shared ONNX runtime's version and turns on download-binaries), not referenced in
+# code — so cargo-machete must not flag it as unused.
+[package.metadata.cargo-machete]
+ignored = ["ort"]
+
+[lints.clippy]
+unwrap_used = "deny"
