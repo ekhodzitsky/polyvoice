@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ekhodzitsky/polyvoice/blob/master/schema/diarization-result-v1.json",
+  "title": "DiarizationResult",
+  "description": "Canonical polyvoice diarization result (schema family `diarization-result-v1`). This is the machine-readable contract for the `--json` CLI output, the Python/FFI projections, and the MCP `diarize` tool. Evolution within v1 is strictly additive: optional fields (notably `turns[].text` and per-word transcription) may appear; a consumer that ignores unknown fields stays forward-compatible.",
+  "type": "object",
+  "required": ["segments", "turns", "num_speakers"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "diarization-result-v1",
+      "description": "Schema family identifier. Stable across additive changes."
+    },
+    "num_speakers": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of distinct speakers detected."
+    },
+    "segments": {
+      "type": "array",
+      "description": "Raw per-window segments before turn merging.",
+      "items": { "$ref": "#/$defs/segment" }
+    },
+    "turns": {
+      "type": "array",
+      "description": "Merged speaker turns — the primary 'who spoke when' output.",
+      "items": { "$ref": "#/$defs/turn" }
+    },
+    "audio": { "$ref": "#/$defs/audio" },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "speakers": {
+      "type": "array",
+      "description": "Per-speaker rollup, sorted by id.",
+      "items": { "$ref": "#/$defs/speaker" }
+    }
+  },
+  "$defs": {
+    "timeRange": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "number", "description": "Start time in seconds." },
+        "end": { "type": "number", "description": "End time in seconds." }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "required": ["time"],
+      "properties": {
+        "time": { "$ref": "#/$defs/timeRange" },
+        "speaker": {
+          "type": ["integer", "null"],
+          "description": "Numeric speaker id, or null if not yet clustered."
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "description": "Assignment confidence (cosine similarity or posterior)."
+        }
+      }
+    },
+    "turn": {
+      "type": "object",
+      "required": ["speaker", "time"],
+      "properties": {
+        "speaker": { "type": "integer", "description": "Numeric speaker id (label is `SPEAKER_{id:02}`)." },
+        "time": { "$ref": "#/$defs/timeRange" },
+        "text": {
+          "type": "string",
+          "description": "Transcript for this turn. ADDITIVE: present only when an ASR backend (polyvoice-asr) ran the who-said-what cascade; absent otherwise."
+        }
+      }
+    },
+    "word": {
+      "type": "object",
+      "description": "ADDITIVE per-word alignment, emitted only by the who-said-what surfaces (diarize + ASR). Not part of the bare diarization result.",
+      "required": ["word", "time", "confidence"],
+      "properties": {
+        "word": { "type": "string" },
+        "time": { "$ref": "#/$defs/timeRange" },
+        "speaker": { "type": ["integer", "null"], "description": "Attributed speaker id (dominant on overlap), or null." },
+        "confidence": { "type": "number", "description": "ASR confidence in [0,1], scaled by turn-coverage share." }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "description": "Audio metadata.",
+      "properties": {
+        "duration_secs": { "type": "number" },
+        "sample_rate": { "type": "integer" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "How the result was produced.",
+      "properties": {
+        "version": { "type": "string", "description": "polyvoice crate version." },
+        "profile": { "type": "string" },
+        "segmenter": { "type": "string", "description": "Segmentation/VAD model id." },
+        "embedder": { "type": "string", "description": "Speaker-embedding model id." },
+        "clusterer": { "type": "string" }
+      }
+    },
+    "speaker": {
+      "type": "object",
+      "description": "Per-speaker rollup entry.",
+      "properties": {
+        "label": { "type": "string", "description": "Canonical label, e.g. \"SPEAKER_00\"." },
+        "id": { "type": "integer" },
+        "total_speech_s": { "type": "number" },
+        "turn_count": { "type": "integer" }
+      }
+    }
+  }
+}
