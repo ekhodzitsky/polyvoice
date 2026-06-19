@@ -4,6 +4,7 @@
 //! two most similar clusters are merged iteratively until no pair exceeds
 //! the cosine similarity threshold.
 
+use crate::types::TimeRange;
 use crate::utils::{cosine_similarity, l2_normalize};
 use std::collections::HashMap;
 
@@ -30,7 +31,7 @@ pub fn agglomerative_cluster_max_clusters(
     ahc_impl(embeddings, threshold, max_clusters).0
 }
 
-/// Dissolve clusters smaller than `min_size` by reassigning each of their
+/// Dissolve clusters smaller than `min_size` members by reassigning each of their
 /// members to the nearest surviving (>= `min_size`) cluster centroid by cosine
 /// similarity, returning compact `0..K` labels. If no cluster reaches `min_size`
 /// the single largest is promoted to sole survivor so the result is never empty.
@@ -51,33 +52,105 @@ pub fn prune_small_clusters(
     for &l in &labels {
         *sizes.entry(l).or_insert(0) += 1;
     }
-    let mut survivors: Vec<usize> = sizes
+    // Survivors: clusters with >= min_size members; tie-break for the degenerate
+    // "all small" case is the largest by size then smallest label.
+    let survivors = survivors_or_largest(&sizes, |&size| size >= min_size);
+    finish_prune(embeddings, labels, survivors, sizes.len())
+}
+
+/// Like [`prune_small_clusters`] but length-invariant: a cluster survives when
+/// its total (overlap-merged) speech **duration** is at least `min_secs`. This
+/// avoids the short-audio failure of a fixed member count — a real minority
+/// speaker keeps its few-but-long windows while genuinely brief spurious clusters
+/// are dissolved, on clips of any length. `min_secs <= 0` is a pass-through.
+/// Requires `time_ranges.len() == embeddings.len() == labels.len()`.
+pub fn prune_small_clusters_by_duration(
+    time_ranges: &[TimeRange],
+    embeddings: &[Vec<f32>],
+    labels: Vec<usize>,
+    min_secs: f64,
+) -> Vec<usize> {
+    if min_secs <= 0.0 {
+        return labels;
+    }
+    let durations = cluster_durations(time_ranges, &labels);
+    let survivors = survivors_or_largest(&durations, |&d| d >= min_secs);
+    finish_prune(embeddings, labels, survivors, durations.len())
+}
+
+/// Overlap-merged total duration of each cluster's member windows.
+fn cluster_durations(time_ranges: &[TimeRange], labels: &[usize]) -> HashMap<usize, f64> {
+    let mut by_label: HashMap<usize, Vec<(f64, f64)>> = HashMap::new();
+    for (i, &l) in labels.iter().enumerate() {
+        if let Some(t) = time_ranges.get(i) {
+            by_label.entry(l).or_default().push((t.start, t.end));
+        }
+    }
+    let mut out = HashMap::with_capacity(by_label.len());
+    for (l, mut spans) in by_label {
+        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut total = 0.0_f64;
+        let mut cur: Option<(f64, f64)> = None;
+        for (s, e) in spans {
+            cur = match cur {
+                Some((cs, ce)) if s <= ce => Some((cs, ce.max(e))),
+                Some((cs, ce)) => {
+                    total += ce - cs;
+                    Some((s, e))
+                }
+                None => Some((s, e)),
+            };
+        }
+        if let Some((cs, ce)) = cur {
+            total += ce - cs;
+        }
+        out.insert(l, total);
+    }
+    out
+}
+
+/// Choose the surviving labels: those whose metric passes `keep`. If none pass,
+/// promote the single label with the largest metric (tie-break: smallest label)
+/// so the result is never empty.
+fn survivors_or_largest<M>(metrics: &HashMap<usize, M>, keep: impl Fn(&M) -> bool) -> Vec<usize>
+where
+    M: PartialOrd + Copy,
+{
+    let mut survivors: Vec<usize> = metrics
         .iter()
-        .filter(|kv| *kv.1 >= min_size)
+        .filter(|kv| keep(kv.1))
         .map(|kv| *kv.0)
         .collect();
     if survivors.is_empty() {
-        // Degenerate: every cluster is below min_size — keep the largest
-        // (tie-break: smallest label) so the output is never empty.
-        let mut best: Option<(usize, usize)> = None; // (size, label)
-        for (&l, &s) in &sizes {
+        let mut best: Option<(M, usize)> = None;
+        for (&l, &m) in metrics {
             best = Some(match best {
-                Some((bs, bl)) if bs > s || (bs == s && bl <= l) => (bs, bl),
-                _ => (s, l),
+                Some((bm, bl)) if bm > m || (bm == m && bl <= l) => (bm, bl),
+                _ => (m, l),
             });
         }
-        match best {
-            Some((_, l)) => survivors.push(l),
-            None => return labels,
+        if let Some((_, l)) = best {
+            survivors.push(l);
         }
     }
-    // Nothing to prune — labels are already compact from the clusterer.
-    if survivors.len() == sizes.len() {
+    survivors
+}
+
+/// Shared tail: reassign members of non-surviving clusters to the nearest
+/// survivor centroid by cosine similarity, returning compact `0..K` labels.
+/// `total_clusters` is the count of distinct labels before pruning — when every
+/// cluster survives the input (already compact) is returned untouched.
+fn finish_prune(
+    embeddings: &[Vec<f32>],
+    labels: Vec<usize>,
+    mut survivors: Vec<usize>,
+    total_clusters: usize,
+) -> Vec<usize> {
+    if survivors.is_empty() || survivors.len() == total_clusters {
         return labels;
     }
     survivors.sort_unstable();
-    let sidx: HashMap<usize, usize> =
-        survivors.iter().enumerate().map(|(i, &l)| (l, i)).collect();
+    let sidx: HashMap<usize, usize> = survivors.iter().enumerate().map(|(i, &l)| (l, i)).collect();
 
     // L2-normalized centroid per survivor (indexed by survivor position).
     let dim = embeddings.first().map(Vec::len).unwrap_or(0);
@@ -355,6 +428,81 @@ mod tests {
     fn test_agglomerative_cluster_empty() {
         let labels = agglomerative_cluster(&[], 0.5);
         assert!(labels.is_empty());
+    }
+
+    // --- duration-based pruning ---
+
+    fn ax(a: usize) -> Vec<f32> {
+        let mut v = vec![0.02f32, 0.02, 0.02];
+        v[a] = 1.0;
+        v
+    }
+    fn tr(s: f64, e: f64) -> TimeRange {
+        TimeRange { start: s, end: e }
+    }
+    fn ndistinct(labels: &[usize]) -> usize {
+        let set: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        set.len()
+    }
+
+    #[test]
+    fn prune_by_duration_dissolves_brief_cluster() {
+        // cluster 0: ~3 s on axis 0; cluster 1: one 0.5 s window on axis 1.
+        let embeddings = vec![ax(0), ax(0), ax(0), ax(0), ax(1)];
+        let times = vec![
+            tr(0.0, 1.0),
+            tr(0.75, 1.75),
+            tr(1.5, 2.5),
+            tr(2.25, 3.25),
+            tr(5.0, 5.5),
+        ];
+        let out = prune_small_clusters_by_duration(&times, &embeddings, vec![0, 0, 0, 0, 1], 1.5);
+        assert_eq!(out.len(), 5);
+        assert_eq!(ndistinct(&out), 1, "the brief 0.5 s cluster is dissolved");
+    }
+
+    #[test]
+    fn prune_by_duration_keeps_few_but_long_speaker() {
+        // cluster 1 has only TWO windows but 4 s of speech — it survives duration
+        // pruning, whereas the member-count rule (min 4) wrongly dissolves it.
+        let embeddings = vec![ax(0), ax(0), ax(0), ax(0), ax(0), ax(0), ax(1), ax(1)];
+        let times = vec![
+            tr(0.0, 1.0),
+            tr(0.75, 1.75),
+            tr(1.5, 2.5),
+            tr(2.25, 3.25),
+            tr(3.0, 4.0),
+            tr(3.75, 4.75),
+            tr(10.0, 12.0),
+            tr(12.0, 14.0),
+        ];
+        let labels = vec![0, 0, 0, 0, 0, 0, 1, 1];
+        let dur = prune_small_clusters_by_duration(&times, &embeddings, labels.clone(), 1.5);
+        assert_eq!(ndistinct(&dur), 2, "few-but-long cluster survives duration prune");
+        assert_ne!(dur[0], dur[6]);
+        // Contrast: the count rule over-prunes the same 2-member cluster.
+        let cnt = prune_small_clusters(&embeddings, labels, 4);
+        assert_eq!(ndistinct(&cnt), 1, "count rule over-prunes the long-but-few cluster");
+    }
+
+    #[test]
+    fn prune_by_duration_zero_is_passthrough() {
+        let embeddings = vec![ax(0), ax(1)];
+        let times = vec![tr(0.0, 0.1), tr(1.0, 1.1)];
+        let labels = vec![0, 1];
+        assert_eq!(
+            prune_small_clusters_by_duration(&times, &embeddings, labels.clone(), 0.0),
+            labels
+        );
+    }
+
+    #[test]
+    fn prune_by_duration_all_short_keeps_one() {
+        let embeddings = vec![ax(0), ax(1), ax(2)];
+        let times = vec![tr(0.0, 0.2), tr(1.0, 1.2), tr(2.0, 2.2)];
+        let out = prune_small_clusters_by_duration(&times, &embeddings, vec![0, 1, 2], 5.0);
+        assert_eq!(out.len(), 3);
+        assert_eq!(ndistinct(&out), 1, "all-short collapses to one survivor");
     }
 
     #[test]

@@ -41,10 +41,14 @@ struct Args {
     /// overlap-add + masked embeddings + centroid-AHC + min_cluster_size).
     #[arg(long, default_value = "legacy")]
     pipeline: String,
-    /// Override the v2 pipeline's min_cluster_size (clusters smaller than this are
-    /// dissolved into the nearest large speaker). Ignored by the legacy pipeline.
+    /// Min cluster size (members): clusters smaller than this are dissolved into
+    /// the nearest large speaker. Applies to both pipelines.
     #[arg(long)]
     min_cluster_size: Option<usize>,
+    /// Min cluster duration in seconds (length-invariant pruning). When > 0 it
+    /// takes precedence over --min-cluster-size on the legacy pipeline.
+    #[arg(long)]
+    min_cluster_secs: Option<f64>,
     /// Optional .uem file. Restricts DER to the scored regions per file (frames
     /// outside the UEM are dropped from both mapping and counts).
     #[arg(long)]
@@ -296,6 +300,7 @@ fn main() -> Result<()> {
                 cluster: ClusterConfig {
                     threshold: args.threshold,
                     min_cluster_size: args.min_cluster_size.unwrap_or(1),
+                    min_cluster_secs: args.min_cluster_secs.unwrap_or(0.0),
                     ..Default::default()
                 },
                 ..DiarizationConfig::default()

@@ -106,13 +106,23 @@ impl Pipeline {
         }
 
         let labels = agglomerative_cluster(&embeddings, self.config.cluster.threshold);
-        // Dissolve spurious sub-min clusters into the nearest large speaker —
-        // the over-clustering fix (no-op at the default min_cluster_size of 1).
-        let labels = crate::ahc::prune_small_clusters(
-            &embeddings,
-            labels,
-            self.config.cluster.min_cluster_size,
-        );
+        // Dissolve spurious tiny clusters into the nearest large speaker — the
+        // over-clustering fix. Duration pruning (length-invariant) takes
+        // precedence when configured; otherwise the member-count rule applies.
+        let labels = if self.config.cluster.min_cluster_secs > 0.0 {
+            crate::ahc::prune_small_clusters_by_duration(
+                &time_ranges,
+                &embeddings,
+                labels,
+                self.config.cluster.min_cluster_secs,
+            )
+        } else {
+            crate::ahc::prune_small_clusters(
+                &embeddings,
+                labels,
+                self.config.cluster.min_cluster_size,
+            )
+        };
         let num_speakers = labels.iter().copied().max().map_or(0, |m| m + 1);
 
         let mut segments: Vec<Segment> = labels
