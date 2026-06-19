@@ -26,6 +26,14 @@ pub trait Clusterer: Send + Sync {
 
     /// Hard ceiling on the number of clusters this implementation can produce.
     fn max_clusters(&self) -> usize;
+
+    /// Whether this clusterer wants raw (non-L2-normalized) embeddings. Cosine
+    /// clusterers (AHC, NME-SC) are scale-invariant and default to `false`; a PLDA
+    /// backend needs the original embedding scale for its mean-centering and
+    /// overrides to `true`.
+    fn wants_raw_embeddings(&self) -> bool {
+        false
+    }
 }
 
 /// Errors from `Clusterer` implementations.
@@ -164,6 +172,10 @@ impl Clusterer for MinClusterSizeClusterer {
 
     fn max_clusters(&self) -> usize {
         self.inner.max_clusters()
+    }
+
+    fn wants_raw_embeddings(&self) -> bool {
+        self.inner.wants_raw_embeddings()
     }
 }
 

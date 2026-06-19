@@ -245,15 +245,21 @@ pub struct VbxClusterer {
     ahc_threshold: f32,
     max_speakers: usize,
     lda_dim: usize,
+    /// Scale applied to the (L2-normalized) input embeddings before the PLDA
+    /// transform, to restore the raw WeSpeaker magnitude the PLDA mean-centering
+    /// expects (the pipeline embedder L2-normalizes by contract, discarding it).
+    emb_scale: f32,
 }
 
 impl VbxClusterer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         plda: PldaModel,
         config: VbxConfig,
         ahc_threshold: f32,
         max_speakers: usize,
         lda_dim: usize,
+        emb_scale: f32,
     ) -> Self {
         Self {
             plda,
@@ -261,6 +267,7 @@ impl VbxClusterer {
             ahc_threshold,
             max_speakers: max_speakers.max(1),
             lda_dim,
+            emb_scale,
         }
     }
 
@@ -283,7 +290,18 @@ impl VbxClusterer {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(0.5);
-        Ok(Self::new(plda, VbxConfig::default(), ahc_threshold, max_speakers, 128))
+        let mut config = VbxConfig::default();
+        if let Some(fa) = std::env::var("POLYVOICE_VBX_FA").ok().and_then(|s| s.parse().ok()) {
+            config.fa = fa;
+        }
+        if let Some(fb) = std::env::var("POLYVOICE_VBX_FB").ok().and_then(|s| s.parse().ok()) {
+            config.fb = fb;
+        }
+        let emb_scale = std::env::var("POLYVOICE_VBX_EMB_SCALE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(4.88);
+        Ok(Self::new(plda, config, ahc_threshold, max_speakers, 128, emb_scale))
     }
 }
 
@@ -316,6 +334,8 @@ impl Clusterer for VbxClusterer {
                 detail: format!("embedding reshape: {e}"),
             }
         })?;
+        // Restore the raw WeSpeaker magnitude the PLDA mean-centering expects.
+        let emb = emb * self.emb_scale;
         let features = self.plda.transform(&emb.view(), self.lda_dim);
         let phi = self.plda.phi();
 
@@ -329,11 +349,28 @@ impl Clusterer for VbxClusterer {
         );
 
         let (gamma, _pi) = cluster_vbx(&ahc_labels, &features.view(), &phi.view(), &self.config);
-        Ok(hard_labels(&gamma))
+        let labels = hard_labels(&gamma);
+        if std::env::var("POLYVOICE_VBX_DEBUG").is_ok() {
+            let norm0 = (emb.row(0).dot(&emb.row(0)) as f64).sqrt();
+            let seed_k = ahc_labels.iter().copied().max().map(|m| m + 1).unwrap_or(0);
+            let final_k = labels.iter().copied().max().map(|m| m + 1).unwrap_or(0);
+            eprintln!(
+                "VBX_DEBUG: n={n} emb_norm0={norm0:.3} fa={} fb={} ahc_thr={} seed_k={seed_k} final_k={final_k}",
+                self.config.fa, self.config.fb, self.ahc_threshold
+            );
+        }
+        Ok(labels)
     }
 
     fn max_clusters(&self) -> usize {
         self.max_speakers
+    }
+
+    /// PLDA mean-centering needs the original embedding scale, so VBx requires raw
+    /// (non-L2-normalized) embeddings — L2-normalized input collapses the centered
+    /// vectors toward `-mean1` and degenerates the transform.
+    fn wants_raw_embeddings(&self) -> bool {
+        true
     }
 }
 

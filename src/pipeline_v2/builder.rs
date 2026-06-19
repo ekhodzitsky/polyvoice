@@ -251,14 +251,18 @@ impl PipelineBuilder {
                 // over-clustering fix that a global threshold cannot achieve
                 // without over-merging real speakers. Profile path only — Custom
                 // callers own their clusterer and opt in via with_clusterer.
+                // VBx determines the speaker count itself (prior-driven pruning),
+                // so post-hoc min-size pruning would dissolve its own clusters —
+                // skip the wrap for VBx.
                 let min_size = self.config.min_cluster_size;
-                let clusterer: Box<dyn Clusterer> = if min_size > 1 {
-                    Box::new(crate::clusterer::MinClusterSizeClusterer::new(
-                        clusterer, min_size,
-                    ))
-                } else {
-                    clusterer
-                };
+                let clusterer: Box<dyn Clusterer> =
+                    if min_size > 1 && self.config.clusterer != ClustererKind::Vbx {
+                        Box::new(crate::clusterer::MinClusterSizeClusterer::new(
+                            clusterer, min_size,
+                        ))
+                    } else {
+                        clusterer
+                    };
                 Ok(Pipeline::from_components(
                     self.config,
                     segmenter,
