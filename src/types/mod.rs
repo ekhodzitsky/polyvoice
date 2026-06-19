@@ -534,7 +534,13 @@ pub struct ClusterConfig {
     /// cluster smaller than this is dissolved and its frames reassigned to the
     /// nearest large speaker centroid. This prunes spurious tiny clusters that
     /// inflate the speaker count without hurting frame-DER. `1` disables pruning.
+    /// Ignored when `min_cluster_secs > 0` (duration pruning takes precedence).
     pub min_cluster_size: usize,
+    /// Minimum total speech duration (seconds) a cluster must have to survive —
+    /// the length-invariant alternative to `min_cluster_size`. When `> 0`, a
+    /// cluster whose overlap-merged window duration is below this is dissolved.
+    /// `0.0` disables it (the member-count rule applies instead).
+    pub min_cluster_secs: f64,
 }
 
 impl Default for ClusterConfig {
@@ -549,8 +555,11 @@ impl Default for ClusterConfig {
             // long files but wrongly dissolves real minority speakers on short
             // ones (the bundled 26 s clip regresses 6.62%→9.54% at min 3). A
             // length-aware / duration-based prune for the larger gain is future
-            // work. `1` disables pruning.
+            // work (see `min_cluster_secs`). `1` disables pruning.
             min_cluster_size: 2,
+            // Duration pruning off by default until calibrated; the validated
+            // shipped default is the member-count rule above.
+            min_cluster_secs: 0.0,
         }
     }
 }
