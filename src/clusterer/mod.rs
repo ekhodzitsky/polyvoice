@@ -2,6 +2,9 @@
 //!
 //! Added in v0.6 (M3).
 
+#[cfg(feature = "vbx")]
+pub mod vbx;
+
 /// Speaker clusterer — turns a batch of L2-normalized speaker embeddings into
 /// per-embedding cluster labels in the range `0..K` where `K` is the inferred
 /// number of clusters.
