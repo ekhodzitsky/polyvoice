@@ -95,10 +95,10 @@ embedder = []
 # pulls `faer`).
 clusterer = []
 
-# VBx (Variational Bayes HMM + PLDA) clustering backend. The inference loop is
-# pure-Rust ndarray (wasm32-clean); the one-time PLDA diagonalization reuses the
-# pure-Rust `faer` linear-algebra backend (no BLAS/LAPACK, wasm-friendly).
-vbx = ["clusterer", "dep:faer"]
+# VBx (Variational Bayes HMM + PLDA) clustering backend. Pure-Rust ndarray
+# (wasm32-clean): the inference loop and the runtime PLDA transform need no
+# linear-algebra backend because the PLDA diagonalization is precomputed offline.
+vbx = ["clusterer"]
 
 # v1.0 Overlap-aware post-clustering resegmentation pass.
 # Pure-Rust, wasm32-clean — does not require `onnx`. Operates on already-

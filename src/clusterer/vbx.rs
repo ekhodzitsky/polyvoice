@@ -231,6 +231,112 @@ pub fn hard_labels(gamma: &Array2<f32>) -> Vec<usize> {
     raw.into_iter().map(|r| remap[&r]).collect()
 }
 
+use crate::clusterer::plda::PldaModel;
+use crate::clusterer::{Clusterer, ClustererError};
+
+/// VBx clusterer: PLDA-transform 256-d embeddings, seed with an over-segmented
+/// AHC pass, then run VBx variational inference whose prior auto-determines the
+/// speaker count. Implements the [`Clusterer`] trait; embeddings are assumed to
+/// arrive in temporal order (the seed and inference treat them as a sequence).
+pub struct VbxClusterer {
+    plda: PldaModel,
+    config: VbxConfig,
+    /// Cosine-similarity threshold for the over-segmenting AHC seed.
+    ahc_threshold: f32,
+    max_speakers: usize,
+    lda_dim: usize,
+}
+
+impl VbxClusterer {
+    pub fn new(
+        plda: PldaModel,
+        config: VbxConfig,
+        ahc_threshold: f32,
+        max_speakers: usize,
+        lda_dim: usize,
+    ) -> Self {
+        Self {
+            plda,
+            config,
+            ahc_threshold,
+            max_speakers: max_speakers.max(1),
+            lda_dim,
+        }
+    }
+
+    /// Construct from the `POLYVOICE_VBX_PLDA_DIR` env var (proof/dev wiring;
+    /// shipped builds will resolve the PLDA params through the model registry).
+    pub fn from_env(max_speakers: usize) -> Result<Self, ClustererError> {
+        let dir = std::env::var("POLYVOICE_VBX_PLDA_DIR").map_err(|_| {
+            ClustererError::AlgorithmFailed {
+                detail: "POLYVOICE_VBX_PLDA_DIR not set".to_owned(),
+            }
+        })?;
+        let plda = PldaModel::from_dir(std::path::Path::new(&dir)).map_err(|e| {
+            ClustererError::AlgorithmFailed {
+                detail: format!("load PLDA: {e}"),
+            }
+        })?;
+        // Over-init seed threshold: higher cosine cutoff → more seed clusters that
+        // VBx then prunes. Tuned on dev later; this is a reasonable over-init.
+        let ahc_threshold = std::env::var("POLYVOICE_VBX_AHC_THRESHOLD")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.5);
+        Ok(Self::new(plda, VbxConfig::default(), ahc_threshold, max_speakers, 128))
+    }
+}
+
+impl Clusterer for VbxClusterer {
+    fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
+        if embeddings.is_empty() {
+            return Ok(Vec::new());
+        }
+        if embeddings.len() == 1 {
+            return Ok(vec![0]);
+        }
+        let dim = embeddings[0].len();
+        for (i, e) in embeddings.iter().enumerate() {
+            if e.len() != dim {
+                return Err(ClustererError::DimMismatch {
+                    expected: dim,
+                    actual: e.len(),
+                    index: i,
+                });
+            }
+        }
+        // Stack into (N, dim) and PLDA-transform to (N, lda_dim).
+        let n = embeddings.len();
+        let mut flat = Vec::with_capacity(n * dim);
+        for e in embeddings {
+            flat.extend_from_slice(e);
+        }
+        let emb = Array2::from_shape_vec((n, dim), flat).map_err(|e| {
+            ClustererError::AlgorithmFailed {
+                detail: format!("embedding reshape: {e}"),
+            }
+        })?;
+        let features = self.plda.transform(&emb.view(), self.lda_dim);
+        let phi = self.plda.phi();
+
+        // Over-segmenting AHC seed on the PLDA features (cosine linkage).
+        let feat_vecs: Vec<Vec<f32>> =
+            features.rows().into_iter().map(|r| r.to_vec()).collect();
+        let ahc_labels = crate::ahc::agglomerative_cluster_max_clusters(
+            &feat_vecs,
+            self.ahc_threshold,
+            self.max_speakers,
+        );
+
+        let (gamma, _pi) = cluster_vbx(&ahc_labels, &features.view(), &phi.view(), &self.config);
+        Ok(hard_labels(&gamma))
+    }
+
+    fn max_clusters(&self) -> usize {
+        self.max_speakers
+    }
+}
+
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {

@@ -229,6 +229,21 @@ impl PipelineBuilder {
                             self.config.profile.default_threshold(),
                         ))
                     }
+                    #[cfg(feature = "vbx")]
+                    ClustererKind::Vbx => Box::new(
+                        crate::clusterer::vbx::VbxClusterer::from_env(
+                            self.config.max_speakers as usize,
+                        )
+                        .map_err(|e| ConfigError::UnknownModel {
+                            model_id: format!("vbx ({e})"),
+                        })?,
+                    ),
+                    #[cfg(not(feature = "vbx"))]
+                    ClustererKind::Vbx => {
+                        return Err(ConfigError::UnknownModel {
+                            model_id: "vbx (requires the `vbx` feature)".to_owned(),
+                        });
+                    }
                 };
                 // Activate min_cluster_size pruning (this config field was
                 // previously dead — never read by any clusterer). Dissolves
