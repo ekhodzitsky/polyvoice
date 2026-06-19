@@ -22,6 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dropped internal tracker indices (roadmap task / finding / audit IDs) from
   shipped code comments and docs in favor of self-contained wording.
 
+### Fixed
+
+- **pipeline v2 segmentation**: the sliding-window aggregator flagged a whole
+  speaker run `is_overlap` when any single frame fell in an overlap class, so
+  long single-speaker speech brushed by a brief overlap was excluded from the
+  primary embedding set and never recovered — on conversational audio this
+  dropped most speech (one 336 s file measured ~90% miss). Runs are now split at
+  every overlap-status transition, so `is_overlap` is precise (a segment is
+  overlap iff every frame was) and two simultaneously-active speakers emit
+  time-equal overlap segments that `extract_overlap_time_ranges` pairs as
+  designed; overlap-light audio is emitted identically (no regression). Pipeline
+  v2 DER on VoxConverse-dev-80 drops from ~33% to 7.75% macro / 8.46% micro —
+  below the legacy default (7.97% / 8.58%) — at `min_cluster_size = 1`.
+
 ## [0.7.0] - 2026-06-14
 
 Audit-driven correctness, packaging, and CI-hardening release. Bumped to a new
