@@ -67,6 +67,26 @@ surface:
       kind: unit-test
       target: src/clusterer::mod::tests
       command: cargo test --lib clusterer --features spectral
+  - name: VbxClusterer
+    kind: struct
+    visibility: public
+    contract: >
+      VBx (Variational Bayes HMM + PLDA) clusterer with prior-driven automatic
+      speaker-count selection. Requires the `vbx` feature; wants raw embeddings.
+    proof:
+      kind: unit-test
+      target: src/clusterer::vbx::tests
+      command: cargo test --lib clusterer::vbx --features vbx
+  - name: PldaModel
+    kind: struct
+    visibility: public
+    contract: >
+      Precomputed PLDA feature transform (256-d -> 128-d) for VBx. Pure-ndarray
+      runtime; diagonalization precomputed offline. Requires the `vbx` feature.
+    proof:
+      kind: unit-test
+      target: src/clusterer::plda::tests
+      command: cargo test --lib clusterer::plda --features vbx
 dependencies:
   internal: []
   external: []
