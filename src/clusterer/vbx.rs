@@ -29,17 +29,24 @@ pub struct VbxConfig {
     pub max_iters: usize,
     pub epsilon: f64,
     pub init_smoothing: f64,
+    /// Self-loop probability of the speaker HMM. `0.0` runs the GMM-style update
+    /// (no temporal model, matches the speakrs reference fixtures); `> 0.0`
+    /// enables the canonical forward-backward VBx whose self-loop-favoring
+    /// transitions smooth labels over time and curb over-clustering.
+    pub loop_prob: f64,
 }
 
 impl Default for VbxConfig {
     fn default() -> Self {
         // Starting point from the speakrs WeSpeaker recipe; retune on dev, never test.
+        // loop_prob defaults to 0.0 (GMM) so the speakrs parity fixtures hold.
         Self {
             fa: 0.07,
             fb: 0.8,
             max_iters: 20,
             epsilon: 1e-4,
             init_smoothing: 7.0,
+            loop_prob: 0.0,
         }
     }
 }
@@ -52,6 +59,63 @@ fn logsumexp_f64(values: &ArrayView1<f64>) -> f64 {
     }
     let sum_exp = values.mapv(|x| (x - max).exp()).sum();
     max + sum_exp.ln()
+}
+
+/// Forward-backward over the speaker HMM with the self-loop-favoring transition
+/// matrix `tr[i][j] = (i==j)*loop_prob + (1-loop_prob)*pi[j]`. Returns the
+/// `(T, S)` occupation posteriors, the total log-likelihood, and the log forward
+/// / log backward matrices (the latter two feed the prior update).
+fn forward_backward(
+    log_p: &Array2<f64>,
+    pi: &Array1<f64>,
+    loop_prob: f64,
+) -> (Array2<f64>, f64, Array2<f64>, Array2<f64>) {
+    let (t_len, s) = log_p.dim();
+    let eps = 1e-8;
+    let mut ltr = Array2::<f64>::zeros((s, s));
+    for i in 0..s {
+        for j in 0..s {
+            let tr = if i == j { loop_prob } else { 0.0 } + (1.0 - loop_prob) * pi[j];
+            ltr[[i, j]] = (tr + eps).ln();
+        }
+    }
+
+    let mut lfw = Array2::<f64>::from_elem((t_len, s), f64::NEG_INFINITY);
+    let mut lbw = Array2::<f64>::from_elem((t_len, s), f64::NEG_INFINITY);
+    let mut tmp = Array1::<f64>::zeros(s);
+
+    for j in 0..s {
+        lfw[[0, j]] = log_p[[0, j]] + (pi[j] + eps).ln();
+    }
+    for t in 1..t_len {
+        for j in 0..s {
+            for i in 0..s {
+                tmp[i] = lfw[[t - 1, i]] + ltr[[i, j]];
+            }
+            lfw[[t, j]] = log_p[[t, j]] + logsumexp_f64(&tmp.view());
+        }
+    }
+
+    for j in 0..s {
+        lbw[[t_len - 1, j]] = 0.0;
+    }
+    for t in (0..t_len.saturating_sub(1)).rev() {
+        for i in 0..s {
+            for j in 0..s {
+                tmp[j] = ltr[[i, j]] + log_p[[t + 1, j]] + lbw[[t + 1, j]];
+            }
+            lbw[[t, i]] = logsumexp_f64(&tmp.view());
+        }
+    }
+
+    let tll = logsumexp_f64(&lfw.row(t_len - 1));
+    let mut gamma = Array2::<f64>::zeros((t_len, s));
+    for t in 0..t_len {
+        for j in 0..s {
+            gamma[[t, j]] = (lfw[[t, j]] + lbw[[t, j]] - tll).exp();
+        }
+    }
+    (gamma, tll, lfw, lbw)
 }
 
 /// Run VBx variational inference.
@@ -135,29 +199,50 @@ pub fn vbx(
             }
         }
 
-        // GMM-style responsibility update with the pi prior.
-        let lpi: Array1<f64> = pi.mapv(|p| (p + 1e-8).ln());
-        let mut log_p_x = Array1::<f64>::zeros(n_samples);
-        for sample_idx in 0..n_samples {
-            scratch.assign(&log_p.row(sample_idx));
-            scratch += &lpi;
-            log_p_x[sample_idx] = logsumexp_f64(&scratch.view());
-        }
-        for sample_idx in 0..n_samples {
-            for speaker_idx in 0..n_speakers {
-                gamma[[sample_idx, speaker_idx]] =
-                    (log_p[[sample_idx, speaker_idx]] + lpi[speaker_idx] - log_p_x[sample_idx])
-                        .exp();
+        // Responsibility + prior update: temporal HMM forward-backward when
+        // loop_prob > 0, else the GMM-style independent-frame update (parity path).
+        let log_px_sum: f64;
+        if config.loop_prob > 0.0 {
+            let (g, tll, log_a, log_b) = forward_backward(&log_p, &pi, config.loop_prob);
+            gamma = g;
+            // Prior / speaker-count update (24): empty speakers shrink toward zero.
+            let one_minus_loop = 1.0 - config.loop_prob;
+            let mut accum = Array1::<f64>::zeros(n_speakers);
+            for t in 0..n_samples.saturating_sub(1) {
+                let lse_fw = logsumexp_f64(&log_a.row(t));
+                for s in 0..n_speakers {
+                    accum[s] += (lse_fw + log_p[[t + 1, s]] + log_b[[t + 1, s]] - tll).exp();
+                }
             }
+            for s in 0..n_speakers {
+                pi[s] = gamma[[0, s]] + one_minus_loop * pi[s] * accum[s];
+            }
+            let pi_sum = pi.sum();
+            pi /= pi_sum;
+            log_px_sum = tll;
+        } else {
+            let lpi: Array1<f64> = pi.mapv(|p| (p + 1e-8).ln());
+            let mut log_p_x = Array1::<f64>::zeros(n_samples);
+            for sample_idx in 0..n_samples {
+                scratch.assign(&log_p.row(sample_idx));
+                scratch += &lpi;
+                log_p_x[sample_idx] = logsumexp_f64(&scratch.view());
+            }
+            for sample_idx in 0..n_samples {
+                for speaker_idx in 0..n_speakers {
+                    gamma[[sample_idx, speaker_idx]] =
+                        (log_p[[sample_idx, speaker_idx]] + lpi[speaker_idx] - log_p_x[sample_idx])
+                            .exp();
+                }
+            }
+            // Update the prior; empty speakers shrink toward zero (auto count).
+            pi = gamma.sum_axis(Axis(0));
+            let pi_sum = pi.sum();
+            pi /= pi_sum;
+            log_px_sum = log_p_x.sum();
         }
 
-        // Update the prior; empty speakers shrink toward zero (auto count).
-        pi = gamma.sum_axis(Axis(0));
-        let pi_sum = pi.sum();
-        pi /= pi_sum;
-
-        // ELBO = sum(log_p_x) + Fb*0.5*sum(ln(invL) - invL - alpha^2 + 1).
-        let log_px_sum: f64 = log_p_x.sum();
+        // ELBO = log_pX + Fb*0.5*sum(ln(invL) - invL - alpha^2 + 1).
         let reg: f64 = inv_l
             .iter()
             .zip(alpha.iter())
@@ -301,6 +386,12 @@ impl VbxClusterer {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or_else(|| VbxConfig::default().fb),
+            // Enable the canonical forward-backward VBx (temporal smoothing) by
+            // default for the integration; 0 falls back to the GMM update.
+            loop_prob: std::env::var("POLYVOICE_VBX_LOOP_PROB")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.9),
             ..VbxConfig::default()
         };
         let emb_scale = std::env::var("POLYVOICE_VBX_EMB_SCALE")
@@ -402,6 +493,43 @@ mod tests {
         assert_eq!(labels[0], labels[1]);
         assert_eq!(labels[0], labels[2]);
         assert_eq!(labels[3], labels[4]);
+        assert_eq!(labels[3], labels[5]);
+        assert_ne!(labels[0], labels[3]);
+    }
+
+    #[test]
+    fn vbx_hmm_keeps_two_clusters_and_valid_posteriors() {
+        // Same two well-separated clusters, but with the temporal HMM path on.
+        let features = array![
+            [10.0, 0.0],
+            [10.1, 0.1],
+            [9.9, -0.1],
+            [-10.0, 0.0],
+            [-10.1, 0.1],
+            [-9.9, -0.1],
+        ];
+        let phi = array![1.0, 1.0];
+        let mut gamma_init = Array2::zeros((6, 2));
+        for t in 0..3 {
+            gamma_init[[t, 0]] = 0.999;
+            gamma_init[[t, 1]] = 0.001;
+        }
+        for t in 3..6 {
+            gamma_init[[t, 0]] = 0.001;
+            gamma_init[[t, 1]] = 0.999;
+        }
+        let cfg = VbxConfig {
+            loop_prob: 0.9,
+            ..VbxConfig::default()
+        };
+        let (gamma, _pi) = vbx(&features.view(), &phi.view(), &gamma_init, &cfg);
+        // Posteriors per frame are a valid distribution (sum ~ 1, finite).
+        for row in gamma.rows() {
+            let s: f32 = row.sum();
+            assert!(s.is_finite() && (s - 1.0).abs() < 1e-3, "row sum {s} not ~1");
+        }
+        let labels = hard_labels(&gamma);
+        assert_eq!(labels[0], labels[2]);
         assert_eq!(labels[3], labels[5]);
         assert_ne!(labels[0], labels[3]);
     }
