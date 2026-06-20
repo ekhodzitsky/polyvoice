@@ -290,13 +290,19 @@ impl VbxClusterer {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(0.5);
-        let mut config = VbxConfig::default();
-        if let Some(fa) = std::env::var("POLYVOICE_VBX_FA").ok().and_then(|s| s.parse().ok()) {
-            config.fa = fa;
-        }
-        if let Some(fb) = std::env::var("POLYVOICE_VBX_FB").ok().and_then(|s| s.parse().ok()) {
-            config.fb = fb;
-        }
+        // fa=0.3 is the polyvoice dev-calibrated optimum (VbxConfig::default keeps
+        // the upstream 0.07 the speakrs parity fixtures were generated with).
+        let config = VbxConfig {
+            fa: std::env::var("POLYVOICE_VBX_FA")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.3),
+            fb: std::env::var("POLYVOICE_VBX_FB")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_else(|| VbxConfig::default().fb),
+            ..VbxConfig::default()
+        };
         let emb_scale = std::env::var("POLYVOICE_VBX_EMB_SCALE")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -349,17 +355,7 @@ impl Clusterer for VbxClusterer {
         );
 
         let (gamma, _pi) = cluster_vbx(&ahc_labels, &features.view(), &phi.view(), &self.config);
-        let labels = hard_labels(&gamma);
-        if std::env::var("POLYVOICE_VBX_DEBUG").is_ok() {
-            let norm0 = (emb.row(0).dot(&emb.row(0)) as f64).sqrt();
-            let seed_k = ahc_labels.iter().copied().max().map(|m| m + 1).unwrap_or(0);
-            let final_k = labels.iter().copied().max().map(|m| m + 1).unwrap_or(0);
-            eprintln!(
-                "VBX_DEBUG: n={n} emb_norm0={norm0:.3} fa={} fb={} ahc_thr={} seed_k={seed_k} final_k={final_k}",
-                self.config.fa, self.config.fb, self.ahc_threshold
-            );
-        }
-        Ok(labels)
+        Ok(hard_labels(&gamma))
     }
 
     fn max_clusters(&self) -> usize {
