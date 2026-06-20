@@ -7,20 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-20
+
+The "who spoke when" → "who said what" release. It adds an attribution cascade
+that puts text on every turn, an MCP server, a canonical serializable result
+type with a published JSON Schema, five output formats, an opt-in VBx clusterer,
+and a long-form pipeline-v2 segmentation correctness fix. It is a large feature
+release: the CLI command surface and output formats were reworked and the
+canonical `DiarizationResult` type is new — pin exactly if you script against the
+0.7 CLI or depend on the prior result shape.
+
 ### Added
 
-- **DER**: `compute_der_with_uem` + `parse_uem` for UEM-scoped scoring — frames
-  outside the scored regions are dropped from both the speaker mapping and the
-  error counts (no UEM == `compute_der`).
-- **`polyvoice-bench`**: `--uem` flag and a model-integrity gate that hard-fails
-  if the on-disk embedder/VAD sha256 disagrees with the manifest.
-- `scripts/run-der-sweep.sh` — reproducible VoxConverse-dev/test + AMI DER sweep
-  (no-collar and 0.25 s-collar from one report).
+- **Who-said-what attribution** (`attribution` feature, pure-Rust, wasm-clean):
+  a word→speaker join mapping ASR words onto diarization turns, plus an
+  end-to-end cascade (diarize → one ASR pass → join) so each turn carries text.
+- **ASR companion** — `polyvoice-asr`, an opt-in workspace crate wrapping
+  Parakeet TDT word-level transcription via `parakeet-rs`, sharing the core ONNX
+  runtime (one `ort` pin, never two). The trait-only `Asr` interface plus
+  `Word`/`Transcript` types live in the core crate; the heavy model dependency is
+  isolated in the companion.
+- **`polyvoice-transcribe` CLI** — who-said-what from the command line
+  (diarization + transcription joined into speaker-attributed text).
+- **MCP stdio server** (`polyvoice-mcp`, opt-in `mcp` feature) — a pure-Rust
+  Model Context Protocol front door (rmcp + schemars) exposing a `diarize` tool
+  to agents. Never in default features; it is a binary in this crate, so its
+  `ort` is the same dependency as the core — no dual-runtime risk.
+- **Canonical `DiarizationResult` v1** — a stable, serializable result type
+  (`schema_version`, `audio`, `provenance`, `speakers[]`, `segments`, `turns`,
+  `num_speakers`) designed as the agent / IPC contract.
+- **Published JSON Schema** for the result
+  (`schema/diarization-result-v1.json`, shipped in the crate) plus a
+  `polyvoice schema` command that prints it.
+- **SRT / VTT / TXT projectors** for diarization results, alongside RTTM and JSON.
+- **CLI rewrite** — one-liner `polyvoice diarize <wav>`, five output formats, a
+  `--json` mode, and generated shell completions.
+- **VBx clusterer** (opt-in `vbx` feature) — Variational-Bayes HMM + PLDA with
+  automatic speaker-count selection, in pure `ndarray` (wasm-clean: the PLDA
+  diagonalization is precomputed offline, so no linear-algebra backend is needed
+  at runtime). Includes a canonical forward-backward (HMM) path and a
+  reproducible PLDA-precompute script with provenance and a parity check.
+- **Opt-in cluster pruning** to curb speaker over-clustering: singleton-cluster
+  pruning and a length-invariant duration-based prune.
+- **UEM-scoped DER**: `compute_der_with_uem` + `parse_uem` (frames outside the
+  scored regions are dropped from both the speaker mapping and the error counts;
+  no UEM == `compute_der`), a `polyvoice-bench --uem` flag with a model-integrity
+  gate (hard-fails if the on-disk embedder/VAD sha256 disagrees with the
+  manifest), and `scripts/run-der-sweep.sh` for a reproducible
+  VoxConverse-dev/test + AMI sweep (no-collar and 0.25 s-collar from one report).
 
 ### Changed
 
-- Dropped internal tracker indices (roadmap task / finding / audit IDs) from
-  shipped code comments and docs in favor of self-contained wording.
+- Real VoxConverse-test + AMI DER baselines locked on the shipped FP32 models.
+- README streamlined and contributing conventions added; internal tracker
+  indices (roadmap task / finding / audit IDs) dropped from shipped code comments
+  and docs in favor of self-contained wording.
 
 ### Fixed
 
