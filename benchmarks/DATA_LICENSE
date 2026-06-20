@@ -1,0 +1,31 @@
+Benchmark data licensing
+========================
+
+The polyvoice source is MIT. The DATASETS used by this benchmark are NOT MIT and
+keep their own licenses. This repository does NOT redistribute any dataset audio
+— the scripts under ../scripts/ download it on demand from the original sources,
+and benchmark/manifests/*.json store only file-id lists and provenance, not
+audio. Reference RTTM annotations, where checked in under ../data/, retain the
+license of their source corpus.
+
+VoxConverse (dev / test)
+  Source:  https://github.com/joonson/voxconverse
+  Paper:   Chung et al., "Spot the conversation: speaker diarisation in the wild",
+           Interspeech 2020 (arXiv:2007.01216)
+  Annotations: CC-BY-4.0 (VoxConverse RTTMs).
+  Audio:   sourced from YouTube; governed by YouTube's terms — NOT redistributed
+           here. Download via scripts/download-voxconverse-{dev,test}.sh.
+
+AMI Meeting Corpus (test split, Mix-Headset)
+  Source:  https://groups.inf.ed.ac.uk/ami/corpus/
+  License: CC-BY-4.0.
+  Audio:   downloaded via scripts/download-ami-test.sh — NOT redistributed here.
+
+Competitor model weights
+  pyannote/speaker-diarization-3.1 and its sub-models are gated on Hugging Face
+  (license acceptance + access token); they are downloaded by the user, never
+  vendored. Other competitor weights follow their respective upstream licenses.
+
+Attribution
+  When citing numbers produced by this harness, cite the dataset (VoxConverse /
+  AMI) and disclose the collar and overlap-handling, per docs/BENCHMARKS.md.

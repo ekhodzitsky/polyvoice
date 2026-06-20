@@ -1,0 +1,18 @@
+# Cross-engine diarization benchmark dependencies.
+#
+# The harness CORE (der.py scorer + benchmark.py driver + the polyvoice runner)
+# needs only the Python standard library — it runs with zero installs. The
+# packages below accelerate or enable optional pieces; each competitor runner
+# skips itself (is_available() → False) when its stack is absent.
+
+# --- optional: faster Hungarian assignment in the DER scorer (pure-python fallback otherwise) ---
+numpy>=1.24
+scipy>=1.10
+
+# --- optional competitor stacks (install only the engines you want to run like-for-like) ---
+# pyannote.audio>=3.1        # pyannote-3.1 + whisperx + diart; weights gated (HF token)
+# torch>=2.0                 # required by pyannote / whisperx / diart
+# whisperx>=3.1              # whisperx runner
+# diart>=0.9                 # diart streaming runner
+# sherpa-onnx>=1.10          # sherpa-onnx offline diarization runner
+# soundfile>=0.12            # WAV loading for the sherpa-onnx runner
