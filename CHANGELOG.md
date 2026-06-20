@@ -55,6 +55,12 @@ canonical `DiarizationResult` type is new — pin exactly if you script against 
   gate (hard-fails if the on-disk embedder/VAD sha256 disagrees with the
   manifest), and `scripts/run-der-sweep.sh` for a reproducible
   VoxConverse-dev/test + AMI sweep (no-collar and 0.25 s-collar from one report).
+- **Cross-engine diarization benchmark** (`benchmarks/`): a single-scorer DER
+  harness (`der.py`: NIST md-eval frame model, collar + overlap + Hungarian
+  mapping, miss/fa/confusion decomposition, speaker-count accuracy, bootstrap CI;
+  cross-checked against `polyvoice-bench` to ~0.02 pp) with skip-if-absent runners
+  for pyannote / WhisperX / sherpa-onnx / diart, plus an honest, collar-disclosed
+  comparison in `docs/BENCHMARKS.md`.
 
 ### Changed
 
