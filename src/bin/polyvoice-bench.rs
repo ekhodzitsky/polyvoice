@@ -45,6 +45,11 @@ struct Args {
     /// the nearest large speaker. Applies to both pipelines.
     #[arg(long)]
     min_cluster_size: Option<usize>,
+    /// v2 clusterer: `ahc` (fixed-threshold AHC, default) or `vbx` (Variational
+    /// Bayes HMM + PLDA with automatic speaker count; requires a `vbx` build and
+    /// `POLYVOICE_VBX_PLDA_DIR`).
+    #[arg(long, default_value = "ahc")]
+    clusterer: String,
     /// Min cluster duration in seconds (length-invariant pruning). When > 0 it
     /// takes precedence over --min-cluster-size on the legacy pipeline.
     #[arg(long)]
@@ -251,11 +256,16 @@ fn main() -> Result<()> {
     // the models it loads and returns the segmenter id for the report.
     let (mut runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
         "v2" => {
-            let mut cfg = PipelineConfig {
-                profile,
-                clusterer: ClustererKind::Ahc {
+            let clusterer = match args.clusterer.as_str() {
+                "ahc" => ClustererKind::Ahc {
                     threshold: args.threshold,
                 },
+                "vbx" => ClustererKind::Vbx,
+                other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
+            };
+            let mut cfg = PipelineConfig {
+                profile,
+                clusterer,
                 ..PipelineConfig::default()
             };
             if let Some(mcs) = args.min_cluster_size {

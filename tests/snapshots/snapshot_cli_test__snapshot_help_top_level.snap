@@ -1,5 +1,6 @@
 ---
 source: tests/snapshot_cli_test.rs
+assertion_line: 18
 expression: stdout
 ---
 Speaker diarization toolkit
@@ -12,6 +13,7 @@ Commands:
   download-models  Download Mobile/Balanced ONNX models
   models           Inspect models registry
   completions      Generate shell completions to stdout
+  schema           Print the JSON Schema of the diarization result to stdout (agent contract)
   help             Print this message or the help of the given subcommand(s)
 
 Arguments:
