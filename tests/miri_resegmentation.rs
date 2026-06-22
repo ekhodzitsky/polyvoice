@@ -67,6 +67,7 @@ fn miri_resegment_single_overlap() {
             end: 1.0,
         },
         primary_speaker: SpeakerId(0),
+        secondary_speaker: None,
         embedding: unit(4, 1),
     }];
     let r = OverlapResegmenter::default();

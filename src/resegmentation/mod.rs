@@ -63,10 +63,18 @@ pub struct SpeakerCentroid {
 /// `embedding` is expected to be L2-normalized; this struct does not enforce
 /// it (`OverlapResegmenter` returns `OverlapDimMismatch` only on dimension
 /// mismatches, not on norm drift).
+///
+/// When `secondary_speaker` is `Some`, the powerset/EEND segmenter already
+/// identified both speakers active in this region (its file-consistent local
+/// indices were mapped to global clusters upstream). The resegmenter then trusts
+/// that assignment, emits both speakers, and ignores `embedding` — avoiding the
+/// degraded nearest-centroid guess on a mixed-voice embedding. When `None`, it
+/// falls back to that centroid match on `embedding`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OverlapRegionInput {
     pub time: TimeRange,
     pub primary_speaker: SpeakerId,
+    pub secondary_speaker: Option<SpeakerId>,
     pub embedding: Vec<f32>,
 }
 
@@ -179,9 +187,13 @@ pub fn extract_overlap_time_ranges(
     pairs
 }
 
-/// Default-constructible overlap-aware resegmenter that picks the nearest
-/// non-primary cluster centroid (by cosine similarity) for each overlap region
-/// above a configurable threshold and minimum duration.
+/// Default-constructible overlap-aware resegmenter.
+///
+/// For each overlap region it prefers the segmenter's own speaker assignment
+/// (`OverlapRegionInput::secondary_speaker`), emitting both active speakers
+/// directly. When that is absent it falls back to picking the nearest non-primary
+/// cluster centroid (by cosine similarity) above a configurable threshold and
+/// minimum duration.
 ///
 /// Typical usage (from `Pipeline` in M6):
 ///
@@ -259,51 +271,80 @@ impl Resegmenter for OverlapResegmenter {
         }
 
         for (i, region) in inputs.overlap_regions.iter().enumerate() {
-            // Validate dim.
-            if region.embedding.len() != expected_dim {
-                return Err(ResegmentError::OverlapDimMismatch {
-                    index: i,
-                    expected: expected_dim,
-                    actual: region.embedding.len(),
-                });
-            }
-            // Validate primary present.
-            if !inputs
-                .speaker_centroids
-                .iter()
-                .any(|c| c.speaker == region.primary_speaker)
-            {
-                return Err(ResegmentError::MissingPrimaryCentroid {
-                    index: i,
-                    primary: region.primary_speaker,
-                });
-            }
-            // Skip too-short regions. Compare in f64 to avoid f32 boundary truncation.
-            if region.time.duration() < f64::from(self.min_overlap_secs) {
-                continue;
-            }
-            // Find best non-primary cluster.
-            let mut best: Option<(SpeakerId, f32)> = None;
-            for c in inputs.speaker_centroids.iter() {
-                if c.speaker == region.primary_speaker {
-                    continue;
-                }
-                let s = crate::utils::cosine_similarity(&region.embedding, &c.embedding);
-                let take = match best {
-                    None => true,
-                    Some((_, b)) => s > b,
-                };
-                if take {
-                    best = Some((c.speaker, s));
-                }
-            }
-            if let Some((id, score)) = best {
-                if score > self.threshold {
+            match region.secondary_speaker {
+                // Segmentation-derived path: the powerset/EEND segmenter already
+                // identified both speakers in this region (its file-consistent
+                // local indices were mapped to global clusters upstream). Trust
+                // that assignment and emit both speakers over the span, ignoring
+                // the mixed-voice embedding. The aggregator splits the primary's
+                // run at the overlap boundary, so `primary_turns` does NOT cover
+                // this span — emit the primary here too, or it is missed.
+                Some(secondary) => {
+                    if region.time.duration() < f64::from(self.min_overlap_secs) {
+                        continue;
+                    }
                     out.push(SpeakerTurn {
-                        speaker: id,
+                        speaker: region.primary_speaker,
                         time: region.time,
                         text: None,
                     });
+                    if secondary != region.primary_speaker {
+                        out.push(SpeakerTurn {
+                            speaker: secondary,
+                            time: region.time,
+                            text: None,
+                        });
+                    }
+                }
+                // Fallback path: the second speaker was not resolved from the
+                // segmentation (a local index never appeared as a solo segment),
+                // so recover it from the nearest non-primary centroid on the
+                // region's (mixed) embedding. Structural checks run before the
+                // duration filter — an invalid region errors even when short.
+                None => {
+                    if region.embedding.len() != expected_dim {
+                        return Err(ResegmentError::OverlapDimMismatch {
+                            index: i,
+                            expected: expected_dim,
+                            actual: region.embedding.len(),
+                        });
+                    }
+                    if !inputs
+                        .speaker_centroids
+                        .iter()
+                        .any(|c| c.speaker == region.primary_speaker)
+                    {
+                        return Err(ResegmentError::MissingPrimaryCentroid {
+                            index: i,
+                            primary: region.primary_speaker,
+                        });
+                    }
+                    if region.time.duration() < f64::from(self.min_overlap_secs) {
+                        continue;
+                    }
+                    let mut best: Option<(SpeakerId, f32)> = None;
+                    for c in inputs.speaker_centroids.iter() {
+                        if c.speaker == region.primary_speaker {
+                            continue;
+                        }
+                        let s = crate::utils::cosine_similarity(&region.embedding, &c.embedding);
+                        let take = match best {
+                            None => true,
+                            Some((_, b)) => s > b,
+                        };
+                        if take {
+                            best = Some((c.speaker, s));
+                        }
+                    }
+                    if let Some((id, score)) = best {
+                        if score > self.threshold {
+                            out.push(SpeakerTurn {
+                                speaker: id,
+                                time: region.time,
+                                text: None,
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -572,6 +613,7 @@ mod resegmenter_tests {
         OverlapRegionInput {
             time: TimeRange { start, end },
             primary_speaker: SpeakerId(primary),
+            secondary_speaker: None,
             embedding: unit(dim, axis),
         }
     }
@@ -729,6 +771,7 @@ mod resegmenter_tests {
                 end: 1.0,
             },
             primary_speaker: SpeakerId(0),
+            secondary_speaker: None,
             embedding: vec![1.0, 0.0], // dim 2, not 3
         }];
         let inputs = ResegmentInputs {
@@ -751,5 +794,81 @@ mod resegmenter_tests {
         };
         let out = r.resegment(inputs).unwrap();
         assert_eq!(out, primary);
+    }
+
+    #[test]
+    fn segmentation_derived_secondary_emits_both_speakers() {
+        // When the segmenter resolves the second speaker, both speakers must be
+        // emitted over the overlap span, and the embedding must be ignored (here
+        // deliberately empty to prove it is never inspected on this path).
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 2.0, 0)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
+        let regions = vec![OverlapRegionInput {
+            time: TimeRange {
+                start: 2.0,
+                end: 3.0,
+            },
+            primary_speaker: SpeakerId(0),
+            secondary_speaker: Some(SpeakerId(1)),
+            embedding: Vec::new(),
+        }];
+        let out = r
+            .resegment(ResegmentInputs {
+                primary_turns: &primary,
+                speaker_centroids: &centroids,
+                overlap_regions: &regions,
+            })
+            .unwrap();
+        let over_span = |spk: u32| {
+            out.iter().any(|t| {
+                t.speaker == SpeakerId(spk)
+                    && (t.time.start - 2.0).abs() < 1e-9
+                    && (t.time.end - 3.0).abs() < 1e-9
+            })
+        };
+        assert!(
+            over_span(0),
+            "primary must be emitted over the overlap span"
+        );
+        assert!(
+            over_span(1),
+            "segmentation-identified secondary must be emitted"
+        );
+    }
+
+    #[test]
+    fn segmentation_derived_secondary_equal_to_primary_emits_one() {
+        // Degenerate overlap where both local indices map to the same global
+        // cluster: emit a single speaker, never a spurious second.
+        let r = OverlapResegmenter::default();
+        let primary = vec![turn(0.0, 2.0, 0)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
+        let regions = vec![OverlapRegionInput {
+            time: TimeRange {
+                start: 2.0,
+                end: 3.0,
+            },
+            primary_speaker: SpeakerId(0),
+            secondary_speaker: Some(SpeakerId(0)),
+            embedding: Vec::new(),
+        }];
+        let out = r
+            .resegment(ResegmentInputs {
+                primary_turns: &primary,
+                speaker_centroids: &centroids,
+                overlap_regions: &regions,
+            })
+            .unwrap();
+        let over_span: Vec<_> = out
+            .iter()
+            .filter(|t| (t.time.start - 2.0).abs() < 1e-9 && (t.time.end - 3.0).abs() < 1e-9)
+            .collect();
+        assert_eq!(
+            over_span.len(),
+            1,
+            "a single-speaker overlap must emit exactly one turn for the span"
+        );
+        assert_eq!(over_span[0].speaker, SpeakerId(0));
     }
 }
