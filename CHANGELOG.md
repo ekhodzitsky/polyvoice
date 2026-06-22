@@ -46,6 +46,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registry) is tracked in `docs/vbx-plda-release.md`. **Breaking:**
   `PipelineConfig` gained a field — struct-literal constructors must add
   `vbx_plda_dir: None` (or use `..PipelineConfig::default()`).
+- **Dense embedding for pipeline v2** — `PipelineConfig.embed_window_secs:
+  Option<f32>` and CLI `polyvoice diarize --v2 --embed-window <secs>`. `Some(w)`
+  slides a `w`-second window (hop `w/2`) inside each segment so a speaker run
+  yields several embeddings (like the legacy pipeline's dense windows), for
+  more robust centroids and lower confusion. Pure compute, no extra weights.
+  `w = 1.5` is the sweet spot (shorter over-fragments — `1.0` is worse). Measured
+  on v2+AHC: VoxConverse-30 16.4% → 14.7% (confusion 12.1 → 9.7), and it beats
+  legacy on overlap-heavy AMI. It does not overtake legacy on clean VoxConverse
+  (13.5%) and slightly hurts the VBx clusterer on AMI, so it is opt-in (`None`
+  default = one embedding per segment, unchanged). Another struct-literal field
+  addition on `PipelineConfig` (add `embed_window_secs: None`).
 
 ## [0.8.0] - 2026-06-20
 

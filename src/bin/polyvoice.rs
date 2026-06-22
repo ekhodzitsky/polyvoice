@@ -83,6 +83,12 @@ struct DiarizeArgs {
     /// `POLYVOICE_VBX_PLDA_DIR`). Only used with `--v2 --clusterer vbx`.
     #[arg(long)]
     vbx_plda_dir: Option<PathBuf>,
+    /// v2 dense embedding window in seconds (e.g. `1.5`): split segments into
+    /// overlapping sub-windows for more embeddings per speaker — lower confusion
+    /// on clean audio at the cost of more embedder calls. Omit for one
+    /// embedding/segment. Only affects `--v2`.
+    #[arg(long)]
+    embed_window: Option<f32>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -148,6 +154,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         v2,
         clusterer,
         vbx_plda_dir,
+        embed_window,
     } = args;
 
     let wav = wav.ok_or_else(|| {
@@ -191,6 +198,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
             threshold,
             &clusterer,
             vbx_plda_dir,
+            embed_window,
             quiet,
         )?
     } else {
@@ -298,6 +306,7 @@ fn run_legacy_pipeline(
     Ok(result)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_v2_pipeline(
     wav: &Path,
     profile: Profile,
@@ -305,6 +314,7 @@ fn run_v2_pipeline(
     threshold: f32,
     clusterer: &str,
     vbx_plda_dir: Option<PathBuf>,
+    embed_window: Option<f32>,
     quiet: bool,
 ) -> Result<DiarizationResult> {
     let clusterer_kind = match clusterer {
@@ -316,6 +326,7 @@ fn run_v2_pipeline(
         profile,
         clusterer: clusterer_kind,
         vbx_plda_dir,
+        embed_window_secs: embed_window,
         ..PipelineConfig::default()
     };
     let pipeline = V2Pipeline::builder()

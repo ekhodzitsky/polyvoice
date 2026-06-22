@@ -23,6 +23,12 @@ pub struct PipelineConfig {
     /// `clusterer == ClustererKind::Vbx`. `None` falls back to the
     /// `POLYVOICE_VBX_PLDA_DIR` env var. Has no effect for other clusterers.
     pub vbx_plda_dir: Option<PathBuf>,
+    /// Dense embedding window (seconds). `None` embeds each primary segment once
+    /// (sparse). `Some(w)` slides a `w`-second window with `w/2` hop inside each
+    /// segment, yielding several embeddings per speaker run — like the legacy
+    /// pipeline's dense windows — for more robust centroids / lower confusion at
+    /// the cost of more embedder calls. Sub-`w` segments still embed once.
+    pub embed_window_secs: Option<f32>,
 }
 
 impl Default for PipelineConfig {
@@ -46,6 +52,7 @@ impl Default for PipelineConfig {
             embedder_pool_size: default_pool_size(),
             execution_provider: ExecutionProvider::auto(),
             vbx_plda_dir: None,
+            embed_window_secs: None,
         }
     }
 }
