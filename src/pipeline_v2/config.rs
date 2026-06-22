@@ -1,6 +1,7 @@
 //! M6a — `PipelineConfig`, `ClustererKind`, `ExecutionProvider`.
 
 use crate::types::{Profile, SampleRate};
+use std::path::PathBuf;
 
 /// Top-level configuration for the v1.0 Pipeline. Mirrors spec §5.2 verbatim.
 #[derive(Clone, Debug)]
@@ -18,6 +19,10 @@ pub struct PipelineConfig {
     pub max_gap_secs: f32,
     pub embedder_pool_size: usize,
     pub execution_provider: ExecutionProvider,
+    /// Directory with the precomputed VBx PLDA params, used only when
+    /// `clusterer == ClustererKind::Vbx`. `None` falls back to the
+    /// `POLYVOICE_VBX_PLDA_DIR` env var. Has no effect for other clusterers.
+    pub vbx_plda_dir: Option<PathBuf>,
 }
 
 impl Default for PipelineConfig {
@@ -40,6 +45,7 @@ impl Default for PipelineConfig {
             max_gap_secs: 0.5,
             embedder_pool_size: default_pool_size(),
             execution_provider: ExecutionProvider::auto(),
+            vbx_plda_dir: None,
         }
     }
 }

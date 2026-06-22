@@ -74,6 +74,15 @@ struct DiarizeArgs {
     /// Use pipeline v2 (experimental; not recommended for long-form audio).
     #[arg(long)]
     v2: bool,
+    /// v2 clusterer: `ahc` (default cosine AHC) or `vbx` (PLDA + VB-HMM — best for
+    /// overlap-heavy / meeting audio; needs the `vbx` build feature and a PLDA dir
+    /// via `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`). Only affects `--v2`.
+    #[arg(long, default_value = "ahc")]
+    clusterer: String,
+    /// Directory with the precomputed VBx PLDA params (overrides
+    /// `POLYVOICE_VBX_PLDA_DIR`). Only used with `--v2 --clusterer vbx`.
+    #[arg(long)]
+    vbx_plda_dir: Option<PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -137,6 +146,8 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         quiet,
         json,
         v2,
+        clusterer,
+        vbx_plda_dir,
     } = args;
 
     let wav = wav.ok_or_else(|| {
@@ -173,7 +184,15 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     let max_clusters = speakers.or(max_speakers);
 
     let result = if v2 {
-        run_v2_pipeline(&wav, profile, &registry, threshold, quiet)?
+        run_v2_pipeline(
+            &wav,
+            profile,
+            &registry,
+            threshold,
+            &clusterer,
+            vbx_plda_dir,
+            quiet,
+        )?
     } else {
         run_legacy_pipeline(&wav, profile, &registry, threshold, max_clusters, quiet)?
     };
@@ -284,11 +303,19 @@ fn run_v2_pipeline(
     profile: Profile,
     registry: &ModelRegistry,
     threshold: f32,
+    clusterer: &str,
+    vbx_plda_dir: Option<PathBuf>,
     quiet: bool,
 ) -> Result<DiarizationResult> {
+    let clusterer_kind = match clusterer {
+        "ahc" => ClustererKind::Ahc { threshold },
+        "vbx" => ClustererKind::Vbx,
+        other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
+    };
     let config = PipelineConfig {
         profile,
-        clusterer: ClustererKind::Ahc { threshold },
+        clusterer: clusterer_kind,
+        vbx_plda_dir,
         ..PipelineConfig::default()
     };
     let pipeline = V2Pipeline::builder()

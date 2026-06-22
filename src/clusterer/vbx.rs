@@ -356,21 +356,24 @@ impl VbxClusterer {
         }
     }
 
-    /// Construct from the `POLYVOICE_VBX_PLDA_DIR` env var (proof/dev wiring;
-    /// shipped builds will resolve the PLDA params through the model registry).
-    pub fn from_env(max_speakers: usize) -> Result<Self, ClustererError> {
-        let dir = std::env::var("POLYVOICE_VBX_PLDA_DIR").map_err(|_| {
-            ClustererError::AlgorithmFailed {
-                detail: "POLYVOICE_VBX_PLDA_DIR not set".to_owned(),
-            }
-        })?;
-        let plda = PldaModel::from_dir(std::path::Path::new(&dir)).map_err(|e| {
-            ClustererError::AlgorithmFailed {
-                detail: format!("load PLDA: {e}"),
-            }
+    /// Construct from an explicit PLDA directory — the precomputed
+    /// `plda_{transform,phi_computed,mean1,mean2,lda,mu}.npy` set produced by
+    /// `scripts/build-vbx-plda.py`. This is the path shipped builds use (the
+    /// directory is resolved through the model registry / `--vbx-plda-dir`).
+    ///
+    /// Hyperparameters default to the dev-calibrated optimum (fa=0.3,
+    /// loop_prob=0.9 i.e. the canonical forward-backward VBx, ahc_threshold=0.5,
+    /// emb_scale=4.88); the `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE}`
+    /// env vars override each one for offline tuning.
+    pub fn from_dir(
+        plda_dir: &std::path::Path,
+        max_speakers: usize,
+    ) -> Result<Self, ClustererError> {
+        let plda = PldaModel::from_dir(plda_dir).map_err(|e| ClustererError::AlgorithmFailed {
+            detail: format!("load PLDA from {}: {e}", plda_dir.display()),
         })?;
         // Over-init seed threshold: higher cosine cutoff → more seed clusters that
-        // VBx then prunes. Tuned on dev later; this is a reasonable over-init.
+        // VBx then prunes (the prior drives the final count).
         let ahc_threshold = std::env::var("POLYVOICE_VBX_AHC_THRESHOLD")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -386,8 +389,7 @@ impl VbxClusterer {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or_else(|| VbxConfig::default().fb),
-            // Enable the canonical forward-backward VBx (temporal smoothing) by
-            // default for the integration; 0 falls back to the GMM update.
+            // Canonical forward-backward VBx (temporal smoothing); 0 → GMM update.
             loop_prob: std::env::var("POLYVOICE_VBX_LOOP_PROB")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -406,6 +408,17 @@ impl VbxClusterer {
             128,
             emb_scale,
         ))
+    }
+
+    /// Construct from the `POLYVOICE_VBX_PLDA_DIR` env var (dev wiring). Shipped
+    /// builds pass the resolved directory to [`VbxClusterer::from_dir`] instead.
+    pub fn from_env(max_speakers: usize) -> Result<Self, ClustererError> {
+        let dir = std::env::var("POLYVOICE_VBX_PLDA_DIR").map_err(|_| {
+            ClustererError::AlgorithmFailed {
+                detail: "POLYVOICE_VBX_PLDA_DIR not set".to_owned(),
+            }
+        })?;
+        Self::from_dir(std::path::Path::new(&dir), max_speakers)
     }
 }
 
@@ -472,6 +485,21 @@ impl Clusterer for VbxClusterer {
 mod tests {
     use super::*;
     use ndarray::{Array2, array};
+
+    #[test]
+    fn from_dir_missing_returns_error() {
+        // A non-existent PLDA dir must surface a clear error, not panic.
+        // (VbxClusterer is not Debug, so match instead of expect_err.)
+        let err = match VbxClusterer::from_dir(std::path::Path::new("/no/such/plda/dir"), 20) {
+            Ok(_) => panic!("missing PLDA dir must error"),
+            Err(e) => e,
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("load PLDA"),
+            "error should name the PLDA load: {msg}"
+        );
+    }
 
     #[test]
     fn two_clusters_with_vbx() {
