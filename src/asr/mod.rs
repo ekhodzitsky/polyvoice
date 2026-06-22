@@ -44,10 +44,17 @@ mod tests {
 
     struct MockAsr;
     impl Asr for MockAsr {
-        fn transcribe(&self, _audio: &[f32], _sample_rate: SampleRate) -> Result<Vec<Word>, AsrError> {
+        fn transcribe(
+            &self,
+            _audio: &[f32],
+            _sample_rate: SampleRate,
+        ) -> Result<Vec<Word>, AsrError> {
             Ok(vec![Word {
                 word: "hi".to_owned(),
-                time: TimeRange { start: 0.0, end: 0.5 },
+                time: TimeRange {
+                    start: 0.0,
+                    end: 0.5,
+                },
                 confidence: 0.9,
             }])
         }

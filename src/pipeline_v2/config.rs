@@ -43,7 +43,9 @@ impl Default for PipelineConfig {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ClustererKind {
     NmeSc,
-    Ahc { threshold: f32 },
+    Ahc {
+        threshold: f32,
+    },
     /// VBx (Variational Bayes HMM + PLDA) with automatic speaker-count selection.
     /// Requires the `vbx` feature; the PLDA params are resolved at construction.
     Vbx,

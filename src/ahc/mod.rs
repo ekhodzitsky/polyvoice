@@ -478,11 +478,19 @@ mod tests {
         ];
         let labels = vec![0, 0, 0, 0, 0, 0, 1, 1];
         let dur = prune_small_clusters_by_duration(&times, &embeddings, labels.clone(), 1.5);
-        assert_eq!(ndistinct(&dur), 2, "few-but-long cluster survives duration prune");
+        assert_eq!(
+            ndistinct(&dur),
+            2,
+            "few-but-long cluster survives duration prune"
+        );
         assert_ne!(dur[0], dur[6]);
         // Contrast: the count rule over-prunes the same 2-member cluster.
         let cnt = prune_small_clusters(&embeddings, labels, 4);
-        assert_eq!(ndistinct(&cnt), 1, "count rule over-prunes the long-but-few cluster");
+        assert_eq!(
+            ndistinct(&cnt),
+            1,
+            "count rule over-prunes the long-but-few cluster"
+        );
     }
 
     #[test]

@@ -672,7 +672,11 @@ mod tests {
         let segs = agg.stitch(&[w]).unwrap();
 
         let overlap: Vec<&RawSegment> = segs.iter().filter(|s| s.is_overlap).collect();
-        assert_eq!(overlap.len(), 2, "exactly two overlap pieces (one per speaker)");
+        assert_eq!(
+            overlap.len(),
+            2,
+            "exactly two overlap pieces (one per speaker)"
+        );
         for s in &overlap {
             assert!((s.time.start - 4.0).abs() < 1e-3, "overlap starts at 4.0s");
             assert!((s.time.end - 6.0).abs() < 1e-3, "overlap ends at 6.0s");

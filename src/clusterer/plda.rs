@@ -68,7 +68,8 @@ impl PldaModel {
     pub fn transform(&self, embeddings: &ArrayView2<f32>, lda_dim: usize) -> Array2<f32> {
         let emb = embeddings.mapv(|v| v as f64);
         let xvec = self.xvec_transform(&emb.view());
-        self.plda_transform(&xvec.view(), lda_dim).mapv(|v| v as f32)
+        self.plda_transform(&xvec.view(), lda_dim)
+            .mapv(|v| v as f32)
     }
 
     /// WeSpeaker/Kaldi x-vector preprocessing: center, L2-norm, LDA-project,

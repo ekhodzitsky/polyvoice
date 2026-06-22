@@ -128,10 +128,7 @@ mod tests {
 
     #[test]
     fn srt_blocks_are_numbered_and_lossless() {
-        let turns = vec![
-            turn(0, 0.5, 2.8, None),
-            turn(1, 3.0, 4.5, Some("hello")),
-        ];
+        let turns = vec![turn(0, 0.5, 2.8, None), turn(1, 3.0, 4.5, Some("hello"))];
         let out = render(|w| write_srt(w, &turns));
         let expected = "\
 1
@@ -160,10 +157,7 @@ SPEAKER_01: hello
 
     #[test]
     fn txt_is_readable_per_turn() {
-        let turns = vec![
-            turn(0, 0.5, 2.8, None),
-            turn(1, 3.0, 4.5, Some("hello")),
-        ];
+        let turns = vec![turn(0, 0.5, 2.8, None), turn(1, 3.0, 4.5, Some("hello"))];
         let out = render(|w| write_txt(w, &turns));
         let expected = "\
 [0.50 - 2.80] SPEAKER_00

@@ -797,8 +797,22 @@ mod diarization_result_tests {
     fn word_and_transcript_round_trip() {
         let t = Transcript {
             words: vec![
-                Word { word: "hello".into(), time: TimeRange { start: 0.0, end: 0.4 }, confidence: 0.95 },
-                Word { word: "world".into(), time: TimeRange { start: 0.4, end: 0.9 }, confidence: 0.88 },
+                Word {
+                    word: "hello".into(),
+                    time: TimeRange {
+                        start: 0.0,
+                        end: 0.4,
+                    },
+                    confidence: 0.95,
+                },
+                Word {
+                    word: "world".into(),
+                    time: TimeRange {
+                        start: 0.4,
+                        end: 0.9,
+                    },
+                    confidence: 0.88,
+                },
             ],
         };
         let json = serde_json::to_string(&t).unwrap();

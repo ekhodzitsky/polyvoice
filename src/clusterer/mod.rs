@@ -394,7 +394,9 @@ mod min_cluster_size_tests {
         // 12 embeddings (label 0) + 3 embeddings (label 1), min_size 12.
         let mut embs = near(0, 12);
         embs.extend(near(0, 3)); // the 3 are near the same axis -> merge into 0
-        let labels: Vec<usize> = std::iter::repeat(0).take(12).chain(std::iter::repeat(1).take(3)).collect();
+        let labels: Vec<usize> = std::iter::repeat_n(0, 12)
+            .chain(std::iter::repeat_n(1, 3))
+            .collect();
         let c = MinClusterSizeClusterer::new(Box::new(PresetClusterer { labels }), 12);
         let out = c.cluster(&embs).unwrap();
         assert_eq!(out.len(), 15, "every member retained");
@@ -409,10 +411,9 @@ mod min_cluster_size_tests {
         let mut embs = near(0, 12);
         embs.extend(near(1, 12));
         embs.extend(near(0, 3)); // spurious, belongs with axis-0 cluster
-        let labels: Vec<usize> = std::iter::repeat(0)
-            .take(12)
-            .chain(std::iter::repeat(1).take(12))
-            .chain(std::iter::repeat(2).take(3))
+        let labels: Vec<usize> = std::iter::repeat_n(0, 12)
+            .chain(std::iter::repeat_n(1, 12))
+            .chain(std::iter::repeat_n(2, 3))
             .collect();
         let c = MinClusterSizeClusterer::new(Box::new(PresetClusterer { labels }), 6);
         let out = c.cluster(&embs).unwrap();
@@ -428,7 +429,12 @@ mod min_cluster_size_tests {
     fn min_size_one_is_identity() {
         let embs = near(0, 3);
         let labels = vec![0, 1, 2];
-        let c = MinClusterSizeClusterer::new(Box::new(PresetClusterer { labels: labels.clone() }), 1);
+        let c = MinClusterSizeClusterer::new(
+            Box::new(PresetClusterer {
+                labels: labels.clone(),
+            }),
+            1,
+        );
         assert_eq!(c.cluster(&embs).unwrap(), labels);
     }
 
@@ -436,8 +442,15 @@ mod min_cluster_size_tests {
     fn no_small_clusters_passes_through() {
         let mut embs = near(0, 6);
         embs.extend(near(1, 6));
-        let labels: Vec<usize> = std::iter::repeat(0).take(6).chain(std::iter::repeat(1).take(6)).collect();
-        let c = MinClusterSizeClusterer::new(Box::new(PresetClusterer { labels: labels.clone() }), 6);
+        let labels: Vec<usize> = std::iter::repeat_n(0, 6)
+            .chain(std::iter::repeat_n(1, 6))
+            .collect();
+        let c = MinClusterSizeClusterer::new(
+            Box::new(PresetClusterer {
+                labels: labels.clone(),
+            }),
+            6,
+        );
         assert_eq!(c.cluster(&embs).unwrap(), labels);
     }
 
@@ -448,7 +461,11 @@ mod min_cluster_size_tests {
         let c = MinClusterSizeClusterer::new(Box::new(PresetClusterer { labels }), 12);
         let out = c.cluster(&embs).unwrap();
         assert_eq!(out.len(), 3);
-        assert_eq!(unique(&out).len(), 1, "degenerate all-small collapses to 1 survivor");
+        assert_eq!(
+            unique(&out).len(),
+            1,
+            "degenerate all-small collapses to 1 survivor"
+        );
         assert!(out.iter().all(|&l| l == 0), "compact single label");
     }
 
@@ -458,10 +475,9 @@ mod min_cluster_size_tests {
         let mut embs = near(0, 8);
         embs.extend(near(1, 8));
         embs.extend(near(2, 2)); // small, dissolves
-        let labels: Vec<usize> = std::iter::repeat(0)
-            .take(8)
-            .chain(std::iter::repeat(5).take(8)) // deliberately non-contiguous label
-            .chain(std::iter::repeat(9).take(2))
+        let labels: Vec<usize> = std::iter::repeat_n(0, 8)
+            .chain(std::iter::repeat_n(5, 8)) // deliberately non-contiguous label
+            .chain(std::iter::repeat_n(9, 2))
             .collect();
         let c = MinClusterSizeClusterer::new(Box::new(PresetClusterer { labels }), 6);
         let out = c.cluster(&embs).unwrap();

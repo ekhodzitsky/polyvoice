@@ -398,7 +398,14 @@ impl VbxClusterer {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(4.88);
-        Ok(Self::new(plda, config, ahc_threshold, max_speakers, 128, emb_scale))
+        Ok(Self::new(
+            plda,
+            config,
+            ahc_threshold,
+            max_speakers,
+            128,
+            emb_scale,
+        ))
     }
 }
 
@@ -437,8 +444,7 @@ impl Clusterer for VbxClusterer {
         let phi = self.plda.phi();
 
         // Over-segmenting AHC seed on the PLDA features (cosine linkage).
-        let feat_vecs: Vec<Vec<f32>> =
-            features.rows().into_iter().map(|r| r.to_vec()).collect();
+        let feat_vecs: Vec<Vec<f32>> = features.rows().into_iter().map(|r| r.to_vec()).collect();
         let ahc_labels = crate::ahc::agglomerative_cluster_max_clusters(
             &feat_vecs,
             self.ahc_threshold,
@@ -488,7 +494,12 @@ mod tests {
             gamma_init[[t, 0]] = 0.001;
             gamma_init[[t, 1]] = 0.999;
         }
-        let (gamma, _pi) = vbx(&features.view(), &phi.view(), &gamma_init, &VbxConfig::default());
+        let (gamma, _pi) = vbx(
+            &features.view(),
+            &phi.view(),
+            &gamma_init,
+            &VbxConfig::default(),
+        );
         let labels = hard_labels(&gamma);
         assert_eq!(labels[0], labels[1]);
         assert_eq!(labels[0], labels[2]);
@@ -526,7 +537,10 @@ mod tests {
         // Posteriors per frame are a valid distribution (sum ~ 1, finite).
         for row in gamma.rows() {
             let s: f32 = row.sum();
-            assert!(s.is_finite() && (s - 1.0).abs() < 1e-3, "row sum {s} not ~1");
+            assert!(
+                s.is_finite() && (s - 1.0).abs() < 1e-3,
+                "row sum {s} not ~1"
+            );
         }
         let labels = hard_labels(&gamma);
         assert_eq!(labels[0], labels[2]);
@@ -561,7 +575,11 @@ mod tests {
         let (gamma, _pi) = vbx(&features.view(), &phi.view(), &gamma_init, &cfg);
         let labels = hard_labels(&gamma);
         let distinct: std::collections::HashSet<usize> = labels.iter().copied().collect();
-        assert_eq!(distinct.len(), 1, "one acoustic cluster must collapse to one speaker");
+        assert_eq!(
+            distinct.len(),
+            1,
+            "one acoustic cluster must collapse to one speaker"
+        );
     }
 
     #[test]
