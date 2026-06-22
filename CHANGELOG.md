@@ -71,6 +71,12 @@ canonical `DiarizationResult` type is new — pin exactly if you script against 
 
 ### Fixed
 
+- **pipeline v2 default min_cluster_size**: lowered from 12 to 1. After the
+  segmentation fix above, the default min-cluster pruning dissolved every cluster
+  on short clips (a 26 s clip has all clusters below 12 members) into one speaker
+  — the v2 e2e DER collapsed to ~49% with 1 hypothesized speaker. v2 ships
+  unpruned (pruning is net-negative for the powerset pipeline); the e2e DER is
+  back to 4.34%. Callers can still set a higher `min_cluster_size` per pipeline.
 - **pipeline v2 segmentation**: the sliding-window aggregator flagged a whole
   speaker run `is_overlap` when any single frame fell in an overlap class, so
   long single-speaker speech brushed by a brief overlap was excluded from the

@@ -29,7 +29,11 @@ impl Default for PipelineConfig {
             seg_hop_secs: 0.5,
             clusterer: ClustererKind::Ahc { threshold: 0.5 },
             max_speakers: 20,
-            min_cluster_size: 12,
+            // v2 ships unpruned: min-cluster pruning is net-negative for the
+            // powerset pipeline and collapses short clips (a 26 s clip has every
+            // cluster below 12 members → all dissolved into one speaker → DER
+            // ~49%). 1 = no pruning; tune per-call if a split-heavy file needs it.
+            min_cluster_size: 1,
             resegment_overlap: true,
             resegment_min_overlap_secs: 0.1,
             min_speech_secs: 0.25,
@@ -99,7 +103,7 @@ mod tests {
             ClustererKind::Ahc { threshold: 0.5 }
         ));
         assert_eq!(cfg.max_speakers, 20);
-        assert_eq!(cfg.min_cluster_size, 12);
+        assert_eq!(cfg.min_cluster_size, 1);
         assert!(cfg.resegment_overlap);
         assert!((cfg.resegment_min_overlap_secs - 0.1).abs() < f32::EPSILON);
         assert!((cfg.min_speech_secs - 0.25).abs() < f32::EPSILON);
