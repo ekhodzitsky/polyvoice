@@ -48,6 +48,7 @@ fn end_to_end_synthetic_two_speakers_overlap() {
             end: 5.5,
         },
         primary_speaker: SpeakerId(0),
+        secondary_speaker: None,
         embedding: unit(dim, 1),
     }];
 
@@ -91,6 +92,7 @@ fn end_to_end_three_speakers_two_pairs() {
                 end: 2.0,
             },
             primary_speaker: SpeakerId(0),
+            secondary_speaker: None,
             embedding: unit(dim, 1),
         },
         // 4.0..5.0: primary 2, secondary best should be 1.
@@ -100,6 +102,7 @@ fn end_to_end_three_speakers_two_pairs() {
                 end: 5.0,
             },
             primary_speaker: SpeakerId(2),
+            secondary_speaker: None,
             embedding: unit(dim, 1),
         },
     ];
@@ -144,6 +147,7 @@ fn rttm_round_trip_preserves_overlap_turns() {
             end: 0.8,
         },
         primary_speaker: SpeakerId(0),
+        secondary_speaker: None,
         embedding: unit(dim, 1),
     }];
     let r = OverlapResegmenter::default();
@@ -228,6 +232,7 @@ mod proptests {
                 .map(|i| OverlapRegionInput {
                     time: TimeRange { start: i as f64 * 0.7, end: i as f64 * 0.7 + 0.5 },
                     primary_speaker: SpeakerId((i % num_centroids) as u32),
+                    secondary_speaker: None,
                     embedding: normalize(vec![embedding_seed_a, embedding_seed_b, 0.0, 0.0]),
                 })
                 .collect();
@@ -277,6 +282,7 @@ mod proptests {
                 .map(|i| OverlapRegionInput {
                     time: TimeRange { start: i as f64 * 0.9, end: i as f64 * 0.9 + 0.4 },
                     primary_speaker: SpeakerId(0),
+                    secondary_speaker: None,
                     embedding: unit(dim, (i + 1) % dim),
                 })
                 .collect();
