@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-23
+
+Accuracy release for pipeline v2. Overlap reconstruction now reuses the
+segmenter's own two-speaker assignment, the VBx (PLDA + VB-HMM) clusterer is a
+first-class opt-in that wins on overlap-heavy / meeting audio, and an opt-in
+dense-embedding mode lowers v2 confusion on clean audio. The shipped default
+(legacy pipeline) is unchanged. Source-breaking additions to `OverlapRegionInput`
+and `PipelineConfig` (struct-literal constructors must add the new fields), all
+flagged by `cargo-semver-checks` — hence the minor bump.
+
 ### Changed
 
 - **Overlap reconstruction now trusts the segmenter's own speaker assignment.**
