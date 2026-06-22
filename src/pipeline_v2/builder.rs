@@ -229,6 +229,21 @@ impl PipelineBuilder {
                             self.config.profile.default_threshold(),
                         ))
                     }
+                    #[cfg(feature = "vbx")]
+                    ClustererKind::Vbx => Box::new(
+                        crate::clusterer::vbx::VbxClusterer::from_env(
+                            self.config.max_speakers as usize,
+                        )
+                        .map_err(|e| ConfigError::UnknownModel {
+                            model_id: format!("vbx ({e})"),
+                        })?,
+                    ),
+                    #[cfg(not(feature = "vbx"))]
+                    ClustererKind::Vbx => {
+                        return Err(ConfigError::UnknownModel {
+                            model_id: "vbx (requires the `vbx` feature)".to_owned(),
+                        });
+                    }
                 };
                 // Activate min_cluster_size pruning (this config field was
                 // previously dead — never read by any clusterer). Dissolves
@@ -236,14 +251,18 @@ impl PipelineBuilder {
                 // over-clustering fix that a global threshold cannot achieve
                 // without over-merging real speakers. Profile path only — Custom
                 // callers own their clusterer and opt in via with_clusterer.
+                // VBx determines the speaker count itself (prior-driven pruning),
+                // so post-hoc min-size pruning would dissolve its own clusters —
+                // skip the wrap for VBx.
                 let min_size = self.config.min_cluster_size;
-                let clusterer: Box<dyn Clusterer> = if min_size > 1 {
-                    Box::new(crate::clusterer::MinClusterSizeClusterer::new(
-                        clusterer, min_size,
-                    ))
-                } else {
-                    clusterer
-                };
+                let clusterer: Box<dyn Clusterer> =
+                    if min_size > 1 && self.config.clusterer != ClustererKind::Vbx {
+                        Box::new(crate::clusterer::MinClusterSizeClusterer::new(
+                            clusterer, min_size,
+                        ))
+                    } else {
+                        clusterer
+                    };
                 Ok(Pipeline::from_components(
                     self.config,
                     segmenter,

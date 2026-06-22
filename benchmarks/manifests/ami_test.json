@@ -1,0 +1,26 @@
+{
+  "dataset": "ami_test",
+  "audio_root": "data/ami-test/audio",
+  "rttm_root": "data/ami-test/rttm",
+  "source": "https://groups.inf.ed.ac.uk/ami/corpus/",
+  "license": "AMI Meeting Corpus CC-BY-4.0",
+  "files": 16,
+  "ids": [
+    "EN2002a.Mix-Headset",
+    "EN2002b.Mix-Headset",
+    "EN2002c.Mix-Headset",
+    "EN2002d.Mix-Headset",
+    "ES2004a.Mix-Headset",
+    "ES2004b.Mix-Headset",
+    "ES2004c.Mix-Headset",
+    "ES2004d.Mix-Headset",
+    "IS1009a.Mix-Headset",
+    "IS1009b.Mix-Headset",
+    "IS1009c.Mix-Headset",
+    "IS1009d.Mix-Headset",
+    "TS3003a.Mix-Headset",
+    "TS3003b.Mix-Headset",
+    "TS3003c.Mix-Headset",
+    "TS3003d.Mix-Headset"
+  ]
+}

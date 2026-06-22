@@ -19,9 +19,7 @@ use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline as LegacyPipeline;
 use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig};
 use polyvoice::rttm::write_rttm;
-use polyvoice::types::{
-    ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate,
-};
+use polyvoice::types::{ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
@@ -165,7 +163,9 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     };
 
     if !quiet {
-        eprintln!("Loading {profile:?} profile from registry (models auto-download on first run)...");
+        eprintln!(
+            "Loading {profile:?} profile from registry (models auto-download on first run)..."
+        );
     }
 
     // `--speakers N` is an exact target; both it and `--max-speakers` cap the
@@ -197,7 +197,9 @@ fn write_output(
 
     let mut buf: Vec<u8> = Vec::new();
     match format {
-        OutputFormat::Rttm => write_rttm(&mut buf, &file_id, &result.turns).context("write RTTM")?,
+        OutputFormat::Rttm => {
+            write_rttm(&mut buf, &file_id, &result.turns).context("write RTTM")?
+        }
         OutputFormat::Srt => write_srt(&mut buf, &result.turns).context("write SRT")?,
         OutputFormat::Vtt => write_vtt(&mut buf, &result.turns).context("write VTT")?,
         OutputFormat::Txt => write_txt(&mut buf, &result.turns).context("write TXT")?,
@@ -308,7 +310,9 @@ fn run_v2_pipeline(
             sr_hz
         );
     }
-    let result = pipeline.run(&samples, sr).context("pipeline v2 run failed")?;
+    let result = pipeline
+        .run(&samples, sr)
+        .context("pipeline v2 run failed")?;
     if !quiet {
         eprintln!(
             "Done — {} turns, {} speakers",
@@ -437,19 +441,27 @@ mod prop_tests {
     #[test]
     fn subcommands_are_not_shadowed_by_default_diarize() {
         assert!(matches!(
-            Cli::try_parse_from(["polyvoice", "models", "list"]).unwrap().command,
+            Cli::try_parse_from(["polyvoice", "models", "list"])
+                .unwrap()
+                .command,
             Some(Command::Models { .. })
         ));
         assert!(matches!(
-            Cli::try_parse_from(["polyvoice", "download-models"]).unwrap().command,
+            Cli::try_parse_from(["polyvoice", "download-models"])
+                .unwrap()
+                .command,
             Some(Command::DownloadModels { .. })
         ));
         assert!(matches!(
-            Cli::try_parse_from(["polyvoice", "completions", "bash"]).unwrap().command,
+            Cli::try_parse_from(["polyvoice", "completions", "bash"])
+                .unwrap()
+                .command,
             Some(Command::Completions { .. })
         ));
         assert!(matches!(
-            Cli::try_parse_from(["polyvoice", "diarize", "x.wav"]).unwrap().command,
+            Cli::try_parse_from(["polyvoice", "diarize", "x.wav"])
+                .unwrap()
+                .command,
             Some(Command::Diarize(_))
         ));
     }

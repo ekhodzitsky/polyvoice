@@ -16,8 +16,9 @@ Speaker_1: 14.1s - 28.7s
 Speaker_0: 31.2s - 45.0s
 ```
 
-~80% of pyannote's accuracy at ~10× less RAM, no GPU, no Python runtime — see
-[Benchmarks](docs/BENCHMARKS.md).
+Like-for-like (collar 0, overlap-scored) VoxConverse-test DER is **18.5%** vs
+pyannote 3.1's **11.3%** — a few DER points traded for a CPU-only, MIT,
+**ungated** engine that needs no Python — see [Benchmarks](docs/BENCHMARKS.md).
 
 ## Install
 
@@ -65,9 +66,11 @@ Python usage and the full API live on [docs.rs](https://docs.rs/polyvoice).
 - **One library, four surfaces.** Rust + Python + C FFI + CLI from a single crate.
 - **CPU-first, ~30 MB, MIT.** No GPU, no Python runtime, no gated model access.
 
-It is **not** the accuracy leader — like-for-like no-collar VoxConverse DER is
-~mid-20s% versus ~11% for pyannote / speakrs. It trades a few DER points for
-deployability and a maintained, multi-binding SDK.
+It is **not** the accuracy leader — like-for-like (collar 0, overlap-scored)
+VoxConverse-test DER is **18.5%** versus **11.3%** for pyannote 3.1. It trades
+those DER points for deployability: a pure-Rust, CPU, MIT, **ungated** engine
+(pyannote's weights are gated behind an HF token) with four bindings and
+streaming.
 
 ## How it works
 

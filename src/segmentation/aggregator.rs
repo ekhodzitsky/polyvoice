@@ -400,14 +400,21 @@ impl Aggregator {
             frame_confidences.push(maxp);
         }
 
-        // Run-length encode per speaker.
+        // Run-length encode per speaker. A run is broken not only when the
+        // speaker falls silent but also when its overlap status flips: a speaker
+        // talking across a brief overlap emits separate solo and overlap
+        // segments rather than one run tainted by the overlap. This keeps
+        // `is_overlap` precise (a segment is overlap iff *every* frame in it was
+        // an overlap frame) and makes two simultaneously-active speakers emit
+        // time-equal overlap segments that `extract_overlap_time_ranges` pairs.
         let mut segments: Vec<RawSegment> = Vec::new();
-        // (start_global_frame, confidence_sum, confidence_count)
-        let mut active: [Option<(usize, f32, f32)>; 3] = [None, None, None];
+        // (start_global_frame, confidence_sum, confidence_count, is_overlap_run)
+        let mut active: [Option<(usize, f32, f32, bool)>; 3] = [None, None, None];
 
         for g in 0..global_frames {
             let frame_class = frame_classes[g];
             let conf = frame_confidences[g];
+            let is_overlap_frame = frame_class.map(|c| c.is_overlap()).unwrap_or(false);
             let active_speakers: Vec<u8> = match frame_class {
                 Some(c) => c.speakers(),
                 None => Vec::new(),
@@ -415,37 +422,43 @@ impl Aggregator {
 
             for (s, slot) in active.iter_mut().enumerate() {
                 let s_active_now = active_speakers.iter().any(|x| *x as usize == s);
+                let ov_now = s_active_now && is_overlap_frame;
                 match (*slot, s_active_now) {
                     (None, true) => {
-                        *slot = Some((g, conf, 1.0));
+                        *slot = Some((g, conf, 1.0, ov_now));
                     }
-                    (Some((start_g, conf_sum, conf_count)), true) => {
-                        *slot = Some((start_g, conf_sum + conf, conf_count + 1.0));
+                    (Some((start_g, conf_sum, conf_count, run_ov)), true) if run_ov == ov_now => {
+                        *slot = Some((start_g, conf_sum + conf, conf_count + 1.0, run_ov));
                     }
-                    (Some((start_g, conf_sum, conf_count)), false) => {
-                        let start_t = global_start + start_g as f32 * stride;
-                        let end_t = global_start + g as f32 * stride;
-                        let dur = end_t - start_t;
-                        if dur >= self.config.min_segment_secs {
-                            let mean_conf = (conf_sum / conf_count.max(1.0)).clamp(0.0, 1.0);
-                            let had_overlap = (start_g..g).any(|gg| {
-                                frame_classes[gg]
-                                    .map(|c| {
-                                        c.is_overlap()
-                                            && c.speakers().iter().any(|x| *x as usize == s)
-                                    })
-                                    .unwrap_or(false)
-                            });
-                            segments.push(RawSegment {
-                                time: TimeRange {
-                                    start: start_t as f64,
-                                    end: end_t as f64,
-                                },
-                                local_speaker_idx: s as u8,
-                                is_overlap: had_overlap,
-                                confidence: PowersetDecoder::frame_confidence(mean_conf),
-                            });
-                        }
+                    (Some((start_g, conf_sum, conf_count, run_ov)), true) => {
+                        // Overlap status flipped — close the current run, open a new one at g.
+                        push_segment(
+                            &mut segments,
+                            global_start,
+                            stride,
+                            s,
+                            start_g,
+                            g,
+                            conf_sum,
+                            conf_count,
+                            run_ov,
+                            self.config.min_segment_secs,
+                        );
+                        *slot = Some((g, conf, 1.0, ov_now));
+                    }
+                    (Some((start_g, conf_sum, conf_count, run_ov)), false) => {
+                        push_segment(
+                            &mut segments,
+                            global_start,
+                            stride,
+                            s,
+                            start_g,
+                            g,
+                            conf_sum,
+                            conf_count,
+                            run_ov,
+                            self.config.min_segment_secs,
+                        );
                         *slot = None;
                     }
                     (None, false) => {}
@@ -455,29 +468,19 @@ impl Aggregator {
 
         // Flush trailing active runs.
         for (s, slot) in active.iter().enumerate() {
-            if let Some((start_g, conf_sum, conf_count)) = *slot {
-                let start_t = global_start + start_g as f32 * stride;
-                let end_t = global_start + global_frames as f32 * stride;
-                let dur = end_t - start_t;
-                if dur >= self.config.min_segment_secs {
-                    let mean_conf = (conf_sum / conf_count.max(1.0)).clamp(0.0, 1.0);
-                    let had_overlap = (start_g..global_frames).any(|gg| {
-                        frame_classes[gg]
-                            .map(|c| {
-                                c.is_overlap() && c.speakers().iter().any(|x| *x as usize == s)
-                            })
-                            .unwrap_or(false)
-                    });
-                    segments.push(RawSegment {
-                        time: TimeRange {
-                            start: start_t as f64,
-                            end: end_t as f64,
-                        },
-                        local_speaker_idx: s as u8,
-                        is_overlap: had_overlap,
-                        confidence: PowersetDecoder::frame_confidence(mean_conf),
-                    });
-                }
+            if let Some((start_g, conf_sum, conf_count, run_ov)) = *slot {
+                push_segment(
+                    &mut segments,
+                    global_start,
+                    stride,
+                    s,
+                    start_g,
+                    global_frames,
+                    conf_sum,
+                    conf_count,
+                    run_ov,
+                    self.config.min_segment_secs,
+                );
             }
         }
 
@@ -489,6 +492,39 @@ impl Aggregator {
         });
         Ok(segments)
     }
+}
+
+/// Emit one run as a `RawSegment`, skipping runs shorter than `min_segment_secs`.
+/// `start_g`/`end_g` are global frame indices; the run carries a single
+/// `is_overlap` flag because the RLE splits runs at every overlap-status change.
+#[allow(clippy::too_many_arguments)]
+fn push_segment(
+    segments: &mut Vec<RawSegment>,
+    global_start: f32,
+    stride: f32,
+    speaker: usize,
+    start_g: usize,
+    end_g: usize,
+    conf_sum: f32,
+    conf_count: f32,
+    is_overlap: bool,
+    min_segment_secs: f32,
+) {
+    let start_t = global_start + start_g as f32 * stride;
+    let end_t = global_start + end_g as f32 * stride;
+    if end_t - start_t < min_segment_secs {
+        return;
+    }
+    let mean_conf = (conf_sum / conf_count.max(1.0)).clamp(0.0, 1.0);
+    segments.push(RawSegment {
+        time: TimeRange {
+            start: start_t as f64,
+            end: end_t as f64,
+        },
+        local_speaker_idx: speaker as u8,
+        is_overlap,
+        confidence: PowersetDecoder::frame_confidence(mean_conf),
+    });
 }
 
 #[allow(clippy::unwrap_used)]
@@ -618,6 +654,42 @@ mod tests {
         let speakers: Vec<u8> = segs.iter().map(|s| s.local_speaker_idx).collect();
         assert!(speakers.contains(&0));
         assert!(speakers.contains(&1));
+    }
+
+    #[test]
+    fn partial_overlap_run_splits_into_solo_and_overlap_segments() {
+        // spk0 talks the whole 0-10s window; spk1 joins only over 4-6s (class 4 =
+        // pair{0,1}). spk0's run must split into solo [0,4), overlap [4,6), solo
+        // [6,10); spk1 emits one overlap [4,6). The two overlap pieces must share
+        // an exact time range so extract_overlap_time_ranges can pair them — this
+        // is the fix for whole single-speaker runs being falsely flagged overlap.
+        let mut classes = vec![1usize; 100];
+        for c in &mut classes[40..60] {
+            *c = 4;
+        }
+        let w = synthetic_window(0.0, 10.0, 100, &classes);
+        let agg = Aggregator::new(AggregationConfig::default());
+        let segs = agg.stitch(&[w]).unwrap();
+
+        let overlap: Vec<&RawSegment> = segs.iter().filter(|s| s.is_overlap).collect();
+        assert_eq!(
+            overlap.len(),
+            2,
+            "exactly two overlap pieces (one per speaker)"
+        );
+        for s in &overlap {
+            assert!((s.time.start - 4.0).abs() < 1e-3, "overlap starts at 4.0s");
+            assert!((s.time.end - 6.0).abs() < 1e-3, "overlap ends at 6.0s");
+        }
+        let ov_speakers: std::collections::HashSet<u8> =
+            overlap.iter().map(|s| s.local_speaker_idx).collect();
+        assert_eq!(ov_speakers, [0u8, 1u8].into_iter().collect());
+
+        // spk0: three pieces (solo, overlap, solo); the two solo ones are NOT overlap.
+        let spk0: Vec<&RawSegment> = segs.iter().filter(|s| s.local_speaker_idx == 0).collect();
+        assert_eq!(spk0.len(), 3, "spk0 run splits at both overlap boundaries");
+        let solo0: Vec<&&RawSegment> = spk0.iter().filter(|s| !s.is_overlap).collect();
+        assert_eq!(solo0.len(), 2, "spk0 keeps two solo pieces");
     }
 
     #[test]

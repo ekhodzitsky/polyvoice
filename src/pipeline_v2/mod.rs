@@ -113,6 +113,9 @@ impl Pipeline {
             .collect();
 
         let sample_rate = self.config.sample_rate.get() as f64;
+        // PLDA backends (VBx) need the raw embedding scale for mean-centering;
+        // cosine backends are scale-invariant and get the L2-normalized vectors.
+        let raw_embeddings = self.clusterer.wants_raw_embeddings();
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(primary_segments.len());
         let mut valid_segments: Vec<_> = Vec::with_capacity(primary_segments.len());
         for seg in &primary_segments {
@@ -152,7 +155,9 @@ impl Pipeline {
                 );
                 continue;
             }
-            l2_normalize(&mut emb);
+            if !raw_embeddings {
+                l2_normalize(&mut emb);
+            }
             embeddings.push(emb);
             valid_segments.push(seg);
         }
