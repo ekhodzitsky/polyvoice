@@ -32,6 +32,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `secondary_speaker: None` to keep the prior mixed-embedding behavior.
 - `POLYVOICE_V2_DISABLE_SEG_OVERLAP` env toggle — forces the legacy
   mixed-embedding overlap path, for A/B ablation of the two strategies.
+- **VBx clusterer is now selectable for pipeline v2 without env hacking.**
+  `PipelineConfig.vbx_plda_dir: Option<PathBuf>` points the `vbx` clusterer at a
+  precomputed PLDA directory (falls back to `POLYVOICE_VBX_PLDA_DIR`), and the
+  CLI gains `polyvoice diarize --v2 --clusterer vbx --vbx-plda-dir <dir>`.
+  `VbxClusterer::from_dir` is the new explicit constructor (`from_env` now
+  delegates to it). VBx (PLDA + VB-HMM) beats cosine AHC on v2 — measured
+  VoxConverse-30 −1.3pp, AMI −5pp, lower confusion — and makes v2+VBx the best
+  option for overlap-heavy / meeting audio (AMI −7.8pp vs the legacy default).
+  It is ~2–3× slower than AHC and needs the PLDA params, so it stays opt-in;
+  legacy remains the default for clean conversational audio. The PLDA params are
+  pyannote-derived, **CC-BY-4.0** (see `NOTICE`); shipping them bundled (model
+  registry) is tracked in `docs/vbx-plda-release.md`. **Breaking:**
+  `PipelineConfig` gained a field — struct-literal constructors must add
+  `vbx_plda_dir: None` (or use `..PipelineConfig::default()`).
 
 ## [0.8.0] - 2026-06-20
 
