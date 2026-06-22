@@ -230,14 +230,17 @@ impl PipelineBuilder {
                         ))
                     }
                     #[cfg(feature = "vbx")]
-                    ClustererKind::Vbx => Box::new(
-                        crate::clusterer::vbx::VbxClusterer::from_env(
-                            self.config.max_speakers as usize,
-                        )
+                    ClustererKind::Vbx => {
+                        let max = self.config.max_speakers as usize;
+                        let vbx = match &self.config.vbx_plda_dir {
+                            Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(dir, max),
+                            None => crate::clusterer::vbx::VbxClusterer::from_env(max),
+                        }
                         .map_err(|e| ConfigError::UnknownModel {
                             model_id: format!("vbx ({e})"),
-                        })?,
-                    ),
+                        })?;
+                        Box::new(vbx)
+                    }
                     #[cfg(not(feature = "vbx"))]
                     ClustererKind::Vbx => {
                         return Err(ConfigError::UnknownModel {
