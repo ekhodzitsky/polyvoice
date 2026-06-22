@@ -181,12 +181,24 @@ impl Pipeline {
 
         let centroids: Vec<SpeakerCentroid> = compute_centroids(&embeddings, &labels);
 
+        // Bridge the powerset segmenter's file-consistent local speaker indices
+        // to global clusters: every primary segment carries both its local index
+        // and (post-clustering) a global label, so a duration-weighted majority
+        // vote maps local → global. Overlap regions then reuse the segmenter's
+        // own two-speaker assignment instead of re-guessing the second speaker
+        // from a degraded mixed-voice embedding.
+        let local_to_global = Self::map_local_to_global(&valid_segments, &labels);
+
         let mut all_turns: Vec<SpeakerTurn> = if self.config.resegment_overlap
             && !overlap_ranges.is_empty()
             && centroids.len() >= 2
         {
-            let overlap_inputs =
-                self.build_overlap_inputs(&overlap_ranges, &primary_turns, samples)?;
+            let overlap_inputs = self.build_overlap_inputs(
+                &overlap_ranges,
+                &primary_turns,
+                &local_to_global,
+                samples,
+            )?;
             self.resegmenter.resegment(ResegmentInputs {
                 primary_turns: &primary_turns,
                 speaker_centroids: &centroids,
@@ -240,29 +252,85 @@ impl Pipeline {
         )
     }
 
+    /// Duration-weighted majority map from each file-consistent local speaker
+    /// index to the global cluster its primary segments landed in. A local index
+    /// whose segments scattered across clusters resolves to the dominant one;
+    /// a local index that never appeared as a solo segment is simply absent.
+    fn map_local_to_global(
+        valid_segments: &[&crate::segmentation::RawSegment],
+        labels: &[usize],
+    ) -> std::collections::HashMap<u8, SpeakerId> {
+        // Ablation toggle: when set, return an empty map so every overlap region
+        // takes the mixed-embedding fallback. Lets the segmentation-derived
+        // overlap path be A/B-measured against the legacy path in one binary.
+        if std::env::var_os("POLYVOICE_V2_DISABLE_SEG_OVERLAP").is_some() {
+            return std::collections::HashMap::new();
+        }
+        let mut local_dur: std::collections::HashMap<u8, std::collections::HashMap<u32, f64>> =
+            std::collections::HashMap::new();
+        for (seg, &lbl) in valid_segments.iter().zip(labels.iter()) {
+            *local_dur
+                .entry(seg.local_speaker_idx)
+                .or_default()
+                .entry(lbl as u32)
+                .or_default() += seg.time.duration();
+        }
+        local_dur
+            .iter()
+            .filter_map(|(&loc, per_global)| {
+                per_global
+                    .iter()
+                    .max_by(|a, b| a.1.total_cmp(b.1))
+                    .map(|(&g, _)| (loc, SpeakerId(g)))
+            })
+            .collect()
+    }
+
     fn build_overlap_inputs(
         &self,
         overlap_ranges: &[(TimeRange, u8, u8)],
         primary_turns: &[SpeakerTurn],
+        local_to_global: &std::collections::HashMap<u8, SpeakerId>,
         samples: &[f32],
     ) -> Result<Vec<OverlapRegionInput>, PipelineError> {
         let sample_rate = self.config.sample_rate.get() as f64;
         let mut out = Vec::with_capacity(overlap_ranges.len());
-        for (time, _lo, _hi) in overlap_ranges {
-            let primary = primary_turns
-                .iter()
-                .find(|t| t.time.start <= time.start && time.end <= t.time.end)
-                .map(|t| t.speaker)
-                .unwrap_or_else(|| {
-                    // Fix 3: nearest by midpoint distance, not start-time distance.
-                    let mid = (time.start + time.end) / 2.0;
-                    let tmid = |t: &SpeakerTurn| (t.time.start + t.time.end) / 2.0;
-                    primary_turns
-                        .iter()
-                        .min_by(|a, b| (tmid(a) - mid).abs().total_cmp(&(tmid(b) - mid).abs()))
-                        .map(|t| t.speaker)
-                        .unwrap_or(SpeakerId(0))
+        for (time, lo, hi) in overlap_ranges {
+            let g_lo = local_to_global.get(lo).copied();
+            let g_hi = local_to_global.get(hi).copied();
+
+            // Both local speakers of the overlap map to a global cluster: take
+            // the segmenter's own two-speaker assignment directly and skip the
+            // mixed-voice embedding entirely (the overlap-accuracy win).
+            if let (Some(a), Some(b)) = (g_lo, g_hi) {
+                out.push(OverlapRegionInput {
+                    time: *time,
+                    primary_speaker: a,
+                    secondary_speaker: Some(b),
+                    embedding: Vec::new(),
                 });
+                continue;
+            }
+
+            // At least one local index never appeared as a solo segment, so its
+            // global identity is unknown. Anchor on whichever local did map (or
+            // the nearest primary turn by midpoint) and recover the other speaker
+            // downstream from a mixed-region embedding.
+            let primary = g_lo.or(g_hi).unwrap_or_else(|| {
+                primary_turns
+                    .iter()
+                    .find(|t| t.time.start <= time.start && time.end <= t.time.end)
+                    .map(|t| t.speaker)
+                    .unwrap_or_else(|| {
+                        let mid = (time.start + time.end) / 2.0;
+                        let tmid = |t: &SpeakerTurn| (t.time.start + t.time.end) / 2.0;
+                        primary_turns
+                            .iter()
+                            .min_by(|a, b| (tmid(a) - mid).abs().total_cmp(&(tmid(b) - mid).abs()))
+                            .map(|t| t.speaker)
+                            .unwrap_or(SpeakerId(0))
+                    })
+            });
             let start_idx = (time.start * sample_rate) as usize;
             let end_idx = ((time.end * sample_rate) as usize).min(samples.len());
             if end_idx <= start_idx {
@@ -281,6 +349,7 @@ impl Pipeline {
             out.push(OverlapRegionInput {
                 time: *time,
                 primary_speaker: primary,
+                secondary_speaker: None,
                 embedding: emb,
             });
         }

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Overlap reconstruction now trusts the segmenter's own speaker assignment.**
+  The powerset segmenter already identifies both speakers in an overlap region
+  (its file-consistent local indices are mapped to global clusters via a
+  duration-weighted majority over the primary segments), so pipeline v2 emits
+  both speakers directly instead of re-deriving the second one from a degraded
+  mixed-voice embedding — and it now covers the *primary* speaker across the
+  overlap span too (the aggregator splits the primary's run at the overlap
+  boundary, so it was previously dropped there). On AMI EN2002a (~79% overlap):
+  total DER 42.47% → 41.37%, overlap-region DER 74.25% → 71.27%, confusion
+  18.3% → 17.3%, with fewer spurious speakers. On low-overlap VoxConverse the
+  total DER is unchanged while overlap-region DER drops ~14pp. The legacy
+  mixed-embedding path remains as a fallback for any overlap whose local speaker
+  never appeared as a solo segment, and is skipped entirely otherwise (one fewer
+  embedding inference per resolved overlap region).
+
+### Added
+
+- `OverlapRegionInput::secondary_speaker: Option<SpeakerId>` — when `Some`, the
+  resegmenter emits that speaker directly and ignores the embedding. **Breaking**
+  for code that constructs `OverlapRegionInput` with a struct literal: add
+  `secondary_speaker: None` to keep the prior mixed-embedding behavior.
+- `POLYVOICE_V2_DISABLE_SEG_OVERLAP` env toggle — forces the legacy
+  mixed-embedding overlap path, for A/B ablation of the two strategies.
+
 ## [0.8.0] - 2026-06-20
 
 The "who spoke when" → "who said what" release. It adds an attribution cascade
