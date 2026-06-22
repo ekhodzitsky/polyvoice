@@ -42,6 +42,42 @@ pub use config::{ClustererKind, ExecutionProvider, PipelineConfig};
 /// clusterer every segment below the 0.25s min_speech output filter.
 const MIN_EMBED_SECS: f64 = 0.20;
 
+/// Expand primary segments into embedding units. With `window = None` each
+/// segment is one unit (sparse, one embedding per segment). With `Some(w)` each
+/// segment longer than `w` is split into `w`-second sub-windows hopped by `w/2`
+/// (dense, legacy-style), every sub-window inheriting the segment's local speaker
+/// index; sub-`w` segments stay whole. The returned units are owned clones so
+/// downstream zips by sub-window time.
+fn expand_embed_units(
+    segs: &[crate::segmentation::RawSegment],
+    window: Option<f32>,
+) -> Vec<crate::segmentation::RawSegment> {
+    let w = match window {
+        Some(w) if w > 0.0 => w as f64,
+        _ => return segs.to_vec(),
+    };
+    let hop = (w / 2.0).max(0.05);
+    let mut out = Vec::with_capacity(segs.len());
+    for seg in segs {
+        if seg.time.end - seg.time.start <= w {
+            out.push(seg.clone());
+            continue;
+        }
+        let mut t = seg.time.start;
+        loop {
+            let end = (t + w).min(seg.time.end);
+            let mut sub = seg.clone();
+            sub.time = TimeRange { start: t, end };
+            out.push(sub);
+            if end >= seg.time.end {
+                break;
+            }
+            t += hop;
+        }
+    }
+    out
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum PipelineError {
     #[error("audio sample rate {actual} unsupported, expected 16000")]
@@ -113,12 +149,18 @@ impl Pipeline {
             .collect();
 
         let sample_rate = self.config.sample_rate.get() as f64;
+        // Optional dense embedding: split each primary segment into overlapping
+        // sub-windows so a speaker run yields several embeddings (legacy-style
+        // dense windows) for more robust centroids. `None` keeps one embedding
+        // per segment. Each unit carries its parent's local speaker index.
+        let embed_units = expand_embed_units(&primary_segments, self.config.embed_window_secs);
         // PLDA backends (VBx) need the raw embedding scale for mean-centering;
         // cosine backends are scale-invariant and get the L2-normalized vectors.
         let raw_embeddings = self.clusterer.wants_raw_embeddings();
-        let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(primary_segments.len());
-        let mut valid_segments: Vec<_> = Vec::with_capacity(primary_segments.len());
-        for seg in &primary_segments {
+        let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(embed_units.len());
+        let mut valid_segments: Vec<&crate::segmentation::RawSegment> =
+            Vec::with_capacity(embed_units.len());
+        for seg in &embed_units {
             let start_idx = (seg.time.start * sample_rate) as usize;
             let end_idx = ((seg.time.end * sample_rate) as usize).min(samples.len());
             if end_idx <= start_idx {
@@ -365,6 +407,57 @@ mod tests {
     use crate::resegmentation::OverlapResegmenter;
     use crate::types::Profile;
     use proptest::prelude::*;
+
+    #[test]
+    fn expand_embed_units_none_is_identity() {
+        let segs = vec![
+            raw_segment(0.0, 5.0, 0, false),
+            raw_segment(6.0, 7.0, 1, false),
+        ];
+        let out = expand_embed_units(&segs, None);
+        assert_eq!(out, segs);
+    }
+
+    #[test]
+    fn expand_embed_units_splits_long_keeps_short() {
+        // 5s segment with a 1.5s window (0.75 hop) → several sub-windows, each
+        // inheriting the parent's local speaker index and ending at the segment
+        // boundary; a 1s segment (< window) stays whole.
+        let segs = vec![
+            raw_segment(0.0, 5.0, 2, false),
+            raw_segment(6.0, 7.0, 1, false),
+        ];
+        let out = expand_embed_units(&segs, Some(1.5));
+        let long: Vec<_> = out.iter().filter(|s| s.local_speaker_idx == 2).collect();
+        assert!(
+            long.len() >= 4,
+            "5s/1.5s should yield >=4 sub-windows, got {}",
+            long.len()
+        );
+        assert!(
+            long.iter()
+                .all(|s| s.time.start >= 0.0 && s.time.end <= 5.0 + 1e-9)
+        );
+        assert!(
+            long.iter()
+                .all(|s| (s.time.end - s.time.start) <= 1.5 + 1e-9)
+        );
+        assert_eq!(
+            long.last().unwrap().time.end,
+            5.0,
+            "last sub-window ends at the segment boundary"
+        );
+        // short segment untouched
+        let short: Vec<_> = out.iter().filter(|s| s.local_speaker_idx == 1).collect();
+        assert_eq!(short.len(), 1);
+        assert_eq!(
+            short[0].time,
+            TimeRange {
+                start: 6.0,
+                end: 7.0
+            }
+        );
+    }
 
     fn pipeline_with_segments(segs: Vec<crate::segmentation::RawSegment>) -> Pipeline {
         let cfg = PipelineConfig {

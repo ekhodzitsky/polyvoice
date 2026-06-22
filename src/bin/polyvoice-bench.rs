@@ -58,6 +58,10 @@ struct Args {
     /// outside the UEM are dropped from both mapping and counts).
     #[arg(long)]
     uem: Option<PathBuf>,
+    /// v2 dense embedding window (seconds): split segments into `w`-sec windows
+    /// (hop w/2) for more embeddings per speaker. Omit for one embedding/segment.
+    #[arg(long)]
+    embed_window: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -266,6 +270,7 @@ fn main() -> Result<()> {
             let mut cfg = PipelineConfig {
                 profile,
                 clusterer,
+                embed_window_secs: args.embed_window,
                 ..PipelineConfig::default()
             };
             if let Some(mcs) = args.min_cluster_size {

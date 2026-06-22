@@ -32,5 +32,6 @@ Options:
       --v2                           Use pipeline v2 (experimental; not recommended for long-form audio)
       --clusterer <CLUSTERER>        v2 clusterer: `ahc` (default cosine AHC) or `vbx` (PLDA + VB-HMM — best for overlap-heavy / meeting audio; needs the `vbx` build feature and a PLDA dir via `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`). Only affects `--v2` [default: ahc]
       --vbx-plda-dir <VBX_PLDA_DIR>  Directory with the precomputed VBx PLDA params (overrides `POLYVOICE_VBX_PLDA_DIR`). Only used with `--v2 --clusterer vbx`
+      --embed-window <EMBED_WINDOW>  v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Only affects `--v2`
   -h, --help                         Print help
   -V, --version                      Print version
