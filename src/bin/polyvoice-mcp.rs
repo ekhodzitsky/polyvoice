@@ -259,7 +259,10 @@ fn project(result: &DiarizationResult, detailed: bool) -> DiarizeOutput {
 fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
     let path = Path::new(&input.path);
     if !path.is_file() {
-        return Err(err(ERR_INVALID_ARG, format!("no such file: {}", input.path)));
+        return Err(err(
+            ERR_INVALID_ARG,
+            format!("no such file: {}", input.path),
+        ));
     }
     let profile = match input.profile.as_deref().unwrap_or("balanced") {
         "balanced" => Profile::Balanced,

@@ -1,0 +1,7 @@
+# Bulky per-file hypothesis caches and ephemeral run outputs are not committed.
+# Committed: code, manifests/ (id lists + provenance), date-stamped summary
+# results, and the final numbers that land in docs/BENCHMARKS.md.
+results_full/
+results/*__latest.json
+__pycache__/
+*.pyc

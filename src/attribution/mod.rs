@@ -194,7 +194,11 @@ mod tests {
         let out = attribute_words(&[word("hi", 1.0, 2.0, 0.9)], &turns);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].speaker, Some(SpeakerId(0)));
-        assert!((out[0].confidence - 0.9).abs() < 1e-6, "conf {}", out[0].confidence);
+        assert!(
+            (out[0].confidence - 0.9).abs() < 1e-6,
+            "conf {}",
+            out[0].confidence
+        );
     }
 
     #[test]
@@ -204,7 +208,11 @@ mod tests {
         let turns = vec![turn(0, 0.0, 5.0), turn(1, 5.0, 10.0)];
         let out = attribute_words(&[word("x", 4.0, 6.0, 1.0)], &turns);
         assert_eq!(out[0].speaker, Some(SpeakerId(0)));
-        assert!(out[0].confidence < 1.0, "straddle conf must drop, got {}", out[0].confidence);
+        assert!(
+            out[0].confidence < 1.0,
+            "straddle conf must drop, got {}",
+            out[0].confidence
+        );
         assert!((out[0].confidence - 0.5).abs() < 1e-6);
 
         // Dominant share: [4.0, 8.0) is 1.0s in spk0, 3.0s in spk1 → spk1 wins.

@@ -810,7 +810,10 @@ mod tests {
             &reference,
             &hypothesis,
             0.0,
-            &[TimeRange { start: 0.0, end: 5.0 }],
+            &[TimeRange {
+                start: 0.0,
+                end: 5.0,
+            }],
         );
         // Only the [0,5) half is scored → ~half the reference frames count.
         assert!(
@@ -837,9 +840,15 @@ mod tests {
             &reference,
             &hypothesis,
             0.0,
-            &[TimeRange { start: 0.0, end: 5.0 }],
+            &[TimeRange {
+                start: 0.0,
+                end: 5.0,
+            }],
         );
-        assert!(full.der > 0.4, "headline DER should see the [5,10) error, got {full}");
+        assert!(
+            full.der > 0.4,
+            "headline DER should see the [5,10) error, got {full}"
+        );
         assert!(
             scoped.der < 0.01,
             "UEM-scoped DER must ignore the out-of-scope error, got {scoped}"
@@ -855,10 +864,16 @@ mod tests {
             &reference,
             &hypothesis,
             0.0,
-            &[TimeRange { start: 0.0, end: 100.0 }],
+            &[TimeRange {
+                start: 0.0,
+                end: 100.0,
+            }],
         );
         assert_eq!(plain.total_ref_frames, scoped.total_ref_frames);
-        assert!((plain.der - scoped.der).abs() < 1e-12, "full UEM must equal no-UEM");
+        assert!(
+            (plain.der - scoped.der).abs() < 1e-12,
+            "full UEM must equal no-UEM"
+        );
     }
 
     #[test]

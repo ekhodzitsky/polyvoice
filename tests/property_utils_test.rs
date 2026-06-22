@@ -6,8 +6,14 @@ use polyvoice::{Segment, SpeakerId, TimeRange, merge_segments};
 use proptest::prelude::*;
 
 fn non_zero_vec() -> impl Strategy<Value = Vec<f32>> {
-    prop::collection::vec(-1.0f32..=1.0f32, 1..=256)
-        .prop_filter("non-zero vector", |v| v.iter().any(|&x| x != 0.0))
+    // Require a norm well above the 1e-8 degenerate guard in cosine_similarity /
+    // l2_normalize: those intentionally return 0 / leave the vector unchanged for
+    // near-zero inputs, so the unit-similarity / unit-norm properties below only
+    // hold for non-degenerate vectors. A bare "has a non-zero element" filter let
+    // tiny vectors (norm < 1e-8) through and flaked the identical-vector test.
+    prop::collection::vec(-1.0f32..=1.0f32, 1..=256).prop_filter("non-degenerate norm", |v| {
+        v.iter().map(|&x| x * x).sum::<f32>().sqrt() > 1e-3
+    })
 }
 
 proptest! {
