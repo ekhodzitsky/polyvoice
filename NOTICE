@@ -1,0 +1,26 @@
+polyvoice
+Copyright (c) the polyvoice authors
+
+This product is licensed under the MIT License (see LICENSE).
+
+Third-party model artifacts
+===========================
+
+polyvoice's source code is MIT. The neural model weights it loads are NOT part
+of this repository — they are downloaded at runtime from their upstream sources
+under their own licenses (see src/models/manifest.toml). Redistributors who
+bundle the weights must comply with those licenses.
+
+VBx PLDA parameters (opt-in `vbx` clusterer)
+--------------------------------------------
+The PLDA parameters consumed by the VBx clusterer
+(plda_{transform,phi_computed,mean1,mean2,lda,mu}.npy) are derived from the
+pyannote `speaker-diarization-community-1` pipeline and are matched to the
+`pyannote/wespeaker-voxceleb-resnet34-LM` embedder.
+
+  Licensed under CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/).
+  Attribution: pyannote (Hervé Bredin et al.).
+
+Redistribution of these derived parameters is permitted under CC-BY-4.0 with
+attribution to pyannote. The raw inputs are mirrored at the Apache-2.0
+`avencera/speakrs` project's `avencera/speakrs-models` model repository.

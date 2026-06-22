@@ -30,5 +30,7 @@ Options:
       --quiet                        Suppress progress/info on stderr
       --json                         Machine mode: emit only the structured JSON result on stdout; route all human-readable output to stderr. Implies `--format json --quiet`
       --v2                           Use pipeline v2 (experimental; not recommended for long-form audio)
+      --clusterer <CLUSTERER>        v2 clusterer: `ahc` (default cosine AHC) or `vbx` (PLDA + VB-HMM — best for overlap-heavy / meeting audio; needs the `vbx` build feature and a PLDA dir via `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`). Only affects `--v2` [default: ahc]
+      --vbx-plda-dir <VBX_PLDA_DIR>  Directory with the precomputed VBx PLDA params (overrides `POLYVOICE_VBX_PLDA_DIR`). Only used with `--v2 --clusterer vbx`
   -h, --help                         Print help
   -V, --version                      Print version
