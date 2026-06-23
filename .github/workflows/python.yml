@@ -25,6 +25,12 @@ jobs:
         working-directory: python
     steps:
       - uses: actions/checkout@v4
+      # Deterministic Xcode on macOS (floating image sometimes lacks the clang
+      # runtime libclang_rt.osx.a → linker failure); keeps the wheel build stable.
+      - if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v5
