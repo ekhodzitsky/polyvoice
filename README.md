@@ -22,10 +22,49 @@ pyannote 3.1's **11.3%** — a few DER points traded for a CPU-only, MIT,
 
 ## Install
 
+### Pre-built CLI binary
+
+Download the latest binary for your platform from the [GitHub Releases](https://github.com/ekhodzitsky/polyvoice/releases) page:
+
 ```bash
-cargo add polyvoice --features "onnx,download"   # Rust library
-pip install polyvoice                             # Python
-cargo install polyvoice --features cli            # CLI
+# Linux x86_64
+curl -L -o polyvoice https://github.com/ekhodzitsky/polyvoice/releases/latest/download/polyvoice-linux-x86_64
+chmod +x polyvoice
+sudo mv polyvoice /usr/local/bin/
+
+# Linux ARM64
+curl -L -o polyvoice https://github.com/ekhodzitsky/polyvoice/releases/latest/download/polyvoice-linux-aarch64
+chmod +x polyvoice
+sudo mv polyvoice /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -L -o polyvoice https://github.com/ekhodzitsky/polyvoice/releases/latest/download/polyvoice-macos-arm64
+chmod +x polyvoice
+sudo mv polyvoice /usr/local/bin/
+```
+
+### Docker
+
+```bash
+docker run --rm -v "$(pwd):/work" ghcr.io/ekhodzitsky/polyvoice:latest diarize /work/meeting.wav --output /work/meeting.rttm
+```
+
+### Rust library
+
+```bash
+cargo add polyvoice --features "onnx,download"
+```
+
+### Python
+
+```bash
+pip install polyvoice
+```
+
+### From source
+
+```bash
+cargo install polyvoice --features cli
 ```
 
 ## Usage
