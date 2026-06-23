@@ -320,6 +320,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --target wasm32-unknown-unknown --no-default-features --lib
 
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t polyvoice:ci .
+      - name: Smoke-test diarize in container
+        run: |
+          docker run --rm -v "${{ github.workspace }}/tests/data/e2e-smoke/audio:/audio" polyvoice:ci diarize /audio/fuzfh.wav --output /audio/out.rttm
+          test -s tests/data/e2e-smoke/audio/out.rttm
+
   e2e-smoke:
     runs-on: ubuntu-latest
     needs: [test]
