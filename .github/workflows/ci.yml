@@ -34,6 +34,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # Pin a complete, present Xcode on macOS: the floating `macos-latest`
+      # image intermittently leaves a default selection whose clang runtime
+      # (`libclang_rt.osx.a`) is missing, breaking the link with
+      # `ld: library 'clang_rt.osx' not found`. Selecting latest-stable makes
+      # the clang resource dir deterministic.
+      - if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo check ${{ matrix.flags }} --locked
@@ -61,6 +70,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # See the `check` job: deterministic Xcode so macOS linking is stable.
+      - if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -90,6 +104,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # See the `check` job: deterministic Xcode so macOS linking is stable.
+      - if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2

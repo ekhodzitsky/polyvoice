@@ -57,6 +57,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # Deterministic Xcode on macOS — the floating image occasionally ships a
+      # default selection whose clang runtime (libclang_rt.osx.a) is missing,
+      # which would fail the link mid-release. Keep release builds reproducible.
+      - if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -91,6 +98,11 @@ jobs:
         working-directory: python
     steps:
       - uses: actions/checkout@v4
+      # See cli-binaries: deterministic Xcode so macOS wheels link reproducibly.
+      - if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5
         with:
