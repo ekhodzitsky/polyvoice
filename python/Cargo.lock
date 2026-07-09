@@ -358,7 +358,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "polyvoice"
-version = "0.7.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "crossbeam-queue",
@@ -380,10 +380,11 @@ dependencies = [
 
 [[package]]
 name = "polyvoice-python"
-version = "0.7.0"
+version = "0.9.0"
 dependencies = [
  "polyvoice",
  "pyo3",
+ "serde_json",
 ]
 
 [[package]]

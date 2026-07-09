@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- C FFI: `polyvoice_pipeline_run_format(..., format, ...)` renders the result as
+  JSON, RTTM, SRT, VTT, or TXT (new `PolyvoiceFormat` / `polyvoice_format_t`
+  selector; RTTM uses the fixed file id `audio`). The existing
+  `polyvoice_pipeline_run` ABI is unchanged.
+- Python: typed `DiarizationResult` with `.to_json()` / `.to_rttm()` /
+  `.to_srt()` / `.to_vtt()` / `.to_txt()` / `.to_dict()` projections and a
+  `DiarizationResult.from_json()` constructor; `Pipeline.run_result()` returns
+  it. Type stubs (`.pyi`) and a `py.typed` marker ship in the wheel.
+- `examples/agent_quickstart.md` — machine-readable integration paths (CLI
+  `--json`, MCP, Python typed result, FFI formats, who-said-what).
+
+### Changed
+
+- WebVTT output now uses the standard voice span `<v SPEAKER_NN>text</v>` for
+  transcribed cues (previously `SPEAKER_NN: text`); diarization-only cues still
+  render the bare `SPEAKER_NN` label.
+
 ## [0.9.0] - 2026-06-23
 
 Accuracy release for pipeline v2. Overlap reconstruction now reuses the

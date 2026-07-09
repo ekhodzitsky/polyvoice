@@ -30,6 +30,48 @@ pub enum PolyvoiceStatus {
     Internal = 99,
 }
 
+/// Output format selector for `polyvoice_pipeline_run_format`.
+#[repr(C)]
+pub enum PolyvoiceFormat {
+    Json = 0,
+    Rttm = 1,
+    Srt = 2,
+    Vtt = 3,
+    Txt = 4,
+}
+
+/// RTTM has a file-id column but the FFI runs on a raw sample buffer with no
+/// filename; emit this fixed id (callers can post-process if they need another).
+const FFI_RTTM_FILE_ID: &str = "audio";
+
+/// Project `result` into the requested format. Returns a status code on failure.
+fn render_result(result: &crate::types::DiarizationResult, format: c_int) -> Result<String, c_int> {
+    let mut buf: Vec<u8> = Vec::new();
+    match format {
+        f if f == PolyvoiceFormat::Json as c_int => {
+            return serde_json::to_string(result).map_err(|_| PolyvoiceStatus::Internal as c_int);
+        }
+        f if f == PolyvoiceFormat::Rttm as c_int => {
+            crate::rttm::write_rttm(&mut buf, FFI_RTTM_FILE_ID, &result.turns)
+                .map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+        }
+        f if f == PolyvoiceFormat::Srt as c_int => {
+            crate::format::write_srt(&mut buf, &result.turns)
+                .map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+        }
+        f if f == PolyvoiceFormat::Vtt as c_int => {
+            crate::format::write_vtt(&mut buf, &result.turns)
+                .map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+        }
+        f if f == PolyvoiceFormat::Txt as c_int => {
+            crate::format::write_txt(&mut buf, &result.turns)
+                .map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+        }
+        _ => return Err(PolyvoiceStatus::InvalidArg as c_int),
+    }
+    String::from_utf8(buf).map_err(|_| PolyvoiceStatus::Internal as c_int)
+}
+
 pub struct PolyvoicePipeline {
     inner: Pipeline,
 }
@@ -185,6 +227,85 @@ polyvoice_pipeline_run(
     }
 }
 
+/// Run diarization and return the result rendered in the requested format
+/// (see `PolyvoiceFormat`: 0=JSON, 1=RTTM, 2=SRT, 3=VTT, 4=TXT).
+///
+/// Identical contract to `polyvoice_pipeline_run` otherwise. RTTM output uses
+/// the fixed file id `audio`. Unknown `format` values return `InvalidArg`.
+///
+/// # Safety
+/// - `pipeline` must be a valid pointer returned by `polyvoice_pipeline_create`.
+/// - `samples` must point to at least `n_samples` valid f32 values.
+/// - `out_str` and `out_str_len` must be valid non-null pointers.
+/// - The returned `*out_str` string must be freed with `polyvoice_free_string`.
+/// - Must not be called concurrently with another call to `polyvoice_pipeline_run`,
+///   `polyvoice_pipeline_run_format`, or `polyvoice_pipeline_destroy` on the same handle.
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+#[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
+// SAFETY: caller upholds the safety contract documented in # Safety above.
+#[rustfmt::skip]
+pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
+polyvoice_pipeline_run_format(
+    pipeline: *mut PolyvoicePipeline,
+    samples: *const c_float,
+    n_samples: usize,
+    sample_rate: u32,
+    format: c_int,
+    out_str: *mut *mut c_char,
+    out_str_len: *mut usize,
+) -> c_int {
+    let r = catch_unwind(AssertUnwindSafe(|| -> Result<(), c_int> {
+        if pipeline.is_null() || samples.is_null() || out_str.is_null() || out_str_len.is_null() {
+            return Err(PolyvoiceStatus::InvalidArg as c_int);
+        }
+        // Reject unknown formats before touching the pipeline.
+        if !(PolyvoiceFormat::Json as c_int..=PolyvoiceFormat::Txt as c_int).contains(&format) {
+            return Err(PolyvoiceStatus::InvalidArg as c_int);
+        }
+        let pipeline = unsafe { // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
+            &*pipeline
+        };
+        const MAX_SAMPLES: usize = 16000 * 3600; // 1 hour at 16 kHz
+        if n_samples > MAX_SAMPLES {
+            return Err(PolyvoiceStatus::AudioTooLong as c_int);
+        }
+        let samples = unsafe { // SAFETY: samples was checked non-null; n_samples was validated against MAX_SAMPLES.
+            std::slice::from_raw_parts(samples, n_samples)
+        };
+        let sr = SampleRate::new(sample_rate)
+            .ok_or(PolyvoiceStatus::InvalidArg as c_int)?;
+        let result = pipeline
+            .inner
+            .run(samples, sr)
+            .map_err(|e| match e {
+                crate::pipeline_v2::PipelineError::UnsupportedSampleRate { .. } => {
+                    PolyvoiceStatus::InvalidArg as c_int
+                }
+                crate::pipeline_v2::PipelineError::ModelLoad { .. } => {
+                    PolyvoiceStatus::ModelLoad as c_int
+                }
+                crate::pipeline_v2::PipelineError::Registry(_) => {
+                    PolyvoiceStatus::Registry as c_int
+                }
+                _ => PolyvoiceStatus::Inference as c_int,
+            })?;
+        let rendered = render_result(&result, format)?;
+        let len = rendered.len();
+        let cstr = CString::new(rendered).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+        let ptr_out = cstr.into_raw();
+        unsafe { // SAFETY: out_str and out_str_len were checked non-null above.
+            *out_str = ptr_out;
+            *out_str_len = len;
+        }
+        Ok(())
+    }));
+    match r {
+        Ok(Ok(())) => PolyvoiceStatus::Ok as c_int,
+        Ok(Err(code)) => code,
+        Err(_) => PolyvoiceStatus::Internal as c_int,
+    }
+}
+
 /// Destroy a pipeline created by `polyvoice_pipeline_create`.
 ///
 /// # Safety
@@ -210,10 +331,11 @@ polyvoice_pipeline_destroy(pipeline: *mut PolyvoicePipeline) {
     }
 }
 
-/// Free a JSON string returned by `polyvoice_pipeline_run`.
+/// Free a string returned by `polyvoice_pipeline_run` or `polyvoice_pipeline_run_format`.
 ///
 /// # Safety
-/// `p` must be a pointer returned by `polyvoice_pipeline_run`, or null.
+/// `p` must be a pointer returned by `polyvoice_pipeline_run` /
+/// `polyvoice_pipeline_run_format`, or null.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
 #[unsafe(no_mangle)] // SAFETY: preserves symbol name for C linkage.
 // SAFETY: caller upholds the safety contract documented in # Safety above.
@@ -222,12 +344,62 @@ pub unsafe extern "C" fn // SAFETY: caller upholds safety contract.
 polyvoice_free_string(p: *mut c_char, _n: usize) {
     if !p.is_null()
         && catch_unwind(AssertUnwindSafe(|| {
-            unsafe { // SAFETY: p is non-null and was created by CString::into_raw in polyvoice_pipeline_run.
+            unsafe { // SAFETY: p is non-null and was created by CString::into_raw in a polyvoice run function.
                 drop(CString::from_raw(p));
             }
         }))
         .is_err()
     {
         eprintln!("polyvoice: panic during cleanup (foreign thread?)");
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{DiarizationResult, SpeakerId, SpeakerTurn, TimeRange};
+
+    fn sample_result() -> DiarizationResult {
+        let turns = vec![SpeakerTurn {
+            speaker: SpeakerId(0),
+            time: TimeRange {
+                start: 0.5,
+                end: 2.0,
+            },
+            text: Some("hello".to_owned()),
+        }];
+        DiarizationResult::new(vec![], turns, 1)
+    }
+
+    #[test]
+    fn render_result_rejects_unknown_format() {
+        let result = sample_result();
+        assert_eq!(
+            render_result(&result, 42),
+            Err(PolyvoiceStatus::InvalidArg as c_int)
+        );
+        assert_eq!(
+            render_result(&result, -1),
+            Err(PolyvoiceStatus::InvalidArg as c_int)
+        );
+    }
+
+    #[test]
+    fn render_result_covers_every_format() {
+        let result = sample_result();
+        for (format, marker) in [
+            (PolyvoiceFormat::Json as c_int, "num_speakers"),
+            (PolyvoiceFormat::Rttm as c_int, "SPEAKER audio 1"),
+            (PolyvoiceFormat::Srt as c_int, "00:00:00,500"),
+            (PolyvoiceFormat::Vtt as c_int, "WEBVTT"),
+            (PolyvoiceFormat::Txt as c_int, "SPEAKER_00: hello"),
+        ] {
+            let rendered = render_result(&result, format).unwrap();
+            assert!(
+                rendered.contains(marker),
+                "format {format} missing marker {marker:?}: {rendered}"
+            );
+        }
     }
 }
