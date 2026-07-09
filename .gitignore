@@ -63,6 +63,9 @@ id_rsa.pub
 .continue/
 .aider*
 
+# Local git worktrees
+.worktrees/
+
 # Python caches
 __pycache__/
 *.pyc

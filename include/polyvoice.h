@@ -30,6 +30,14 @@ typedef enum {
     POLYVOICE_ERR_INTERNAL = 99
 } polyvoice_status_t;
 
+typedef enum {
+    POLYVOICE_FORMAT_JSON = 0,
+    POLYVOICE_FORMAT_RTTM = 1,
+    POLYVOICE_FORMAT_SRT = 2,
+    POLYVOICE_FORMAT_VTT = 3,
+    POLYVOICE_FORMAT_TXT = 4
+} polyvoice_format_t;
+
 /** Create a pipeline from a profile. */
 int polyvoice_pipeline_create(polyvoice_profile_t profile,
                               const char* models_cache_dir,
@@ -47,12 +55,26 @@ int polyvoice_pipeline_run(PolyvoicePipeline* pipeline,
                            size_t* out_json_len);
 
 /**
+ * Run diarization and return the result rendered in the requested format
+ * (polyvoice_format_t). Same contract as polyvoice_pipeline_run otherwise.
+ * RTTM output uses the fixed file id "audio". Unknown formats return
+ * POLYVOICE_ERR_INVALID_ARG. Free *out_str with polyvoice_free_string.
+ */
+int polyvoice_pipeline_run_format(PolyvoicePipeline* pipeline,
+                                  const float* samples,
+                                  size_t n_samples,
+                                  uint32_t sample_rate,
+                                  polyvoice_format_t format,
+                                  char** out_str,
+                                  size_t* out_str_len);
+
+/**
  * Destroy a pipeline. Must be called exactly once per handle.
  * Must not be called concurrently with run on the same handle.
  */
 void polyvoice_pipeline_destroy(PolyvoicePipeline* pipeline);
 
-/** Free a JSON string returned by polyvoice_pipeline_run. */
+/** Free a string returned by polyvoice_pipeline_run / polyvoice_pipeline_run_format. */
 void polyvoice_free_string(char* p, size_t n);
 
 #ifdef __cplusplus

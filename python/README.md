@@ -38,11 +38,17 @@ for turn in result["turns"]:
 - `polyvoice.Pipeline.balanced(models_cache=None)` — balanced accuracy / speed.
 - `polyvoice.Pipeline.mobile(models_cache=None)` — smaller, faster model.
 - `pipeline.run(samples, sample_rate)` → `dict` with `num_speakers` and `turns`.
+- `pipeline.run_result(samples, sample_rate)` → typed `DiarizationResult` with
+  `.to_json()` / `.to_rttm()` / `.to_srt()` / `.to_vtt()` / `.to_txt()` projections.
+- `polyvoice.DiarizationResult.from_json(json)` — re-hydrate a saved result.
 
 ## Performance
 
-| Pipeline | VoxConverse DER | Model size |
-|----------|-----------------|------------|
-| Hybrid + K-means | **14.12%** | ~30 MB |
+| Pipeline | VoxConverse-test DER (collar 0, overlap-scored) | Model size |
+|----------|-------------------------------------------------|------------|
+| default (shipped) | **18.5%** | ~30 MB |
+
+Full protocol, collar/averaging disclosure, and competitor numbers:
+[docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/master/docs/BENCHMARKS.md).
 
 See the [full repository](https://github.com/ekhodzitsky/polyvoice) for Rust / C / CLI APIs, benchmarks, and development docs.
