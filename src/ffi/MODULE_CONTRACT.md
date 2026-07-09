@@ -5,7 +5,7 @@ module: src/ffi
 level: subsystem
 layer: bindings
 purpose: >
-  Owns C FFI bindings for polyvoice (ABI v2). Exposes pipeline, model registry,
+  Owns C FFI bindings for polyvoice (ABI v3). Exposes pipeline, model registry,
   and VAD configuration to C callers. Does NOT own the Rust pipeline internals.
 status: stable
 owners:
@@ -44,16 +44,45 @@ surface:
     kind: function
     visibility: public
     contract: >
-      C-visible run function. Accepts raw audio buffer and sample rate.
+      C-visible run function. Accepts raw audio buffer and sample rate; returns JSON.
     proof:
       kind: integration-test
       target: tests/ffi_smoke_test.rs
       command: cargo test --test ffi_smoke_test --features ffi
-  - name: polyvoice_pipeline_free
+  - name: polyvoice_pipeline_run_format
     kind: function
     visibility: public
     contract: >
-      C-visible destructor. Must be called for every created pipeline.
+      C-visible run function with output-format selector (PolyvoiceFormat:
+      JSON/RTTM/SRT/VTT/TXT). Same contract as polyvoice_pipeline_run otherwise;
+      RTTM uses the fixed file id "audio"; unknown formats return InvalidArg.
+    proof:
+      kind: integration-test
+      target: tests/ffi_smoke_test.rs
+      command: cargo test --test ffi_smoke_test --features ffi
+  - name: PolyvoiceFormat
+    kind: enum
+    visibility: public
+    contract: >
+      #[repr(C)] output-format selector for polyvoice_pipeline_run_format.
+    proof:
+      kind: static-check
+      target: src/ffi/mod.rs
+      command: cargo check --features ffi
+  - name: polyvoice_pipeline_destroy
+    kind: function
+    visibility: public
+    contract: >
+      C-visible destructor. Must be called exactly once for every created pipeline.
+    proof:
+      kind: integration-test
+      target: tests/ffi_smoke_test.rs
+      command: cargo test --test ffi_smoke_test --features ffi
+  - name: polyvoice_free_string
+    kind: function
+    visibility: public
+    contract: >
+      Frees strings returned by the run functions. Null-safe.
     proof:
       kind: integration-test
       target: tests/ffi_smoke_test.rs
@@ -87,10 +116,11 @@ consumers:
     uses:
       - polyvoice_pipeline_create
       - polyvoice_pipeline_run
-      - polyvoice_pipeline_free
+      - polyvoice_pipeline_destroy
   - path: tests/ffi_smoke_test.rs
     uses:
       - PolyvoicePipeline
+      - polyvoice_pipeline_run_format
 invariants:
   - id: memory-safety
     rule: Every create has exactly one free; no use-after-free.

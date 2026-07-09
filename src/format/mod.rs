@@ -26,10 +26,39 @@ fn timecode(secs: f64, sep: char) -> String {
     format!("{h:02}:{m:02}:{s:02}{sep}{ms:03}")
 }
 
+/// Normalize transcript text for a single-line cue payload: newlines collapse
+/// to spaces (one turn = one block is this module's contract) and a literal
+/// `-->` is broken up so no payload line can parse as a timing line.
+fn sanitize_cue_text(text: &str) -> String {
+    text.replace("\r\n", " ")
+        .replace(['\r', '\n'], " ")
+        .replace("-->", "-- >")
+}
+
+/// Escape WebVTT cue text: `&` and `<` are the two characters the spec
+/// requires escaping inside cue payloads.
+fn escape_vtt_text(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;")
+}
+
 /// Cue line: `SPEAKER_NN: text` when transcript text is present, else `SPEAKER_NN`.
 fn cue_label(turn: &SpeakerTurn) -> String {
     match &turn.text {
-        Some(t) if !t.is_empty() => format!("{}: {}", turn.speaker, t),
+        Some(t) if !t.is_empty() => format!("{}: {}", turn.speaker, sanitize_cue_text(t)),
+        _ => turn.speaker.to_string(),
+    }
+}
+
+/// WebVTT cue payload: the standard voice span `<v SPEAKER_NN>text</v>` when
+/// transcript text is present (text sanitized and spec-escaped), else the bare
+/// `SPEAKER_NN` label (a voice span with an empty payload is not meaningful WebVTT).
+fn vtt_cue_payload(turn: &SpeakerTurn) -> String {
+    match &turn.text {
+        Some(t) if !t.is_empty() => format!(
+            "<v {}>{}</v>",
+            turn.speaker,
+            escape_vtt_text(&sanitize_cue_text(t))
+        ),
         _ => turn.speaker.to_string(),
     }
 }
@@ -57,6 +86,7 @@ pub fn write_srt<W: Write>(writer: &mut W, turns: &[SpeakerTurn]) -> io::Result<
 /// `pub fn write_vtt<W: Write>(writer: &mut W, turns: &[SpeakerTurn]) -> io::Result<()>`
 /// { true }
 /// Write speaker turns as WebVTT: `WEBVTT` header, `.`-separated milliseconds.
+/// Transcribed cues use the standard voice span `<v SPEAKER_NN>text</v>`.
 pub fn write_vtt<W: Write>(writer: &mut W, turns: &[SpeakerTurn]) -> io::Result<()> {
     writeln!(writer, "WEBVTT")?;
     writeln!(writer)?;
@@ -67,7 +97,7 @@ pub fn write_vtt<W: Write>(writer: &mut W, turns: &[SpeakerTurn]) -> io::Result<
             timecode(turn.time.start, '.'),
             timecode(turn.time.end, '.')
         )?;
-        writeln!(writer, "{}", cue_label(turn))?;
+        writeln!(writer, "{}", vtt_cue_payload(turn))?;
         writeln!(writer)?;
     }
     Ok(())
@@ -151,8 +181,37 @@ SPEAKER_01: hello
         let out = render(|w| write_vtt(w, &turns));
         assert!(out.starts_with("WEBVTT\n\n"));
         assert!(out.contains("00:00:00.000 --> 00:00:01.250"));
-        assert!(out.contains("SPEAKER_00: hi"));
+        assert!(out.contains("<v SPEAKER_00>hi</v>"));
         assert_eq!(out.matches(" --> ").count(), turns.len());
+    }
+
+    #[test]
+    fn vtt_without_text_uses_bare_label() {
+        let turns = vec![turn(1, 0.0, 2.0, None)];
+        let out = render(|w| write_vtt(w, &turns));
+        assert!(out.contains("SPEAKER_01\n"));
+        assert!(!out.contains("<v "));
+    }
+
+    #[test]
+    fn vtt_escapes_markup_characters_in_text() {
+        let turns = vec![turn(0, 0.0, 1.0, Some("<unk> & co"))];
+        let out = render(|w| write_vtt(w, &turns));
+        // `&` and `<` are escaped (the spec's two mandatory escapes); `>` stays raw.
+        assert!(out.contains("<v SPEAKER_00>&lt;unk> &amp; co</v>"));
+        assert!(!out.contains("<unk>"));
+    }
+
+    #[test]
+    fn cue_text_newlines_and_arrows_stay_single_line() {
+        let turns = vec![turn(0, 0.0, 1.0, Some("a\n\nb --> c"))];
+        let srt = render(|w| write_srt(w, &turns));
+        let vtt = render(|w| write_vtt(w, &turns));
+        // one block per turn survives hostile text
+        assert_eq!(srt.matches(" --> ").count(), 1);
+        assert_eq!(vtt.matches(" --> ").count(), 1);
+        assert!(srt.contains("SPEAKER_00: a  b -- > c"));
+        assert!(vtt.contains("a  b -- > c"));
     }
 
     #[test]
