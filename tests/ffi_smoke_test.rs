@@ -176,7 +176,10 @@ fn ffi_run_format_renders_every_format() {
         let s = unsafe { std::ffi::CStr::from_ptr(out).to_string_lossy().into_owned() };
         assert_eq!(s.len(), out_len);
         if !marker.is_empty() {
-            assert!(s.contains(marker), "format {format} missing marker {marker}");
+            assert!(
+                s.contains(marker),
+                "format {format} missing marker {marker}"
+            );
         }
         // SAFETY: out was returned by polyvoice_pipeline_run_format.
         unsafe { polyvoice_free_string(out, out_len) };
@@ -198,7 +201,10 @@ fn ffi_run_format_renders_every_format() {
             &mut out_len,
         )
     };
-    assert_eq!(rc, 1, "unknown format with a valid handle must return InvalidArg");
+    assert_eq!(
+        rc, 1,
+        "unknown format with a valid handle must return InvalidArg"
+    );
     assert!(out.is_null());
 
     // SAFETY: handle was returned by polyvoice_pipeline_create and is non-null.

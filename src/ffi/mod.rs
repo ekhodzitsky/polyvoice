@@ -45,10 +45,7 @@ pub enum PolyvoiceFormat {
 const FFI_RTTM_FILE_ID: &str = "audio";
 
 /// Project `result` into the requested format. Returns a status code on failure.
-fn render_result(
-    result: &crate::types::DiarizationResult,
-    format: c_int,
-) -> Result<String, c_int> {
+fn render_result(result: &crate::types::DiarizationResult, format: c_int) -> Result<String, c_int> {
     let mut buf: Vec<u8> = Vec::new();
     match format {
         f if f == PolyvoiceFormat::Json as c_int => {
