@@ -37,7 +37,32 @@ struct Baseline {
 struct DatasetBaseline {
     #[serde(rename = "der_collar_0_25")]
     der_collar_0_25: f64,
+    /// No-collar (collar=0) DER baseline — the headline like-for-like metric.
+    /// `None` (JSON null) = not yet measured → the no-collar gate stays inactive.
+    der_no_collar: Option<f64>,
     tolerance: f64,
+}
+
+/// Gate `measured` (a 0..1 ratio) against an optional percent baseline. Inactive
+/// (prints the value to record) while the baseline is null in der_baseline.json.
+fn assert_no_collar(dataset: &str, measured: f64, baseline_pct: Option<f64>, tolerance_pct: f64) {
+    match baseline_pct {
+        Some(expected_pct) => {
+            let bound = (expected_pct + tolerance_pct) / 100.0;
+            assert!(
+                measured <= bound,
+                "no-collar DER regression on {dataset}: expected <= {:.2}%, got {:.2}% (baseline {:.2}% + tolerance {:.2}%)",
+                bound * 100.0,
+                measured * 100.0,
+                expected_pct,
+                tolerance_pct,
+            );
+        }
+        None => println!(
+            "{dataset}: no-collar baseline not yet measured — record {:.2}% as der_no_collar in tests/der_baseline.json to activate the gate",
+            measured * 100.0
+        ),
+    }
 }
 
 #[derive(Deserialize)]
@@ -55,8 +80,11 @@ fn load_baseline() -> Baseline {
 }
 
 /// Run CLI `polyvoice diarize --v2` and return
-/// (DER decomposition, num_speakers, stem).
-fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (DerDecomposition, usize, String) {
+/// (DER decomposition at collar 0.25, at collar 0, num_speakers, stem).
+fn run_cli_diarize(
+    wav_path: &Path,
+    rttm_path: &Path,
+) -> (DerDecomposition, DerDecomposition, usize, String) {
     let stem = wav_path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -120,13 +148,16 @@ fn run_cli_diarize(wav_path: &Path, rttm_path: &Path) -> (DerDecomposition, usiz
         turns
     };
 
+    // Same hypothesis scored at both collars: 0.25 for the historical gate,
+    // 0 (no-collar) for the headline like-for-like metric.
     let decomp = compute_der_decomposition(&ref_turns, &hyp_turns, 0.25);
+    let decomp_no_collar = compute_der_decomposition(&ref_turns, &hyp_turns, 0.0);
     let num_speakers = hyp_turns
         .iter()
         .map(|t| t.speaker.0)
         .collect::<std::collections::HashSet<_>>()
         .len();
-    (decomp, num_speakers, stem)
+    (decomp, decomp_no_collar, num_speakers, stem)
 }
 
 #[ignore = "requires cached ONNX bundle + tests/data/e2e-smoke/"]
@@ -146,9 +177,14 @@ fn cli_der_regression_v2_e2e_smoke() {
         return;
     }
 
-    let (decomp, _num_speakers, stem) = run_cli_diarize(wav_path, rttm_path);
+    let (decomp, decomp_no_collar, _num_speakers, stem) = run_cli_diarize(wav_path, rttm_path);
     let der = decomp.total.der;
-    println!("{stem}: DER={:.2}%", der * 100.0);
+    let der_no_collar = decomp_no_collar.total.der;
+    println!(
+        "{stem}: DER(collar 0.25)={:.2}% DER(no collar)={:.2}%",
+        der * 100.0,
+        der_no_collar * 100.0
+    );
 
     let expected = baseline.v2_e2e_smoke.der_collar_0_25 / 100.0;
     let tolerance = baseline.v2_e2e_smoke.tolerance / 100.0;
@@ -159,6 +195,12 @@ fn cli_der_regression_v2_e2e_smoke() {
         der * 100.0,
         expected * 100.0,
         tolerance * 100.0,
+    );
+    assert_no_collar(
+        "v2_e2e_smoke",
+        der_no_collar,
+        baseline.v2_e2e_smoke.der_no_collar,
+        baseline.v2_e2e_smoke.tolerance,
     );
 }
 
@@ -193,7 +235,9 @@ fn cli_der_regression_v2_ami_single() {
         return;
     }
 
-    let (decomp, num_speakers, stem) = run_cli_diarize(&wav_path, &rttm_path);
+    // No-collar decomposition is not gated here — on ~79%-overlap audio total DER
+    // is miss-bound at any collar (see the comment below).
+    let (decomp, _decomp_no_collar, num_speakers, stem) = run_cli_diarize(&wav_path, &rttm_path);
     let der = decomp.total.der;
     let single_der = decomp.single_speaker.der;
     let confusion = decomp.total.confusion_rate;
