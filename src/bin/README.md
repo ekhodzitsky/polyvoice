@@ -41,3 +41,22 @@ cargo test --test e2e_smoke_test
 - Both binaries require ONNX models at runtime. Use `download-models` or ensure
   the cache directory (`~/.cache/polyvoice/models`) is populated.
 - The `balanced` profile (WeSpeaker ResNet34, 256-d) is the default.
+
+## Per-backend RTFx (realtime factor)
+
+`polyvoice-bench` labels every report with `resolved_execution_provider` and,
+for the v2 pipeline, a per-stage `stage_timings` breakdown per file
+(segmentation / embedding / clustering / resegmentation; VAD is part of the
+powerset segmenter in v2) plus an aggregate `stage_totals`. Select a backend
+with `--execution-provider auto|cpu|coreml|nnapi|cuda|xnnpack`; omitted, each
+pipeline keeps its shipped default (legacy embedder: cpu, v2: auto) so
+committed DER baselines stay reproducible.
+
+Reproducible comparison across backends (one dataset, one table):
+
+```bash
+scripts/bench-backends.sh data/voxconverse-test-3 v2 cpu coreml
+```
+
+Report schema is `polyvoice-bench-v0.10`: strictly additive over v0.8 —
+existing fields are unchanged.

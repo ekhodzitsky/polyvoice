@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-backend RTFx benchmarking.** `polyvoice-bench` gains
+  `--execution-provider` (omitted = each pipeline's shipped default, so
+  committed DER baselines stay reproducible), labels every report with
+  `resolved_execution_provider` + `host_cpus`, and for the v2 pipeline records
+  a per-stage wall-clock breakdown (`stage_timings` per file, `stage_totals`
+  aggregate: segmentation / embedding / clustering / resegmentation) via the
+  new `Pipeline::run_with_timings` (additive; `run()` now delegates to it).
+  `scripts/bench-backends.sh` runs the bench once per backend on one dataset
+  and prints an RTFx comparison table. Report schema bumped to
+  `polyvoice-bench-v0.10` — strictly additive over v0.8.
 - **`PipelineConfig.execution_provider` now takes effect end-to-end.**
   `PipelineBuilder::build()` threads the configured provider into both the
   powerset segmenter and the embedder (previously the field was inert dead
