@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Release builds now require a manifest signature for every profile-resolved
+  model.** `ModelEntry.signature` was optional and only verified when present,
+  so a tampered/forked manifest that simply dropped the signature silently
+  downgraded authenticity to a self-consistent hash. Profile resolution
+  (`ensure_for_profile`) now fails fast with the new
+  `RegistryError::UnsignedModel` — before any network access — when a resolved
+  model has no signature and the build is a release build
+  (`cfg!(not(debug_assertions))`). All seven bundled models are signed, so
+  existing flows are unaffected; ad-hoc single-model `ensure` stays lenient for
+  dev/test. **Breaking:** `RegistryError` gained a variant (exhaustive matches
+  must add an arm) — hence the version bump to 0.10.0.
+
 ### Added
 
 - **No-collar DER is now release-gated.** The DER regression tests (legacy and
