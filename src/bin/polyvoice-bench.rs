@@ -6,7 +6,7 @@ use clap::Parser;
 use polyvoice::der::{compute_der, compute_der_decomposition, compute_der_with_uem, parse_uem};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline;
-use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig};
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig, StageTimings};
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
 use polyvoice::types::{
     ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate, TimeRange,
@@ -62,6 +62,12 @@ struct Args {
     /// (hop w/2) for more embeddings per speaker. Omit for one embedding/segment.
     #[arg(long)]
     embed_window: Option<f32>,
+    /// ONNX execution provider: auto|cpu|coreml|nnapi|cuda|xnnpack. Omitted =
+    /// each pipeline's shipped default (legacy embedder: cpu; v2: auto), so
+    /// committed DER baselines stay reproducible. The resolved provider is
+    /// recorded in the report for per-backend RTFx comparison.
+    #[arg(long)]
+    execution_provider: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -96,6 +102,9 @@ struct PerFileResult {
     num_turns: usize,
     audio_duration_secs: f64,
     runtime_secs: f64,
+    /// Per-stage wall-clock seconds (v2 pipeline only; absent on legacy).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stage_timings: Option<StageTimings>,
 }
 
 #[derive(Serialize)]
@@ -126,6 +135,13 @@ struct BenchReport {
     der_no_collar_micro: f64,
     collar_secs: f64,
     averaging_policy: &'static str,
+    /// Debug-formatted resolved execution provider (e.g. "CoreMl", "Cpu") —
+    /// labels every report for per-backend RTFx comparison.
+    resolved_execution_provider: String,
+    host_cpus: usize,
+    /// Sum of per-stage wall-clock seconds across files (v2 only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stage_totals: Option<StageTimings>,
     miss: f64,
     false_alarm: f64,
     confusion: f64,
@@ -240,12 +256,34 @@ enum Runner {
 }
 
 impl Runner {
-    fn run(&mut self, samples: &[f32], sr: SampleRate) -> Result<DiarizationResult> {
+    fn run(
+        &mut self,
+        samples: &[f32],
+        sr: SampleRate,
+    ) -> Result<(DiarizationResult, Option<StageTimings>)> {
         match self {
-            Runner::Legacy(l) => Ok(l.pipeline.run(samples, &l.extractor, &mut l.vad)?),
-            Runner::V2(p) => Ok(p.run(samples, sr)?),
+            Runner::Legacy(l) => Ok((l.pipeline.run(samples, &l.extractor, &mut l.vad)?, None)),
+            Runner::V2(p) => {
+                let (result, timings) = p.run_with_timings(samples, sr)?;
+                Ok((result, Some(timings)))
+            }
         }
     }
+}
+
+fn parse_execution_provider(s: &str) -> Result<polyvoice::onnx::ExecutionProvider> {
+    use polyvoice::onnx::ExecutionProvider as Ep;
+    Ok(match s {
+        "auto" => Ep::auto(),
+        "cpu" => Ep::Cpu,
+        "coreml" => Ep::CoreMl,
+        "nnapi" => Ep::Nnapi,
+        "cuda" => Ep::Cuda,
+        "xnnpack" => Ep::XnnPack,
+        other => anyhow::bail!(
+            "unknown --execution-provider '{other}' (expected auto|cpu|coreml|nnapi|cuda|xnnpack)"
+        ),
+    })
 }
 
 fn main() -> Result<()> {
@@ -255,6 +293,19 @@ fn main() -> Result<()> {
     let models = registry
         .ensure_for_profile(profile)
         .context("ensure models")?;
+
+    // Resolve the execution provider: an explicit flag applies to the selected
+    // pipeline; omitted keeps each pipeline's shipped default (legacy embedder
+    // cpu, v2 auto) so committed DER baselines stay reproducible.
+    let explicit_ep = args
+        .execution_provider
+        .as_deref()
+        .map(parse_execution_provider)
+        .transpose()?;
+    let resolved_ep = match args.pipeline.as_str() {
+        "v2" => explicit_ep.unwrap_or_else(polyvoice::onnx::ExecutionProvider::auto),
+        _ => explicit_ep.unwrap_or(polyvoice::onnx::ExecutionProvider::Cpu),
+    };
 
     // Build the requested pipeline. Each path verifies the integrity of exactly
     // the models it loads and returns the segmenter id for the report.
@@ -271,6 +322,7 @@ fn main() -> Result<()> {
                 profile,
                 clusterer,
                 embed_window_secs: args.embed_window,
+                execution_provider: resolved_ep,
                 ..PipelineConfig::default()
             };
             if let Some(mcs) = args.min_cluster_size {
@@ -301,13 +353,9 @@ fn main() -> Result<()> {
                 anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')");
             }
             let embedding_dim = profile.embedding_dim();
-            let extractor = FbankOnnxExtractor::new(
-                &models.embedder_path,
-                embedding_dim,
-                1,
-                polyvoice::onnx::ExecutionProvider::Cpu,
-            )
-            .context("load embedder")?;
+            let extractor =
+                FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1, resolved_ep)
+                    .context("load embedder")?;
             let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
             let vad = SileroVad::new(&vad_path, 512).context("load vad")?;
 
@@ -370,6 +418,7 @@ fn main() -> Result<()> {
     let mut totals = Aggregate::default();
     let mut total_audio_secs = 0.0_f64;
     let mut total_runtime_secs = 0.0_f64;
+    let mut stage_totals: Option<StageTimings> = None;
     let mut speaker_count_exact = 0_usize;
     let mut speaker_count_pm1 = 0_usize;
     let mut speaker_count_off = 0_usize;
@@ -390,7 +439,7 @@ fn main() -> Result<()> {
         let audio_secs = samples.len() as f64 / sr_hz as f64;
 
         let t0 = Instant::now();
-        let result = runner.run(&samples, sr)?;
+        let (result, stage_timings) = runner.run(&samples, sr)?;
         let runtime_secs = t0.elapsed().as_secs_f64();
 
         let ref_turns = {
@@ -492,7 +541,15 @@ fn main() -> Result<()> {
             num_turns: result.turns.len(),
             audio_duration_secs: audio_secs,
             runtime_secs,
+            stage_timings,
         });
+        if let Some(t) = stage_timings {
+            let acc = stage_totals.get_or_insert_with(StageTimings::default);
+            acc.segmentation_secs += t.segmentation_secs;
+            acc.embedding_secs += t.embedding_secs;
+            acc.clustering_secs += t.clustering_secs;
+            acc.resegmentation_secs += t.resegmentation_secs;
+        }
     }
 
     let n = totals.count.max(1) as f64;
@@ -519,7 +576,7 @@ fn main() -> Result<()> {
     println!("  der_no_collar : macro={der_no_collar_macro:.2}%  micro={der_no_collar_micro:.2}%");
 
     let report = BenchReport {
-        schema: "polyvoice-bench-v0.8",
+        schema: "polyvoice-bench-v0.10",
         crate_version: env!("CARGO_PKG_VERSION"),
         git_sha: git_sha(),
         host_arch: std::env::consts::ARCH.to_owned(),
@@ -535,6 +592,11 @@ fn main() -> Result<()> {
         der_no_collar_micro,
         collar_secs: args.collar,
         averaging_policy: "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
+        resolved_execution_provider: format!("{resolved_ep:?}"),
+        host_cpus: std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1),
+        stage_totals,
         miss: (totals.miss / n) * 100.0,
         false_alarm: (totals.false_alarm / n) * 100.0,
         confusion: (totals.confusion / n) * 100.0,
