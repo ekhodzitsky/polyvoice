@@ -51,7 +51,12 @@ fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>, file_key:
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
 
     // Use a dummy clusterer that we will override later.
     // HybridPipeline requires a Clusterer at construction, but run_diagnostics

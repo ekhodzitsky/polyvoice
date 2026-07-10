@@ -66,7 +66,12 @@ fn hybrid_embedder_sweep_on_aorju() {
 
     // ResNet34 (256-d).
     {
-        let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("resnet");
+        let embedder = ResNet34Adapter::new(
+            &models.embedder_path,
+            pool_size,
+            polyvoice::onnx::ExecutionProvider::Cpu,
+        )
+        .expect("resnet");
         let pipeline = HybridPipeline::new(
             Box::new(PowersetSegmenter::new(&models.segmenter_path).unwrap()),
             Box::new(embedder),
@@ -91,7 +96,13 @@ fn hybrid_embedder_sweep_on_aorju() {
     {
         let cam_path = Path::new("models/cam_pp_fp32.onnx");
         if cam_path.is_file() {
-            let embedder = CamPlusPlusExtractor::new(cam_path, 512, pool_size).expect("cam++");
+            let embedder = CamPlusPlusExtractor::new(
+                cam_path,
+                512,
+                pool_size,
+                polyvoice::onnx::ExecutionProvider::Cpu,
+            )
+            .expect("cam++");
             let pipeline = HybridPipeline::new(
                 Box::new(PowersetSegmenter::new(&models.segmenter_path).unwrap()),
                 Box::new(embedder),

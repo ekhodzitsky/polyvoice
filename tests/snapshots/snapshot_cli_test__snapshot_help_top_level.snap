@@ -20,18 +20,35 @@ Arguments:
   [WAV]  WAV file to diarize. `polyvoice meeting.wav` diarizes it directly
 
 Options:
-      --profile <PROFILE>            [default: balanced]
-      --output <OUTPUT>              Write output to a file instead of stdout
-      --format <FORMAT>              Output format [default: rttm] [possible values: rttm, json, srt, vtt, txt]
-      --models-cache <MODELS_CACHE>  
-      --threshold <THRESHOLD>        [default: 0.45]
-      --speakers <SPEAKERS>          Target speaker count (caps clustering at N speakers)
-      --max-speakers <MAX_SPEAKERS>  Maximum number of speakers (clustering ceiling)
-      --quiet                        Suppress progress/info on stderr
-      --json                         Machine mode: emit only the structured JSON result on stdout; route all human-readable output to stderr. Implies `--format json --quiet`
-      --v2                           Use pipeline v2 (experimental; not recommended for long-form audio)
-      --clusterer <CLUSTERER>        v2 clusterer: `ahc` (default cosine AHC) or `vbx` (PLDA + VB-HMM — best for overlap-heavy / meeting audio; needs the `vbx` build feature and a PLDA dir via `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`). Only affects `--v2` [default: ahc]
-      --vbx-plda-dir <VBX_PLDA_DIR>  Directory with the precomputed VBx PLDA params (overrides `POLYVOICE_VBX_PLDA_DIR`). Only used with `--v2 --clusterer vbx`
-      --embed-window <EMBED_WINDOW>  v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Only affects `--v2`
-  -h, --help                         Print help
-  -V, --version                      Print version
+      --profile <PROFILE>
+          [default: balanced]
+      --output <OUTPUT>
+          Write output to a file instead of stdout
+      --format <FORMAT>
+          Output format [default: rttm] [possible values: rttm, json, srt, vtt, txt]
+      --models-cache <MODELS_CACHE>
+          
+      --threshold <THRESHOLD>
+          [default: 0.45]
+      --speakers <SPEAKERS>
+          Target speaker count (caps clustering at N speakers)
+      --max-speakers <MAX_SPEAKERS>
+          Maximum number of speakers (clustering ceiling)
+      --quiet
+          Suppress progress/info on stderr
+      --json
+          Machine mode: emit only the structured JSON result on stdout; route all human-readable output to stderr. Implies `--format json --quiet`
+      --v2
+          Use pipeline v2 (experimental; not recommended for long-form audio)
+      --clusterer <CLUSTERER>
+          v2 clusterer: `ahc` (default cosine AHC) or `vbx` (PLDA + VB-HMM — best for overlap-heavy / meeting audio; needs the `vbx` build feature and a PLDA dir via `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`). Only affects `--v2` [default: ahc]
+      --vbx-plda-dir <VBX_PLDA_DIR>
+          Directory with the precomputed VBx PLDA params (overrides `POLYVOICE_VBX_PLDA_DIR`). Only used with `--v2 --clusterer vbx`
+      --embed-window <EMBED_WINDOW>
+          v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Only affects `--v2`
+      --execution-provider <EXECUTION_PROVIDER>
+          ONNX execution provider: `auto` (CoreML on Apple Silicon, XNNPACK on aarch64 Linux, else CPU), `cpu`, `coreml`, `nnapi`, `cuda`, `xnnpack`. Providers not compiled into this build log a warning and run on CPU. Only affects `--v2`; the legacy default pipeline keeps its built-in per-session defaults [default: auto]
+  -h, --help
+          Print help
+  -V, --version
+          Print version

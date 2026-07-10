@@ -68,7 +68,12 @@ fn main() {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let clusterer = KMeansClusterer::new(20);
 
     let pipeline =

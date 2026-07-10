@@ -89,6 +89,13 @@ struct DiarizeArgs {
     /// embedding/segment. Only affects `--v2`.
     #[arg(long)]
     embed_window: Option<f32>,
+    /// ONNX execution provider: `auto` (CoreML on Apple Silicon, XNNPACK on
+    /// aarch64 Linux, else CPU), `cpu`, `coreml`, `nnapi`, `cuda`, `xnnpack`.
+    /// Providers not compiled into this build log a warning and run on CPU.
+    /// Only affects `--v2`; the legacy default pipeline keeps its built-in
+    /// per-session defaults.
+    #[arg(long, default_value = "auto")]
+    execution_provider: String,
 }
 
 #[derive(Subcommand, Debug)]
@@ -155,6 +162,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         clusterer,
         vbx_plda_dir,
         embed_window,
+        execution_provider,
     } = args;
 
     let wav = wav.ok_or_else(|| {
@@ -199,6 +207,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
             &clusterer,
             vbx_plda_dir,
             embed_window,
+            &execution_provider,
             quiet,
         )?
     } else {
@@ -320,6 +329,7 @@ fn run_v2_pipeline(
     clusterer: &str,
     vbx_plda_dir: Option<PathBuf>,
     embed_window: Option<f32>,
+    execution_provider: &str,
     quiet: bool,
 ) -> Result<DiarizationResult> {
     let clusterer_kind = match clusterer {
@@ -327,11 +337,23 @@ fn run_v2_pipeline(
         "vbx" => ClustererKind::Vbx,
         other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
     };
+    let ep = match execution_provider {
+        "auto" => polyvoice::onnx::ExecutionProvider::auto(),
+        "cpu" => polyvoice::onnx::ExecutionProvider::Cpu,
+        "coreml" => polyvoice::onnx::ExecutionProvider::CoreMl,
+        "nnapi" => polyvoice::onnx::ExecutionProvider::Nnapi,
+        "cuda" => polyvoice::onnx::ExecutionProvider::Cuda,
+        "xnnpack" => polyvoice::onnx::ExecutionProvider::XnnPack,
+        other => anyhow::bail!(
+            "unknown --execution-provider '{other}' (expected auto|cpu|coreml|nnapi|cuda|xnnpack)"
+        ),
+    };
     let config = PipelineConfig {
         profile,
         clusterer: clusterer_kind,
         vbx_plda_dir,
         embed_window_secs: embed_window,
+        execution_provider: ep,
         ..PipelineConfig::default()
     };
     let pipeline = V2Pipeline::builder()
