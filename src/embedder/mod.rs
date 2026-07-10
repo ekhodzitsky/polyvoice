@@ -240,11 +240,18 @@ mod onnx_adapters {
         /// { ret.as_ref().map_or(true, |e| e.dim() == 256) }
         /// Load the WeSpeaker ResNet34 ONNX model.
         pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError> {
-            let inner = FbankOnnxExtractor::new(path.as_ref(), 256, pool_size).map_err(|e| {
-                EmbedderError::ModelIo {
-                    path: path.as_ref().to_path_buf(),
-                    detail: format!("{e}"),
-                }
+            // ExecutionProvider::Cpu preserves this path's historical behavior
+            // (it never registered an EP); threading the configured EP through
+            // is the follow-up that wires PipelineConfig.execution_provider.
+            let inner = FbankOnnxExtractor::new(
+                path.as_ref(),
+                256,
+                pool_size,
+                crate::onnx::ExecutionProvider::Cpu,
+            )
+            .map_err(|e| EmbedderError::ModelIo {
+                path: path.as_ref().to_path_buf(),
+                detail: format!("{e}"),
             })?;
             Ok(Self { inner, dim: 256 })
         }
@@ -290,11 +297,16 @@ mod onnx_adapters {
             dim: usize,
             pool_size: usize,
         ) -> Result<Self, EmbedderError> {
-            let inner = FbankOnnxExtractor::new(path.as_ref(), dim, pool_size).map_err(|e| {
-                EmbedderError::ModelIo {
-                    path: path.as_ref().to_path_buf(),
-                    detail: format!("{e}"),
-                }
+            // Cpu: same historical-behavior note as ResNet34Adapter above.
+            let inner = FbankOnnxExtractor::new(
+                path.as_ref(),
+                dim,
+                pool_size,
+                crate::onnx::ExecutionProvider::Cpu,
+            )
+            .map_err(|e| EmbedderError::ModelIo {
+                path: path.as_ref().to_path_buf(),
+                detail: format!("{e}"),
             })?;
             Ok(Self { inner, dim })
         }

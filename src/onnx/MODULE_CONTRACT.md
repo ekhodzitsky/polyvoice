@@ -40,6 +40,30 @@ surface:
       kind: unit-test
       target: src/onnx::mod::tests
       command: cargo test --lib onnx --features onnx
+  - name: ExecutionProvider
+    kind: enum
+    visibility: public
+    contract: >
+      Canonical execution-provider selector (Cpu/CoreMl/Nnapi/Cuda/XnnPack)
+      with a target-aware auto(). Lives here (the module that owns session
+      creation); pipeline_v2::config re-exports it.
+    proof:
+      kind: unit-test
+      target: src/onnx::mod::tests
+      command: cargo test --lib onnx --features onnx
+  - name: build_session_with_ep
+    kind: function
+    visibility: public
+    contract: >
+      THE single ort session constructor for embedding + segmentation paths.
+      Validates the ONNX header BEFORE ort parses the file, optionally pins
+      intra-op threads, then registers the requested EP. Unwired providers
+      warn (tracing) and fall back to CPU; EP registration failure is never
+      fatal (ort's CPU fallback keeps inference correct).
+    proof:
+      kind: unit-test
+      target: src/onnx::mod::tests
+      command: cargo test --lib onnx --features onnx
   - name: OnnxValidationError
     kind: struct
     visibility: public

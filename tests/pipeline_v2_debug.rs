@@ -59,8 +59,13 @@ fn run_legacy_pipeline(samples: &[f32]) -> DiarizationResult {
     use polyvoice::vad::VadConfig;
     use polyvoice::{FbankOnnxExtractor, SileroVad};
 
-    let extractor = FbankOnnxExtractor::new(Path::new("models/wespeaker_resnet34.onnx"), 256, 1)
-        .expect("legacy embedder load");
+    let extractor = FbankOnnxExtractor::new(
+        Path::new("models/wespeaker_resnet34.onnx"),
+        256,
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("legacy embedder load");
     let mut vad =
         SileroVad::new(Path::new("models/silero_vad.onnx"), 512).expect("legacy vad load");
 
@@ -88,9 +93,13 @@ fn compare_embeddings_on_segments(
     let sr = 16000_f64;
 
     // Legacy ResNet34
-    let legacy_ext =
-        polyvoice::FbankOnnxExtractor::new(Path::new("models/wespeaker_resnet34.onnx"), 256, 1)
-            .expect("legacy load");
+    let legacy_ext = polyvoice::FbankOnnxExtractor::new(
+        Path::new("models/wespeaker_resnet34.onnx"),
+        256,
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("legacy load");
     let config = DiarizationConfig::default();
     let mut legacy_embs: Vec<Vec<f32>> = Vec::new();
     for seg in &primary_segments {

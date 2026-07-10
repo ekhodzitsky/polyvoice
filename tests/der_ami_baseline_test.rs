@@ -55,9 +55,13 @@ fn ami_single_file_der_within_baseline() {
         .ensure_for_profile(Profile::Balanced)
         .expect("models");
 
-    let extractor =
-        FbankOnnxExtractor::new(&models.embedder_path, Profile::Balanced.embedding_dim(), 1)
-            .expect("embedder");
+    let extractor = FbankOnnxExtractor::new(
+        &models.embedder_path,
+        Profile::Balanced.embedding_dim(),
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let vad_path = registry.ensure("silero_vad").expect("silero_vad model");
     let mut vad = SileroVad::new(&vad_path, 512).expect("vad");
     let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());

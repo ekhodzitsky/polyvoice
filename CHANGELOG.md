@@ -23,6 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **One EP-aware ONNX session builder.** `onnx::build_session_with_ep(path, ep,
+  intra_threads)` is now the single place embedding/segmentation `ort` sessions
+  are constructed: header validation always runs before ort parses the file,
+  and the requested `ExecutionProvider` is registered in one audited spot.
+  Selecting a provider that isn't wired yet (NNAPI/CUDA/XNNPACK, or CoreML
+  without the `coreml` feature) logs a warning and runs on CPU instead of
+  silently doing nothing — the first observable step toward making
+  `PipelineConfig.execution_provider` real. **Breaking:** the canonical
+  `ExecutionProvider` enum moved to `polyvoice::onnx` (still re-exported from
+  `pipeline_v2::config`), and `OnnxEmbeddingExtractor::new`,
+  `FbankOnnxExtractor::new`, and `PowersetSegmenter::with_config` gained an
+  `ep` parameter (`PowersetSegmenter::new` keeps its signature and picks the
+  target default). Default behavior is unchanged: CoreML on Apple Silicon for
+  segmentation/legacy embedding, plain CPU for the fbank embedder.
 - **No-collar DER is now release-gated.** The DER regression tests (legacy and
   pipeline-v2) score every run at collar 0 in addition to collar 0.25 and fail
   when the no-collar DER exceeds its committed baseline + tolerance; on the

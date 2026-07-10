@@ -9,6 +9,89 @@ use std::path::Path;
 /// Minimum plausible size for an ONNX file (header only).
 pub const ONNX_MIN_HEADER_BYTES: usize = 64;
 
+/// Which ONNX Runtime execution provider to request for a session.
+///
+/// Canonical home is here (the module that owns session creation) so the
+/// low-level constructors can name it without depending on `pipeline_v2`;
+/// `pipeline_v2::config` re-exports it, so existing imports keep compiling.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ExecutionProvider {
+    Cpu,
+    CoreMl,
+    Nnapi,
+    Cuda,
+    XnnPack,
+}
+
+impl ExecutionProvider {
+    /// Best default for the current target: CoreML on Apple Silicon, XNNPACK on
+    /// aarch64 Linux, plain CPU elsewhere. Unwired providers fall back to CPU
+    /// with a warning at session-build time.
+    pub fn auto() -> Self {
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        return Self::CoreMl;
+        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+        return Self::XnnPack;
+        #[cfg(not(any(
+            all(target_os = "macos", target_arch = "aarch64"),
+            all(target_os = "linux", target_arch = "aarch64"),
+        )))]
+        return Self::Cpu;
+    }
+}
+
+/// Build an `ort` session for `model_path` with the requested execution
+/// provider. This is the ONE place embedding/segmentation sessions are
+/// constructed: it validates the ONNX header BEFORE ort ever parses the file
+/// (the validate-before-build invariant), then registers the EP.
+///
+/// `intra_threads`: `Some(n)` pins the session's intra-op thread count (the
+/// fbank embedder uses 1 because it parallelises across a session pool).
+///
+/// EP behavior: `Cpu` registers nothing. `CoreMl` registers CoreML when the
+/// build carries the `coreml` feature on macOS aarch64, else warns and runs on
+/// CPU. `Nnapi`/`Cuda`/`XnnPack` are not wired yet — they warn and run on CPU.
+/// EP registration failure is deliberately not an error: ort's built-in CPU
+/// fallback keeps inference correct.
+pub fn build_session_with_ep(
+    model_path: &Path,
+    ep: ExecutionProvider,
+    intra_threads: Option<usize>,
+) -> anyhow::Result<ort::session::Session> {
+    validate_onnx_header(model_path)?;
+    // ort::Error is not Send+Sync, so it cannot ride `?` into anyhow — stringify.
+    let mut builder =
+        ort::session::Session::builder().map_err(|e| anyhow::anyhow!("session builder: {e}"))?;
+    if let Some(n) = intra_threads {
+        builder = builder
+            .with_intra_threads(n)
+            .map_err(|e| anyhow::anyhow!("intra threads: {e}"))?;
+    }
+    match ep {
+        ExecutionProvider::Cpu => {}
+        ExecutionProvider::CoreMl => {
+            #[cfg(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))]
+            {
+                let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
+                builder = builder
+                    .with_execution_providers([coreml.build()])
+                    .map_err(|e| anyhow::anyhow!("coreml ep: {e}"))?;
+            }
+            #[cfg(not(all(feature = "coreml", target_os = "macos", target_arch = "aarch64")))]
+            tracing::warn!(
+                "execution provider CoreMl is not compiled in (needs the `coreml` feature on \
+                 macOS aarch64) — falling back to CPU"
+            );
+        }
+        ExecutionProvider::Nnapi | ExecutionProvider::Cuda | ExecutionProvider::XnnPack => {
+            tracing::warn!("execution provider {ep:?} is not wired yet — falling back to CPU");
+        }
+    }
+    builder
+        .commit_from_file(model_path)
+        .map_err(|e| anyhow::anyhow!("commit_from_file: {e}"))
+}
+
 /// Error raised when an ONNX file fails structural header validation.
 #[derive(thiserror::Error, Debug)]
 #[error("ONNX header validation failed for {path}: {detail}")]
@@ -102,32 +185,21 @@ pub struct OnnxEmbeddingExtractor {
 #[cfg(feature = "onnx")]
 impl OnnxEmbeddingExtractor {
     /// { pool_size > 0 }
-    /// `fn new(model_path: &Path, embedding_dim: usize, window_samples: usize, pool_size: usize) -> Result<Self, anyhow::Error>`
+    /// `fn new(model_path: &Path, embedding_dim: usize, window_samples: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
     /// { ret.pool.len() == pool_size }
     pub fn new(
         model_path: &Path,
         embedding_dim: usize,
         window_samples: usize,
         pool_size: usize,
+        ep: ExecutionProvider,
     ) -> anyhow::Result<Self> {
         if pool_size == 0 {
             anyhow::bail!("pool_size must be > 0");
         }
-        validate_onnx_header(model_path)
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
         let pool = crossbeam_queue::ArrayQueue::new(pool_size);
         for i in 0..pool_size {
-            let mut builder = ort::session::Session::builder()
-                .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
-            #[cfg(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))]
-            {
-                let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
-                builder = builder
-                    .with_execution_providers([coreml.build()])
-                    .map_err(|e| EmbeddingError::InferenceFailed(format!("coreml ep: {e}")))?;
-            }
-            let session = builder
-                .commit_from_file(model_path)
+            let session = build_session_with_ep(model_path, ep, None)
                 .map_err(|e| EmbeddingError::InferenceFailed(format!("session {i}: {e}")))?;
             pool.push(session)
                 .map_err(|_| anyhow::anyhow!("failed to push session into pool"))?;
@@ -307,5 +379,31 @@ mod tests {
         data[1] = 0x08; // ir_version = 8
         tmp.write_all(&data).unwrap();
         assert!(validate_onnx_header(tmp.path()).is_ok());
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn build_session_with_ep_rejects_garbage_before_ort() {
+        // Validation must run first: garbage never reaches the ort parser.
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(&[0xAB; 64]).unwrap();
+        let err = build_session_with_ep(tmp.path(), ExecutionProvider::Cpu, None)
+            .expect_err("garbage must fail header validation");
+        assert!(err.to_string().contains("ONNX header validation failed"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn build_session_with_ep_cpu_and_unwired_ep_build_ok() {
+        let path = std::path::Path::new("models/silero_vad.onnx");
+        if !path.exists() {
+            // Skip if the model is missing (e.g. CI without models).
+            return;
+        }
+        assert!(build_session_with_ep(path, ExecutionProvider::Cpu, None).is_ok());
+        assert!(build_session_with_ep(path, ExecutionProvider::Cpu, Some(1)).is_ok());
+        // Unwired providers warn and fall back to CPU — never panic or error.
+        assert!(build_session_with_ep(path, ExecutionProvider::Cuda, None).is_ok());
+        assert!(build_session_with_ep(path, ExecutionProvider::auto(), None).is_ok());
     }
 }

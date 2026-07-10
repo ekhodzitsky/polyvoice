@@ -62,6 +62,7 @@ fn main() {
             sample_rate: 16000,
             aggregation: Default::default(),
         },
+        polyvoice::onnx::ExecutionProvider::auto(),
     )
     .expect("segmenter");
     let pool_size = std::thread::available_parallelism()
