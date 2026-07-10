@@ -62,7 +62,12 @@ fn pipeline_v2_aorju_with_ahc() {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let clusterer = AhcClusterer::with_threshold(20, 0.40);
 
     let pipeline = Pipeline::builder()

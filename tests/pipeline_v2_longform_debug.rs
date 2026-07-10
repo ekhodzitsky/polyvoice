@@ -41,7 +41,12 @@ fn debug_v2_segments_on_aepyx() {
         .expect("models");
 
     let segmenter = PowersetSegmenter::new(&models.segmenter_path).expect("segmenter");
-    let embedder = ResNet34Adapter::new(&models.embedder_path, 1).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
 
     println!("=== SEGMENTATION ===");
     let segments = segmenter.segment(&samples).expect("segment");
