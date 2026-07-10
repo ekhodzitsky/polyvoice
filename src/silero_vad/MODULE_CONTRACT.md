@@ -36,7 +36,10 @@ surface:
     visibility: public
     contract: >
       ONNX-backed Silero VAD. Implements VoiceActivityDetector.
-      Requires 512-sample frames at 16kHz.
+      Requires 512-sample frames at 16kHz. The ort session is built via the
+      shared EP-aware helper (onnx::build_session_with_ep): new() keeps the
+      historical CPU default (signature unchanged per escalation policy);
+      with_ep() selects an execution provider explicitly.
     proof:
       kind: unit-test
       target: src/silero_vad::mod::tests
