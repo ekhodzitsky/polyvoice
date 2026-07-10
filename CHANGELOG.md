@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **No-collar DER is now release-gated.** The DER regression tests (legacy and
+  pipeline-v2) score every run at collar 0 in addition to collar 0.25 and fail
+  when the no-collar DER exceeds its committed baseline + tolerance; on the
+  VoxConverse 10-file subset the no-collar gate uses a duration-weighted
+  micro average (sum of error frames / sum of reference frames — the
+  like-for-like convention of pyannote/speakrs headline numbers) instead of a
+  mean of per-file ratios. Previously only collar-0.25 was asserted and the
+  headline metric could regress silently through a release.
+- No-collar baselines measured and committed for the previously null entries
+  (legacy e2e smoke 14.52%, v2 e2e smoke 11.81%, VoxConverse-10 micro 27.08%),
+  and the long-form overlap-excluded DER floor on AMI EN2002a is now active for
+  pipeline v2 (24.80% + 3.0 tolerance) — it was a dormant placeholder gate.
+- `src/der/README.md` documents the baseline/gate layout and the refresh
+  procedure.
 - C FFI: `polyvoice_pipeline_run_format(..., format, ...)` renders the result as
   JSON, RTTM, SRT, VTT, or TXT (new `PolyvoiceFormat` / `polyvoice_format_t`
   selector; RTTM uses the fixed file id `audio`). The existing
@@ -22,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Legacy DER baselines tightened after the singleton-pruning improvements:
+  AMI EN2002a 36.30 → 34.62 (collar 0.25) / 44.73 → 42.90 (no collar);
+  VoxConverse-10 macro 17.43 → 15.82 (collar 0.25). The old VoxConverse-10
+  no-collar value (25.99) was a macro-era number and is replaced by the micro
+  27.08 baseline. Retired hybrid-pipeline baseline entries are marked as
+  historical/ungated instead of silently keeping `null` no-collar fields.
 - WebVTT output now uses the standard voice span `<v SPEAKER_NN>text</v>` for
   transcribed cues (previously `SPEAKER_NN: text`); diarization-only cues still
   render the bare `SPEAKER_NN` label.
