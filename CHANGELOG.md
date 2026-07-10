@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`PipelineConfig.execution_provider` now takes effect end-to-end.**
+  `PipelineBuilder::build()` threads the configured provider into both the
+  powerset segmenter and the embedder (previously the field was inert dead
+  code), a fluent `PipelineBuilder::execution_provider(ep)` setter exists, the
+  resolved provider is logged at pipeline construction, and the CLI gains
+  `polyvoice diarize --v2 --execution-provider <auto|cpu|coreml|nnapi|cuda|xnnpack>`
+  (default `auto`; the legacy default pipeline keeps its built-in per-session
+  defaults). With `auto` on Apple Silicon the v2 embedder now also goes through
+  CoreML (it was CPU-only) — measured byte-identical output on the bundled
+  clip at comparable speed. **Breaking:** `ResNet34Adapter::new` and
+  `CamPlusPlusExtractor::new` gained an `ep` parameter.
 - **One EP-aware ONNX session builder.** `onnx::build_session_with_ep(path, ep,
   intra_threads)` is now the single place embedding/segmentation `ort` sessions
   are constructed: header validation always runs before ort parses the file,

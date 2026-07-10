@@ -63,8 +63,18 @@ fn compare_pipeline_v2_vs_hybrid_on_aorju() {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder_hybrid = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
-    let embedder_v2 = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder_hybrid = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
+    let embedder_v2 = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let clusterer_hybrid = AhcClusterer::with_threshold(20, 0.40);
     let clusterer_v2 = AhcClusterer::with_threshold(20, 0.40);
 

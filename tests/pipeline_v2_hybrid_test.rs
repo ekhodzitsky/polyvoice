@@ -56,7 +56,12 @@ fn run_hybrid_on_file_with_config(
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let clusterer = AhcClusterer::with_threshold(20, 0.40);
 
     let pipeline =
@@ -224,7 +229,12 @@ fn hybrid_ami_test_single() {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let clusterer = AhcClusterer::with_threshold(20, 0.35);
 
     let pipeline =
@@ -280,7 +290,12 @@ fn hybrid_voxconverse_10_file_subset_thr40() {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let clusterer = AhcClusterer::with_threshold(20, 0.40);
 
     let pipeline =
@@ -355,7 +370,12 @@ fn hybrid_voxconverse_10_file_subset_kmeans() {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let clusterer = polyvoice::clusterer::KMeansClusterer::new(20);
 
     let pipeline =
@@ -429,7 +449,12 @@ fn hybrid_voxconverse_10_file_subset_kmeans_fast() {
     let pool_size = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let embedder = ResNet34Adapter::new(&models.embedder_path, pool_size).expect("embedder");
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let clusterer = polyvoice::clusterer::KMeansClusterer::new(20).fast_mode();
 
     let pipeline =
