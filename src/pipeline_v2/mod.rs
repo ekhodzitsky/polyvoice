@@ -34,6 +34,17 @@ use crate::utils::{l2_normalize, merge_segments};
 pub use builder::{ConfigError, PipelineBuilder};
 pub use config::{ClustererKind, ExecutionProvider, PipelineConfig};
 
+/// Wall-clock seconds per pipeline stage, from [`Pipeline::run_with_timings`].
+/// In pipeline v2 voice-activity detection is part of the powerset segmenter,
+/// so there is no separate VAD stage.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize)]
+pub struct StageTimings {
+    pub segmentation_secs: f64,
+    pub embedding_secs: f64,
+    pub clustering_secs: f64,
+    pub resegmentation_secs: f64,
+}
+
 /// Minimum segment length (seconds) accepted for embedding. WeSpeaker ResNet34
 /// downsamples the time axis ~8×, so a segment shorter than ~0.11s (≈10 fbank
 /// frames at win=400/hop=160) leaves ≤1 frame after downsampling and the
@@ -132,13 +143,27 @@ impl Pipeline {
     }
 
     pub fn run(&self, samples: &[f32], sr: SampleRate) -> Result<DiarizationResult, PipelineError> {
+        self.run_with_timings(samples, sr).map(|(result, _)| result)
+    }
+
+    /// Like [`Pipeline::run`], but also returns wall-clock seconds spent in each
+    /// pipeline stage. Benchmark entry point (RTFx breakdown per backend); the
+    /// instrumentation is four `Instant` reads, so `run` simply delegates here.
+    pub fn run_with_timings(
+        &self,
+        samples: &[f32],
+        sr: SampleRate,
+    ) -> Result<(DiarizationResult, StageTimings), PipelineError> {
         if sr.get() != self.config.sample_rate.get() {
             return Err(PipelineError::UnsupportedSampleRate { actual: sr.get() });
         }
+        let mut timings = StageTimings::default();
 
+        let t = std::time::Instant::now();
         let raw_segments = self.segmenter.segment(samples)?;
+        timings.segmentation_secs = t.elapsed().as_secs_f64();
         if raw_segments.is_empty() {
-            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
+            return Ok((DiarizationResult::new(Vec::new(), Vec::new(), 0), timings));
         }
 
         let overlap_ranges = extract_overlap_time_ranges(&raw_segments);
@@ -157,6 +182,7 @@ impl Pipeline {
         // PLDA backends (VBx) need the raw embedding scale for mean-centering;
         // cosine backends are scale-invariant and get the L2-normalized vectors.
         let raw_embeddings = self.clusterer.wants_raw_embeddings();
+        let t = std::time::Instant::now();
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(embed_units.len());
         let mut valid_segments: Vec<&crate::segmentation::RawSegment> =
             Vec::with_capacity(embed_units.len());
@@ -204,11 +230,15 @@ impl Pipeline {
             valid_segments.push(seg);
         }
 
+        timings.embedding_secs = t.elapsed().as_secs_f64();
+
         if embeddings.is_empty() {
-            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
+            return Ok((DiarizationResult::new(Vec::new(), Vec::new(), 0), timings));
         }
 
+        let t = std::time::Instant::now();
         let labels = self.clusterer.cluster(&embeddings)?;
+        timings.clustering_secs = t.elapsed().as_secs_f64();
 
         // Fix 1: zip valid_segments (survivors only) with labels — not primary_segments.
         let mut primary_turns: Vec<SpeakerTurn> = valid_segments
@@ -231,6 +261,7 @@ impl Pipeline {
         // from a degraded mixed-voice embedding.
         let local_to_global = Self::map_local_to_global(&valid_segments, &labels);
 
+        let t = std::time::Instant::now();
         let mut all_turns: Vec<SpeakerTurn> = if self.config.resegment_overlap
             && !overlap_ranges.is_empty()
             && centroids.len() >= 2
@@ -250,6 +281,8 @@ impl Pipeline {
             primary_turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
             primary_turns
         };
+
+        timings.resegmentation_secs = t.elapsed().as_secs_f64();
 
         // Fix 4: guarantee sorted order regardless of which Resegmenter impl ran.
         all_turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
@@ -284,14 +317,13 @@ impl Pipeline {
             .collect::<std::collections::HashSet<_>>()
             .len();
 
-        Ok(
-            DiarizationResult::new(merged_segments, merged_turns, num_speakers)
-                .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
-                .with_provenance(crate::types::Provenance {
-                    profile: self.config.profile.manifest_id().to_owned(),
-                    ..Default::default()
-                }),
-        )
+        let result = DiarizationResult::new(merged_segments, merged_turns, num_speakers)
+            .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
+            .with_provenance(crate::types::Provenance {
+                profile: self.config.profile.manifest_id().to_owned(),
+                ..Default::default()
+            });
+        Ok((result, timings))
     }
 
     /// Duration-weighted majority map from each file-consistent local speaker
