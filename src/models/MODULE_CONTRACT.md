@@ -119,10 +119,18 @@ invariants:
       target: src/models::verify::tests
       command: cargo test --lib models --features download
   - id: verify-signature
-    rule: Downloaded files must pass minisig verification before use.
+    rule: >
+      Downloaded files must pass minisig verification before use. In release
+      builds (cfg!(not(debug_assertions))) every PROFILE-RESOLVED model must
+      additionally carry a manifest signature — a missing signature fails fast
+      with RegistryError::UnsignedModel before any network access, so a
+      tampered/forked manifest cannot silently downgrade authenticity to a
+      self-consistent hash. Ad-hoc single-model ensure() stays lenient for
+      dev/test. (Verification-requirement change recorded per escalation
+      policy; strengthens, never weakens, verification.)
     proof:
       kind: unit-test
-      target: src/models::verify::tests
+      target: src/models::mod::tests::strict_profile_resolution_rejects_unsigned_model
       command: cargo test --lib models --features download
   - id: download-https-only
     rule: >

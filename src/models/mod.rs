@@ -36,6 +36,12 @@ pub fn default_manifest() -> Manifest {
 pub enum RegistryError {
     #[error("model '{model_id}' not found in manifest")]
     ModelNotFound { model_id: String },
+    #[error(
+        "model '{model_id}' has no signature in the manifest — release builds require a \
+         minisign signature for every profile-resolved model (a manifest that drops the \
+         signature would otherwise silently downgrade authenticity to a self-consistent hash)"
+    )]
+    UnsignedModel { model_id: String },
     #[error("profile '{profile}' not found in manifest")]
     ProfileNotFound { profile: String },
     #[error("custom profile cannot be resolved by registry — caller must supply models")]
@@ -69,7 +75,15 @@ pub struct ProfileModels {
 pub struct ModelRegistry {
     manifest: Manifest,
     cache_dir: PathBuf,
+    /// When true (the default in release builds), profile resolution refuses
+    /// manifest entries without a minisign signature (`UnsignedModel`). Debug
+    /// builds stay lenient so local fixtures don't need signatures.
+    require_signatures: bool,
 }
+
+/// Signature presence is enforced for profile-resolved models in release
+/// builds; debug builds keep the lenient transition behavior.
+const REQUIRE_SIGNATURES_DEFAULT: bool = cfg!(not(debug_assertions));
 
 impl ModelRegistry {
     /// { true }
@@ -103,6 +117,7 @@ impl ModelRegistry {
         Ok(Self {
             manifest: default_manifest(),
             cache_dir: path,
+            require_signatures: REQUIRE_SIGNATURES_DEFAULT,
         })
     }
 
@@ -114,6 +129,14 @@ impl ModelRegistry {
     #[cfg(test)]
     pub fn with_manifest_override(mut self, manifest: Manifest) -> Self {
         self.manifest = manifest;
+        self
+    }
+
+    /// Test-only: force the signature-presence strictness regardless of build
+    /// profile, so both the strict and lenient paths are testable in debug.
+    #[cfg(test)]
+    pub fn with_require_signatures(mut self, require: bool) -> Self {
+        self.require_signatures = require;
         self
     }
 
@@ -134,6 +157,7 @@ impl ModelRegistry {
         Ok(Self {
             manifest,
             cache_dir: path,
+            require_signatures: REQUIRE_SIGNATURES_DEFAULT,
         })
     }
 
@@ -200,10 +224,35 @@ impl ModelRegistry {
         Ok(dest)
     }
 
+    /// Enforce signature presence for a profile-resolved model when strict mode
+    /// is on. Runs BEFORE any network access, so a tampered manifest that drops
+    /// a signature fails fast instead of downloading. Ad-hoc single-model
+    /// `ensure` stays lenient by design (dev/test convenience); only profile
+    /// resolution is strict.
+    fn require_signature_for(&self, model_id: &str) -> Result<(), RegistryError> {
+        if !self.require_signatures {
+            return Ok(());
+        }
+        let entry = self
+            .manifest
+            .model(model_id)
+            .ok_or_else(|| RegistryError::ModelNotFound {
+                model_id: model_id.to_owned(),
+            })?;
+        if entry.signature.is_none() {
+            return Err(RegistryError::UnsignedModel {
+                model_id: model_id.to_owned(),
+            });
+        }
+        Ok(())
+    }
+
     /// { true }
     /// `pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError>`
     /// { ret.as_ref().map_or(true, |p| p.segmenter_path.exists() && p.embedder_path.exists()) }
     /// Resolve all models for a profile, downloading any that are missing.
+    /// In release builds every profile-resolved model must carry a manifest
+    /// signature (`UnsignedModel` otherwise); all bundled models are signed.
     pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError> {
         if profile == Profile::Custom {
             return Err(RegistryError::CustomProfileUnresolvable);
@@ -214,6 +263,8 @@ impl ModelRegistry {
             .ok_or_else(|| RegistryError::ProfileNotFound {
                 profile: profile.manifest_id().to_owned(),
             })?;
+        self.require_signature_for(&prof.segmenter)?;
+        self.require_signature_for(&prof.embedder)?;
         let segmenter_path = self.ensure(&prof.segmenter)?;
         let embedder_path = self.ensure(&prof.embedder)?;
         Ok(ProfileModels {
@@ -240,6 +291,10 @@ impl ModelRegistry {
             .ok_or_else(|| RegistryError::ProfileNotFound {
                 profile: profile.manifest_id().to_owned(),
             })?;
+        // Mirror ensure_for_profile's strictness so the offline test path can
+        // exercise both modes without network access.
+        self.require_signature_for(&prof.segmenter)?;
+        self.require_signature_for(&prof.embedder)?;
         let segmenter_path = self.ensure_in_cache_only(&prof.segmenter)?;
         let embedder_path = self.ensure_in_cache_only(&prof.embedder)?;
         Ok(ProfileModels {
@@ -357,12 +412,81 @@ mod tests {
             Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
         let r = ModelRegistry::with_cache_dir(tmp.path())
             .unwrap()
-            .with_manifest_override(manifest);
+            .with_manifest_override(manifest)
+            // TINY_MANIFEST is unsigned; pin the lenient mode so this lookup
+            // test also passes under `cargo test --release`.
+            .with_require_signatures(false);
 
         std::fs::write(tmp.path().join("hello.bin"), b"hello").unwrap();
 
         let bundle = r.ensure_in_cache_only_for_profile(Profile::Mobile).unwrap();
         assert_eq!(bundle.segmenter_path, tmp.path().join("hello.bin"));
         assert_eq!(bundle.embedder_path, tmp.path().join("hello.bin"));
+    }
+
+    /// Signed variant of TINY_MANIFEST — the signature value only needs to be
+    /// present for the strictness check (cryptographic verification happens on
+    /// the download path, not here).
+    const TINY_MANIFEST_SIGNED: &str = r#"
+        schema = "polyvoice-models-v1"
+        [profiles.mobile]
+        segmenter = "hello_model"
+        embedder  = "hello_model"
+        [profiles.balanced]
+        segmenter = "hello_model"
+        embedder  = "hello_model"
+        [models.hello_model]
+        url      = "file:///dev/null"
+        sha256   = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        size     = 5
+        filename = "hello.bin"
+        signature = "untrusted comment: fixture\nRWQfixturesignature"
+    "#;
+
+    #[test]
+    fn strict_profile_resolution_rejects_unsigned_model() {
+        let tmp = TempDir::new().unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_cache_dir(tmp.path())
+            .unwrap()
+            .with_manifest_override(manifest)
+            .with_require_signatures(true);
+
+        // Fails before any network/cache access — both profile paths agree.
+        let err = r.ensure_for_profile(Profile::Mobile).expect_err("unsigned");
+        assert!(
+            matches!(err, RegistryError::UnsignedModel { ref model_id } if model_id == "hello_model")
+        );
+        let err = r
+            .ensure_in_cache_only_for_profile(Profile::Mobile)
+            .expect_err("unsigned");
+        assert!(matches!(err, RegistryError::UnsignedModel { .. }));
+    }
+
+    #[test]
+    fn strict_profile_resolution_accepts_signed_model() {
+        let tmp = TempDir::new().unwrap();
+        let manifest = Manifest::from_toml_str(TINY_MANIFEST_SIGNED).unwrap();
+        let r = ModelRegistry::with_cache_dir(tmp.path())
+            .unwrap()
+            .with_manifest_override(manifest)
+            .with_require_signatures(true);
+
+        std::fs::write(tmp.path().join("hello.bin"), b"hello").unwrap();
+        let bundle = r.ensure_in_cache_only_for_profile(Profile::Mobile).unwrap();
+        assert_eq!(bundle.segmenter_path, tmp.path().join("hello.bin"));
+    }
+
+    #[test]
+    fn every_bundled_model_is_signed() {
+        // The strict release-build gate is only non-breaking while this holds.
+        let m = default_manifest();
+        for (id, entry) in &m.models {
+            assert!(
+                entry.signature.is_some(),
+                "bundled model '{id}' has no signature — release profile resolution would fail"
+            );
+        }
     }
 }
