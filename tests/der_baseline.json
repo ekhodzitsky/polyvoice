@@ -62,34 +62,37 @@
   "voxconverse_test_10files": {
     "files": 10,
     "profile": "balanced",
-    "der_collar_0_25": 17.43,
-    "der_no_collar": 25.99,
+    "der_collar_0_25": 15.82,
+    "der_no_collar": 27.08,
+    "der_collar_macro": 15.82,
+    "der_collar_micro": 19.33,
+    "der_no_collar_micro": 27.08,
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — 10-file subset, v0.6.0-alpha.7 legacy pipeline (threshold=0.45)",
-    "_filled_by": "polyvoice-bench-v0.6"
+    "_status": "operational — 10-file subset, legacy pipeline (threshold=0.45), re-captured on crate 0.9.0 (master 9bbcdcd, shipped FP32, macOS aarch64 CPU). GATED METRICS: der_collar_0_25 is the historical MACRO mean-of-per-file gate (tightened 17.43 -> 15.82 after singleton pruning improvements); der_no_collar is MICRO (frame-weighted, sum of error frames / sum of ref frames) — the headline like-for-like convention. The prior der_no_collar 25.99 was a v0.6 macro-era value and is not comparable; micro upweights the long hard files, hence 27.08 > the old number while collar-0.25 quality actually improved.",
+    "_filled_by": "cargo nextest run --run-ignored only --test der_regression_test --features onnx,download der_regression_voxconverse_10_file_subset --no-capture"
   },
   "e2e_smoke": {
     "files": 1,
     "profile": "balanced",
     "der_collar_0_25": 6.62,
-    "der_no_collar": null,
+    "der_no_collar": 14.52,
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — bundled 26 s clip, v0.6.0-alpha.3 legacy pipeline (threshold=0.45)",
-    "_filled_by": "cargo test --all-features --test e2e_smoke_test -- --ignored"
+    "_status": "operational — bundled 26 s clip, legacy pipeline (threshold=0.45). der_no_collar captured on crate 0.9.0 (master 9bbcdcd): 14.52% at collar 0 on the same run that scored 6.62% at collar 0.25 (short clip, many boundaries — the collar hides a large share).",
+    "_filled_by": "cargo nextest run --run-ignored only --test der_regression_test --features onnx,download der_regression_e2e_smoke --no-capture"
   },
   "ami_test_single": {
     "files": 1,
     "profile": "balanced",
-    "der_collar_0_25": 36.30,
-    "der_no_collar": 44.73,
+    "der_collar_0_25": 34.62,
+    "der_no_collar": 42.90,
     "der_single_speaker": null,
     "der_single_speaker_tolerance": 2.0,
     "_der_single_speaker_status": "PLACEHOLDER — overlap-excluded (single-speaker-region) DER. Run the AMI regression test with --ignored, read the printed 'overlap-excluded DER', then set this value to activate the long-form numeric floor.",
@@ -98,21 +101,21 @@
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — EN2002a single meeting, v0.6.0-alpha.7 legacy pipeline (threshold=0.45)",
-    "_filled_by": "polyvoice-bench-v0.6"
+    "_status": "operational — EN2002a single meeting, legacy pipeline (threshold=0.45). Tightened on crate 0.9.0 (master 9bbcdcd) after singleton-pruning improvements: collar 36.30 -> 34.62, no-collar 44.73 -> 42.90.",
+    "_filled_by": "cargo nextest run --run-ignored only --test der_regression_test --features onnx,download der_regression_ami_test_single --no-capture"
   },
   "v2_e2e_smoke": {
     "files": 1,
     "profile": "balanced",
     "der_collar_0_25": 4.43,
-    "der_no_collar": null,
+    "der_no_collar": 11.81,
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — Pipeline v2 (Powerset + ResNet34 + AHC), DER < 5% on 26s clip",
-    "_filled_by": "cargo test --test pipeline_v2_integration -- --ignored"
+    "_status": "operational — Pipeline v2 (Powerset + ResNet34 + AHC), DER < 5% on 26s clip. der_no_collar captured on crate 0.9.0 (master 9bbcdcd): 11.81% measured at collar 0 on the same run that scored 4.34% at collar 0.25 (the 26 s clip has many boundaries, so the collar hides a large share).",
+    "_filled_by": "cargo nextest run --run-ignored only --test cli_der_regression_test --features cli,download cli_der_regression_v2_e2e_smoke --no-capture"
   },
   "hybrid_e2e_smoke": {
     "files": 1,
@@ -124,7 +127,7 @@
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — Hybrid pipeline (Powerset VAD + ResNet34 + AHC), API-only",
+    "_status": "retired — hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured, polyvoice-bench no longer exposes the hybrid pipeline)",
     "_filled_by": "cargo test --test pipeline_v2_hybrid_test -- --ignored"
   },
   "hybrid_voxconverse_3file": {
@@ -137,7 +140,7 @@
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — Hybrid pipeline 3-file subset (aepyx/aggyz/aiqwk)",
+    "_status": "retired — hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured)",
     "_filled_by": "cargo test --test pipeline_v2_hybrid_test -- --ignored"
   },
   "hybrid_voxconverse_10file": {
@@ -150,7 +153,7 @@
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — Hybrid pipeline 10-file subset (threshold=0.40). aorju is a known outlier (47.00% DER, 12 speakers, 23 min, 17% overlap). Excluding aorju: avg DER ~9.4%.",
+    "_status": "retired — hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured). aorju was a known outlier (47.00% DER, 12 speakers, 23 min, 17% overlap); excluding aorju avg DER was ~9.4%.",
     "_filled_by": "cargo test --release --test pipeline_v2_hybrid_test -- hybrid_voxconverse_10_file_subset --ignored --nocapture"
   },
   "hybrid_ami_test_single": {
@@ -158,15 +161,15 @@
     "profile": "balanced",
     "der_collar_0_25": 24.95,
     "der_no_collar": null,
-    "der_single_speaker": null,
+    "der_single_speaker": 24.80,
     "der_single_speaker_tolerance": 3.0,
-    "_der_single_speaker_status": "PLACEHOLDER — overlap-excluded (single-speaker-region) DER for the v2/hybrid pipeline on EN2002a. Measure via --ignored, then set to activate the long-form numeric floor.",
+    "_der_single_speaker_status": "ACTIVE — overlap-excluded (single-speaker-region) DER floor for pipeline v2 on EN2002a, measured 24.80% on crate 0.9.0 (master 9bbcdcd, CLI --v2, collar 0.25). This is the long-form numeric gate: unlike total DER (miss-bound at ~79% overlap), it discriminates healthy vs collapsed diarization.",
     "tolerance": 3.0,
     "model_versions": {
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational — Hybrid pipeline on AMI EN2002a (35 min, 4 speakers, 78.8% overlap). Legacy DER on same file: 36.30%.",
+    "_status": "v2-family AMI entry (read as ami_v2 by cli_der_regression_test); hosts the overlap-excluded long-form floor. The original hybrid experiment is retired (superseded by pipeline v2), so der_collar_0_25/der_no_collar here are historical, ungated, and intentionally not re-measured. Legacy DER on the same file: 36.30%.",
     "_filled_by": "cargo test --release --test pipeline_v2_hybrid_test -- hybrid_ami_test_single --ignored --nocapture"
   }
 }
