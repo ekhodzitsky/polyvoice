@@ -92,8 +92,13 @@ fn e2e_smoke_single_file_der_below_50_percent() {
     );
 
     let embedding_dim = Profile::Balanced.embedding_dim();
-    let extractor =
-        FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("load embedder");
+    let extractor = FbankOnnxExtractor::new(
+        &models.embedder_path,
+        embedding_dim,
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("load embedder");
     let mut vad = SileroVad::new(&vad_path, 512).expect("load vad");
 
     let config = DiarizationConfig::default();

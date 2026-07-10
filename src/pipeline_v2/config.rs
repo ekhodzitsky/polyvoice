@@ -68,28 +68,10 @@ pub enum ClustererKind {
     Vbx,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ExecutionProvider {
-    Cpu,
-    CoreMl,
-    Nnapi,
-    Cuda,
-    XnnPack,
-}
-
-impl ExecutionProvider {
-    pub fn auto() -> Self {
-        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-        return Self::CoreMl;
-        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-        return Self::XnnPack;
-        #[cfg(not(any(
-            all(target_os = "macos", target_arch = "aarch64"),
-            all(target_os = "linux", target_arch = "aarch64"),
-        )))]
-        return Self::Cpu;
-    }
-}
+// Canonical home moved to `crate::onnx` (the module that owns session
+// creation) so low-level constructors can name the EP without a cyclic dep on
+// pipeline_v2; re-exported here so existing imports keep compiling.
+pub use crate::onnx::ExecutionProvider;
 
 fn default_pool_size() -> usize {
     std::thread::available_parallelism()
