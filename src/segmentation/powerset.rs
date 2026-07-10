@@ -46,44 +46,32 @@ impl PowersetSegmenter {
     /// { true }
     /// `pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError>`
     /// { true }
-    /// Load the ONNX model from `model_path`.
+    /// Load the ONNX model from `model_path` with the target's default
+    /// execution provider (today's behavior: CoreML on Apple Silicon).
     pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError> {
-        Self::with_config(model_path, PowersetConfig::default())
+        Self::with_config(
+            model_path,
+            PowersetConfig::default(),
+            crate::onnx::ExecutionProvider::auto(),
+        )
     }
 
     /// { true }
-    /// `pub fn with_config( model_path: impl AsRef<Path>, config: PowersetConfig, ) -> Result<Self, SegmentationError>`
+    /// `pub fn with_config( model_path: impl AsRef<Path>, config: PowersetConfig, ep: ExecutionProvider, ) -> Result<Self, SegmentationError>`
     /// { true }
-    /// Load with explicit configuration.
+    /// Load with explicit configuration and execution provider.
     pub fn with_config(
         model_path: impl AsRef<Path>,
         config: PowersetConfig,
+        ep: crate::onnx::ExecutionProvider,
     ) -> Result<Self, SegmentationError> {
         let path = model_path.as_ref().to_path_buf();
-        crate::onnx::validate_onnx_header(&path).map_err(|e| SegmentationError::ModelIo {
-            path: path.clone(),
-            detail: e.to_string(),
-        })?;
-        let mut builder = Session::builder().map_err(|e| SegmentationError::ModelIo {
-            path: path.clone(),
-            detail: format!("session builder failed: {e}"),
-        })?;
-        #[cfg(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))]
-        {
-            let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
-            builder = builder
-                .with_execution_providers([coreml.build()])
-                .map_err(|e| SegmentationError::ModelIo {
-                    path: path.clone(),
-                    detail: format!("coreml ep: {e}"),
-                })?;
-        }
-        let session = builder
-            .commit_from_file(&path)
-            .map_err(|e| SegmentationError::ModelIo {
+        let session = crate::onnx::build_session_with_ep(&path, ep, None).map_err(|e| {
+            SegmentationError::ModelIo {
                 path: path.clone(),
-                detail: format!("commit_from_file failed: {e}"),
-            })?;
+                detail: e.to_string(),
+            }
+        })?;
         let input_name = session
             .inputs()
             .first()

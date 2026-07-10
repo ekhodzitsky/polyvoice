@@ -28,23 +28,22 @@ pub struct FbankOnnxExtractor {
 #[cfg(feature = "onnx")]
 impl FbankOnnxExtractor {
     /// { pool_size > 0 }
-    /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> Result<Self, anyhow::Error>`
+    /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
     /// { ret.pool.len() == pool_size }
-    pub fn new(model_path: &Path, embedding_dim: usize, pool_size: usize) -> anyhow::Result<Self> {
+    pub fn new(
+        model_path: &Path,
+        embedding_dim: usize,
+        pool_size: usize,
+        ep: crate::onnx::ExecutionProvider,
+    ) -> anyhow::Result<Self> {
         if pool_size == 0 {
             anyhow::bail!("pool_size must be > 0");
         }
-        crate::onnx::validate_onnx_header(model_path)
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
         let pool = crossbeam_queue::ArrayQueue::new(pool_size);
         for i in 0..pool_size {
-            let session = ort::session::Session::builder()
-                .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?
-                .with_intra_threads(1)
-                .map_err(|e| {
-                    EmbeddingError::InferenceFailed(format!("session {i} intra threads: {e}"))
-                })?
-                .commit_from_file(model_path)
+            // intra_threads(1): this extractor parallelises across the session
+            // pool, so each session stays single-threaded.
+            let session = crate::onnx::build_session_with_ep(model_path, ep, Some(1))
                 .map_err(|e| EmbeddingError::InferenceFailed(format!("session {i}: {e}")))?;
             pool.push(session)
                 .map_err(|_| anyhow::anyhow!("failed to push session into pool"))?;
