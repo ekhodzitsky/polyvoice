@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every ONNX session now honors the selected execution provider.** The last
+  stragglers are routed through the shared EP-aware builder: Silero VAD gains
+  `SileroVad::with_ep(path, chunk_size, ep)` (`new()` keeps its signature and
+  the historical CPU default). A macOS-aarch64 CoreML smoke test builds the
+  full v2 pipeline plus a VAD session with `ExecutionProvider::CoreMl` and runs
+  a real clip end-to-end — no session is left silently on CPU when CoreML is
+  requested.
 - **Per-backend RTFx benchmarking.** `polyvoice-bench` gains
   `--execution-provider` (omitted = each pipeline's shipped default, so
   committed DER baselines stay reproducible), labels every report with
