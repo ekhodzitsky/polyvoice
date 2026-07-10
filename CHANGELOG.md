@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Calibrated binarization of segmentation posteriors (opt-in).**
+  `PipelineConfig.binarization: Option<BinarizationConfig>` replaces the v2
+  aggregator's per-frame argmax with pyannote-style onset/offset hysteresis
+  plus min-duration-on/off smoothing over per-speaker activity probabilities.
+  Measured on VoxConverse-10 (collar 0, micro): 28.80% → 26.19% DER (−2.6pp;
+  the balanced 0.6/0.4 point gives −2.56pp with argmax-level miss). Thresholds
+  are domain-sensitive (neutral on AMI), so the feature ships opt-in
+  (`None` = unchanged argmax) with an offline calibration helper
+  (`scripts/calibrate-binarization.sh`) and `polyvoice-bench --binarize-*`
+  flags. **Breaking:** `PipelineConfig` and `AggregationConfig` gained a field
+  (struct-literal constructors must add `binarization: None`).
 - **XNNPACK execution provider is wired.** With the `xnnpack` build feature,
   selecting `ExecutionProvider::XnnPack` (the `auto()` default on aarch64
   Linux) registers ort's XNNPACK provider instead of warning and running plain

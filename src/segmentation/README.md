@@ -38,3 +38,19 @@ cargo test --test chaos_test --features onnx,download
 
 - Pure-Rust core (decoder, aggregator, Hungarian) compiles to wasm32.
 - ONNX-backed PowersetSegmenter requires `onnx` feature.
+
+## Calibrated binarization (opt-in)
+
+`AggregationConfig.binarization: Option<BinarizationConfig>` replaces the
+per-frame argmax with pyannote-style calibrated binarization: each speaker's
+activity probability (sum of the powerset classes containing the speaker) is
+thresholded with onset/offset hysteresis, then short blips are dropped
+(`min_duration_on`) and short gaps bridged (`min_duration_off`). `None`
+(default) keeps the historical argmax.
+
+Thresholds are dataset-sensitive — calibrate offline per domain with
+`scripts/calibrate-binarization.sh` (grid-search over onset/offset against
+no-collar DER; not in the hot path). Measured on VoxConverse-10 (v2, collar 0,
+micro): argmax 28.80% → 0.6/0.4 26.24% → 0.7/0.3 26.19%; on AMI EN2002a the
+VoxConverse optimum is neutral (48.40% vs 48.29%), so 0.6/0.4 is the safe
+starting point and per-domain calibration is recommended.

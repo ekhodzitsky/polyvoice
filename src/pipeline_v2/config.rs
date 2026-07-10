@@ -29,6 +29,10 @@ pub struct PipelineConfig {
     /// pipeline's dense windows — for more robust centroids / lower confusion at
     /// the cost of more embedder calls. Sub-`w` segments still embed once.
     pub embed_window_secs: Option<f32>,
+    /// Optional calibrated binarization of segmentation posteriors (onset/offset
+    /// hysteresis + min-duration smoothing) instead of per-frame argmax.
+    /// `None` keeps the shipped argmax behavior.
+    pub binarization: Option<crate::segmentation::BinarizationConfig>,
 }
 
 impl Default for PipelineConfig {
@@ -53,6 +57,7 @@ impl Default for PipelineConfig {
             execution_provider: ExecutionProvider::auto(),
             vbx_plda_dir: None,
             embed_window_secs: None,
+            binarization: None,
         }
     }
 }
