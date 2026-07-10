@@ -83,7 +83,20 @@ pub fn build_session_with_ep(
                  macOS aarch64) — falling back to CPU"
             );
         }
-        ExecutionProvider::Nnapi | ExecutionProvider::Cuda | ExecutionProvider::XnnPack => {
+        ExecutionProvider::XnnPack => {
+            #[cfg(feature = "xnnpack")]
+            {
+                let xnnpack = ort::execution_providers::XNNPACKExecutionProvider::default();
+                builder = builder
+                    .with_execution_providers([xnnpack.build()])
+                    .map_err(|e| anyhow::anyhow!("xnnpack ep: {e}"))?;
+            }
+            #[cfg(not(feature = "xnnpack"))]
+            tracing::warn!(
+                "execution provider XnnPack is not compiled in (needs the `xnnpack` feature) —                  falling back to CPU"
+            );
+        }
+        ExecutionProvider::Nnapi | ExecutionProvider::Cuda => {
             tracing::warn!("execution provider {ep:?} is not wired yet — falling back to CPU");
         }
     }
