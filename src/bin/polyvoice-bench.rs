@@ -68,6 +68,21 @@ struct Args {
     /// recorded in the report for per-backend RTFx comparison.
     #[arg(long)]
     execution_provider: Option<String>,
+    /// v2 binarization: enter-speech (onset) threshold. Setting ANY
+    /// --binarize-* flag enables calibrated hysteresis binarization of the
+    /// segmentation posteriors (defaults for unset knobs: onset/offset 0.5,
+    /// min durations 0).
+    #[arg(long)]
+    binarize_onset: Option<f32>,
+    /// v2 binarization: leave-speech (offset) threshold (< onset = hysteresis).
+    #[arg(long)]
+    binarize_offset: Option<f32>,
+    /// v2 binarization: drop active runs shorter than this many seconds.
+    #[arg(long)]
+    binarize_min_on: Option<f32>,
+    /// v2 binarization: bridge gaps shorter than this many seconds.
+    #[arg(long)]
+    binarize_min_off: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -318,11 +333,27 @@ fn main() -> Result<()> {
                 "vbx" => ClustererKind::Vbx,
                 other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
             };
+            let binarization = if args.binarize_onset.is_some()
+                || args.binarize_offset.is_some()
+                || args.binarize_min_on.is_some()
+                || args.binarize_min_off.is_some()
+            {
+                let d = polyvoice::segmentation::BinarizationConfig::default();
+                Some(polyvoice::segmentation::BinarizationConfig {
+                    onset: args.binarize_onset.unwrap_or(d.onset),
+                    offset: args.binarize_offset.unwrap_or(d.offset),
+                    min_duration_on: args.binarize_min_on.unwrap_or(d.min_duration_on),
+                    min_duration_off: args.binarize_min_off.unwrap_or(d.min_duration_off),
+                })
+            } else {
+                None
+            };
             let mut cfg = PipelineConfig {
                 profile,
                 clusterer,
                 embed_window_secs: args.embed_window,
                 execution_provider: resolved_ep,
+                binarization,
                 ..PipelineConfig::default()
             };
             if let Some(mcs) = args.min_cluster_size {

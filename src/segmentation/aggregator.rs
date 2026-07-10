@@ -77,6 +77,11 @@ impl WindowOutput {
 pub struct AggregationConfig {
     pub min_segment_secs: f32,
     pub max_local_speakers: usize,
+    /// Optional calibrated binarization of the averaged posteriors (hysteresis
+    /// + min-duration smoothing) instead of the plain per-frame argmax.
+    ///
+    /// `None` keeps the historical argmax behavior.
+    pub binarization: Option<BinarizationConfig>,
 }
 
 impl Default for AggregationConfig {
@@ -84,8 +89,171 @@ impl Default for AggregationConfig {
         Self {
             min_segment_secs: 0.0,
             max_local_speakers: 3,
+            binarization: None,
         }
     }
+}
+
+/// Calibrated binarization of segmentation posteriors, pyannote-style: each
+/// speaker's activity probability (sum of the powerset classes containing the
+/// speaker) is thresholded with onset/offset hysteresis, then short active
+/// blips are dropped and short gaps bridged.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BinarizationConfig {
+    /// Enter-speech threshold: a speaker turns ON when its probability
+    /// reaches `onset`.
+    pub onset: f32,
+    /// Leave-speech threshold: an ON speaker turns OFF only when its
+    /// probability drops below `offset` (set `offset < onset` for hysteresis).
+    pub offset: f32,
+    /// Active runs shorter than this many seconds are dropped.
+    pub min_duration_on: f32,
+    /// Gaps shorter than this many seconds between active runs are bridged.
+    pub min_duration_off: f32,
+}
+
+impl Default for BinarizationConfig {
+    fn default() -> Self {
+        Self {
+            onset: 0.5,
+            offset: 0.5,
+            min_duration_on: 0.0,
+            min_duration_off: 0.0,
+        }
+    }
+}
+
+/// Binarize averaged powerset posteriors into per-frame classes.
+///
+/// `avg_probs[g]` are the 7 mean class probabilities for global frame `g`;
+/// `has_data[g]` is false where no window covered the frame (emits `None`).
+/// Returns per-frame classes + confidences with the same conventions as the
+/// argmax path (`None` = uncovered, `Empty` = silence).
+// Index loops are deliberate: three parallel per-frame arrays are read and
+// written by frame/speaker index, including range writes for gap bridging.
+#[allow(clippy::needless_range_loop)]
+pub fn binarize_frames(
+    avg_probs: &[[f32; 7]],
+    has_data: &[bool],
+    stride: f32,
+    cfg: &BinarizationConfig,
+) -> (Vec<Option<PowersetClass>>, Vec<f32>) {
+    let n = avg_probs.len();
+    // Per-speaker activity probability: sum of classes containing the speaker.
+    let mut speaker_probs = vec![[0.0_f32; 3]; n];
+    for g in 0..n {
+        if !has_data[g] {
+            continue;
+        }
+        for c in 0..7 {
+            if let Some(class) = PowersetDecoder::class_for_index(c) {
+                for s in class.speakers() {
+                    speaker_probs[g][s as usize] += avg_probs[g][c];
+                }
+            }
+        }
+    }
+
+    // Hysteresis per speaker: ON at prob >= onset, OFF only below offset.
+    let mut active = vec![[false; 3]; n];
+    for s in 0..3 {
+        let mut on = false;
+        for g in 0..n {
+            if !has_data[g] {
+                on = false;
+                continue;
+            }
+            let prob = speaker_probs[g][s];
+            if on {
+                on = prob >= cfg.offset;
+            } else {
+                on = prob >= cfg.onset;
+            }
+            active[g][s] = on;
+        }
+    }
+
+    // Duration smoothing, pyannote order: bridge short gaps first, then drop
+    // short blips. Frame counts round to the nearest whole frame.
+    let min_on = (cfg.min_duration_on / stride).round() as usize;
+    let min_off = (cfg.min_duration_off / stride).round() as usize;
+    for s in 0..3 {
+        if min_off > 1 {
+            let mut last_on: Option<usize> = None;
+            for g in 0..n {
+                if active[g][s] {
+                    if let Some(prev) = last_on {
+                        let gap = g - prev - 1;
+                        if gap > 0 && gap < min_off && (prev + 1..g).all(|k| has_data[k]) {
+                            for k in prev + 1..g {
+                                active[k][s] = true;
+                            }
+                        }
+                    }
+                    last_on = Some(g);
+                }
+            }
+        }
+        if min_on > 1 {
+            let mut run_start: Option<usize> = None;
+            for g in 0..=n {
+                let is_on = g < n && active[g][s];
+                match (run_start, is_on) {
+                    (None, true) => run_start = Some(g),
+                    (Some(start), false) => {
+                        if g - start < min_on {
+                            for k in start..g {
+                                active[k][s] = false;
+                            }
+                        }
+                        run_start = None;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    // Rebuild per-frame classes: 0 active -> Empty, 1 -> solo, 2 -> pair,
+    // 3 -> top-2 by probability (powerset expresses at most two speakers).
+    let mut classes = Vec::with_capacity(n);
+    let mut confidences = Vec::with_capacity(n);
+    for g in 0..n {
+        if !has_data[g] {
+            classes.push(None);
+            confidences.push(0.0);
+            continue;
+        }
+        let mut on: Vec<u8> = (0..3u8).filter(|&s| active[g][s as usize]).collect();
+        if on.len() > 2 {
+            on.sort_by(|a, b| {
+                speaker_probs[g][*b as usize].total_cmp(&speaker_probs[g][*a as usize])
+            });
+            on.truncate(2);
+            on.sort_unstable();
+        }
+        let idx = match on.as_slice() {
+            [] => 0,
+            [s] => 1 + *s as usize,
+            [a, b] => match (*a, *b) {
+                (0, 1) => 4,
+                (0, 2) => 5,
+                _ => 6,
+            },
+            _ => 0,
+        };
+        classes.push(PowersetDecoder::class_for_index(idx));
+        let conf = if on.is_empty() {
+            avg_probs[g][0]
+        } else {
+            on.iter()
+                .map(|s| speaker_probs[g][*s as usize])
+                .sum::<f32>()
+                / on.len() as f32
+        };
+        confidences.push(conf.clamp(0.0, 1.0));
+    }
+    (classes, confidences)
 }
 
 /// Aggregator over sliding-window powerset outputs.
@@ -378,27 +546,44 @@ impl Aggregator {
             }
         }
 
-        let mut frame_classes: Vec<Option<PowersetClass>> = Vec::with_capacity(global_frames);
-        let mut frame_confidences: Vec<f32> = Vec::with_capacity(global_frames);
-        for g in 0..global_frames {
-            if counts[g] == 0 {
-                frame_classes.push(None);
-                frame_confidences.push(0.0);
-                continue;
-            }
-            let inv = 1.0 / counts[g] as f32;
-            let mut argmax = 0_usize;
-            let mut maxp = 0.0_f32;
-            for (c, &sp) in summed_probs[g].iter().enumerate() {
-                let p = sp * inv;
-                if p > maxp {
-                    maxp = p;
-                    argmax = c;
+        let (frame_classes, frame_confidences) = if let Some(bin) = &self.config.binarization {
+            let mut avg_probs = vec![[0.0_f32; 7]; global_frames];
+            let mut has_data = vec![false; global_frames];
+            for g in 0..global_frames {
+                if counts[g] == 0 {
+                    continue;
                 }
+                let inv = 1.0 / counts[g] as f32;
+                for c in 0..7 {
+                    avg_probs[g][c] = summed_probs[g][c] * inv;
+                }
+                has_data[g] = true;
             }
-            frame_classes.push(PowersetDecoder::class_for_index(argmax));
-            frame_confidences.push(maxp);
-        }
+            binarize_frames(&avg_probs, &has_data, stride, bin)
+        } else {
+            let mut frame_classes: Vec<Option<PowersetClass>> = Vec::with_capacity(global_frames);
+            let mut frame_confidences: Vec<f32> = Vec::with_capacity(global_frames);
+            for g in 0..global_frames {
+                if counts[g] == 0 {
+                    frame_classes.push(None);
+                    frame_confidences.push(0.0);
+                    continue;
+                }
+                let inv = 1.0 / counts[g] as f32;
+                let mut argmax = 0_usize;
+                let mut maxp = 0.0_f32;
+                for (c, &sp) in summed_probs[g].iter().enumerate() {
+                    let p = sp * inv;
+                    if p > maxp {
+                        maxp = p;
+                        argmax = c;
+                    }
+                }
+                frame_classes.push(PowersetDecoder::class_for_index(argmax));
+                frame_confidences.push(maxp);
+            }
+            (frame_classes, frame_confidences)
+        };
 
         // Run-length encode per speaker. A run is broken not only when the
         // speaker falls silent but also when its overlap status flips: a speaker
@@ -530,6 +715,113 @@ fn push_segment(
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
+    /// Frame probs for a solo speaker-0 activity level `p` (rest goes to Empty).
+    fn spk0_frame(p: f32) -> [f32; 7] {
+        let mut f = [0.0; 7];
+        f[1] = p; // class 1 = {spk0}
+        f[0] = 1.0 - p;
+        f
+    }
+
+    #[test]
+    fn binarize_drops_short_blip_and_bridges_short_gap() {
+        let stride = 0.1;
+        // 2-frame blip (frames 1-2), then a solid run 6..16 with a 1-frame gap at 10.
+        let mut frames = vec![spk0_frame(0.1); 20];
+        for g in [1, 2] {
+            frames[g] = spk0_frame(0.9);
+        }
+        for f in frames.iter_mut().take(16).skip(6) {
+            *f = spk0_frame(0.9);
+        }
+        frames[10] = spk0_frame(0.1);
+        let has_data = vec![true; 20];
+        let cfg = BinarizationConfig {
+            onset: 0.5,
+            offset: 0.5,
+            min_duration_on: 0.3,  // 3 frames: the 2-frame blip must go
+            min_duration_off: 0.2, // 2 frames: the 1-frame gap must be bridged
+        };
+        let (classes, _) = binarize_frames(&frames, &has_data, stride, &cfg);
+        let active: Vec<bool> = classes
+            .iter()
+            .map(|c| c.map(|c| c.speakers().contains(&0)).unwrap_or(false))
+            .collect();
+        assert!(!active[1] && !active[2], "short blip must be dropped");
+        assert!(active[10], "one-frame gap must be bridged");
+        assert!((6..16).all(|g| active[g]), "solid run must stay active");
+        assert!(!active[0] && !active[19], "silence stays silent");
+    }
+
+    #[test]
+    fn binarize_hysteresis_prevents_flicker() {
+        let stride = 0.1;
+        // Rise to 0.7, then oscillate around 0.5 (0.45/0.55): with offset 0.3
+        // the speaker must stay ON through the dips; a plain 0.5 threshold
+        // (onset == offset) flickers.
+        let mut frames = vec![spk0_frame(0.1); 12];
+        frames[2] = spk0_frame(0.7);
+        for (i, g) in (3..9).enumerate() {
+            frames[g] = spk0_frame(if i % 2 == 0 { 0.45 } else { 0.55 });
+        }
+        let has_data = vec![true; 12];
+
+        let hysteresis = BinarizationConfig {
+            onset: 0.6,
+            offset: 0.3,
+            min_duration_on: 0.0,
+            min_duration_off: 0.0,
+        };
+        let (classes, _) = binarize_frames(&frames, &has_data, stride, &hysteresis);
+        assert!(
+            (2..9).all(|g| classes[g]
+                .map(|c| !c.speakers().is_empty())
+                .unwrap_or(false)),
+            "hysteresis must hold the speaker ON through sub-onset dips"
+        );
+
+        let plain = BinarizationConfig {
+            onset: 0.5,
+            offset: 0.5,
+            min_duration_on: 0.0,
+            min_duration_off: 0.0,
+        };
+        let (classes, _) = binarize_frames(&frames, &has_data, stride, &plain);
+        let flickers = (3..9)
+            .filter(|&g| classes[g].map(|c| c.speakers().is_empty()).unwrap_or(true))
+            .count();
+        assert!(flickers > 0, "plain threshold must flicker on this input");
+    }
+
+    #[test]
+    fn binarize_uncovered_frames_stay_none_and_three_speakers_truncate_to_top2() {
+        let stride = 0.1;
+        // One frame where all three speakers are active (probs 0.9/0.8/0.7):
+        // powerset expresses at most two — keep the top-2.
+        let mut f = [0.0_f32; 7];
+        f[1] = 0.5; // spk0 solo
+        f[4] = 0.3; // {0,1}
+        f[6] = 0.4; // {1,2}
+        f[5] = 0.1; // {0,2}
+        // spk0 = 0.9, spk1 = 0.7, spk2 = 0.5 — all above onset 0.4.
+        let frames = vec![f, [0.0; 7]];
+        let has_data = vec![true, false];
+        let cfg = BinarizationConfig {
+            onset: 0.4,
+            offset: 0.4,
+            min_duration_on: 0.0,
+            min_duration_off: 0.0,
+        };
+        let (classes, conf) = binarize_frames(&frames, &has_data, stride, &cfg);
+        assert_eq!(
+            classes[0].map(|c| c.speakers()),
+            Some(vec![0, 1]),
+            "top-2 speakers by probability"
+        );
+        assert!(classes[1].is_none(), "uncovered frame stays None");
+        assert_eq!(conf[1], 0.0);
+    }
+
     use super::*;
 
     /// Helper: build a window where every frame is a single class (like 0=silence,
