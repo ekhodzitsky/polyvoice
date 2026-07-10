@@ -205,10 +205,12 @@ impl PipelineBuilder {
                 let profile_models = registry.ensure_for_profile(self.config.profile)?;
                 let ep = self.config.execution_provider;
                 tracing::info!("pipeline v2 execution provider: {ep:?}");
+                let mut seg_cfg = crate::segmentation::PowersetConfig::default();
+                seg_cfg.aggregation.binarization = self.config.binarization;
                 let segmenter: Box<dyn Segmenter> = Box::new(
                     crate::segmentation::PowersetSegmenter::with_config(
                         &profile_models.segmenter_path,
-                        crate::segmentation::PowersetConfig::default(),
+                        seg_cfg,
                         ep,
                     )
                     .map_err(|e| ConfigError::UnknownModel {
