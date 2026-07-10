@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **XNNPACK execution provider is wired.** With the `xnnpack` build feature,
+  selecting `ExecutionProvider::XnnPack` (the `auto()` default on aarch64
+  Linux) registers ort's XNNPACK provider instead of warning and running plain
+  CPU; without the feature the warn-and-CPU-fallback stays. CI type-checks the
+  wiring on the real `aarch64-unknown-linux-gnu` target.
 - **Every ONNX session now honors the selected execution provider.** The last
   stragglers are routed through the shared EP-aware builder: Silero VAD gains
   `SileroVad::with_ep(path, chunk_size, ep)` (`new()` keeps its signature and
