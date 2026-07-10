@@ -104,6 +104,13 @@ impl PipelineBuilder {
         self
     }
 
+    /// Override the execution provider (defaults to
+    /// `ExecutionProvider::auto()` via `PipelineConfig::default`).
+    pub fn execution_provider(mut self, ep: crate::onnx::ExecutionProvider) -> Self {
+        self.config.execution_provider = ep;
+        self
+    }
+
     pub fn validate(&self) -> Result<(), ConfigError> {
         match self.config.profile {
             Profile::Mobile | Profile::Balanced => {
@@ -196,16 +203,23 @@ impl PipelineBuilder {
                     profile: self.config.profile,
                 })?;
                 let profile_models = registry.ensure_for_profile(self.config.profile)?;
+                let ep = self.config.execution_provider;
+                tracing::info!("pipeline v2 execution provider: {ep:?}");
                 let segmenter: Box<dyn Segmenter> = Box::new(
-                    crate::segmentation::PowersetSegmenter::new(&profile_models.segmenter_path)
-                        .map_err(|e| ConfigError::UnknownModel {
-                            model_id: format!("powerset (cause: {e})"),
-                        })?,
+                    crate::segmentation::PowersetSegmenter::with_config(
+                        &profile_models.segmenter_path,
+                        crate::segmentation::PowersetConfig::default(),
+                        ep,
+                    )
+                    .map_err(|e| ConfigError::UnknownModel {
+                        model_id: format!("powerset (cause: {e})"),
+                    })?,
                 );
                 let embedder: Box<dyn Embedder> = Box::new(
                     crate::embedder::ResNet34Adapter::new(
                         &profile_models.embedder_path,
                         self.config.embedder_pool_size,
+                        ep,
                     )
                     .map_err(|e| ConfigError::UnknownModel {
                         model_id: format!("resnet34 (cause: {e})"),
@@ -286,6 +300,15 @@ mod tests {
 
     fn fresh() -> PipelineBuilder {
         PipelineBuilder::new()
+    }
+
+    #[test]
+    fn execution_provider_setter_overrides_config() {
+        let b = fresh().execution_provider(crate::onnx::ExecutionProvider::Cpu);
+        assert_eq!(
+            b.config.execution_provider,
+            crate::onnx::ExecutionProvider::Cpu
+        );
     }
 
     #[test]

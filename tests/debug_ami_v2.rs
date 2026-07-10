@@ -39,7 +39,12 @@ fn debug_ami_v2_components() {
     println!("primary segments: {}", primary.len());
 
     // 2. Embeddings
-    let embedder = ResNet34Adapter::new(&models.embedder_path, 1).unwrap();
+    let embedder = ResNet34Adapter::new(
+        &models.embedder_path,
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .unwrap();
     let sr_f = 16000_f64;
     let mut embeddings = Vec::new();
     let mut nan_durs: Vec<f64> = Vec::new();

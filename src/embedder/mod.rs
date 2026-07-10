@@ -236,23 +236,21 @@ mod onnx_adapters {
 
     impl ResNet34Adapter {
         /// { true }
-        /// `pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError>`
+        /// `pub fn new(path: impl AsRef<Path>, pool_size: usize, ep: ExecutionProvider) -> Result<Self, EmbedderError>`
         /// { ret.as_ref().map_or(true, |e| e.dim() == 256) }
-        /// Load the WeSpeaker ResNet34 ONNX model.
-        pub fn new(path: impl AsRef<Path>, pool_size: usize) -> Result<Self, EmbedderError> {
-            // ExecutionProvider::Cpu preserves this path's historical behavior
-            // (it never registered an EP); threading the configured EP through
-            // is the follow-up that wires PipelineConfig.execution_provider.
-            let inner = FbankOnnxExtractor::new(
-                path.as_ref(),
-                256,
-                pool_size,
-                crate::onnx::ExecutionProvider::Cpu,
-            )
-            .map_err(|e| EmbedderError::ModelIo {
-                path: path.as_ref().to_path_buf(),
-                detail: format!("{e}"),
-            })?;
+        /// Load the WeSpeaker ResNet34 ONNX model with the given execution provider.
+        pub fn new(
+            path: impl AsRef<Path>,
+            pool_size: usize,
+            ep: crate::onnx::ExecutionProvider,
+        ) -> Result<Self, EmbedderError> {
+            let inner =
+                FbankOnnxExtractor::new(path.as_ref(), 256, pool_size, ep).map_err(|e| {
+                    EmbedderError::ModelIo {
+                        path: path.as_ref().to_path_buf(),
+                        detail: format!("{e}"),
+                    }
+                })?;
             Ok(Self { inner, dim: 256 })
         }
     }
@@ -286,7 +284,7 @@ mod onnx_adapters {
 
     impl CamPlusPlusExtractor {
         /// { true }
-        /// `pub fn new( path: impl AsRef<Path>, dim: usize, pool_size: usize, ) -> Result<Self, EmbedderError>`
+        /// `pub fn new( path: impl AsRef<Path>, dim: usize, pool_size: usize, ep: ExecutionProvider, ) -> Result<Self, EmbedderError>`
         /// { ret.as_ref().map_or(true, |e| e.dim() == dim) }
         /// Load a CAM++ ONNX model. `dim` must match the model's output
         /// dimension (e.g. 192 or 512 depending on the variant). Pool size
@@ -296,18 +294,15 @@ mod onnx_adapters {
             path: impl AsRef<Path>,
             dim: usize,
             pool_size: usize,
+            ep: crate::onnx::ExecutionProvider,
         ) -> Result<Self, EmbedderError> {
-            // Cpu: same historical-behavior note as ResNet34Adapter above.
-            let inner = FbankOnnxExtractor::new(
-                path.as_ref(),
-                dim,
-                pool_size,
-                crate::onnx::ExecutionProvider::Cpu,
-            )
-            .map_err(|e| EmbedderError::ModelIo {
-                path: path.as_ref().to_path_buf(),
-                detail: format!("{e}"),
-            })?;
+            let inner =
+                FbankOnnxExtractor::new(path.as_ref(), dim, pool_size, ep).map_err(|e| {
+                    EmbedderError::ModelIo {
+                        path: path.as_ref().to_path_buf(),
+                        detail: format!("{e}"),
+                    }
+                })?;
             Ok(Self { inner, dim })
         }
     }

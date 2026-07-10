@@ -116,8 +116,13 @@ fn compare_embeddings_on_segments(
     }
 
     // CAM++
-    let campp_ext = CamPlusPlusExtractor::new(Path::new("models/cam_pp_fp32.onnx"), 512, 1)
-        .expect("cam++ load");
+    let campp_ext = CamPlusPlusExtractor::new(
+        Path::new("models/cam_pp_fp32.onnx"),
+        512,
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("cam++ load");
     let mut campp_embs: Vec<Vec<f32>> = Vec::new();
     for seg in &primary_segments {
         let start_idx = (seg.time.start * sr) as usize;
@@ -133,8 +138,12 @@ fn compare_embeddings_on_segments(
     }
 
     // ResNet34 via v1.0 Embedder trait
-    let resnet34_ext = ResNet34Adapter::new(Path::new("models/wespeaker_resnet34.onnx"), 1)
-        .expect("resnet34 load");
+    let resnet34_ext = ResNet34Adapter::new(
+        Path::new("models/wespeaker_resnet34.onnx"),
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("resnet34 load");
     let mut resnet34_embs: Vec<Vec<f32>> = Vec::new();
     for seg in &primary_segments {
         let start_idx = (seg.time.start * sr) as usize;
@@ -240,12 +249,21 @@ fn run_v2_pipeline<C: Clusterer>(
     // Select embedder
     let embedder: Box<dyn Embedder> = match embedder_name {
         "cam++" => Box::new(
-            CamPlusPlusExtractor::new(Path::new("models/cam_pp_fp32.onnx"), 512, 1)
-                .expect("cam++ load"),
+            CamPlusPlusExtractor::new(
+                Path::new("models/cam_pp_fp32.onnx"),
+                512,
+                1,
+                polyvoice::onnx::ExecutionProvider::Cpu,
+            )
+            .expect("cam++ load"),
         ),
         "resnet34" => Box::new(
-            ResNet34Adapter::new(Path::new("models/wespeaker_resnet34.onnx"), 1)
-                .expect("resnet34 load"),
+            ResNet34Adapter::new(
+                Path::new("models/wespeaker_resnet34.onnx"),
+                1,
+                polyvoice::onnx::ExecutionProvider::Cpu,
+            )
+            .expect("resnet34 load"),
         ),
         other => panic!("unknown embedder: {}", other),
     };

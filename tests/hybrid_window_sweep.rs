@@ -69,7 +69,14 @@ fn hybrid_window_sweep_on_aorju() {
 
         let pipeline = HybridPipeline::new(
             Box::new(PowersetSegmenter::new(&models.segmenter_path).unwrap()),
-            Box::new(ResNet34Adapter::new(&models.embedder_path, pool_size).unwrap()),
+            Box::new(
+                ResNet34Adapter::new(
+                    &models.embedder_path,
+                    pool_size,
+                    polyvoice::onnx::ExecutionProvider::Cpu,
+                )
+                .unwrap(),
+            ),
             Box::new(AhcClusterer::with_threshold(20, 0.40)),
         )
         .with_window_samples(win_samples)

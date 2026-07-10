@@ -36,7 +36,9 @@ fn cam_plus_plus_extractor_produces_512d_normalized_embedding() {
         .expect("download must succeed");
 
     // The WeSpeaker voxceleb_CAM++ ONNX outputs 512-d.
-    let extractor = CamPlusPlusExtractor::new(&model_path, 512, 1).expect("loads");
+    let extractor =
+        CamPlusPlusExtractor::new(&model_path, 512, 1, polyvoice::onnx::ExecutionProvider::Cpu)
+            .expect("loads");
     assert_eq!(extractor.dim(), 512);
 
     let embedding = extractor.embed(&synthetic_audio_1s()).expect("embed runs");
@@ -54,7 +56,8 @@ fn resnet34_adapter_produces_256d_normalized_embedding() {
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
     let model_path = registry.ensure("wespeaker_resnet34").expect("download");
 
-    let extractor = ResNet34Adapter::new(&model_path, 1).expect("loads");
+    let extractor = ResNet34Adapter::new(&model_path, 1, polyvoice::onnx::ExecutionProvider::Cpu)
+        .expect("loads");
     assert_eq!(extractor.dim(), 256);
 
     let embedding = extractor.embed(&synthetic_audio_1s()).expect("embed");
