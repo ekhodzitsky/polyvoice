@@ -301,8 +301,13 @@ fn main() -> Result<()> {
                 anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')");
             }
             let embedding_dim = profile.embedding_dim();
-            let extractor = FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1)
-                .context("load embedder")?;
+            let extractor = FbankOnnxExtractor::new(
+                &models.embedder_path,
+                embedding_dim,
+                1,
+                polyvoice::onnx::ExecutionProvider::Cpu,
+            )
+            .context("load embedder")?;
             let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
             let vad = SileroVad::new(&vad_path, 512).context("load vad")?;
 

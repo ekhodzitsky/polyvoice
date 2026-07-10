@@ -279,8 +279,13 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
     let models = registry
         .ensure_for_profile(profile)
         .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
-    let extractor = FbankOnnxExtractor::new(&models.embedder_path, profile.embedding_dim(), 1)
-        .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
+    let extractor = FbankOnnxExtractor::new(
+        &models.embedder_path,
+        profile.embedding_dim(),
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
     let vad_path = registry
         .ensure("silero_vad")
         .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;

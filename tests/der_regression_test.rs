@@ -97,8 +97,13 @@ fn run_legacy_pipeline(
         .expect("models");
 
     let embedding_dim = Profile::Balanced.embedding_dim();
-    let extractor =
-        FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1).expect("embedder");
+    let extractor = FbankOnnxExtractor::new(
+        &models.embedder_path,
+        embedding_dim,
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .expect("embedder");
     let vad_path = registry.ensure("silero_vad").expect("silero_vad model");
     let mut vad = SileroVad::new(&vad_path, 512).expect("vad");
 
