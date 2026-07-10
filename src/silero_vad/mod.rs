@@ -24,15 +24,26 @@ impl SileroVad {
     /// { true }
     /// `pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error>`
     /// { true }
+    /// Load with the historical default (no execution provider — plain CPU).
     pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error> {
+        Self::with_ep(model_path, chunk_size, crate::onnx::ExecutionProvider::Cpu)
+    }
+
+    /// { true }
+    /// `pub fn with_ep(model_path: &std::path::Path, chunk_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
+    /// { true }
+    /// Load with an explicit execution provider. The session goes through the
+    /// shared EP-aware builder, so header validation and warn-and-CPU-fallback
+    /// for unwired providers match every other ONNX session in the crate.
+    pub fn with_ep(
+        model_path: &std::path::Path,
+        chunk_size: usize,
+        ep: crate::onnx::ExecutionProvider,
+    ) -> Result<Self, anyhow::Error> {
         if chunk_size == 0 {
             anyhow::bail!("SileroVad::new: chunk_size must be > 0");
         }
-        crate::onnx::validate_onnx_header(model_path).map_err(|e| anyhow::anyhow!("{e}"))?;
-        let session = ort::session::Session::builder()
-            .map_err(|e| anyhow::anyhow!("session builder: {e}"))?
-            .commit_from_file(model_path)
-            .map_err(|e| anyhow::anyhow!("load model: {e}"))?;
+        let session = crate::onnx::build_session_with_ep(model_path, ep, None)?;
 
         let context_size = if chunk_size >= 512 { 64 } else { 32 };
 
