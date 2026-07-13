@@ -1,0 +1,29 @@
+[package]
+name = "polyvoice-asr-sherpa"
+version = "0.10.0"
+edition = "2024"
+rust-version = "1.85.0"
+description = "Opt-in CJK/multilingual ASR companion for polyvoice: SenseVoice and Paraformer via sherpa-onnx. Ships a SECOND C++ ONNX runtime — never a default feature."
+license = "MIT"
+repository = "https://github.com/ekhodzitsky/polyvoice"
+keywords = ["asr", "speech-recognition", "chinese", "japanese", "diarization"]
+categories = ["multimedia::audio"]
+# Not yet published — the workspace's release pipeline is the sole publisher.
+publish = false
+
+# Deliberately NOT a workspace member (like python/): the second C++ ONNX
+# runtime sherpa-onnx brings must never enter the core workspace's dependency
+# graph, its --all-features builds, or the wasm target. This crate builds
+# standalone with its own lockfile.
+[workspace]
+
+[dependencies]
+# Core trait + types only; polyvoice's default features are empty, so nothing
+# from the core ONNX pipeline leaks in here.
+polyvoice = { path = "..", default-features = false }
+# SenseVoice/Paraformer via sherpa-onnx. default-features would pull TTS —
+# we only need the offline recognizers + prebuilt native libraries.
+sherpa-rs = { version = "0.6.8", default-features = false, features = ["download-binaries"] }
+
+[lints.clippy]
+unwrap_used = "deny"
