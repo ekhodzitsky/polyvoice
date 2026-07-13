@@ -82,6 +82,10 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
+          # Key the cache to the Xcode version: build-script outputs embed
+          # absolute toolchain paths, so a cache built under another Xcode
+          # poisons the link line (dead -L search paths, missing clang_rt).
+          key: xcode-${{ steps.xcode.outputs.version }}
       # Cache the hash-pinned native ONNX Runtime that ort-sys downloads
       # (verified against the SHA-256 embedded in the crate; see
       # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
@@ -94,10 +98,6 @@ jobs:
             ~/Library/Caches/ort.pyke.io
             ~/AppData/Local/ort.pyke.io
           key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          # Key the cache to the Xcode version: build-script outputs embed
-          # absolute toolchain paths, so a cache built under another Xcode
-          # poisons the link line (dead -L search paths, missing clang_rt).
-          key: xcode-${{ steps.xcode.outputs.version }}
       - run: cargo build --release --features cli --target ${{ matrix.target }}
       - name: Rename binary (unix)
         if: runner.os != 'Windows'
@@ -140,6 +140,10 @@ jobs:
           python-version: "3.12"
       - uses: Swatinem/rust-cache@v2
         with:
+          # Key the cache to the Xcode version: build-script outputs embed
+          # absolute toolchain paths, so a cache built under another Xcode
+          # poisons the link line (dead -L search paths, missing clang_rt).
+          key: xcode-${{ steps.xcode.outputs.version }}
       # Cache the hash-pinned native ONNX Runtime that ort-sys downloads
       # (verified against the SHA-256 embedded in the crate; see
       # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
@@ -152,10 +156,6 @@ jobs:
             ~/Library/Caches/ort.pyke.io
             ~/AppData/Local/ort.pyke.io
           key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          # Key the cache to the Xcode version: build-script outputs embed
-          # absolute toolchain paths, so a cache built under another Xcode
-          # poisons the link line (dead -L search paths, missing clang_rt).
-          key: xcode-${{ steps.xcode.outputs.version }}
       - run: pip install maturin
       - run: maturin build --release --out dist
       - uses: actions/upload-artifact@v4

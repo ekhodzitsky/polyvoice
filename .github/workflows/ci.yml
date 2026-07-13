@@ -87,12 +87,10 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          # Key the cache to the Xcode version: build-script outputs embed
-          # absolute toolchain paths, so a cache built under another Xcode
-          # poisons the link line (dead -L search paths, missing clang_rt).
-          key: xcode-${{ steps.xcode.outputs.version }}
-        with:
-          key: clippy-${{ matrix.os }}-${{ hashFiles('Cargo.toml', '**/Cargo.toml', '**/Cargo.lock') }}
+          # clippy-scoped cache, additionally keyed to the Xcode version:
+          # build-script outputs embed absolute toolchain paths, so a cache
+          # built under another Xcode poisons the link line.
+          key: clippy-xcode-${{ steps.xcode.outputs.version }}-${{ matrix.os }}-${{ hashFiles('Cargo.toml', '**/Cargo.toml', '**/Cargo.lock') }}
           cache-on-failure: false
       - shell: bash
         run: cargo clippy ${{ matrix.flags }} -- -D warnings 2>&1 | tee clippy.log
