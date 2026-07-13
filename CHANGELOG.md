@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **ONNX Runtime native-binary provenance documented and cached.** Verified
+  against the ort-sys 2.0.0-rc.12 sources that `download-binaries` is
+  hash-pinned end to end (committed Cargo.lock → crate checksum → embedded
+  `dist.txt` SHA-256 → streamed verification of the downloaded archive),
+  superseding the earlier "unpinned native binary" audit concern for this ort
+  version. Trust model, residual assumptions (pyke as builder, CDN
+  availability, RC track), and upgrade checklist live in
+  `docs/security/ort-native-binary-provenance.md`; release/e2e CI jobs now
+  cache the verified binary keyed by Cargo.lock, so publishes don't depend on
+  the CDN and cold fetches are observable as cache misses.
 - **Release builds now require a manifest signature for every profile-resolved
   model.** `ModelEntry.signature` was optional and only verified when present,
   so a tampered/forked manifest that simply dropped the signature silently
