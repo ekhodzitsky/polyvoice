@@ -55,7 +55,7 @@ committed DER baselines stay reproducible.
 Reproducible comparison across backends (one dataset, one table):
 
 ```bash
-scripts/bench-backends.sh data/voxconverse-test-3 v2 cpu coreml
+BENCH_ARGS="--max-files 3" scripts/bench-backends.sh data/voxconverse-test v2 cpu coreml
 ```
 
 Report schema is `polyvoice-bench-v0.10`: strictly additive over v0.8 —

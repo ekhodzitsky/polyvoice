@@ -9,7 +9,7 @@
 #
 # Usage:
 #   scripts/bench-backends.sh <dataset-dir> [pipeline] [ep ...]
-#   scripts/bench-backends.sh data/voxconverse-test-3            # v2, cpu+auto
+#   BENCH_ARGS="--max-files 3" scripts/bench-backends.sh data/voxconverse-test   # v2, cpu+auto
 #   scripts/bench-backends.sh data/ami-test-single v2 cpu coreml
 # Extra polyvoice-bench flags go through BENCH_ARGS:
 #   BENCH_ARGS="--max-files 10" scripts/bench-backends.sh data/voxconverse-test

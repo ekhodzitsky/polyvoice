@@ -48,6 +48,8 @@ pyannote we use polyvoice's **no-collar** number.
 | System | DER % | miss | FA | conf | collar | source |
 |---|---|---|---|---|---|---|
 | pyannote.audio 3.1 | **11.3** | 3.4 | 4.1 | 3.8 | 0 | model card ² |
+| pyannote community-1 | 11.2 | — | — | — | 0 | pyannote benchmark ⁷ |
+| speakrs (Rust + ONNX, Apache-2.0) | 11.1 | — | — | — | 0 | speakrs README ⁸ |
 | VBx (offline baseline) | 11.1 | 4.6 | 3.1 | 3.4 | 0 | diart paper ³ |
 | 3D-Speaker toolkit | 11.75 | — | — | — | unstated | repo ⁴ |
 | **polyvoice (legacy, shipped)** | **18.54** | 4.49 | 3.19 | 4.99 | 0 | this repo ⁵ |
@@ -66,7 +68,9 @@ dominates, and speaker mis-counting drives confusion.
 | System | DER % | miss | FA | conf | setup | source |
 |---|---|---|---|---|---|---|
 | DiariZen (WavLM, CC-BY-NC) | 15.4 | — | — | — | SDM | 3D-Speaker eval ⁴ |
+| pyannote community-1 | 17.0 | — | — | — | IHM | pyannote benchmark ⁷ |
 | pyannote.audio 3.1 | **18.8** | 9.5 | 3.6 | 5.7 | Mix-Headset | model card ² |
+| pyannote community-1 (SDM) | 19.9 | — | — | — | SDM | pyannote benchmark ⁷ |
 | 3D-Speaker toolkit | 21.76 | — | — | — | SDM | repo ⁴ |
 | pyannote 3.1 (SDM) | 22.4 | 11.2 | 3.8 | 7.5 | array1-ch1 | model card ² |
 | VBx (offline baseline) | 24.1 | 17.2 | 3.1 | 3.8 | — | diart paper ³ |
@@ -210,6 +214,8 @@ python benchmark.py --dataset voxconverse_test --runners all
 - ⁴ 3D-Speaker toolkit (VoxConverse 11.75, AMI_SDM 21.76; collar unstated): https://github.com/modelscope/3D-Speaker
 - ⁵ polyvoice: [`tests/der_baseline.json`](../tests/der_baseline.json) (schema `polyvoice-der-baseline-v2`), shipped FP32 (Silero VAD + WeSpeaker ResNet34 + AHC, threshold 0.45, singleton prune), reproduced by `benchmarks/der.py`
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
+- ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands
+- ⁸ speakrs (pure Rust + ONNX, Apache-2.0 code; VoxConverse-test 11.1 % at collar 0, CoreML): https://github.com/avencera/speakrs (retrieved 2026-07-13)
 - NeMo Sortformer (CC-BY-NC; DIHARD 16.28, CALLHOME): https://huggingface.co/nvidia/diar_sortformer_4spk-v1
 - WhisperX (bundles pyannote 3.1): https://github.com/m-bain/whisperX
 - sherpa-onnx (no DER published): https://k2-fsa.github.io/sherpa/onnx/speaker-diarization/index.html
