@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Integration test `tests/streaming_test.rs` (the target the streaming module
+  contract always referenced): drives `feed()`/`flush()` over ~580 sub-frame
+  (320-sample) chunks and asserts the cumulative `turns()` contract —
+  turns() equals the in-order concatenation of every per-call return, is
+  monotonic, and `num_speakers()` covers the distinct ids. A model-gated
+  variant runs the same contract through the real ONNX embedder.
 - The bench's collar/no-collar × macro/micro aggregation lives in a pure,
   unit-tested `aggregate_der` helper (the report path calls it): model-free
   tests lock in macro ≠ micro on unequal file durations, the exact
