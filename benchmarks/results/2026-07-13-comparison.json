@@ -1,0 +1,150 @@
+{
+  "schema": "polyvoice-comparison-v1",
+  "generated": "2026-07-13",
+  "note": "Apples-to-apples positioning table. Every cell states collar, overlap policy, setup, and source; measured cells come from this repo's harness on the shipped FP32 artifact, published cells cite the primary source verbatim. Canonical narrative lives in docs/BENCHMARKS.md.",
+  "cells": [
+    {
+      "system": "polyvoice legacy (shipped)",
+      "dataset": "voxconverse-test",
+      "der_pct": 18.54,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "232 files, micro",
+      "source_kind": "measured",
+      "source": "measured: benchmarks/der.py + polyvoice-bench on shipped FP32; tests/der_baseline.json (schema polyvoice-der-baseline-v2)",
+      "miss": 4.49,
+      "false_alarm": 3.19,
+      "confusion": 4.99
+    },
+    {
+      "system": "polyvoice legacy (shipped)",
+      "dataset": "voxconverse-test",
+      "der_pct": 12.91,
+      "collar_secs": 0.25,
+      "overlap_scored": true,
+      "setup": "232 files, micro — no cross-system peer published at this collar",
+      "source_kind": "measured",
+      "source": "measured: benchmarks/der.py + polyvoice-bench on shipped FP32; tests/der_baseline.json (schema polyvoice-der-baseline-v2)"
+    },
+    {
+      "system": "pyannote.audio 3.1",
+      "dataset": "voxconverse-test",
+      "der_pct": 11.3,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "model-card protocol",
+      "source_kind": "published",
+      "source": "published: https://huggingface.co/pyannote/speaker-diarization-3.1 model card"
+    },
+    {
+      "system": "pyannote community-1",
+      "dataset": "voxconverse-test",
+      "der_pct": 11.2,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "VoxConverse v0.3; ties 3.1 (11.2 vs 11.3 = annotation-version drift)",
+      "source_kind": "published",
+      "source": "published: https://www.pyannote.ai/benchmark (updated 2025-09) + https://huggingface.co/pyannote/speaker-diarization-community-1"
+    },
+    {
+      "system": "speakrs (Rust+ONNX, Apache-2.0)",
+      "dataset": "voxconverse-test",
+      "der_pct": 11.1,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "CoreML backend",
+      "source_kind": "published",
+      "source": "published: https://github.com/avencera/speakrs README (retrieved 2026-07-13)"
+    },
+    {
+      "system": "VBx offline baseline",
+      "dataset": "voxconverse-test",
+      "der_pct": 11.1,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "",
+      "source_kind": "published",
+      "source": "published: diart paper, https://arxiv.org/abs/2109.06483"
+    },
+    {
+      "system": "3D-Speaker toolkit",
+      "dataset": "voxconverse-test",
+      "der_pct": 11.75,
+      "collar_secs": null,
+      "overlap_scored": true,
+      "setup": "collar unstated",
+      "source_kind": "published",
+      "source": "published: https://github.com/modelscope/3D-Speaker"
+    },
+    {
+      "system": "diart (online, 5s latency)",
+      "dataset": "voxconverse-test",
+      "der_pct": 16.8,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "",
+      "source_kind": "published",
+      "source": "published: diart paper, https://arxiv.org/abs/2109.06483"
+    },
+    {
+      "system": "polyvoice legacy (shipped)",
+      "dataset": "ami-test",
+      "der_pct": 32.87,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "16 meetings, Mix-Headset, micro",
+      "source_kind": "measured",
+      "source": "measured: benchmarks/der.py + polyvoice-bench on shipped FP32; tests/der_baseline.json (schema polyvoice-der-baseline-v2)"
+    },
+    {
+      "system": "DiariZen (WavLM, CC-BY-NC)",
+      "dataset": "ami-test",
+      "der_pct": 15.4,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "SDM",
+      "source_kind": "published",
+      "source": "published: 3D-Speaker eval, https://github.com/modelscope/3D-Speaker"
+    },
+    {
+      "system": "pyannote community-1",
+      "dataset": "ami-test",
+      "der_pct": 17.0,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "IHM",
+      "source_kind": "published",
+      "source": "published: https://www.pyannote.ai/benchmark (updated 2025-09) + https://huggingface.co/pyannote/speaker-diarization-community-1"
+    },
+    {
+      "system": "pyannote.audio 3.1",
+      "dataset": "ami-test",
+      "der_pct": 18.8,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "Mix-Headset",
+      "source_kind": "published",
+      "source": "published: https://huggingface.co/pyannote/speaker-diarization-3.1 model card"
+    },
+    {
+      "system": "pyannote community-1",
+      "dataset": "ami-test",
+      "der_pct": 19.9,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "SDM",
+      "source_kind": "published",
+      "source": "published: https://www.pyannote.ai/benchmark (updated 2025-09) + https://huggingface.co/pyannote/speaker-diarization-community-1"
+    },
+    {
+      "system": "pyannote.audio 3.1",
+      "dataset": "ami-test",
+      "der_pct": 22.4,
+      "collar_secs": 0,
+      "overlap_scored": true,
+      "setup": "SDM array1-ch1",
+      "source_kind": "published",
+      "source": "published: https://huggingface.co/pyannote/speaker-diarization-3.1 model card"
+    }
+  ]
+}
