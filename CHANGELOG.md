@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Benchmarks: pyannote **community-1** (VoxConverse 11.2 — ties 3.1; AMI IHM
+  17.0 / SDM 19.9) and **speakrs** (VoxConverse 11.1, Apache-2.0 Rust+ONNX)
+  rows in `docs/BENCHMARKS.md`, plus a provenance-per-cell comparison artifact
+  (`benchmarks/results/2026-07-13-comparison.json`). The README headline
+  comparison vs pyannote 3.1 stands (community-1 ties it on VoxConverse).
 - **Calibrated binarization of segmentation posteriors (opt-in).**
   `PipelineConfig.binarization: Option<BinarizationConfig>` replaces the v2
   aggregator's per-frame argmax with pyannote-style onset/offset hysteresis
