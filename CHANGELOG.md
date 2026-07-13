@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bench's collar/no-collar × macro/micro aggregation lives in a pure,
+  unit-tested `aggregate_der` helper (the report path calls it): model-free
+  tests lock in macro ≠ micro on unequal file durations, the exact
+  frame-weighted micro formula, and no-collar ≥ collar on boundary errors —
+  a refactor can no longer silently revert micro to a ratio-average.
 - Benchmarks: pyannote **community-1** (VoxConverse 11.2 — ties 3.1; AMI IHM
   17.0 / SDM 19.9) and **speakrs** (VoxConverse 11.1, Apache-2.0 Rust+ONNX)
   rows in `docs/BENCHMARKS.md`, plus a provenance-per-cell comparison artifact
