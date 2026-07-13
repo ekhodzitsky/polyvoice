@@ -1,5 +1,8 @@
 name: Mutants
 
+# Deliberately schedule-only with NO kill-rate gate: the mutation report is a
+# weekly diagnostic, and its caught/total ratio is too noisy across runs to be
+# a non-flaky PR gate. Revisit only if the ratio stabilizes.
 on:
   schedule:
     - cron: "0 4 * * 0"
