@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Streaming differentiation thesis in `src/streaming/README.md`: four
+  defensible axes vs Sortformer/parakeet-rs (CPU/edge realtime, no speaker
+  cap — `max_speakers` 64 vs Sortformer's hard 4, cannot-link constraints,
+  explicit latency modes) with explicit non-goals, a measured-numbers-only
+  metrics policy, concrete API specs for the `cannot-link` primitive and the
+  `LatencyMode` presets (Balanced == today's defaults), a build-vs-adopt
+  record, and an ordered implementation queue in `src/streaming/TODO.md`.
+  The competitor snapshot `docs/COMPETITORS.md` is now committed.
 - Integration test `tests/streaming_test.rs` (the target the streaming module
   contract always referenced): drives `feed()`/`flush()` over ~580 sub-frame
   (320-sample) chunks and asserts the cumulative `turns()` contract —
