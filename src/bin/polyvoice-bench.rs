@@ -3,7 +3,9 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use polyvoice::der::{compute_der, compute_der_decomposition, compute_der_with_uem, parse_uem};
+use polyvoice::der::{
+    DerResult, compute_der, compute_der_decomposition, compute_der_with_uem, parse_uem,
+};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline;
 use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig, StageTimings};
@@ -450,6 +452,9 @@ fn main() -> Result<()> {
     let mut total_audio_secs = 0.0_f64;
     let mut total_runtime_secs = 0.0_f64;
     let mut stage_totals: Option<StageTimings> = None;
+    // Per-file (collar, no-collar) DER pairs — the four report aggregates are
+    // computed from these by the unit-tested aggregate_der helper.
+    let mut der_pairs: Vec<(DerResult, DerResult)> = Vec::new();
     let mut speaker_count_exact = 0_usize;
     let mut speaker_count_pm1 = 0_usize;
     let mut speaker_count_off = 0_usize;
@@ -517,22 +522,11 @@ fn main() -> Result<()> {
             _ => speaker_count_off += 1,
         }
 
-        totals.der_total += der.der;
-        totals.der_no_collar_total += der_no_collar.der;
         totals.miss += der.miss_rate;
         totals.false_alarm += der.false_alarm_rate;
         totals.confusion += der.confusion_rate;
         totals.count += 1;
-        // Frame sums for duration-weighted micro-averages — kept strictly
-        // separate per collar pass (collar and no-collar frames must not mix).
-        totals.collar_missed_frames += der.missed_frames;
-        totals.collar_fa_frames += der.false_alarm_frames;
-        totals.collar_confusion_frames += der.confusion_frames;
-        totals.collar_ref_frames += der.total_ref_frames;
-        totals.no_collar_missed_frames += der_no_collar.missed_frames;
-        totals.no_collar_fa_frames += der_no_collar.false_alarm_frames;
-        totals.no_collar_confusion_frames += der_no_collar.confusion_frames;
-        totals.no_collar_ref_frames += der_no_collar.total_ref_frames;
+        der_pairs.push((der, der_no_collar));
         total_audio_secs += audio_secs;
         total_runtime_secs += runtime_secs;
 
@@ -584,20 +578,11 @@ fn main() -> Result<()> {
     }
 
     let n = totals.count.max(1) as f64;
-    let der_collar_macro = (totals.der_total / n) * 100.0;
-    let der_no_collar_macro = (totals.der_no_collar_total / n) * 100.0;
-    let der_collar_micro = micro_der(
-        totals.collar_missed_frames,
-        totals.collar_fa_frames,
-        totals.collar_confusion_frames,
-        totals.collar_ref_frames,
-    );
-    let der_no_collar_micro = micro_der(
-        totals.no_collar_missed_frames,
-        totals.no_collar_fa_frames,
-        totals.no_collar_confusion_frames,
-        totals.no_collar_ref_frames,
-    );
+    let agg = aggregate_der(&der_pairs);
+    let der_collar_macro = agg.collar_macro;
+    let der_no_collar_macro = agg.no_collar_macro;
+    let der_collar_micro = agg.collar_micro;
+    let der_no_collar_micro = agg.no_collar_micro;
 
     println!(
         "\n=== Aggregate DER over {} files (collar={:.2}s) ===",
@@ -650,22 +635,46 @@ fn main() -> Result<()> {
 
 #[derive(Default)]
 struct Aggregate {
-    der_total: f64,
-    der_no_collar_total: f64,
     miss: f64,
     false_alarm: f64,
     confusion: f64,
     count: usize,
-    // Frame sums for duration-weighted micro-averages (collar pass).
-    collar_missed_frames: u64,
-    collar_fa_frames: u64,
-    collar_confusion_frames: u64,
-    collar_ref_frames: u64,
-    // Frame sums (no-collar pass).
-    no_collar_missed_frames: u64,
-    no_collar_fa_frames: u64,
-    no_collar_confusion_frames: u64,
-    no_collar_ref_frames: u64,
+}
+
+/// The four report aggregates, as percentages.
+struct DerAggregates {
+    collar_macro: f64,
+    no_collar_macro: f64,
+    collar_micro: f64,
+    no_collar_micro: f64,
+}
+
+/// Compute collar/no-collar x macro/micro DER from per-file result pairs.
+/// Macro = mean of per-file ratios; micro = duration-weighted (summed error
+/// frames / summed reference frames), with collar and no-collar frame sums
+/// kept strictly separate. This is THE aggregation the report publishes —
+/// unit-tested so a refactor cannot silently revert micro to a ratio-average
+/// or swap the collar passes.
+fn aggregate_der(pairs: &[(DerResult, DerResult)]) -> DerAggregates {
+    let n = pairs.len().max(1) as f64;
+    let (mut cm, mut cf, mut cc, mut cr) = (0u64, 0u64, 0u64, 0u64);
+    let (mut nm, mut nf, mut nc, mut nr) = (0u64, 0u64, 0u64, 0u64);
+    for (c, n_) in pairs {
+        cm += c.missed_frames;
+        cf += c.false_alarm_frames;
+        cc += c.confusion_frames;
+        cr += c.total_ref_frames;
+        nm += n_.missed_frames;
+        nf += n_.false_alarm_frames;
+        nc += n_.confusion_frames;
+        nr += n_.total_ref_frames;
+    }
+    DerAggregates {
+        collar_macro: pairs.iter().map(|(c, _)| c.der).sum::<f64>() / n * 100.0,
+        no_collar_macro: pairs.iter().map(|(_, x)| x.der).sum::<f64>() / n * 100.0,
+        collar_micro: micro_der(cm, cf, cc, cr),
+        no_collar_micro: micro_der(nm, nf, nc, nr),
+    }
 }
 
 /// Duration-weighted micro-average DER as a percentage: total error frames over
@@ -684,6 +693,66 @@ fn micro_der(missed: u64, false_alarm: u64, confusion: u64, ref_frames: u64) -> 
 mod prop_tests {
     use super::*;
     use proptest::prelude::*;
+
+    /// Synthetic DerResult: `errors` error frames over `ref_frames` (all miss).
+    fn synth(errors: u64, ref_frames: u64) -> DerResult {
+        DerResult {
+            der: errors as f64 / ref_frames as f64,
+            miss_rate: errors as f64 / ref_frames as f64,
+            false_alarm_rate: 0.0,
+            confusion_rate: 0.0,
+            total_speech: ref_frames as f64 * 0.01,
+            total_ref_frames: ref_frames,
+            missed_frames: errors,
+            false_alarm_frames: 0,
+            confusion_frames: 0,
+        }
+    }
+
+    #[test]
+    fn aggregate_macro_diverges_from_micro_and_micro_is_frame_weighted() {
+        // A tiny 1s file at 50% DER and a long 60s file at 1% DER: the mean of
+        // ratios (macro) must NOT equal the frame-weighted micro, and micro
+        // must equal summed error frames / summed reference frames exactly.
+        let short = synth(50, 100);
+        let long = synth(60, 6000);
+        let agg = aggregate_der(&[(short, short), (long, long)]);
+        assert!(
+            (agg.collar_macro - 25.5).abs() < 1e-9,
+            "{}",
+            agg.collar_macro
+        );
+        let expected_micro = (50 + 60) as f64 / (100 + 6000) as f64 * 100.0;
+        assert!((agg.collar_micro - expected_micro).abs() < 1e-9);
+        assert!((agg.collar_macro - agg.collar_micro).abs() > 10.0);
+        // Same inputs on both passes => identical aggregates per pass.
+        assert_eq!(agg.collar_micro, agg.no_collar_micro);
+    }
+
+    #[test]
+    fn aggregate_no_collar_at_least_collar_on_boundary_errors() {
+        use polyvoice::types::{SpeakerId, SpeakerTurn, TimeRange};
+        let turn = |s: u32, a: f64, b: f64| SpeakerTurn {
+            speaker: SpeakerId(s),
+            time: TimeRange { start: a, end: b },
+            text: None,
+        };
+        // Hypothesis shifted 0.3s off every reference boundary: the collar
+        // forgives part of that error, no-collar must not.
+        let reference = vec![turn(0, 0.0, 10.0), turn(1, 12.0, 20.0)];
+        let hypothesis = vec![turn(0, 0.3, 10.3), turn(1, 12.3, 20.3)];
+        let collar = compute_der(&reference, &hypothesis, 0.25);
+        let no_collar = compute_der(&reference, &hypothesis, 0.0);
+        let agg = aggregate_der(&[(collar, no_collar)]);
+        assert!(
+            agg.no_collar_micro >= agg.collar_micro,
+            "no-collar {} < collar {}",
+            agg.no_collar_micro,
+            agg.collar_micro
+        );
+        assert!(agg.no_collar_macro >= agg.collar_macro);
+        assert!(agg.no_collar_micro > 0.0, "boundary errors must be scored");
+    }
 
     proptest! {
         #[test]
