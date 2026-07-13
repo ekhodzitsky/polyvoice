@@ -189,10 +189,12 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  # BLOCKING lane: these three targets are confirmed green + deterministic
+  # under miri, so a UB regression in them fails the PR. Broader/experimental
+  # miri coverage belongs in a separate non-blocking lane, not here.
   miri:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
