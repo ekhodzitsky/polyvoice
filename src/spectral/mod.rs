@@ -133,6 +133,18 @@ pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {
         }
 
         let labels = kmeans_on_features(&features, k, 20);
+        // A singleton cluster has no definable variance — the spherical
+        // Gaussian behind this BIC is degenerate there, and on row-normalized
+        // spectral features k == n is always a "perfect" fit, so without this
+        // guard the trivial everyone-is-their-own-speaker split wins. Require
+        // at least 2 points per cluster for a k to be a valid candidate.
+        let mut counts = vec![0usize; k];
+        for &l in &labels {
+            counts[l] += 1;
+        }
+        if counts.iter().any(|&c| c < 2) {
+            continue;
+        }
         let bic = compute_bic(&features, &labels, k);
         if bic < best_bic {
             best_bic = bic;
@@ -168,9 +180,12 @@ fn kmeans_on_features(features: &[Vec<f64>], k: usize, max_iter: usize) -> Vec<u
         return vec![0; n];
     }
 
-    // K-means++ initialization.
+    // K-means++ initialization. Deterministic seed: this legacy path values
+    // reproducibility (stable exact-k tests, identical runs on identical
+    // input) over stochastic restarts; the production NME-SC path does not
+    // come through here.
     let mut centroids: Vec<Vec<f64>> = Vec::with_capacity(k);
-    let mut rng = fastrand::Rng::new();
+    let mut rng = fastrand::Rng::with_seed(0x504f_4c59_564f_4943);
     let first_idx = rng.usize(0..n);
     centroids.push(features[first_idx].clone());
 
@@ -289,10 +304,24 @@ fn compute_bic(features: &[Vec<f64>], labels: &[usize], k: usize) -> f64 {
     // BIC for spherical Gaussian: -2*log(L) + p*log(n)
     // where p = k * (dim + 1)  (centroids + 1 variance parameter per cluster)
     let p = k * (dim + 1);
-    if inertia < 1e-10 {
-        // Perfect fit — penalize complexity.
-        return p as f64 * (n as f64).ln();
-    }
+    // Floor the inertia RELATIVE to the total feature variance so the
+    // log-likelihood stays finite and saturates on (near-)perfect fits: every
+    // k that explains the data down to the floor shares the same maximal
+    // likelihood term, and the p*ln(n) complexity penalty then picks the
+    // SMALLEST such k. That fixes both failure modes at once: the old branch
+    // returned a bare positive penalty for perfect fits (a near-perfect true
+    // k lost to an imperfect lower k with negative BIC — under-selection on
+    // clean data), while an ABSOLUTE floor would let the trivial k == n
+    // perfect fit out-likelihood a merely near-perfect true k (over-selection).
+    let mean: Vec<f64> = (0..dim)
+        .map(|d| features.iter().map(|f| f[d]).sum::<f64>() / n as f64)
+        .collect();
+    let total_ss: f64 = features
+        .iter()
+        .map(|f| euclidean_distance(f, &mean).powi(2))
+        .sum();
+    let floor = (total_ss * 1e-6).max(1e-12);
+    let inertia = inertia.max(floor);
     let log_likelihood = -(n as f64) * (inertia / n as f64).ln() / 2.0;
     -2.0 * log_likelihood + p as f64 * (n as f64).ln()
 }
@@ -322,6 +351,45 @@ mod tests {
     }
 
     #[test]
+    fn test_spectral_cluster_four_blocks_exact() {
+        // Four tight clusters of 3 points each in 4D — exact k must be 4
+        // (the singleton guard rejects k > 4 splits, the BIC floor keeps the
+        // perfect k=4 from losing to an imperfect lower k).
+        let mut embeddings = Vec::new();
+        for axis in 0..4usize {
+            for jitter in [0.0f32, 0.03, -0.03] {
+                let mut v = vec![0.0f32; 4];
+                v[axis] = 1.0;
+                v[(axis + 1) % 4] = 0.05 + jitter;
+                embeddings.push(v);
+            }
+        }
+        let labels = spectral_cluster(&embeddings, 10);
+        let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(unique.len(), 4, "expected exactly 4 clusters");
+    }
+
+    #[test]
+    fn test_spectral_cluster_noisy_three_blocks_does_not_explode() {
+        // Three clusters with visible jitter: k must stay 3 — neither collapse
+        // below (the historical under-selection) nor climb toward k == n (the
+        // failure mode of a naive absolute inertia floor).
+        let jitters = [0.00f32, 0.06, -0.06, 0.11, -0.11];
+        let mut embeddings = Vec::new();
+        for axis in 0..3usize {
+            for (j, &jit) in jitters.iter().enumerate() {
+                let mut v = vec![0.0f32; 3];
+                v[axis] = 1.0 - 0.02 * j as f32;
+                v[(axis + 1) % 3] = (0.08 + jit).abs();
+                embeddings.push(v);
+            }
+        }
+        let labels = spectral_cluster(&embeddings, 15);
+        let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(unique.len(), 3, "expected exactly 3 clusters on noisy data");
+    }
+
+    #[test]
     fn test_spectral_cluster_empty() {
         let labels = spectral_cluster(&[], 10);
         assert!(labels.is_empty());
@@ -343,15 +411,10 @@ mod tests {
     #[test]
     fn test_spectral_cluster_three_blocks() {
         // Three tight, well-separated clusters (9 points); mirrors
-        // NmeScClusterer's synthetic. The unified NME-SC eigengap now SEEDS k=3
-        // here (the convention itself is proven by `eigengap_selects_k_on_known_sequence`,
-        // which exercises the very function this path calls). spectral_cluster's
-        // FINAL k is then BIC-decided, and its `compute_bic` currently under-selects
-        // on near-perfect-fit data (the inertia<1e-10 branch returns a positive
-        // penalty, so a near-perfect k loses to an imperfect lower-k with negative
-        // BIC) — a separate concern from the eigengap unification. So we assert
-        // the path stays multi-speaker (no collapse to 1) rather than an exact k the
-        // BIC override moves.
+        // NmeScClusterer's synthetic. The eigengap SEEDS k=3 and the BIC search
+        // confirms it: with the perfect-fit floor in compute_bic (and the
+        // deterministic k-means seed) the exact k is stable, so this asserts
+        // unique == 3 — the historical under-selection to 2 would fail here.
         let embeddings = vec![
             vec![1.0, 0.0, 0.0],
             vec![0.98, 0.05, 0.0],
@@ -365,9 +428,10 @@ mod tests {
         ];
         let labels = spectral_cluster(&embeddings, 10);
         let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
-        assert!(
-            unique.len() >= 2,
-            "spectral_cluster collapsed to {} cluster(s)",
+        assert_eq!(
+            unique.len(),
+            3,
+            "spectral_cluster must find exactly 3 clusters, got {}",
             unique.len()
         );
     }

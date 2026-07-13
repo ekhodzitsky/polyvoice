@@ -140,6 +140,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `examples/agent_quickstart.md` — machine-readable integration paths (CLI
   `--json`, MCP, Python typed result, FFI formats, who-said-what).
 
+### Fixed
+
+- `spectral_cluster` (legacy path; production NME-SC/AHC/VBx unaffected) no
+  longer under-counts speakers on clean, well-separated data: `compute_bic`'s
+  perfect-fit branch returned a bare positive penalty, so a near-perfect true
+  k lost to an imperfect lower k. The likelihood now saturates via a
+  variance-relative inertia floor, singleton clusters are rejected as BIC
+  candidates (degenerate variance — this also stops the trivial k == n split
+  from winning), and k-means seeding is deterministic. Exact-k tests cover
+  2/3/4 clusters and a noisy input; the historical 3-clusters-become-2 case
+  now asserts exactly 3.
+
 ### Changed
 
 - Legacy DER baselines tightened after the singleton-pruning improvements:
