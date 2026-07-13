@@ -99,6 +99,9 @@ struct DiarizeArgs {
 }
 
 #[derive(Subcommand, Debug)]
+// One instance for the process lifetime, parsed once: boxing the big
+// DiarizeArgs variant would buy nothing but indirection.
+#[allow(clippy::large_enum_variant)]
 enum Command {
     /// Run diarization on a WAV file (same as the bare `polyvoice <wav>` form).
     Diarize(DiarizeArgs),
