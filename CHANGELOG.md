@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-13
+
+Hardening-and-plumbing release. Security: release builds refuse unsigned
+profile-resolved models, and the ONNX Runtime native binary's hash-pinned
+provenance is documented and cached in CI. The execution-provider plumbing is
+now real end-to-end (config -> builder -> every ONNX session -> CLI flag),
+with CoreML covering all four sessions, XNNPACK wired, and a per-backend
+RTFx benchmark with a per-stage runtime breakdown to prove it. Accuracy gains
+an opt-in calibrated binarization of segmentation posteriors (-2.6pp
+no-collar on the VoxConverse tuning subset). The who-said-what surfaces reach
+Python (typed DiarizationResult) and C FFI (run_format) parity, the headline
+no-collar DER metric is release-gated, and the legacy spectral clusterer's
+BIC under-selection is fixed. Several struct/enum additions are
+source-breaking for exhaustive matches and struct literals — hence the minor
+bump; see the Security/Added/Changed entries below for the exact list.
+
 ### Security
 
 - **ONNX Runtime native-binary provenance documented and cached.** Verified

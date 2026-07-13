@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-13
+
 ### Added
 
 - Typed `DiarizationResult` with `.to_json()` / `.to_rttm()` / `.to_srt()` /
