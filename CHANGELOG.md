@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CJK/multilingual ASR companion `polyvoice-asr-sherpa`** (opt-in crate,
+  deliberately OUTSIDE the workspace): SenseVoice (zh/en/ja/ko/yue) and
+  Paraformer (zh) via sherpa-onnx, implementing the same core `Asr` trait as
+  the Parakeet companion — the who-said-what cascade works unchanged. Sherpa
+  ships a second C++ ONNX runtime, so the crate never enters the core
+  dependency graph (CI enforces the isolation and the core stays wasm-clean);
+  token-start timestamps are merged into words (CJK characters stay one word
+  each), granularity and the no-confidence caveat documented. Verified end to
+  end against the real SenseVoice int8 bundle (sha256 recorded in the crate
+  README).
+
 ## [0.10.0] - 2026-07-13
 
 Hardening-and-plumbing release. Security: release builds refuse unsigned

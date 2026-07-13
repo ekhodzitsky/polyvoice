@@ -331,6 +331,28 @@ jobs:
       # type-checks on the real target.
       - run: cargo check --target aarch64-unknown-linux-gnu --features xnnpack
 
+  # CJK ASR companion: builds OUTSIDE the workspace on purpose — sherpa-onnx
+  # is a second C++ ONNX runtime and must never enter the core dependency
+  # graph. This job proves the crate builds/tests standalone AND that the
+  # core tree stays sherpa-free.
+  asr-sherpa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: polyvoice-asr-sherpa
+      - name: isolation — no sherpa in the core dependency tree
+        run: |
+          if cargo tree -e no-dev | grep -qi sherpa; then
+            echo "LEAK: sherpa entered the core dependency graph"; exit 1
+          fi
+          echo CLEAN
+      - run: cargo test --manifest-path polyvoice-asr-sherpa/Cargo.toml --locked
+      - run: cargo clippy --manifest-path polyvoice-asr-sherpa/Cargo.toml --all-targets --locked -- -D warnings
+
   wasm32-smoke:
     runs-on: ubuntu-latest
     steps:
