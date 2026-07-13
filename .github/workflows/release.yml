@@ -19,6 +19,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Cache the hash-pinned native ONNX Runtime that ort-sys downloads
+      # (verified against the SHA-256 embedded in the crate; see
+      # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
+      # an ort bump re-pins the binary. A cache miss makes any cold network
+      # fetch observable in the log.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ort.pyke.io
+            ~/Library/Caches/ort.pyke.io
+            ~/AppData/Local/ort.pyke.io
+          key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-audit,cargo-deny
@@ -70,6 +82,18 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
+      # Cache the hash-pinned native ONNX Runtime that ort-sys downloads
+      # (verified against the SHA-256 embedded in the crate; see
+      # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
+      # an ort bump re-pins the binary. A cache miss makes any cold network
+      # fetch observable in the log.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ort.pyke.io
+            ~/Library/Caches/ort.pyke.io
+            ~/AppData/Local/ort.pyke.io
+          key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           # Key the cache to the Xcode version: build-script outputs embed
           # absolute toolchain paths, so a cache built under another Xcode
           # poisons the link line (dead -L search paths, missing clang_rt).
@@ -116,6 +140,18 @@ jobs:
           python-version: "3.12"
       - uses: Swatinem/rust-cache@v2
         with:
+      # Cache the hash-pinned native ONNX Runtime that ort-sys downloads
+      # (verified against the SHA-256 embedded in the crate; see
+      # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
+      # an ort bump re-pins the binary. A cache miss makes any cold network
+      # fetch observable in the log.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ort.pyke.io
+            ~/Library/Caches/ort.pyke.io
+            ~/AppData/Local/ort.pyke.io
+          key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           # Key the cache to the Xcode version: build-script outputs embed
           # absolute toolchain paths, so a cache built under another Xcode
           # poisons the link line (dead -L search paths, missing clang_rt).
