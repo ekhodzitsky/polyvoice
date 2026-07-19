@@ -171,6 +171,18 @@ cargo build --features ffi
 
 See `include/polyvoice.h` and `examples/ffi_usage.c` for usage.
 
+## WebAssembly
+
+The pure-Rust algorithmic core compiles for `wasm32-unknown-unknown` when the
+ONNX-backed default features are disabled:
+
+```bash
+cargo check --target wasm32-unknown-unknown --no-default-features --lib
+```
+
+ONNX-based profiles require an execution provider that supports the target
+platform. The CI job `wasm32-smoke` verifies this build on every push.
+
 ## Performance Tuning
 
 1. **Use `FbankExtractor`** instead of `compute_fbank` to avoid per-call FFT allocation.
