@@ -350,6 +350,11 @@ jobs:
             echo "LEAK: sherpa entered the core dependency graph"; exit 1
           fi
           echo CLEAN
+      # rust-cache restores target/ without the external sherpa-rs binary cache
+      # (~/.cache/sherpa-rs), so a cached build can link against missing native
+      # libraries. Force the build script to rerun and re-download them.
+      - name: Force sherpa-rs-sys build-script rerun
+        run: cargo clean -p sherpa-rs-sys --manifest-path polyvoice-asr-sherpa/Cargo.toml
       - run: cargo test --manifest-path polyvoice-asr-sherpa/Cargo.toml --locked
       - run: cargo clippy --manifest-path polyvoice-asr-sherpa/Cargo.toml --all-targets --locked -- -D warnings
 
