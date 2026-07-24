@@ -220,3 +220,40 @@ python benchmark.py --dataset voxconverse_test --runners all
 - WhisperX (bundles pyannote 3.1): https://github.com/m-bain/whisperX
 - sherpa-onnx (no DER published): https://k2-fsa.github.io/sherpa/onnx/speaker-diarization/index.html
 - "Benchmarking Diarization Models" (DiariZen ~5.2 VoxConverse @0.25 collar): https://arxiv.org/abs/2509.26177
+
+## Streaming latency presets (methodology)
+
+Named presets for `polyvoice::streaming::LatencyPreset` / CLI `--latency-preset`:
+
+| Preset     | window_secs | hop_secs | right_context_secs | cache_cap | input-buffer latency¹ | RTF | DER (collar 0) |
+|------------|-------------|----------|--------------------|-----------|----------------------|-----|----------------|
+| `realtime` | 1.0         | 0.5      | 0.0                | 16        | ≈ 1.03 s             | TBD | TBD            |
+| `balanced` | 1.5         | 0.75     | 0.0                | 32        | ≈ 1.53 s             | TBD | TBD            |
+| `accurate` | 2.0         | 1.0      | 0.25               | 64        | ≈ 2.28 s             | TBD | TBD            |
+
+¹ **Input-buffer latency** is a configuration number:
+`window_secs + right_context_secs + vad_frame_secs` with EnergyVad frame 512
+samples @ 16 kHz (`vad_frame_secs ≈ 0.032 s`). It is **not** wall-clock RTF.
+
+**Reporting convention (diart / NeMo):** publish **latency**, **RTF**, and **DER**
+as three separate numbers. Never publish a latency figure without DER and a
+stated methodology (hardware, chunk schedule, collar, overlap policy).
+
+### How to fill the table
+
+1. Stream a fixed subset (recommended: VoxConverse-test 30-file subset, or full
+   test when budget allows) through `StreamingPipeline::with_latency_preset`
+   with the Balanced ONNX embedder on a **named** CPU (cores, arch, OS).
+2. Record per-chunk wall time series (`t_end - t_start` around `feed`), then
+   RTF = total_feed_wall / audio_duration. Also record start-of-stream vs
+   end-of-stream mean chunk latency on a ≥1 h synthetic or long-form file to
+   confirm bounded state (cache cap prevents O(t) growth).
+3. Score DER with `benchmarks/der.py` / `polyvoice-bench` at **collar 0**,
+   overlap scored, Hungarian mapping — same protocol as the offline tables.
+4. Optionally report label flip rate via
+   `polyvoice::streaming::label_flip_rate` (first-emitted vs final labels).
+
+Artifacts belong under `benchmarks/results/` (per-chunk latency series + DER
+JSON). Until a measured run lands, cells stay **TBD** — do not invent numbers.
+
+See also `benchmarks/results/streaming-latency-methodology.md`.

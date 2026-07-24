@@ -23,8 +23,29 @@ The crate exposes two pipeline layers:
 
 | Mode | Use case | Latency | Accuracy |
 |------|----------|---------|----------|
-| **Online** (`OnlineDiarizer`) | Real-time streaming (WebSocket, microphone) | Low (chunk-by-chunk) | Lower (no future context) |
-| **Offline** (`OfflineDiarizer`) | File transcription, post-processing | High (full file) | Higher (two-pass + merge) |
+| **Online** (`StreamingPipeline`) | Real-time streaming (WebSocket, microphone) | Tunable via `LatencyPreset` | Lower (no future context) |
+| **Offline** (`Pipeline` / `pipeline_v2`) | File transcription, post-processing | High (full file) | Higher (two-pass + merge) |
+
+### Streaming latency presets
+
+```rust
+use polyvoice::streaming::{LatencyPreset, StreamingPipeline};
+
+let mut pipeline = StreamingPipeline::with_latency_preset(
+    vad, extractor, LatencyPreset::Realtime, vad_config,
+)?;
+```
+
+| Preset | window | hop | cache | input-buffer budget @16 kHz |
+|--------|--------|-----|-------|-----------------------------|
+| `realtime` | 1.0 s | 0.5 s | 16 | ≈ 1.03 s |
+| `balanced` | 1.5 s | 0.75 s | 32 | ≈ 1.53 s (default) |
+| `accurate` | 2.0 s | 1.0 s | 64 | ≈ 2.28 s |
+
+Turns may carry `stable: false` while a speaker is still provisional; once
+`stable: true`, that speaker ID is immutable for the session. See
+`src/streaming/README.md` and `docs/BENCHMARKS.md` (latency + RTF + DER
+reported separately). CLI: `--latency-preset realtime|balanced|accurate`.
 
 ## Core Types
 

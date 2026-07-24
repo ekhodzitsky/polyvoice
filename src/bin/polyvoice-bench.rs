@@ -736,6 +736,7 @@ mod prop_tests {
             speaker: SpeakerId(s),
             time: TimeRange { start: a, end: b },
             text: None,
+            stable: true,
         };
         // Hypothesis shifted 0.3s off every reference boundary: the collar
         // forgives part of that error, no-collar must not.

@@ -197,6 +197,7 @@ impl HybridPipeline {
                     speaker: spk,
                     time: s.time,
                     text: None,
+                    stable: true,
                 })
             })
             .collect();

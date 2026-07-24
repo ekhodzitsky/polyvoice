@@ -112,6 +112,12 @@ struct DiarizeArgs {
     /// reconciliation surface — concurrent speakers are collapsed per frame).
     #[arg(long)]
     exclusive: bool,
+    /// Streaming-aligned window geometry preset: `realtime` | `balanced` |
+    /// `accurate`. Sets embedding window/hop (and max speakers ceiling) to match
+    /// `polyvoice::streaming::LatencyPreset`. Default leaves config unchanged
+    /// (balanced geometry is already the DiarizationConfig default).
+    #[arg(long, value_name = "PRESET")]
+    latency_preset: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -183,6 +189,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         embed_window,
         execution_provider,
         exclusive,
+        latency_preset,
     } = args;
 
     let wav = wav.ok_or_else(|| {
@@ -218,6 +225,17 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     // clusterer ceiling (`--speakers` wins when both are set).
     let max_clusters = speakers.or(max_speakers);
 
+    let latency = match latency_preset.as_deref() {
+        None => None,
+        Some(name) => Some(
+            polyvoice::streaming::LatencyPreset::parse_name(name).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "invalid --latency-preset '{name}' (expected realtime|balanced|accurate)"
+                )
+            })?,
+        ),
+    };
+
     let mut result = if v2 {
         run_v2_pipeline(
             &wav,
@@ -226,12 +244,22 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
             threshold,
             &clusterer,
             vbx_plda_dir,
-            embed_window,
+            // Streaming latency presets map onto v2 dense embed windows when the
+            // user did not pass an explicit --embed-window.
+            embed_window.or_else(|| latency.map(|p| p.params().window_secs)),
             &execution_provider,
             quiet,
         )?
     } else {
-        run_legacy_pipeline(&wav, profile, &registry, threshold, max_clusters, quiet)?
+        run_legacy_pipeline(
+            &wav,
+            profile,
+            &registry,
+            threshold,
+            max_clusters,
+            latency,
+            quiet,
+        )?
     };
 
     if exclusive {
@@ -299,6 +327,7 @@ fn run_legacy_pipeline(
     registry: &ModelRegistry,
     threshold: f32,
     max_clusters: Option<usize>,
+    latency: Option<polyvoice::streaming::LatencyPreset>,
     quiet: bool,
 ) -> Result<DiarizationResult> {
     let models = registry
@@ -322,10 +351,21 @@ fn run_legacy_pipeline(
     if let Some(n) = max_clusters {
         cluster.max_speakers = n;
     }
-    let config = DiarizationConfig {
+    let mut config = DiarizationConfig {
         cluster,
         ..DiarizationConfig::default()
     };
+    if let Some(preset) = latency {
+        // Apply window/hop/cap from the streaming latency preset; keep the
+        // CLI --threshold / --max-speakers overrides when the user set them.
+        let saved_threshold = config.cluster.threshold;
+        let saved_max = max_clusters;
+        preset.apply(&mut config);
+        config.cluster.threshold = saved_threshold;
+        if let Some(n) = saved_max {
+            config.cluster.max_speakers = n;
+        }
+    }
     let vad_config = VadConfig::default();
     let pipeline = LegacyPipeline::new(config, vad_config);
 

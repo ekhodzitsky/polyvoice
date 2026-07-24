@@ -440,6 +440,7 @@ pub fn compute_der_from_rttm(
                 speaker: crate::types::SpeakerId(id),
                 time: TimeRange { start, end },
                 text: None,
+                stable: true,
             }
         })
         .collect();
@@ -753,6 +754,7 @@ mod tests {
             speaker: SpeakerId(speaker),
             time: TimeRange { start, end },
             text: None,
+            stable: true,
         }
     }
 
