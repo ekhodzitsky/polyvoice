@@ -756,12 +756,7 @@ mod tests {
         }
     }
 
-    fn w(
-        word: &str,
-        start: f64,
-        end: f64,
-        spk: Option<u32>,
-    ) -> crate::types::WordAlignment {
+    fn w(word: &str, start: f64, end: f64, spk: Option<u32>) -> crate::types::WordAlignment {
         crate::types::WordAlignment {
             word: word.to_owned(),
             time: TimeRange { start, end },
@@ -1147,14 +1142,8 @@ EN2002a 1 50.0 10.0
 
     #[test]
     fn wder_skips_unlabeled_reference_words() {
-        let reference = vec![
-            w("a", 0.0, 0.5, None),
-            w("b", 0.5, 1.0, Some(0)),
-        ];
-        let hypothesis = vec![
-            w("a", 0.0, 0.5, Some(0)),
-            w("b", 0.5, 1.0, Some(0)),
-        ];
+        let reference = vec![w("a", 0.0, 0.5, None), w("b", 0.5, 1.0, Some(0))];
+        let hypothesis = vec![w("a", 0.0, 0.5, Some(0)), w("b", 0.5, 1.0, Some(0))];
         let r = compute_wder(&reference, &hypothesis);
         assert_eq!(r.total_words, 1);
         assert_eq!(r.speaker_errors, 0);

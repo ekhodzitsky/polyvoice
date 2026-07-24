@@ -295,12 +295,7 @@ mod tests {
     fn load_audio_resamples_multi_rate_wav_duration() {
         // Synthetic tones at common rates; duration after resample ≈ input duration.
         // Allow a small filter-tail tolerance (FFT resampler delay trim is not exact).
-        let cases: &[(u32, f32)] = &[
-            (8_000, 1.0),
-            (22_050, 1.0),
-            (44_100, 1.0),
-            (48_000, 1.0),
-        ];
+        let cases: &[(u32, f32)] = &[(8_000, 1.0), (22_050, 1.0), (44_100, 1.0), (48_000, 1.0)];
         let dir = tempfile::tempdir().unwrap();
         for &(rate, secs) in cases {
             let path = dir.path().join(format!("tone_{rate}.wav"));

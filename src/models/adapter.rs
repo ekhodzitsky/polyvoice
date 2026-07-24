@@ -226,11 +226,7 @@ impl AdapterRegistry {
     /// Alias resolution is logged at `info` so DER reports can record which
     /// pin was actually used. Returns an owned `String` so both direct ids and
     /// alias targets share a single return type without lifetime coupling.
-    pub fn resolve(
-        &self,
-        stage: AdapterStage,
-        id_or_alias: &str,
-    ) -> Result<String, AdapterError> {
+    pub fn resolve(&self, stage: AdapterStage, id_or_alias: &str) -> Result<String, AdapterError> {
         if self
             .factories
             .contains_key(&(stage, id_or_alias.to_owned()))
@@ -259,12 +255,13 @@ impl AdapterRegistry {
         id_or_alias: &str,
     ) -> Result<Box<dyn Any + Send + Sync>, AdapterError> {
         let id = self.resolve(stage, id_or_alias)?;
-        let factory = self.factories.get(&(stage, id.clone())).ok_or(
-            AdapterError::UnknownAdapter {
-                stage,
-                adapter_type: id,
-            },
-        )?;
+        let factory =
+            self.factories
+                .get(&(stage, id.clone()))
+                .ok_or(AdapterError::UnknownAdapter {
+                    stage,
+                    adapter_type: id,
+                })?;
         Ok(factory())
     }
 
@@ -410,7 +407,10 @@ mod tests {
         ] {
             assert_eq!(AdapterStage::parse(stage.as_str()), Some(stage));
         }
-        assert_eq!(AdapterStage::parse("segmenter"), Some(AdapterStage::Segmentation));
+        assert_eq!(
+            AdapterStage::parse("segmenter"),
+            Some(AdapterStage::Segmentation)
+        );
         assert_eq!(AdapterStage::parse("e2e"), Some(AdapterStage::Diarizer));
         assert!(AdapterStage::parse("nope").is_none());
     }
@@ -424,9 +424,7 @@ mod tests {
             reg.resolve(AdapterStage::Diarizer, "latest").unwrap(),
             "sortformer-v2"
         );
-        let handle = reg
-            .create(AdapterStage::Diarizer, "sortformer-v2")
-            .unwrap();
+        let handle = reg.create(AdapterStage::Diarizer, "sortformer-v2").unwrap();
         let builtin = handle.downcast_ref::<BuiltinAdapter>().expect("marker");
         assert_eq!(builtin.id, "sortformer-v2");
         assert_eq!(builtin.stage, AdapterStage::Diarizer);

@@ -17,9 +17,7 @@ mod ort_session;
 mod runtime;
 
 pub use ort_session::OrtSession;
-pub use runtime::{
-    InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData,
-};
+pub use runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
 
 /// Minimum plausible size for an ONNX file (header only).
 pub const ONNX_MIN_HEADER_BYTES: usize = 64;

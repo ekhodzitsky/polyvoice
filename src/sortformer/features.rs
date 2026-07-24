@@ -155,9 +155,7 @@ fn create_mel_filterbank_slaney(n_fft: usize, n_mels: usize, sample_rate: usize)
     let mel_min = hz_to_mel_slaney(0.0);
     let mel_max = hz_to_mel_slaney(fmax);
     let mel_points: Vec<f64> = (0..=n_mels + 1)
-        .map(|i| {
-            mel_to_hz_slaney(mel_min + (mel_max - mel_min) * i as f64 / (n_mels + 1) as f64)
-        })
+        .map(|i| mel_to_hz_slaney(mel_min + (mel_max - mel_min) * i as f64 / (n_mels + 1) as f64))
         .collect();
     let fft_freqs: Vec<f64> = (0..freq_bins)
         .map(|i| i as f64 * sample_rate as f64 / n_fft as f64)

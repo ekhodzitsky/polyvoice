@@ -154,11 +154,11 @@ pub mod sortformer;
 
 // Public re-exports for ergonomic use.
 pub use cluster::SpeakerCluster;
+pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
 #[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
-pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
 pub use overlap::{OverlapRegion, detect_overlaps};
 pub use types::ClusterConfig;
 pub use types::{

@@ -6,9 +6,7 @@ pub mod download;
 pub mod manifest;
 pub mod metadata;
 pub mod verify;
-pub use adapter::{
-    AdapterError, AdapterFactory, AdapterRegistry, AdapterStage, BuiltinAdapter,
-};
+pub use adapter::{AdapterError, AdapterFactory, AdapterRegistry, AdapterStage, BuiltinAdapter};
 pub use download::{
     DownloadError, download_with_checksum, download_with_checksum_and_signature, verify_sha256,
 };
