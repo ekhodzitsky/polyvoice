@@ -83,6 +83,27 @@ impl OrtSession {
             input_names,
         })
     }
+
+    /// Custom `metadata_props` key/value pairs from the ONNX model.
+    ///
+    /// Empty when the model carries no custom metadata. Used by the
+    /// self-describing model config loader (`models::metadata`).
+    pub fn custom_metadata_props(&self) -> Result<std::collections::HashMap<String, String>, String> {
+        let meta = self
+            .session
+            .metadata()
+            .map_err(|e| format!("session metadata: {e}"))?;
+        let keys = meta
+            .custom_keys()
+            .map_err(|e| format!("custom metadata keys: {e}"))?;
+        let mut out = std::collections::HashMap::with_capacity(keys.len());
+        for key in keys {
+            if let Some(value) = meta.custom(&key) {
+                out.insert(key, value);
+            }
+        }
+        Ok(out)
+    }
 }
 
 impl InferenceRuntime for OrtSession {

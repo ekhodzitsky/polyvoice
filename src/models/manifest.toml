@@ -1,4 +1,18 @@
-schema = "polyvoice-models-v1"
+schema = "polyvoice-models-v2"
+
+# Stage-scoped version aliases (Deepgram diarize_model=latest|v1 pattern).
+# Resolution is logged so DER reports record the pin that was actually used.
+[aliases.segmenter]
+latest = "powerset_fp32"
+v1 = "powerset_fp32"
+
+[aliases.embedder]
+latest = "wespeaker_resnet34"
+v1 = "wespeaker_resnet34"
+
+[aliases.vad]
+latest = "silero_vad"
+v1 = "silero_vad"
 
 # v0.5 legacy profiles — point at proven FP32 models until v1.0 components
 # are validated. Mobile uses CAM++ (512-dim), Balanced uses WeSpeaker ResNet34
@@ -18,6 +32,12 @@ url      = "https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/dat
 sha256   = "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
 size     = 2327524
 filename = "silero_vad.onnx"
+license  = "MIT"
+license_url = "https://github.com/snakers4/silero-vad/blob/master/LICENSE"
+provenance = "snakers4/silero-vad upstream ONNX"
+adapter_type = "silero"
+version  = "1.0"
+sample_rate = 16000
 signature = '''
 untrusted comment: signature from minisign secret key
 RUQGu9FvZMmIhZU2jujLiO9QWKC7WPSGEE1crTXcP/4t+FGlbFrJ9+JLTVuj7Om/zXdAo1Aak/nvQo3/7xXev41Qn10+VSda/wE=
@@ -30,6 +50,13 @@ url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve
 sha256   = "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
 size     = 26534127
 filename = "wespeaker_resnet34.onnx"
+license  = "Apache-2.0"
+license_url = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34"
+provenance = "Wespeaker/wespeaker-voxceleb-resnet34 Hugging Face"
+adapter_type = "wespeaker-resnet34"
+version  = "1.0"
+sample_rate = 16000
+embedding_dim = 256
 signature = '''
 untrusted comment: signature from minisign secret key
 RUQGu9FvZMmIhf99QhdU+yew+XOYA3tx+dixo9cqxxz0Y7xlIOiiLhFTFKbsKeiH5OkiGn9GPbzP8TwGGLjKGLVRsOdFHSueOAs=
@@ -42,6 +69,15 @@ url      = "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-
 sha256   = "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
 size     = 5992913
 filename = "powerset_fp32.onnx"
+license  = "MIT"
+license_url = "https://github.com/k2-fsa/sherpa-onnx"
+provenance = "sherpa-onnx-pyannote-segmentation-3-0 (pyannote/segmentation-3.0)"
+adapter_type = "powerset-v1"
+version  = "3.0"
+sample_rate = 16000
+window_secs = 10.0
+hop_secs = 1.0
+num_speakers = 3
 signature = '''
 untrusted comment: signature from minisign secret key
 RUQGu9FvZMmIhQ10AL95cKcDAXudXyE1DdH7VfQpci6E/PZHNlI6W19DEjsqPi8tZ7GC8PZkaHeRJ4ZnjAKTQCvkRWYoByTjuAk=
@@ -54,6 +90,13 @@ url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus/resolve
 sha256   = "b50810498b5bcf5773d086f6993d344476bd0c88b566a41e8d801aaf8461efad"
 size     = 29292449
 filename = "cam_pp_fp32.onnx"
+license  = "Apache-2.0"
+license_url = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus"
+provenance = "Wespeaker/wespeaker-voxceleb-campplus Hugging Face"
+adapter_type = "cam++"
+version  = "1.0"
+sample_rate = 16000
+embedding_dim = 512
 signature = '''
 untrusted comment: signature from minisign secret key
 RUQGu9FvZMmIhZxjhT1+WXcKvuaszc4e4LHkeeySB9tzOhQLjB23OeDyBKfzQWQdfp1JfLylKJ3fvlH92eix78kBHpFruwFCFAc=
@@ -77,6 +120,15 @@ sha256   = "ef549ac4b068fdb8df273d2df43cd9c150a3edc26f859b0c9b5c07f2db7914aa"
 size     = 5737909
 filename = "powerset_int8.onnx"
 calibration = "voxconverse_dev_500_samples_seed_42"
+license  = "MIT"
+license_url = "https://github.com/k2-fsa/sherpa-onnx"
+provenance = "INT8 quant of sherpa-onnx-pyannote-segmentation-3-0"
+adapter_type = "powerset-v1"
+version  = "3.0-int8"
+sample_rate = 16000
+window_secs = 10.0
+hop_secs = 1.0
+num_speakers = 3
 signature = '''
 untrusted comment: signature from minisign secret key
 RUQGu9FvZMmIhU/BRu4ryq+ErSzXtl11bOOsOU0N43fBlBw5PlG0CcAVg1tcdHocfuTBfslpnb1igiBfkQBU9ZGFaf/Ec2Yu3go=
@@ -90,6 +142,13 @@ sha256   = "cca48a4b36c1b46e48432b1eb1461dd69f9cf113cf506f3f660de808c93b9a85"
 size     = 8803007
 filename = "cam_pp_int8.onnx"
 calibration = "voxconverse_dev_500_samples_seed_42"
+license  = "Apache-2.0"
+license_url = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus"
+provenance = "INT8 quant of Wespeaker CAM++"
+adapter_type = "cam++"
+version  = "1.0-int8"
+sample_rate = 16000
+embedding_dim = 512
 signature = '''
 untrusted comment: signature from minisign secret key
 RUQGu9FvZMmIhRQLqEqyoP/TNkcz2seLIK19JzqgIbPWHKFDVHMTA4+2hdmwZA5t0M6msDTE8LPEQXVpmqlb+jC4IzfAm518JgE=
@@ -103,6 +162,13 @@ sha256   = "d4528ed19bac510e9f8dfe08515bc3c2860f8f4d135aa5ce875b346ed0f3bbae"
 size     = 6766646
 filename = "resnet34_int8.onnx"
 calibration = "voxconverse_dev_500_samples_seed_42"
+license  = "Apache-2.0"
+license_url = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34"
+provenance = "INT8 quant of Wespeaker ResNet34"
+adapter_type = "wespeaker-resnet34"
+version  = "1.0-int8"
+sample_rate = 16000
+embedding_dim = 256
 signature = '''
 untrusted comment: signature from minisign secret key
 RUQGu9FvZMmIhfT3/3pshTKu6WUH1VBohHK2UjcgjH77Gd6GHqQJJXp74rJtfoiEUx6e3jfPsfAIt6N7NmpjyL4xmPugQ+d9uAs=
