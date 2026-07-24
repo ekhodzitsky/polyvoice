@@ -428,6 +428,13 @@ pub struct SpeakerSummary {
     pub total_speech_s: f64,
     /// Number of turns for this speaker.
     pub turn_count: usize,
+    /// Optional L2-normalized mean embedding for this speaker (opt-in export).
+    ///
+    /// Additive: absent when embeddings were not requested. Shape is the
+    /// embedder dimension (e.g. 256 for ResNet34). Intended for downstream
+    /// identification / voiceprint consumers — not identification itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embedding: Option<Vec<f32>>,
 }
 
 fn default_schema_version() -> String {
@@ -437,10 +444,13 @@ fn default_schema_version() -> String {
 /// Result of offline diarization — the canonical v1 result type that every
 /// surface (RTTM/JSON/SRT/VTT/TXT, CLI, MCP) projects from.
 ///
-/// The metadata fields (`schema_version`, `audio`, `provenance`, `speakers`) are
-/// additive and `#[serde(default)]`, so older JSON without them still
-/// deserializes. Construct via [`DiarizationResult::new`] so `speakers` and
-/// `schema_version` are always populated.
+/// The metadata fields (`schema_version`, `audio`, `provenance`, `speakers`,
+/// `exclusive_turns`) are additive and `#[serde(default)]`, so older JSON
+/// without them still deserializes. Construct via [`DiarizationResult::new`] so
+/// `speakers` and `schema_version` are always populated.
+///
+/// Schema family stays `diarization-result-v1`: new fields are optional and
+/// omitted when empty, so consumers that ignore unknown keys remain compatible.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DiarizationResult {
     pub segments: Vec<Segment>,
@@ -458,6 +468,14 @@ pub struct DiarizationResult {
     /// Per-speaker rollup (sorted by id); exposes id AND the SPEAKER_NN label.
     #[serde(default)]
     pub speakers: Vec<SpeakerSummary>,
+    /// Single-speaker (exclusive) timeline derived from [`Self::turns`].
+    ///
+    /// At most one speaker is active at every frame — the ASR-reconciliation
+    /// surface (overlap is collapsed by a deterministic per-frame argmax). Empty
+    /// unless filled via [`DiarizationResult::with_exclusive`]. The overlap-aware
+    /// [`Self::turns`] field is always the primary diarization output.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclusive_turns: Vec<SpeakerTurn>,
 }
 
 impl DiarizationResult {
@@ -478,6 +496,7 @@ impl DiarizationResult {
                 ..Provenance::default()
             },
             speakers,
+            exclusive_turns: Vec::new(),
         }
     }
 
@@ -504,6 +523,29 @@ impl DiarizationResult {
         };
         self
     }
+
+    /// Fill [`Self::exclusive_turns`] from the overlap-aware [`Self::turns`].
+    ///
+    /// Does not modify `turns` / `segments`. Safe to call multiple times.
+    pub fn with_exclusive(mut self) -> Self {
+        self.exclusive_turns = exclusive_turns(&self.turns);
+        self
+    }
+
+    /// Attach L2-normalized per-speaker embeddings onto [`Self::speakers`].
+    ///
+    /// Speakers with no matching entry keep `embedding: None`. Vectors are
+    /// cloned and re-normalized so callers need not pre-normalize.
+    pub fn with_speaker_embeddings(mut self, embeddings: &[(SpeakerId, Vec<f32>)]) -> Self {
+        for sp in &mut self.speakers {
+            if let Some((_, emb)) = embeddings.iter().find(|(id, _)| id.0 == sp.id) {
+                let mut v = emb.clone();
+                crate::utils::l2_normalize(&mut v);
+                sp.embedding = Some(v);
+            }
+        }
+        self
+    }
 }
 
 /// Per-speaker rollup (total speech + turn count) from turns, sorted by numeric
@@ -522,8 +564,230 @@ fn speaker_summaries(turns: &[SpeakerTurn]) -> Vec<SpeakerSummary> {
             id,
             total_speech_s: total,
             turn_count: count,
+            embedding: None,
         })
         .collect()
+}
+
+/// Frame resolution (seconds) used by exclusive-mode conversion — matches DER.
+const EXCLUSIVE_FRAME_SECS: f64 = 0.01;
+
+/// Derive a single-speaker (exclusive) timeline from overlap-aware turns.
+///
+/// For every 10 ms frame with any active speech, exactly one speaker is chosen:
+/// among speakers covering the frame, pick the one whose covering turn is
+/// longest (dominant claim); ties break to the smaller [`SpeakerId`]. Consecutive
+/// frames with the same speaker are collapsed into turns. Silence frames produce
+/// no output.
+///
+/// This is the ASR-reconciliation surface (cf. pyannote exclusive diarization):
+/// on overlap-heavy audio the second concurrent speaker is dropped by design.
+///
+/// Coverage of the exclusive timeline equals the union of the input speech
+/// frames (every speech frame keeps one speaker).
+pub fn exclusive_turns(turns: &[SpeakerTurn]) -> Vec<SpeakerTurn> {
+    if turns.is_empty() {
+        return Vec::new();
+    }
+    let max_time = turns
+        .iter()
+        .map(|t| t.time.end)
+        .fold(0.0f64, f64::max);
+    if !max_time.is_finite() || max_time <= 0.0 {
+        return Vec::new();
+    }
+    // Cap at 24 h of frames (same guard as DER) to avoid unbounded allocation.
+    const MAX_FRAMES: usize = 24 * 3600 * 100;
+    let n_frames = ((max_time / EXCLUSIVE_FRAME_SECS).ceil() as usize + 1).min(MAX_FRAMES);
+
+    // Per frame: best (speaker, covering_turn_duration). None = silence.
+    let mut best: Vec<Option<(u32, f64)>> = vec![None; n_frames];
+    for turn in turns {
+        if !turn.time.start.is_finite() || !turn.time.end.is_finite() || turn.time.end <= turn.time.start
+        {
+            continue;
+        }
+        let dur = turn.time.duration();
+        let start_f = (turn.time.start / EXCLUSIVE_FRAME_SECS).max(0.0) as usize;
+        let end_f = (turn.time.end / EXCLUSIVE_FRAME_SECS)
+            .ceil()
+            .max(0.0) as usize;
+        for frame in best
+            .iter_mut()
+            .take(end_f.min(n_frames))
+            .skip(start_f)
+        {
+            match frame {
+                None => *frame = Some((turn.speaker.0, dur)),
+                Some((spk, best_dur)) => {
+                    // Longer covering turn wins; tie-break smaller speaker id.
+                    if dur > *best_dur + f64::EPSILON
+                        || ((dur - *best_dur).abs() <= f64::EPSILON && turn.speaker.0 < *spk)
+                    {
+                        *frame = Some((turn.speaker.0, dur));
+                    }
+                }
+            }
+        }
+    }
+
+    // Collapse consecutive same-speaker frames into turns.
+    let mut out: Vec<SpeakerTurn> = Vec::new();
+    let mut i = 0usize;
+    while i < n_frames {
+        let Some((spk, _)) = best[i] else {
+            i += 1;
+            continue;
+        };
+        let start = i;
+        i += 1;
+        while i < n_frames {
+            match best[i] {
+                Some((s, _)) if s == spk => i += 1,
+                _ => break,
+            }
+        }
+        out.push(SpeakerTurn {
+            speaker: SpeakerId(spk),
+            time: TimeRange {
+                start: start as f64 * EXCLUSIVE_FRAME_SECS,
+                end: i as f64 * EXCLUSIVE_FRAME_SECS,
+            },
+            text: None,
+        });
+    }
+    out
+}
+
+/// Default midpoint for [`confidence_from_similarity`] (cosine similarity scale).
+pub const CONFIDENCE_SIM_MIDPOINT: f32 = 0.5;
+/// Default steepness for the logistic confidence curve.
+pub const CONFIDENCE_SIM_STEEPNESS: f32 = 10.0;
+
+/// Map a cosine similarity in `[-1, 1]` to a confidence score in `(0, 1]`.
+///
+/// Uses a fixed logistic curve centered at [`CONFIDENCE_SIM_MIDPOINT`] with
+/// slope [`CONFIDENCE_SIM_STEEPNESS`]. **Monotone increasing** in similarity
+/// (equivalently monotone decreasing in cosine distance `1 − sim`).
+///
+/// This is a cheap heuristic for ranking / low-confidence triage, **not** a
+/// calibrated probability of label correctness. Full isotonic calibration needs
+/// labeled dev data and is intentionally not hard-coded here.
+///
+/// Non-finite inputs map to confidence near 0.
+pub fn confidence_from_similarity(sim: f32) -> f32 {
+    confidence_from_similarity_params(sim, CONFIDENCE_SIM_MIDPOINT, CONFIDENCE_SIM_STEEPNESS)
+}
+
+/// Logistic confidence from cosine similarity with explicit midpoint/steepness.
+///
+/// `steepness` must be positive for the intended "higher sim → higher conf"
+/// direction; non-positive values are treated as [`CONFIDENCE_SIM_STEEPNESS`].
+pub fn confidence_from_similarity_params(sim: f32, midpoint: f32, steepness: f32) -> f32 {
+    let s = if sim.is_finite() {
+        sim.clamp(-1.0, 1.0)
+    } else {
+        -1.0
+    };
+    let k = if steepness.is_finite() && steepness > 0.0 {
+        steepness
+    } else {
+        CONFIDENCE_SIM_STEEPNESS
+    };
+    let m = if midpoint.is_finite() {
+        midpoint
+    } else {
+        CONFIDENCE_SIM_MIDPOINT
+    };
+    let x = k * (s - m);
+    // sigmoid(x) = 1 / (1 + e^{-x}); clamp for numerical safety.
+    let conf = if x >= 20.0 {
+        1.0
+    } else if x <= -20.0 {
+        0.0
+    } else {
+        1.0 / (1.0 + (-x).exp())
+    };
+    conf.clamp(0.0, 1.0)
+}
+
+/// Confidence from cosine distance `d = 1 − sim` (L2-normalized embeddings).
+///
+/// Monotone **decreasing** in `distance`. Equivalent to
+/// [`confidence_from_similarity`]`(1 − distance)`.
+pub fn confidence_from_distance(distance: f32) -> f32 {
+    let d = if distance.is_finite() {
+        distance
+    } else {
+        2.0
+    };
+    confidence_from_similarity(1.0 - d)
+}
+
+/// Mean L2-normalized embedding per speaker from parallel label/embedding slices.
+///
+/// Speakers appear sorted by numeric id. Empty / mismatched input yields an empty
+/// vec. Each output vector is L2-normalized.
+pub fn mean_speaker_embeddings(
+    labels: &[SpeakerId],
+    embeddings: &[Vec<f32>],
+) -> Vec<(SpeakerId, Vec<f32>)> {
+    use std::collections::BTreeMap;
+    if labels.is_empty() || embeddings.is_empty() {
+        return Vec::new();
+    }
+    let n = labels.len().min(embeddings.len());
+    let mut sums: BTreeMap<u32, (Vec<f32>, usize)> = BTreeMap::new();
+    for i in 0..n {
+        let emb = &embeddings[i];
+        if emb.is_empty() || emb.iter().any(|x| !x.is_finite()) {
+            continue;
+        }
+        let id = labels[i].0;
+        let entry = sums.entry(id).or_insert_with(|| (vec![0.0; emb.len()], 0));
+        if entry.0.len() != emb.len() {
+            continue; // dimension mismatch — skip
+        }
+        for (s, &v) in entry.0.iter_mut().zip(emb.iter()) {
+            *s += v;
+        }
+        entry.1 += 1;
+    }
+    sums.into_iter()
+        .filter_map(|(id, (mut sum, count))| {
+            if count == 0 {
+                return None;
+            }
+            let inv = 1.0 / count as f32;
+            for v in &mut sum {
+                *v *= inv;
+            }
+            crate::utils::l2_normalize(&mut sum);
+            Some((SpeakerId(id), sum))
+        })
+        .collect()
+}
+
+/// Per-embedding confidence from cosine similarity to the speaker's mean centroid.
+///
+/// Returns one score per pair in `labels.zip(embeddings)` (length
+/// `min(labels.len(), embeddings.len())`). Embeddings whose label has no usable
+/// centroid get confidence `0.0`.
+pub fn segment_confidences_from_embeddings(
+    labels: &[SpeakerId],
+    embeddings: &[Vec<f32>],
+) -> Vec<f32> {
+    let centroids = mean_speaker_embeddings(labels, embeddings);
+    let n = labels.len().min(embeddings.len());
+    let mut out = vec![0.0f32; n];
+    for i in 0..n {
+        let Some((_, centroid)) = centroids.iter().find(|(id, _)| *id == labels[i]) else {
+            continue;
+        };
+        let sim = crate::utils::cosine_similarity(&embeddings[i], centroid);
+        out[i] = confidence_from_similarity(sim);
+    }
+    out
 }
 
 /// Configuration for speaker clustering.
@@ -826,6 +1090,117 @@ mod diarization_result_tests {
         assert_eq!(back.words.len(), 2);
         assert_eq!(back.words[0].word, "hello");
         assert_eq!(Transcript::default().words.len(), 0);
+    }
+
+    #[test]
+    fn exclusive_collapses_overlap_to_one_speaker_per_frame() {
+        // Overlap on [2, 4): both spk0 and spk1 active. spk0 turn is longer (0-4)
+        // than spk1 (2-6), so exclusive should keep spk0 on the overlap.
+        let turns = vec![turn(0, 0.0, 4.0), turn(1, 2.0, 6.0)];
+        let ex = exclusive_turns(&turns);
+        // Frame check: never two speakers.
+        assert_exclusive_one_speaker(&ex, 6.0);
+        // Speech coverage equals the union [0, 6).
+        let speech: f64 = ex.iter().map(|t| t.time.duration()).sum();
+        assert!(
+            (speech - 6.0).abs() < 0.02,
+            "exclusive speech coverage should match union, got {speech}"
+        );
+    }
+
+    #[test]
+    fn exclusive_no_overlap_is_identity_up_to_frame_quantize() {
+        let turns = vec![turn(0, 0.0, 2.0), turn(1, 2.0, 4.0)];
+        let ex = exclusive_turns(&turns);
+        assert_exclusive_one_speaker(&ex, 4.0);
+        assert_eq!(ex.len(), 2);
+        assert_eq!(ex[0].speaker, SpeakerId(0));
+        assert_eq!(ex[1].speaker, SpeakerId(1));
+    }
+
+    #[test]
+    fn with_exclusive_populates_field_without_touching_turns() {
+        let turns = vec![turn(0, 0.0, 3.0), turn(1, 2.0, 5.0)];
+        let r = DiarizationResult::new(vec![], turns.clone(), 2).with_exclusive();
+        assert_eq!(r.turns, turns);
+        assert!(!r.exclusive_turns.is_empty());
+        assert_exclusive_one_speaker(&r.exclusive_turns, 5.0);
+        // Empty exclusive_turns is omitted from JSON.
+        let bare = DiarizationResult::new(vec![], turns, 2);
+        let json = serde_json::to_string(&bare).unwrap();
+        assert!(!json.contains("exclusive_turns"));
+        let with = bare.with_exclusive();
+        let json2 = serde_json::to_string(&with).unwrap();
+        assert!(json2.contains("exclusive_turns"));
+    }
+
+    #[test]
+    fn confidence_from_similarity_is_monotone() {
+        let sims = [-1.0f32, -0.5, 0.0, 0.3, 0.5, 0.7, 0.9, 1.0];
+        let mut prev = -1.0f32;
+        for &s in &sims {
+            let c = confidence_from_similarity(s);
+            assert!((0.0..=1.0).contains(&c), "conf {c} out of range for sim {s}");
+            assert!(
+                c + 1e-6 >= prev,
+                "not monotone: sim {s} conf {c} < prev {prev}"
+            );
+            prev = c;
+        }
+        // Larger distance → lower confidence.
+        let d_small = confidence_from_distance(0.1);
+        let d_large = confidence_from_distance(0.8);
+        assert!(d_small > d_large, "{d_small} should beat {d_large}");
+    }
+
+    #[test]
+    fn mean_speaker_embeddings_are_l2_normalized_and_deterministic() {
+        let labels = [
+            SpeakerId(0),
+            SpeakerId(0),
+            SpeakerId(1),
+            SpeakerId(1),
+        ];
+        let embeddings = vec![
+            vec![3.0, 0.0],
+            vec![0.0, 4.0],
+            vec![1.0, 0.0],
+            vec![1.0, 0.0],
+        ];
+        let a = mean_speaker_embeddings(&labels, &embeddings);
+        let b = mean_speaker_embeddings(&labels, &embeddings);
+        assert_eq!(a, b, "must be deterministic");
+        assert_eq!(a.len(), 2);
+        for (_, emb) in &a {
+            let norm: f32 = emb.iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((norm - 1.0).abs() < 1e-5, "norm {norm}");
+        }
+        // Speaker 1 mean is [1,0] already unit.
+        assert!((a[1].1[0] - 1.0).abs() < 1e-5);
+        // Attach to result.
+        let r = DiarizationResult::new(vec![], vec![turn(0, 0.0, 1.0), turn(1, 1.0, 2.0)], 2)
+            .with_speaker_embeddings(&a);
+        assert!(r.speakers[0].embedding.is_some());
+        assert!(r.speakers[1].embedding.is_some());
+        let confs = segment_confidences_from_embeddings(&labels, &embeddings);
+        assert_eq!(confs.len(), 4);
+        assert!(confs.iter().all(|&c| (0.0..=1.0).contains(&c)));
+    }
+
+    fn assert_exclusive_one_speaker(turns: &[SpeakerTurn], max_time: f64) {
+        let n = ((max_time / EXCLUSIVE_FRAME_SECS).ceil() as usize) + 1;
+        let mut counts = vec![0u32; n];
+        for t in turns {
+            let s = (t.time.start / EXCLUSIVE_FRAME_SECS) as usize;
+            let e = (t.time.end / EXCLUSIVE_FRAME_SECS).ceil() as usize;
+            for c in counts.iter_mut().take(e.min(n)).skip(s) {
+                *c += 1;
+            }
+        }
+        assert!(
+            counts.iter().all(|&c| c <= 1),
+            "exclusive timeline has dual-speaker frames"
+        );
     }
 }
 
