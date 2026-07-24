@@ -24,6 +24,9 @@ Thumbs.db
 *.wav
 *.mp3
 *.flac
+# Tiny audio-io decode fixtures (checked in on purpose).
+!tests/data/audio-io/
+!tests/data/audio-io/**
 
 # ONNX model files (should be downloaded, not committed)
 *.onnx

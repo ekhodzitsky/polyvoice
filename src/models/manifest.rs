@@ -57,7 +57,6 @@ pub struct ModelEntry {
     pub signature: Option<String>,
 
     // --- schema v2 fields (all optional so v1 records keep deserializing) ---
-
     /// SPDX license identifier (e.g. `"MIT"`, `"Apache-2.0"`).
     #[serde(default)]
     pub license: Option<String>,
@@ -77,7 +76,6 @@ pub struct ModelEntry {
 
     // Geometry / runtime fallbacks used when ONNX `metadata_props` are absent.
     // These never override values successfully read from the binary.
-
     /// Expected input sample rate (Hz).
     #[serde(default)]
     pub sample_rate: Option<u32>,
@@ -99,9 +97,7 @@ pub struct ModelEntry {
 pub enum ManifestError {
     #[error("toml parse error: {0}")]
     Toml(#[from] toml::de::Error),
-    #[error(
-        "unsupported schema version: expected '{SCHEMA_V1}' or '{SCHEMA_V2}', got '{0}'"
-    )]
+    #[error("unsupported schema version: expected '{SCHEMA_V1}' or '{SCHEMA_V2}', got '{0}'")]
     UnsupportedSchema(String),
     #[error("profile '{profile}' references unknown model '{model}'")]
     DanglingModelRef { profile: String, model: String },
@@ -345,10 +341,7 @@ mod tests {
         assert_eq!(p.sample_rate, Some(16000));
         assert_eq!(p.embedding_dim, None);
         assert_eq!(p.window_secs, Some(10.0));
-        assert_eq!(
-            m.alias("segmenter", "latest"),
-            Some("powerset_fp32")
-        );
+        assert_eq!(m.alias("segmenter", "latest"), Some("powerset_fp32"));
     }
 
     #[test]

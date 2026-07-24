@@ -8,6 +8,10 @@
 //! resegmentation); v2 is not yet validated as default on long-form audio — see
 //! PRODUCTION-READINESS.md.
 //!
+//! Audio input: without the `audio-io` build feature, only mono 16 kHz WAV is
+//! accepted. Rebuild with `--features "cli,audio-io"` to decode mp3/flac/ogg/
+//! m4a/aac (and other containers) and resample any rate → 16 kHz mono.
+//!
 //! STDOUT discipline: only the diarization result goes to stdout (so `--format
 //! json` / `--json` and downstream pipes stay clean); all progress and info go to
 //! stderr.
@@ -21,10 +25,15 @@ use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConf
 use polyvoice::rttm::write_rttm;
 use polyvoice::types::{ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate};
 use polyvoice::vad::VadConfig;
-use polyvoice::wav::read_wav;
+use polyvoice::wav::load_audio;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+#[cfg(feature = "audio-io")]
+const INPUT_HELP: &str = "Audio file to diarize (mp3/flac/ogg/m4a/aac/wav at any sample rate; decoded and resampled to 16 kHz mono)";
+#[cfg(not(feature = "audio-io"))]
+const INPUT_HELP: &str = "WAV file to diarize (mono 16 kHz). Rebuild with --features audio-io for mp3/flac/ogg/m4a and any-rate resampling";
 
 #[derive(Parser, Debug)]
 #[command(
@@ -44,7 +53,8 @@ struct Cli {
 /// Diarization arguments, shared by `polyvoice <wav>` and `polyvoice diarize <wav>`.
 #[derive(Args, Debug)]
 struct DiarizeArgs {
-    /// WAV file to diarize. `polyvoice meeting.wav` diarizes it directly.
+    /// Input audio path. Bare `polyvoice meeting.wav` is implicit diarize.
+    #[arg(help = INPUT_HELP)]
     wav: Option<PathBuf>,
     #[arg(long, default_value = "balanced")]
     profile: String,
@@ -109,7 +119,7 @@ struct DiarizeArgs {
 // DiarizeArgs variant would buy nothing but indirection.
 #[allow(clippy::large_enum_variant)]
 enum Command {
-    /// Run diarization on a WAV file (same as the bare `polyvoice <wav>` form).
+    /// Run diarization on an audio file (same as the bare `polyvoice <file>` form).
     Diarize(DiarizeArgs),
     /// Download Mobile/Balanced ONNX models.
     DownloadModels {
@@ -177,7 +187,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
 
     let wav = wav.ok_or_else(|| {
         anyhow::anyhow!(
-            "no input: provide a WAV file (e.g. `polyvoice meeting.wav`) or a subcommand (see --help)"
+            "no input: provide an audio file (e.g. `polyvoice meeting.wav`) or a subcommand (see --help)"
         )
     })?;
     // Machine mode forces JSON to stdout and silences human chatter on stderr.
@@ -322,7 +332,8 @@ fn run_legacy_pipeline(
     if !quiet {
         eprintln!("Reading {}...", wav.display());
     }
-    let (samples, sr_hz) = read_wav(wav).with_context(|| format!("read WAV {}", wav.display()))?;
+    let (samples, sr_hz) =
+        load_audio(wav).with_context(|| format!("load audio {}", wav.display()))?;
     let _sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
 
     if !quiet {
@@ -390,7 +401,8 @@ fn run_v2_pipeline(
     if !quiet {
         eprintln!("Reading {}...", wav.display());
     }
-    let (samples, sr_hz) = read_wav(wav).with_context(|| format!("read WAV {}", wav.display()))?;
+    let (samples, sr_hz) =
+        load_audio(wav).with_context(|| format!("load audio {}", wav.display()))?;
     let sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
 
     if !quiet {
@@ -485,17 +497,14 @@ fn cmd_models_info(name: String) -> Result<()> {
     let registry = ModelRegistry::default()?;
     let manifest = registry.manifest();
     // Accept direct model ids and stage-scoped aliases (e.g. embedder/latest).
-    let resolved = manifest
-        .model(&name)
-        .map(|_| name.as_str())
-        .or_else(|| {
-            for stage in ["segmenter", "embedder", "vad"] {
-                if let Some(id) = manifest.resolve_model_ref(stage, &name) {
-                    return Some(id);
-                }
+    let resolved = manifest.model(&name).map(|_| name.as_str()).or_else(|| {
+        for stage in ["segmenter", "embedder", "vad"] {
+            if let Some(id) = manifest.resolve_model_ref(stage, &name) {
+                return Some(id);
             }
-            None
-        });
+        }
+        None
+    });
     let Some(model_id) = resolved else {
         anyhow::bail!("model '{name}' not found in manifest");
     };
