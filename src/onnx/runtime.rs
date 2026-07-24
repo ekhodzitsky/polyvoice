@@ -132,6 +132,12 @@ pub trait InferenceRuntime: Send {
     /// Model input names in declaration order.
     fn input_names(&self) -> &[String];
 
+    /// Model output names in declaration order (matches [`Self::run`] vector order).
+    /// Default is empty when a backend does not expose names.
+    fn output_names(&self) -> &[String] {
+        &[]
+    }
+
     /// First input name, if any — convenience for single-input models.
     fn primary_input_name(&self) -> Option<&str> {
         self.input_names().first().map(String::as_str)
