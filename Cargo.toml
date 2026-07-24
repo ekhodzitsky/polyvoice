@@ -251,6 +251,11 @@ path = "src/bin/polyvoice-bench.rs"
 required-features = ["cli"]
 
 [[bin]]
+name = "polyvoice-measure"
+path = "src/bin/polyvoice-measure.rs"
+required-features = ["cli"]
+
+[[bin]]
 name = "polyvoice-mcp"
 path = "src/bin/polyvoice-mcp.rs"
 required-features = ["mcp"]

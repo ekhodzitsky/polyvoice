@@ -1,47 +1,46 @@
-# Streaming latency-vs-DER methodology (stub)
+# Streaming latency measurement methodology
 
-This file is the placeholder for measured streaming preset numbers. Fill it
-when a calibrated run is available; until then the table in
-`docs/BENCHMARKS.md` keeps **TBD** cells.
+**Filled:** 2026-07-24  
+**Artifact:** `benchmarks/results/streaming-latency-measured.json`  
+**Harness:** `polyvoice-measure streaming` (release)
 
-## Protocol
+## Setup
 
-| Item | Value |
-|------|-------|
-| Pipeline | `StreamingPipeline::with_latency_preset` + Balanced ONNX embedder |
-| Presets | `realtime`, `balanced`, `accurate` |
-| Sample rate | 16 kHz mono |
-| VAD | EnergyVad or Silero, frame 512 samples (32 ms) |
-| Input-buffer latency | `window_secs + right_context_secs + vad_frame_secs` (config, not RTF) |
-| RTF | `sum(feed_wall_time) / audio_duration` on named hardware |
-| DER | collar 0, overlap scored, Hungarian (`benchmarks/der.py`) |
-| Subset | VoxConverse-test 30-file subset (or full 232 when budget allows) |
-| Long-stream | ≥1 h audio or synthetic; per-chunk latency series start vs end |
-| Label stability | `label_flip_rate(first_emitted, final)` |
+| Field | Value |
+|-------|--------|
+| Hardware | Apple M1 Pro, 10 cores, aarch64, macOS |
+| Build | `cargo build --release --features "cli,onnx,download" --bin polyvoice-measure` |
+| Dataset | `data/voxconverse-test`, first **10** WAV files (lexicographic sort) |
+| Audio total | ~6701 s across the 10 files |
+| Chunk schedule | 3200 samples / feed (~200 ms @ 16 kHz) |
+| VAD | Silero, frame 512 |
+| Embedder | WeSpeaker ResNet34 (256-d) |
+| DER | `compute_der`, collar 0 and 0.25, overlap scored, Hungarian |
 
-## Expected artifact schema
+## Metrics
 
-```json
-{
-  "schema": "polyvoice-streaming-latency-v1",
-  "hardware": "TBD",
-  "presets": {
-    "realtime": {
-      "input_buffer_latency_secs": 1.032,
-      "rtf_mean": null,
-      "chunk_latency_ms_mean": null,
-      "chunk_latency_ms_p95": null,
-      "chunk_latency_ms_start_mean": null,
-      "chunk_latency_ms_end_mean": null,
-      "der_collar0": null,
-      "label_flip_rate": null
-    }
-  }
-}
+- **Input-buffer latency** = `window + right_context + 512/16000` (config, not wall).
+- **RTF** = sum wall-clock of (feed loop + flush) / sum audio duration.
+- **DER** = macro average of per-file DER on streaming `turns()` after flush.
+
+## Results (summary)
+
+| Preset | latency | RTF | DER0 | DER0.25 |
+|--------|---------|-----|------|---------|
+| realtime | 1.032 s | 0.117 | 42.15% | 32.74% |
+| balanced | 1.532 s | 0.109 | 29.99% | 20.15% |
+| accurate | 2.282 s | 0.111 | 30.10% | 20.85% |
+
+## Reproduce
+
+```bash
+cargo run --release --features "cli,onnx,download" --bin polyvoice-measure -- streaming \
+  --dataset data/voxconverse-test --max-files 10 \
+  --output benchmarks/results/streaming-latency-measured.json
 ```
 
-## Bounded-state check
+## Follow-ups
 
-`ArrivalOrderSpeakerCache` is hard-capped (`speaker_cache_cap`). Unit tests
-assert `cache.len() <= cap` under long assign loops. The ≥1 h bench must show
-non-growing per-chunk latency (start window ≈ end window within noise).
+- Full 232-file VoxConverse-test when budget allows.
+- ≥1 h long-stream per-chunk latency series (bounded-state proof).
+- Wire right-context so `accurate` can improve DER vs `balanced`.
