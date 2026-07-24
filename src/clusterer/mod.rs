@@ -7,6 +7,16 @@ pub mod plda;
 #[cfg(feature = "vbx")]
 pub mod vbx;
 
+pub mod assign;
+pub mod short_filter;
+
+pub use assign::{
+    LocalGlobalDuration, build_cooccurrence, hungarian_local_to_global, majority_local_to_global,
+};
+pub use short_filter::{
+    partition_by_min_duration, reassign_short_by_cosine, reassign_short_by_features,
+};
+
 /// Speaker clusterer — turns a batch of L2-normalized speaker embeddings into
 /// per-embedding cluster labels in the range `0..K` where `K` is the inferred
 /// number of clusters.
@@ -23,6 +33,23 @@ pub trait Clusterer: Send + Sync {
     /// **Guarantees on Ok:** `result.len() == embeddings.len()`,
     /// `result[i] < unique(result).count()` (compact 0..K numbering).
     fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError>;
+
+    /// Cluster with per-embedding durations (seconds). Defaults to ignoring
+    /// durations and calling [`cluster`]. Backends that filter short embeddings
+    /// (cVBx short-segment exclusion) override this so unreliable short windows
+    /// are kept out of AHC/VB and reassigned afterward.
+    ///
+    /// When `durations_secs.len() != embeddings.len()` the durations are ignored
+    /// (treated as absent) rather than erroring — callers without timing info
+    /// may pass an empty slice.
+    fn cluster_with_durations(
+        &self,
+        embeddings: &[Vec<f32>],
+        durations_secs: &[f64],
+    ) -> Result<Vec<usize>, ClustererError> {
+        let _ = durations_secs;
+        self.cluster(embeddings)
+    }
 
     /// Hard ceiling on the number of clusters this implementation can produce.
     fn max_clusters(&self) -> usize;
@@ -163,6 +190,21 @@ impl MinClusterSizeClusterer {
 impl Clusterer for MinClusterSizeClusterer {
     fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
         let labels = self.inner.cluster(embeddings)?;
+        Ok(crate::ahc::prune_small_clusters(
+            embeddings,
+            labels,
+            self.min_size,
+        ))
+    }
+
+    fn cluster_with_durations(
+        &self,
+        embeddings: &[Vec<f32>],
+        durations_secs: &[f64],
+    ) -> Result<Vec<usize>, ClustererError> {
+        let labels = self
+            .inner
+            .cluster_with_durations(embeddings, durations_secs)?;
         Ok(crate::ahc::prune_small_clusters(
             embeddings,
             labels,
