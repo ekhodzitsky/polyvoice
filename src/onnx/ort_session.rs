@@ -1,8 +1,9 @@
 //! ONNX Runtime (`ort`) implementation of [`InferenceRuntime`].
 //!
 //! **This is the only module that may import `ort::`.** Neural stages must go
-//! through [`InferenceRuntime`] / [`OrtSession`] instead. Future backends
-//! (e.g. tract) live in sibling modules and implement the same trait.
+//! through [`InferenceRuntime`] / [`RuntimeSession`](super::RuntimeSession)
+//! instead. The optional tract backend lives in `tract_session` behind
+//! `backend-tract`.
 
 use super::runtime::{
     InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData,
