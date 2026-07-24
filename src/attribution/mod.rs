@@ -825,7 +825,10 @@ mod tests {
         let embs = vec![vec![3.0, 0.0], vec![0.0, 4.0], vec![0.0, 2.0]];
         let means = speaker_embeddings_from_segments(&labels, &embs);
         let wsw = wsw.with_speaker_embeddings(&means);
-        let se = wsw.speaker_embeddings.as_ref().expect("embeddings attached");
+        let se = wsw
+            .speaker_embeddings
+            .as_ref()
+            .expect("embeddings attached");
         assert_eq!(se.len(), 2);
         for e in se {
             let n: f32 = e.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
