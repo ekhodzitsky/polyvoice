@@ -1,12 +1,21 @@
-//! Model registry — manifest-driven downloads with SHA-256 verification.
+//! Model registry — manifest-driven downloads with SHA-256 verification,
+//! adapter selection by config string, and self-describing model metadata.
 
+pub mod adapter;
 pub mod download;
 pub mod manifest;
+pub mod metadata;
 pub mod verify;
+pub use adapter::{
+    AdapterError, AdapterFactory, AdapterRegistry, AdapterStage, BuiltinAdapter,
+};
 pub use download::{
     DownloadError, download_with_checksum, download_with_checksum_and_signature, verify_sha256,
 };
-pub use manifest::{Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1};
+pub use manifest::{
+    Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1, SCHEMA_V2, is_supported_schema,
+};
+pub use metadata::{MetaSource, ModelConfigMeta, load_model_config, read_onnx_metadata_props};
 
 use crate::types::Profile;
 use std::path::{Path, PathBuf};
@@ -336,9 +345,38 @@ mod tests {
     fn embedded_manifest_parses() {
         // This will panic if the bundled manifest.toml is malformed.
         let m = default_manifest();
-        assert_eq!(m.schema, SCHEMA_V1);
+        assert!(
+            is_supported_schema(&m.schema),
+            "embedded schema must be v1 or v2, got {}",
+            m.schema
+        );
         assert!(m.profiles.contains_key("mobile"));
         assert!(m.profiles.contains_key("balanced"));
+    }
+
+    #[test]
+    fn embedded_manifest_is_v2_with_adapter_metadata() {
+        let m = default_manifest();
+        assert_eq!(m.schema, SCHEMA_V2);
+        // Every shipped model carries adapter_type + license (schema v2).
+        for (id, entry) in &m.models {
+            assert!(
+                entry.adapter_type.is_some(),
+                "model '{id}' missing adapter_type"
+            );
+            assert!(entry.license.is_some(), "model '{id}' missing license");
+            assert!(entry.version.is_some(), "model '{id}' missing version");
+        }
+        // latest aliases resolve to pinned model ids.
+        assert_eq!(
+            m.resolve_model_ref("segmenter", "latest"),
+            Some("powerset_fp32")
+        );
+        assert_eq!(
+            m.resolve_model_ref("embedder", "latest"),
+            Some("wespeaker_resnet34")
+        );
+        assert_eq!(m.resolve_model_ref("vad", "latest"), Some("silero_vad"));
     }
 
     #[test]
