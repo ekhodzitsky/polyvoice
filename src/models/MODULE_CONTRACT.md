@@ -5,8 +5,9 @@ module: src/models
 level: subsystem
 layer: infrastructure
 purpose: >
-  Owns model registry, manifest parsing, HTTP downloads, SHA-256 verification,
-  and minisig signature verification for ONNX model bundles. Does NOT own
+  Owns model registry, manifest parsing (schema v1+v2), HTTP downloads,
+  SHA-256/minisig verification, adapter selection by config string
+  (AdapterRegistry), and self-describing model metadata loading. Does NOT own
   model inference (that lives in onnx, embedder, segmentation).
 status: stable
 owners:
@@ -62,10 +63,29 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Typed TOML manifest describing available model bundles.
+      Typed TOML manifest describing available model bundles (schema v1 + v2).
     proof:
       kind: unit-test
       target: src/models::manifest::tests
+      command: cargo test --lib models --features download
+  - name: AdapterRegistry
+    kind: struct
+    visibility: public
+    contract: >
+      Selects segmentation/embedder/clusterer/scoring/VAD adapters by config
+      string; public register API; unknown type returns AdapterError.
+    proof:
+      kind: unit-test
+      target: src/models::adapter::tests
+      command: cargo test --lib models --features download
+  - name: ModelConfigMeta
+    kind: struct
+    visibility: public
+    contract: >
+      Self-describing model config from ONNX metadata_props with manifest/default fallback.
+    proof:
+      kind: unit-test
+      target: src/models::metadata::tests
       command: cargo test --lib models --features download
   - name: DEFAULT_MANIFEST_TOML
     kind: constant
