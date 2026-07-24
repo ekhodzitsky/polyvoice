@@ -221,39 +221,99 @@ python benchmark.py --dataset voxconverse_test --runners all
 - sherpa-onnx (no DER published): https://k2-fsa.github.io/sherpa/onnx/speaker-diarization/index.html
 - "Benchmarking Diarization Models" (DiariZen ~5.2 VoxConverse @0.25 collar): https://arxiv.org/abs/2509.26177
 
-## Streaming latency presets (methodology)
+## Streaming latency presets (measured)
 
-Named presets for `polyvoice::streaming::LatencyPreset` / CLI `--latency-preset`:
+Named presets for `polyvoice::streaming::LatencyPreset` / CLI `--latency-preset`.
 
-| Preset     | window_secs | hop_secs | right_context_secs | cache_cap | input-buffer latency¹ | RTF | DER (collar 0) |
-|------------|-------------|----------|--------------------|-----------|----------------------|-----|----------------|
-| `realtime` | 1.0         | 0.5      | 0.0                | 16        | ≈ 1.03 s             | TBD | TBD            |
-| `balanced` | 1.5         | 0.75     | 0.0                | 32        | ≈ 1.53 s             | TBD | TBD            |
-| `accurate` | 2.0         | 1.0      | 0.25               | 64        | ≈ 2.28 s             | TBD | TBD            |
+**Protocol (2026-07-24):** VoxConverse-test **first 10 files** (sorted names),
+overlap scored, Hungarian DER, collar 0 and 0.25. `StreamingPipeline` + Silero
+VAD + WeSpeaker ResNet34, feed chunks of 3200 samples (~200 ms) @ 16 kHz.
+Release build on **Apple M1 Pro (10 cores)**. Full artifact:
+[`benchmarks/results/streaming-latency-measured.json`](../benchmarks/results/streaming-latency-measured.json).
 
-¹ **Input-buffer latency** is a configuration number:
-`window_secs + right_context_secs + vad_frame_secs` with EnergyVad frame 512
-samples @ 16 kHz (`vad_frame_secs ≈ 0.032 s`). It is **not** wall-clock RTF.
+| Preset     | window | hop  | right ctx | cache | input-buffer latency¹ | RTF   | DER collar 0 | DER collar 0.25 |
+|------------|--------|------|-----------|-------|----------------------|-------|--------------|-----------------|
+| `realtime` | 1.0 s  | 0.5  | 0.0       | 16    | **1.032 s**          | **0.117** | **42.15%** | **32.74%** |
+| `balanced` | 1.5 s  | 0.75 | 0.0       | 32    | **1.532 s**          | **0.109** | **29.99%** | **20.15%** |
+| `accurate` | 2.0 s  | 1.0  | 0.25      | 64    | **2.282 s**          | **0.111** | **30.10%** | **20.85%** |
 
-**Reporting convention (diart / NeMo):** publish **latency**, **RTF**, and **DER**
-as three separate numbers. Never publish a latency figure without DER and a
-stated methodology (hardware, chunk schedule, collar, overlap policy).
+¹ **Input-buffer latency** is configuration:
+`window_secs + right_context_secs + vad_frame_secs` with frame 512 @ 16 kHz
+(`≈ 0.032 s`). It is **not** wall-clock RTF. RTF = total wall / total audio
+(~6701 s audio × 3 presets on this run).
 
-### How to fill the table
+**Notes:** online DER is expected to trail the offline legacy baseline
+(~18.5% no-collar full test). On this 10-file slice `balanced` beats
+`realtime` by ~12 pp (collar 0); `accurate` does **not** improve further
+(right-context currently contributes to the latency budget but does not yet
+delay emission — see streaming module docs). Reproduce:
 
-1. Stream a fixed subset (recommended: VoxConverse-test 30-file subset, or full
-   test when budget allows) through `StreamingPipeline::with_latency_preset`
-   with the Balanced ONNX embedder on a **named** CPU (cores, arch, OS).
-2. Record per-chunk wall time series (`t_end - t_start` around `feed`), then
-   RTF = total_feed_wall / audio_duration. Also record start-of-stream vs
-   end-of-stream mean chunk latency on a ≥1 h synthetic or long-form file to
-   confirm bounded state (cache cap prevents O(t) growth).
-3. Score DER with `benchmarks/der.py` / `polyvoice-bench` at **collar 0**,
-   overlap scored, Hungarian mapping — same protocol as the offline tables.
-4. Optionally report label flip rate via
-   `polyvoice::streaming::label_flip_rate` (first-emitted vs final labels).
-
-Artifacts belong under `benchmarks/results/` (per-chunk latency series + DER
-JSON). Until a measured run lands, cells stay **TBD** — do not invent numbers.
+```bash
+cargo run --release --features "cli,onnx,download" --bin polyvoice-measure -- streaming \
+  --dataset data/voxconverse-test --max-files 10 \
+  --output benchmarks/results/streaming-latency-measured.json
+```
 
 See also `benchmarks/results/streaming-latency-methodology.md`.
+
+## VAD parity: Silero vs earshot (measured)
+
+**Protocol:** same VoxConverse-test **10-file** slice, legacy offline pipeline
+(WeSpeaker ResNet34 + AHC threshold 0.45), only the VAD backend swapped.
+Release build, Apple M1 Pro. Artifact:
+[`benchmarks/results/vad-parity-earshot-silero.json`](../benchmarks/results/vad-parity-earshot-silero.json).
+
+| VAD | frame | DER collar 0 | DER collar 0.25 | RTF |
+|-----|-------|--------------|-----------------|-----|
+| **Silero** (default) | 512 | **23.89%** | **15.82%** | 0.102 |
+| **earshot** (`vad-earshot`) | 256 | **26.54%** | **18.68%** | 0.099 |
+| **Δ (earshot − Silero)** | — | **+2.65 pp** | **+2.86 pp** | −0.0025 |
+
+**Parity gate** (notes file): |Δ DER| ≤ **0.3 pp** absolute. **Failed** on both
+collars → keep earshot **optional only**; do **not** switch the default VAD.
+Vendor “40× faster / more accurate” claims remain **unverified / not supported**
+by this DER gate (RTF nearly tied; accuracy worse).
+
+```bash
+cargo run --release --features "cli,vad-earshot,onnx,download" --bin polyvoice-measure -- vad-parity \
+  --dataset data/voxconverse-test --max-files 10 \
+  --output benchmarks/results/vad-parity-earshot-silero.json
+```
+
+## Embedder short-segment: ResNet34 vs ERes2NetV2 (measured)
+
+**EER protocol:** 400 same/different-speaker pairs built from **VoxConverse-test
+RTTM segments** (VoxCeleb1 audio not present in this tree). Center-crop to
+0.5 / 1 / 2 / 3 s, cosine scoring, equal-error rate. **Not** the official
+VoxCeleb1 `veri_test` protocol — domain is in-the-wild multi-party English.
+
+**DER protocol:** same 10-file Vox slice, legacy pipeline, Silero VAD fixed;
+only the embedder ONNX swapped (ResNet34 256-d vs ERes2NetV2 192-d zh-cn
+optional download). Artifact:
+[`benchmarks/results/embedder-short-eres2net.json`](../benchmarks/results/embedder-short-eres2net.json).
+
+| Duration | ResNet34 EER % | ERes2NetV2 EER % |
+|----------|----------------|------------------|
+| 0.5 s | **18.86** | 27.46 |
+| 1.0 s | **7.21** | 20.09 |
+| 2.0 s | **4.75** | 13.03 |
+| 3.0 s | **3.84** | 10.74 |
+
+| Embedder | DER collar 0 | DER collar 0.25 |
+|----------|--------------|-----------------|
+| WeSpeaker ResNet34 (default) | **23.89%** | **15.82%** |
+| ERes2NetV2 (zh-cn common ONNX) | **53.84%** | **49.18%** |
+
+**Verdict:** the shipped **zh-cn** ERes2NetV2 optional weights are **not** a
+drop-in upgrade on English VoxConverse under our fbank front-end: both short-seg
+EER and full-file DER regress hard. Keep the adapter for CJK / experiment
+paths; do **not** make it default. A VoxCeleb-English ERes2Net export (if
+ungated Apache) would need a separate measurement before any accuracy claim.
+
+```bash
+cargo run --release --features "cli,embedder,onnx,download" --bin polyvoice-measure -- embedder-short \
+  --veri-list data/voxceleb1-subset/lists/veri_test.txt \
+  --wav-root data/voxceleb1-subset \
+  --der-dataset data/voxconverse-test --der-max-files 10 \
+  --output benchmarks/results/embedder-short-eres2net.json
+```
