@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/ekhodzitsky/polyvoice/blob/master/schema/diarization-result-v1.json",
   "title": "DiarizationResult",
-  "description": "Canonical polyvoice diarization result (schema family `diarization-result-v1`). This is the machine-readable contract for the `--json` CLI output, the Python/FFI projections, and the MCP `diarize` tool. Evolution within v1 is strictly additive: optional fields (notably `turns[].text` and per-word transcription) may appear; a consumer that ignores unknown fields stays forward-compatible.",
+  "description": "Canonical polyvoice diarization result (schema family `diarization-result-v1`). This is the machine-readable contract for the `--json` CLI output, the Python/FFI projections, and the MCP `diarize` tool. Evolution within v1 is strictly additive: optional fields (notably `turns[].text`, `exclusive_turns`, per-speaker `embedding`, and per-word transcription) may appear; a consumer that ignores unknown fields stays forward-compatible. Schema decision: keep v1 with additive optional fields rather than bumping to v2 — all new fields are optional/omitted-when-empty.",
   "type": "object",
   "required": ["segments", "turns", "num_speakers"],
   "properties": {
@@ -23,7 +23,12 @@
     },
     "turns": {
       "type": "array",
-      "description": "Merged speaker turns — the primary 'who spoke when' output.",
+      "description": "Merged speaker turns — the primary overlap-aware 'who spoke when' output.",
+      "items": { "$ref": "#/$defs/turn" }
+    },
+    "exclusive_turns": {
+      "type": "array",
+      "description": "ADDITIVE single-speaker (exclusive) timeline for ASR reconciliation: at most one speaker per frame, derived from `turns` by a deterministic per-frame argmax. Omitted when empty. Not a replacement for overlap-aware `turns`.",
       "items": { "$ref": "#/$defs/turn" }
     },
     "audio": { "$ref": "#/$defs/audio" },
@@ -54,7 +59,7 @@
         },
         "confidence": {
           "type": ["number", "null"],
-          "description": "Assignment confidence (cosine similarity or posterior)."
+          "description": "Assignment confidence in [0,1] from a logistic map of embedding-to-centroid cosine similarity (or a raw posterior when available). Ranking score — not a calibrated probability of label correctness."
         }
       }
     },
@@ -111,7 +116,12 @@
         "label": { "type": "string", "description": "Canonical label, e.g. \"SPEAKER_00\"." },
         "id": { "type": "integer" },
         "total_speech_s": { "type": "number" },
-        "turn_count": { "type": "integer" }
+        "turn_count": { "type": "integer" },
+        "embedding": {
+          "type": "array",
+          "items": { "type": "number" },
+          "description": "ADDITIVE optional L2-normalized mean embedding for this speaker (embedder dimension). Omitted unless embeddings were requested/attached."
+        }
       }
     }
   }
