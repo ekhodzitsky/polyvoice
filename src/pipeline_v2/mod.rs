@@ -298,12 +298,35 @@ impl Pipeline {
         all_turns.retain(|t| t.time.duration() >= min_secs);
 
         let max_gap = self.config.max_gap_secs as f64;
+        // Window-level confidence from embedding↔centroid cosine (logistic map).
+        // After merge_segments the per-run confidence is the mean of present values.
+        let speaker_ids: Vec<SpeakerId> = labels.iter().map(|&l| SpeakerId(l as u32)).collect();
+        let window_conf =
+            crate::types::segment_confidences_from_embeddings(&speaker_ids, &embeddings);
+        // Map each merged turn's speaker/time back to a confidence by averaging
+        // window confidences whose midpoint falls inside the turn (fallback: None).
         let merged_segments: Vec<Segment> = all_turns
             .iter()
-            .map(|t| Segment {
-                time: t.time,
-                speaker: Some(t.speaker),
-                confidence: None,
+            .map(|t| {
+                let mut sum = 0.0f32;
+                let mut n = 0u32;
+                for (i, seg) in valid_segments.iter().enumerate() {
+                    if speaker_ids.get(i).copied() != Some(t.speaker) {
+                        continue;
+                    }
+                    let mid = (seg.time.start + seg.time.end) / 2.0;
+                    if mid >= t.time.start && mid < t.time.end
+                        && let Some(&c) = window_conf.get(i)
+                    {
+                        sum += c;
+                        n += 1;
+                    }
+                }
+                Segment {
+                    time: t.time,
+                    speaker: Some(t.speaker),
+                    confidence: if n > 0 { Some(sum / n as f32) } else { None },
+                }
             })
             .collect();
         let merged_segments = merge_segments(merged_segments, max_gap);
