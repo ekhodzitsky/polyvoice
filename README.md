@@ -64,7 +64,11 @@ pip install polyvoice
 ### From source
 
 ```bash
+# CLI (WAV 16 kHz mono input)
 cargo install polyvoice --features cli
+
+# CLI + any-format audio (mp3/flac/ogg/m4a/aac, any sample rate → 16 kHz mono)
+cargo install polyvoice --features "cli,audio-io"
 ```
 
 ## Usage
@@ -80,7 +84,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_models_from(ModelRegistry::default()?) // models auto-download on first run
         .build()?;
 
-    let (samples, sr) = polyvoice::wav::read_wav("meeting.wav")?;
+    // Pipeline-ready mono 16 kHz (with feature `audio-io`, also mp3/flac/… + resample).
+    // Without that feature, load_audio accepts 16 kHz WAV only.
+    let (samples, sr) = polyvoice::wav::load_audio(std::path::Path::new("meeting.wav"))?;
     let result = pipeline.run(&samples, SampleRate::new(sr).ok_or("bad sample rate")?)?;
 
     for turn in &result.turns {
@@ -93,6 +99,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```bash
 polyvoice download-models --profile balanced
 polyvoice diarize meeting.wav --output meeting.rttm
+# With a build that includes `audio-io`:
+# polyvoice diarize meeting.mp3 --output meeting.rttm
 ```
 
 Python usage and the full API live on [docs.rs](https://docs.rs/polyvoice).
