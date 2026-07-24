@@ -308,10 +308,66 @@ mod onnx_adapters {
             parallel_embed_batch(self, audios)
         }
     }
+
+    /// ERes2NetV2 speaker embedder (Interspeech 2024): 192-d output, same
+    /// 80-bin log-mel fbank path as CAM++. Tuned for short (1–3 s) utterances.
+    /// Weights are optional downloads (Apache-2.0); never bundled or default.
+    pub struct ERes2NetV2Extractor {
+        inner: FbankOnnxExtractor,
+        dim: usize,
+    }
+
+    impl ERes2NetV2Extractor {
+        /// Output embedding dimension for the common zh-cn 16 kHz ONNX export.
+        pub const DIM: usize = 192;
+
+        /// Load an ERes2NetV2 ONNX model. Default dim is [`Self::DIM`] (192).
+        pub fn new(
+            path: impl AsRef<Path>,
+            pool_size: usize,
+            ep: crate::onnx::ExecutionProvider,
+        ) -> Result<Self, EmbedderError> {
+            Self::with_dim(path, Self::DIM, pool_size, ep)
+        }
+
+        /// Load with an explicit output dimension (for non-standard exports).
+        pub fn with_dim(
+            path: impl AsRef<Path>,
+            dim: usize,
+            pool_size: usize,
+            ep: crate::onnx::ExecutionProvider,
+        ) -> Result<Self, EmbedderError> {
+            let inner =
+                FbankOnnxExtractor::new(path.as_ref(), dim, pool_size, ep).map_err(|e| {
+                    EmbedderError::ModelIo {
+                        path: path.as_ref().to_path_buf(),
+                        detail: format!("{e}"),
+                    }
+                })?;
+            Ok(Self { inner, dim })
+        }
+    }
+
+    impl Embedder for ERes2NetV2Extractor {
+        fn dim(&self) -> usize {
+            self.dim
+        }
+
+        fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            let config = crate::types::DiarizationConfig::default();
+            self.inner
+                .extract(audio, &config)
+                .map_err(|e| EmbedderError::Legacy(format!("{e}")))
+        }
+
+        fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {
+            parallel_embed_batch(self, audios)
+        }
+    }
 }
 
 #[cfg(all(feature = "onnx", feature = "embedder"))]
-pub use onnx_adapters::{CamPlusPlusExtractor, ResNet34Adapter};
+pub use onnx_adapters::{CamPlusPlusExtractor, ERes2NetV2Extractor, ResNet34Adapter};
 
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
