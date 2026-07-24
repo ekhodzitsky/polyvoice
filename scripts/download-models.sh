@@ -16,7 +16,10 @@ else
     echo "  Done: $(du -h "$MODEL_DIR/wespeaker_resnet34.onnx" | cut -f1)"
 fi
 
-echo "Downloading Silero VAD v5..."
+# Silero VAD v6-generation weights (URL tracks upstream master; pin verified by
+# ModelRegistry SHA-256). Prefer a release-asset mirror once published — see
+# scripts/mirror-silero-vad.md.
+echo "Downloading Silero VAD (v6-generation)..."
 if [ -f "$MODEL_DIR/silero_vad.onnx" ]; then
     echo "  Already exists, skipping."
 else

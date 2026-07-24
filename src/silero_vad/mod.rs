@@ -1,6 +1,13 @@
-//! Silero VAD v5 ONNX integration.
+//! Silero VAD (v6-generation) ONNX integration.
 //!
-//! Implements `VoiceActivityDetector` using the Silero VAD v5 ONNX model.
+//! Implements `VoiceActivityDetector` using the shipped Silero VAD ONNX model
+//! (v6-generation weights; upstream v6.0 replaced the master file 2025-08-25,
+//! releases through v6.2.1 keep the same architecture). The pinned SHA-256 in
+//! `src/models/manifest.toml` (`1a153a22…`) is the source of truth for the
+//! file we download — the upstream URL still tracks `master`, so a force-push
+//! can break fresh installs (hash check fails closed). See
+//! `scripts/mirror-silero-vad.md` for the release-asset mirror procedure.
+//!
 //! The model is stateful (LSTM) — hidden state is carried between calls
 //! to `process()` and reset via `reset()`.
 
