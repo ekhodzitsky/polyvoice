@@ -182,15 +182,15 @@ pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
 
 /// A pooled ONNX session for speaker embedding extraction.
 ///
-/// Wraps `ort::session::Session` in a [`crossbeam_queue::ArrayQueue`]
-/// so that multiple threads can extract embeddings concurrently without lock contention.
+/// Wraps `ort::session::Session` in a blocking [`crate::utils::ObjectPool`]
+/// so concurrent extractors can reuse sessions (checkout waits; Drop returns).
 #[cfg(feature = "onnx")]
 #[deprecated(
     since = "0.7.0",
     note = "use the v1.0 Embedder trait in polyvoice::embedder"
 )]
 pub struct OnnxEmbeddingExtractor {
-    pool: crossbeam_queue::ArrayQueue<ort::session::Session>,
+    pool: crate::utils::ObjectPool<ort::session::Session>,
     embedding_dim: usize,
     window_samples: usize,
 }
@@ -199,7 +199,7 @@ pub struct OnnxEmbeddingExtractor {
 impl OnnxEmbeddingExtractor {
     /// { pool_size > 0 }
     /// `fn new(model_path: &Path, embedding_dim: usize, window_samples: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
-    /// { ret.pool.len() == pool_size }
+    /// { true }
     pub fn new(
         model_path: &Path,
         embedding_dim: usize,
@@ -210,24 +210,16 @@ impl OnnxEmbeddingExtractor {
         if pool_size == 0 {
             anyhow::bail!("pool_size must be > 0");
         }
-        let pool = crossbeam_queue::ArrayQueue::new(pool_size);
+        let mut sessions = Vec::with_capacity(pool_size);
         for i in 0..pool_size {
             let session = build_session_with_ep(model_path, ep, None)
                 .map_err(|e| EmbeddingError::InferenceFailed(format!("session {i}: {e}")))?;
-            pool.push(session)
-                .map_err(|_| anyhow::anyhow!("failed to push session into pool"))?;
+            sessions.push(session);
         }
         Ok(Self {
-            pool,
+            pool: crate::utils::ObjectPool::new(sessions),
             embedding_dim,
             window_samples,
-        })
-    }
-
-    fn checkout(&self) -> Option<PooledSession<'_>> {
-        self.pool.pop().map(|s| PooledSession {
-            session: Some(s),
-            pool: &self.pool,
         })
     }
 }
@@ -239,9 +231,7 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
         samples: &[f32],
         _config: &DiarizationConfig,
     ) -> Result<Vec<f32>, EmbeddingError> {
-        let mut guard = self.checkout().ok_or_else(|| {
-            EmbeddingError::InferenceFailed("ONNX session pool exhausted".to_string())
-        })?;
+        let mut session = self.pool.checkout();
 
         if samples.len() != self.window_samples {
             return Err(EmbeddingError::InvalidInput {
@@ -254,10 +244,6 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
             ort::value::TensorRef::from_array_view(([1_usize, self.window_samples], samples))
                 .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
-        let session = guard
-            .session
-            .as_mut()
-            .ok_or_else(|| EmbeddingError::InferenceFailed("session not available".to_string()))?;
         let outputs = session
             .run(ort::inputs![input_tensor])
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
@@ -287,21 +273,6 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
 
     fn embedding_dim(&self) -> usize {
         self.embedding_dim
-    }
-}
-
-#[cfg(feature = "onnx")]
-struct PooledSession<'a> {
-    session: Option<ort::session::Session>,
-    pool: &'a crossbeam_queue::ArrayQueue<ort::session::Session>,
-}
-
-#[cfg(feature = "onnx")]
-impl Drop for PooledSession<'_> {
-    fn drop(&mut self) {
-        if let Some(session) = self.session.take() {
-            let _ = self.pool.push(session);
-        }
     }
 }
 

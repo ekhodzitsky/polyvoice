@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **MSRV is now Rust 1.88.0** (was 1.85.0). The declared version was wrong for
+  any ort-enabled build: `ort` 2.0.0-rc.11+ requires 1.88. CI's MSRV job pins
+  1.88 and checks both the default library surface and the common ort feature
+  set. Non-ort / wasm-only builds may still compile on older toolchains, but
+  that is not a supported promise.
+- **Dropped `crossbeam-queue` and `fastrand`**. ONNX session / embedder pools
+  use a small shared `Mutex<Vec<_>>` pool (blocking checkout, return on Drop).
+  K-means++ seeding uses an in-tree xorshift64* PRNG; seed *inputs* are
+  unchanged, but the draw sequence is no longer fastrand's, so exact labels on
+  a fixed seed can differ while clustering quality metrics stay the same.
+
 ### Added
 
 - **CJK/multilingual ASR companion `polyvoice-asr-sherpa`** (opt-in crate,
@@ -19,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each), granularity and the no-confidence caveat documented. Verified end to
   end against the real SenseVoice int8 bundle (sha256 recorded in the crate
   README).
+- Migration note for the upcoming ort execution-provider API cleanup:
+  [`docs/ort-ep-migration.md`](docs/ort-ep-migration.md). Pin stays on
+  `2.0.0-rc.12` until a post-cleanup RC is evaluated.
+- Silero VAD mirror procedure for release-asset hosting:
+  [`scripts/mirror-silero-vad.md`](scripts/mirror-silero-vad.md).
 
 ## [0.10.0] - 2026-07-13
 

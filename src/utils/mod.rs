@@ -202,6 +202,141 @@ fn mean_confidence(sum: f32, count: u32) -> Option<f32> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Object pool — blocking Mutex<Vec<T>> checkout (ONNX sessions, embedders)
+// ---------------------------------------------------------------------------
+
+/// Blocking object pool backed by `Mutex<Vec<T>>`.
+///
+/// Checkout waits until an item is available; [`Drop`] returns it. Pool
+/// checkout is not a contention-hot path in this crate, so a small mutex pool
+/// is preferred over a dedicated lock-free queue crate.
+#[cfg(any(feature = "onnx", feature = "embedder"))]
+pub(crate) struct ObjectPool<T> {
+    items: std::sync::Mutex<Vec<T>>,
+}
+
+/// RAII guard: the pooled item is returned on drop.
+#[cfg(any(feature = "onnx", feature = "embedder"))]
+pub(crate) struct PooledGuard<'a, T> {
+    item: Option<T>,
+    pool: &'a ObjectPool<T>,
+}
+
+#[cfg(any(feature = "onnx", feature = "embedder"))]
+impl<T> ObjectPool<T> {
+    pub(crate) fn new(items: Vec<T>) -> Self {
+        Self {
+            items: std::sync::Mutex::new(items),
+        }
+    }
+
+    /// Blocking checkout. Spins with yield until an item is free.
+    ///
+    /// **Caller must ensure the pool is non-empty** (or that empty is handled
+    /// before calling); an empty pool spins forever.
+    pub(crate) fn checkout(&self) -> PooledGuard<'_, T> {
+        loop {
+            {
+                let mut guard = self.items.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(item) = guard.pop() {
+                    return PooledGuard {
+                        item: Some(item),
+                        pool: self,
+                    };
+                }
+            }
+            std::thread::yield_now();
+        }
+    }
+}
+
+#[cfg(any(feature = "onnx", feature = "embedder"))]
+impl<T> std::ops::Deref for PooledGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        // Invariant: item is Some until Drop takes it.
+        match self.item.as_ref() {
+            Some(item) => item,
+            None => unreachable!("pooled item missing before Drop"),
+        }
+    }
+}
+
+#[cfg(any(feature = "onnx", feature = "embedder"))]
+impl<T> std::ops::DerefMut for PooledGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        match self.item.as_mut() {
+            Some(item) => item,
+            None => unreachable!("pooled item missing before Drop"),
+        }
+    }
+}
+
+#[cfg(any(feature = "onnx", feature = "embedder"))]
+impl<T> Drop for PooledGuard<'_, T> {
+    fn drop(&mut self) {
+        if let Some(item) = self.item.take() {
+            self.pool
+                .items
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(item);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic PRNG — xorshift64* for k-means++ seeding
+// ---------------------------------------------------------------------------
+
+/// Marsaglia/Vigna xorshift64* — tiny deterministic PRNG for k-means++ draws.
+///
+/// Replaces an external RNG dependency for a handful of samples per clustering
+/// call. Sequence is fully determined by the seed (non-zero state).
+#[derive(Clone, Debug)]
+pub(crate) struct XorShift64Star {
+    state: u64,
+}
+
+impl XorShift64Star {
+    /// Construct from a seed. Seed `0` is remapped so the generator is usable.
+    pub(crate) fn new(seed: u64) -> Self {
+        // xorshift state must be non-zero; splitmix-style constant as fallback.
+        Self {
+            state: if seed == 0 {
+                0x9E37_79B9_7F4A_7C15
+            } else {
+                seed
+            },
+        }
+    }
+
+    #[inline]
+    pub(crate) fn next_u64(&mut self) -> u64 {
+        let mut x = self.state;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.state = x;
+        x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    }
+
+    /// Uniform in `[0, 1)`.
+    pub(crate) fn f64(&mut self) -> f64 {
+        // Top 53 bits → IEEE-754 double mantissa.
+        (self.next_u64() >> 11) as f64 * (1.0 / ((1u64 << 53) as f64))
+    }
+
+    /// Uniform integer in `0..upper` (exclusive). `upper` must be > 0.
+    pub(crate) fn usize(&mut self, upper: usize) -> usize {
+        debug_assert!(upper > 0);
+        // Multiply-high mapping: nearly unbiased for any upper << 2^64.
+        let upper = upper as u64;
+        ((self.next_u64() as u128 * upper as u128) >> 64) as usize
+    }
+}
+
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
