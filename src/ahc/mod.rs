@@ -19,7 +19,7 @@ use std::collections::HashMap;
 /// `threshold` is the minimum cosine similarity to merge two clusters.
 /// Higher threshold → more clusters (stricter merging).
 pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usize> {
-    ahc_impl(embeddings, threshold, 0).0
+    ahc_impl(embeddings, threshold, 0, AscStop::Off).0
 }
 
 /// Run AHC with a fixed threshold and a hard ceiling on the number of clusters.
@@ -28,7 +28,54 @@ pub fn agglomerative_cluster_max_clusters(
     threshold: f32,
     max_clusters: usize,
 ) -> Vec<usize> {
-    ahc_impl(embeddings, threshold, max_clusters).0
+    ahc_impl(embeddings, threshold, max_clusters, AscStop::Off).0
+}
+
+/// Stopping rule for **cAHC-ASC** (agglomerative clustering with an
+/// "already-sufficient cluster" stop): refuse to merge two clusters that are
+/// both already *established* by member count or total speech duration.
+///
+/// This protects genuine speakers from being glued together once each has
+/// enough evidence, and is the main lever the cVBx line uses to improve
+/// speaker-count estimates without lowering the global merge threshold.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum AscStop {
+    /// No established-cluster stop (classic AHC).
+    #[default]
+    Off,
+    /// A cluster is established once it has at least this many members.
+    /// `0` is treated as off.
+    MinMembers(usize),
+    /// A cluster is established once its overlap-merged speech duration reaches
+    /// this many seconds. Requires time ranges of equal length to the embeddings.
+    /// Non-positive values are treated as off.
+    MinSecs(f64),
+}
+
+/// Run AHC with a fixed threshold, optional cluster ceiling, and optional
+/// cAHC-ASC established-cluster stop. When `time_ranges` is required by the
+/// stop rule but missing or length-mismatched, the stop is ignored (AHC still
+/// runs on threshold / max_clusters alone).
+pub fn agglomerative_cluster_asc(
+    embeddings: &[Vec<f32>],
+    threshold: f32,
+    max_clusters: usize,
+    stop: AscStop,
+    time_ranges: Option<&[TimeRange]>,
+) -> Vec<usize> {
+    let stop = match stop {
+        AscStop::MinSecs(s) if s > 0.0 => {
+            if time_ranges.is_some_and(|t| t.len() == embeddings.len()) {
+                AscStop::MinSecs(s)
+            } else {
+                AscStop::Off
+            }
+        }
+        AscStop::MinMembers(0) => AscStop::Off,
+        AscStop::MinSecs(s) if s <= 0.0 => AscStop::Off,
+        other => other,
+    };
+    ahc_impl_with_times(embeddings, threshold, max_clusters, stop, time_ranges).0
 }
 
 /// Dissolve clusters smaller than `min_size` members by reassigning each of their
@@ -222,11 +269,26 @@ pub fn agglomerative_cluster_auto_max_clusters(
         return (Vec::new(), 0.0);
     }
     let threshold = estimate_threshold_from_similarities(embeddings);
-    ahc_impl(embeddings, threshold, max_clusters)
+    ahc_impl(embeddings, threshold, max_clusters, AscStop::Off)
+}
+
+fn ahc_impl(
+    embeddings: &[Vec<f32>],
+    threshold: f32,
+    max_clusters: usize,
+    stop: AscStop,
+) -> (Vec<usize>, f32) {
+    ahc_impl_with_times(embeddings, threshold, max_clusters, stop, None)
 }
 
 #[allow(clippy::needless_range_loop)]
-fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Vec<usize>, f32) {
+fn ahc_impl_with_times(
+    embeddings: &[Vec<f32>],
+    threshold: f32,
+    max_clusters: usize,
+    stop: AscStop,
+    time_ranges: Option<&[TimeRange]>,
+) -> (Vec<usize>, f32) {
     let n = embeddings.len();
     if n == 0 {
         return (Vec::new(), 0.0);
@@ -241,6 +303,13 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
     let mut labels: Vec<usize> = (0..n).collect();
     let mut centroids: Vec<Vec<f32>> = embeddings.to_vec();
     let mut cluster_sizes: Vec<usize> = vec![1; n];
+    // Per-root total speech duration (only used for AscStop::MinSecs).
+    let mut cluster_dur: Vec<f64> = match (stop, time_ranges) {
+        (AscStop::MinSecs(_), Some(times)) if times.len() == n => {
+            times.iter().map(|t| t.duration().max(0.0)).collect()
+        }
+        _ => vec![0.0; n],
+    };
     let mut active: Vec<bool> = vec![true; n];
 
     // Precompute similarity matrix. sim_matrix[i][j] holds the similarity
@@ -261,13 +330,23 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
         let mut best_i = 0;
         let mut best_j = 0;
 
-        // Find the best pair among active clusters.
+        // Find the best pair among active clusters, skipping merges that would
+        // glue two established clusters (cAHC-ASC).
         for i in 0..n {
             if !active[i] {
                 continue;
             }
             for j in (i + 1)..n {
                 if !active[j] {
+                    continue;
+                }
+                if both_established(
+                    stop,
+                    cluster_sizes[i],
+                    cluster_sizes[j],
+                    cluster_dur[i],
+                    cluster_dur[j],
+                ) {
                     continue;
                 }
                 let sim = sim_matrix[i][j];
@@ -287,6 +366,11 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
         if above_ceiling && best_sim == neg_inf {
             break;
         }
+        // cAHC-ASC: every remaining pair is two established clusters → stop even
+        // if the ceiling still wants fewer clusters (prefer correct count).
+        if best_sim == neg_inf {
+            break;
+        }
 
         // Merge j into i.
         let total = cluster_sizes[best_i] + cluster_sizes[best_j];
@@ -301,6 +385,7 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
 
         centroids[best_i] = new_centroid;
         cluster_sizes[best_i] = total;
+        cluster_dur[best_i] += cluster_dur[best_j];
         active[best_j] = false;
 
         // Invalidate best_j from the similarity matrix.
@@ -355,6 +440,16 @@ fn ahc_impl(embeddings: &[Vec<f32>], threshold: f32, max_clusters: usize) -> (Ve
     }
 
     (labels, threshold)
+}
+
+/// True when both clusters already meet the established threshold and must not
+/// be merged under cAHC-ASC.
+fn both_established(stop: AscStop, size_i: usize, size_j: usize, dur_i: f64, dur_j: f64) -> bool {
+    match stop {
+        AscStop::Off => false,
+        AscStop::MinMembers(m) => m > 0 && size_i >= m && size_j >= m,
+        AscStop::MinSecs(s) => s > 0.0 && dur_i >= s && dur_j >= s,
+    }
 }
 
 /// Estimate a good AHC threshold from the distribution of pairwise similarities.
@@ -582,5 +677,76 @@ mod tests {
         assert_eq!(l2[4], 0, "a2 is in the big cluster -> id 0");
         assert_eq!(l2[0], 1, "b2 is in the small cluster -> id 1");
         assert_eq!(l2[2], 1, "b is in the small cluster -> id 1");
+    }
+
+    #[test]
+    fn cahc_asc_refuses_to_merge_two_established_clusters() {
+        // Two well-separated speakers (3 members each). With a very low
+        // threshold classic AHC would still merge them; MinMembers(3) stops
+        // before that final merge because both sides are already established.
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.98, 0.05, 0.0],
+            vec![0.97, 0.0, 0.05],
+            vec![0.0, 1.0, 0.0],
+            vec![0.05, 0.98, 0.0],
+            vec![0.0, 0.97, 0.05],
+        ];
+        let classic = agglomerative_cluster(&embeddings, 0.0);
+        assert_eq!(
+            ndistinct(&classic),
+            1,
+            "threshold 0 must glue everything without ASC"
+        );
+        let asc = agglomerative_cluster_asc(&embeddings, 0.0, 0, AscStop::MinMembers(3), None);
+        assert_eq!(
+            ndistinct(&asc),
+            2,
+            "cAHC-ASC must keep two established speakers separate"
+        );
+        assert_eq!(asc[0], asc[1]);
+        assert_eq!(asc[0], asc[2]);
+        assert_eq!(asc[3], asc[4]);
+        assert_eq!(asc[3], asc[5]);
+        assert_ne!(asc[0], asc[3]);
+    }
+
+    #[test]
+    fn cahc_asc_min_secs_uses_durations() {
+        // Same geometry as above, but establish by total duration (each speaker
+        // has ~3 s of speech across three 1 s windows).
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.98, 0.05, 0.0],
+            vec![0.97, 0.0, 0.05],
+            vec![0.0, 1.0, 0.0],
+            vec![0.05, 0.98, 0.0],
+            vec![0.0, 0.97, 0.05],
+        ];
+        let times = vec![
+            tr(0.0, 1.0),
+            tr(1.0, 2.0),
+            tr(2.0, 3.0),
+            tr(10.0, 11.0),
+            tr(11.0, 12.0),
+            tr(12.0, 13.0),
+        ];
+        let asc =
+            agglomerative_cluster_asc(&embeddings, 0.0, 0, AscStop::MinSecs(2.5), Some(&times));
+        assert_eq!(ndistinct(&asc), 2);
+        assert_ne!(asc[0], asc[3]);
+    }
+
+    #[test]
+    fn cahc_asc_off_matches_classic() {
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.9, 0.1, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.1, 0.9, 0.0],
+        ];
+        let classic = agglomerative_cluster_max_clusters(&embeddings, 0.5, 0);
+        let asc = agglomerative_cluster_asc(&embeddings, 0.5, 0, AscStop::Off, None);
+        assert_eq!(classic, asc);
     }
 }

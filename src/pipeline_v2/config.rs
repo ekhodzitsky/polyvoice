@@ -16,6 +16,8 @@ pub struct PipelineConfig {
     pub resegment_overlap: bool,
     pub resegment_min_overlap_secs: f32,
     pub min_speech_secs: f32,
+    /// Gap-filling: merge same-speaker segments separated by at most this many
+    /// seconds (cVBx Δ=0.5 s default). One global value — never per-dataset.
     pub max_gap_secs: f32,
     pub embedder_pool_size: usize,
     pub execution_provider: ExecutionProvider,

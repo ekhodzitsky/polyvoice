@@ -365,26 +365,29 @@ impl Aggregator {
             }
         }
 
-        // Build cost matrix: C[a][b] = -IoU(a_mask, b_mask).
-        let mut cost: Vec<Vec<f32>> = vec![vec![0.0_f32; n]; n];
-        let a_active_count = a_masks
-            .iter()
-            .take(n)
-            .filter(|m| m.iter().any(|&x| x))
-            .count();
-        let b_active_count = b_masks
-            .iter()
-            .take(n)
-            .filter(|m| m.iter().any(|&x| x))
-            .count();
+        // Active speakers only — never put inactive (never-on) speakers into the
+        // cost matrix. Including them is the pyannote "inactive speakers in the
+        // similarity matrix" bug: zero-IoU rows compete for columns and corrupt
+        // the permutation among the speakers that actually speak in the overlap.
+        let a_active: Vec<usize> = (0..n).filter(|&i| a_masks[i].iter().any(|&x| x)).collect();
+        let b_active: Vec<usize> = (0..n).filter(|&i| b_masks[i].iter().any(|&x| x)).collect();
 
-        for ai in 0..n {
-            for bi in 0..n {
+        // If fewer than 2 speakers are active on either side in the overlap, we
+        // cannot reliably determine the full permutation — return identity.
+        if a_active.len() < 2 || b_active.len() < 2 {
+            return Ok([0, 1, 2]);
+        }
+
+        // Build cost over the active×active submatrix, padded to square.
+        let m = a_active.len().max(b_active.len());
+        let mut cost: Vec<Vec<f32>> = vec![vec![0.0_f32; m]; m];
+        for (ai, &a_idx) in a_active.iter().enumerate() {
+            for (bi, &b_idx) in b_active.iter().enumerate() {
                 let mut inter = 0_usize;
                 let mut uni = 0_usize;
                 for k in 0..grid_len {
-                    let ax = a_masks[ai][k];
-                    let bx = b_masks[bi][k];
+                    let ax = a_masks[a_idx][k];
+                    let bx = b_masks[b_idx][k];
                     if ax && bx {
                         inter += 1;
                     }
@@ -401,12 +404,6 @@ impl Aggregator {
             }
         }
 
-        // If fewer than 2 speakers are active on either side in the overlap, we
-        // cannot reliably determine the full permutation — return identity.
-        if a_active_count < 2 || b_active_count < 2 {
-            return Ok([0, 1, 2]);
-        }
-
         let assignment =
             hungarian::solve(&cost).ok_or_else(|| SegmentationError::PermutationFailed {
                 prev_idx: 0,
@@ -414,13 +411,17 @@ impl Aggregator {
                 detail: "non-square cost matrix".to_owned(),
             })?;
 
-        // assignment[i] = j means: row i (A's global speaker i) best matches column j
-        // (B's local speaker j). We want perm[b_local] = a_global, i.e. the direct
-        // mapping: perm[j] = i.
+        // assignment[ai] = bi means: active-A row ai best matches active-B col bi.
+        // Map back onto the original local indices: perm[b_local] = a_global.
+        // Inactive locals keep identity.
         let mut perm = [0_u8, 1_u8, 2_u8];
-        for (i, &j) in assignment.iter().enumerate() {
-            if j < 3 && i < 3 {
-                perm[j] = i as u8;
+        for (ai, &a_idx) in a_active.iter().enumerate() {
+            let bi = assignment[ai];
+            if bi < b_active.len() {
+                let b_idx = b_active[bi];
+                if b_idx < 3 && a_idx < 3 {
+                    perm[b_idx] = a_idx as u8;
+                }
             }
         }
         Ok(perm)
@@ -1115,6 +1116,50 @@ mod tests {
         let agg = Aggregator::new(config);
         let segs = agg.stitch(&[w]).unwrap();
         assert!(segs.is_empty());
+    }
+
+    /// Regression: inactive speakers must not enter the Hungarian cost matrix.
+    ///
+    /// Setup: max_local_speakers = 3, but only speakers 0 and 1 are ever on.
+    /// Window B swaps their local indices in the overlap. With the active-only
+    /// matrix the permutation recovers the swap; a full 3×3 matrix that pads
+    /// inactive speaker 2 with zero-IoU rows is the pyannote-style bug and can
+    /// mis-assign columns. This test locks the correct (active-only) outcome.
+    #[test]
+    fn window_perm_ignores_inactive_third_speaker() {
+        // Window A: spk0 then both in the last second (overlap with B).
+        // classes: 1 = spk0, 2 = spk1, 4 = spk0+spk1 (powerset).
+        let mut a_classes = vec![1usize; 50];
+        for c in &mut a_classes[40..50] {
+            *c = 4; // both speakers in overlap region
+        }
+        let a = synthetic_window(0.0, 5.0, 50, &a_classes);
+        // Window B: in the overlap, local indices are swapped (class 4 is
+        // unordered {0,1}; pure spk runs use swapped singles).
+        // First 10 frames (overlap): both; then pure local-1 (which is global 0)
+        // then pure local-0 (which is global 1).
+        let mut b_classes = vec![4usize; 10];
+        b_classes.extend(std::iter::repeat_n(2usize, 20)); // local spk1
+        b_classes.extend(std::iter::repeat_n(1usize, 20)); // local spk0
+        let b = synthetic_window(4.0, 9.0, 50, &b_classes);
+
+        let agg = Aggregator::new(AggregationConfig {
+            max_local_speakers: 3,
+            ..AggregationConfig::default()
+        });
+        let segs = agg.stitch(&[a, b]).unwrap();
+        let unique: std::collections::HashSet<u8> =
+            segs.iter().map(|s| s.local_speaker_idx).collect();
+        // Only two speakers exist in the file — the inactive third slot must not
+        // produce a third global identity.
+        assert!(
+            unique.len() <= 2,
+            "inactive speaker slot must not invent a third speaker; got {unique:?}"
+        );
+        assert!(
+            !unique.contains(&2),
+            "speaker index 2 must stay unused: {unique:?}"
+        );
     }
 
     #[test]

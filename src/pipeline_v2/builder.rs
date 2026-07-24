@@ -248,13 +248,18 @@ impl PipelineBuilder {
                     #[cfg(feature = "vbx")]
                     ClustererKind::Vbx => {
                         let max = self.config.max_speakers as usize;
-                        let vbx = match &self.config.vbx_plda_dir {
+                        let mut vbx = match &self.config.vbx_plda_dir {
                             Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(dir, max),
                             None => crate::clusterer::vbx::VbxClusterer::from_env(max),
                         }
                         .map_err(|e| ConfigError::UnknownModel {
                             model_id: format!("vbx ({e})"),
                         })?;
+                        // Dense windowed embeddings are non-contiguous: the HMM
+                        // self-loop assumption is invalid → auto GMM-VBx unless
+                        // POLYVOICE_VBX_LOOP_PROB is set explicitly.
+                        let windowed = self.config.embed_window_secs.is_some_and(|w| w > 0.0);
+                        vbx = vbx.auto_gmm_for_windowed(windowed);
                         Box::new(vbx)
                     }
                     #[cfg(not(feature = "vbx"))]
