@@ -171,7 +171,10 @@ impl HybridPipeline {
             return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
-        let labels = self.clusterer.cluster(&embeddings)?;
+        let durations: Vec<f64> = time_ranges.iter().map(|t| t.duration()).collect();
+        let labels = self
+            .clusterer
+            .cluster_with_durations(&embeddings, &durations)?;
         let num_speakers = labels.iter().copied().max().map_or(0, |m| m + 1);
 
         let mut segments: Vec<Segment> = labels
@@ -310,7 +313,10 @@ impl HybridPipeline {
             });
         }
 
-        let labels = self.clusterer.cluster(&embeddings)?;
+        let durations: Vec<f64> = time_ranges.iter().map(|t| t.duration()).collect();
+        let labels = self
+            .clusterer
+            .cluster_with_durations(&embeddings, &durations)?;
         let num_speakers = labels.iter().copied().max().map_or(0, |m| m + 1);
 
         Ok(HybridDiagnostics {
