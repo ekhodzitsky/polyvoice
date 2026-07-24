@@ -111,7 +111,10 @@ pub use resegmentation::extract_overlap_time_ranges;
 pub mod attribution;
 #[cfg(feature = "attribution")]
 pub use attribution::{
-    WhoSaidWhat, attribute_and_fill, attribute_words, fill_turn_text, who_said_what,
+    AttributionConfig, SpeakerEmbedding, WhoSaidWhat, WordAnchor, attribute_and_fill,
+    attribute_and_fill_with_config, attribute_words, attribute_words_with_config, fill_turn_text,
+    fill_turn_text_with_config, interpolate_word_timestamps, speaker_embeddings_from_segments,
+    who_said_what, who_said_what_with_config,
 };
 
 pub mod pipeline;
@@ -150,12 +153,14 @@ pub use cluster::SpeakerCluster;
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
+pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
 pub use overlap::{OverlapRegion, detect_overlaps};
 pub use types::ClusterConfig;
 pub use types::{
     Confidence, DiarizationConfig, DiarizationResult, Profile, SampleRate, Seconds, Segment,
-    SpeakerId, SpeakerIdRemap, SpeakerTurn, TimeRange, Transcript, Word, WordAlignment,
-    remap_segments, remap_turns,
+    SpeakerId, SpeakerIdRemap, SpeakerSummary, SpeakerTurn, TimeRange, Transcript, Word,
+    WordAlignment, confidence_from_distance, confidence_from_similarity, exclusive_turns,
+    mean_speaker_embeddings, remap_segments, remap_turns, segment_confidences_from_embeddings,
 };
 pub use window::{WindowBuffer, WindowIter};
 

@@ -22,6 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Exclusive diarization timeline** (`exclusive_turns`) as an additive v1 field
+  beside the overlap-aware `turns`: at most one speaker per frame via a
+  deterministic per-frame argmax. CLI `--exclusive` fills the field (JSON keeps
+  both timelines; RTTM/SRT/VTT/TXT project the exclusive one). ASR-reconciliation
+  surface — concurrent speakers are dropped by design on overlap.
+- **Per-segment confidence** from a logistic map of embedding-to-centroid cosine
+  similarity (monotone in similarity; ranking score, not a calibrated
+  probability). Wired into the legacy and v2 pipelines; `Segment.confidence` is
+  populated when embeddings are available.
+- **WDER** (`compute_wder` / `WderResult`): word diarization error rate with
+  optimal speaker mapping for who-said-what evaluation. Hand-crafted unit tests
+  cover perfect match, partial error, and unlabeled refs. AMI word-level
+  measurement is optional when forced-aligned refs are present.
+- **Opt-in per-speaker embeddings** on `SpeakerSummary.embedding` and
+  attribution `WhoSaidWhat.speaker_embeddings` (L2-normalized means; WhisperX
+  `return_embeddings` pattern). Schema stays `diarization-result-v1` with
+  additive optional fields (no v2 bump).
 - **CJK/multilingual ASR companion `polyvoice-asr-sherpa`** (opt-in crate,
   deliberately OUTSIDE the workspace): SenseVoice (zh/en/ja/ko/yue) and
   Paraformer (zh) via sherpa-onnx, implementing the same core `Asr` trait as
