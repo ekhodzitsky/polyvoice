@@ -175,3 +175,21 @@ RUQGu9FvZMmIhfT3/3pshTKu6WUH1VBohHK2UjcgjH77Gd6GHqQJJXp74rJtfoiEUx6e3jfPsfAIt6N7
 trusted comment: polyvoice v0.6.0-alpha.3 | resnet34_int8.onnx
 OdzDgAbIm1wmfjPhvZFqPYFl5dvBTlquEGjx1ZCJ10xpvY2IVP1xFvOtzGPT4hrzuf9h94KFUuya8/yvcSN/DQ==
 '''
+
+# Optional E2E Streaming Sortformer v2 (≤4 speakers). NEVER default, NEVER
+# bundled, NEVER pulled by profile resolution or default CI. Download only via
+# explicit ModelRegistry::ensure("sortformer_v2") under the `sortformer` feature.
+# Signature omitted until a release artifact is signed with the project key —
+# SHA-256 alone gates integrity for this optional download path.
+[models.sortformer_v2]
+url      = "https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main/diar_streaming_sortformer_4spk-v2.onnx?download=true"
+sha256   = "7dbfc7cba4615e07b679f7d65b5e0edd22a4b7b1ab69505a594f2f90421bd9c1"
+size     = 492242946
+filename = "diar_streaming_sortformer_4spk-v2.onnx"
+license  = "CC-BY-4.0"
+license_url = "https://creativecommons.org/licenses/by/4.0/"
+provenance = "NVIDIA diar_streaming_sortformer_4spk-v2 (CC-BY-4.0); community ONNX export by Altunenes for parakeet-rs, mirrored at cgus/diar_streaming_sortformer_4spk-v2-onnx"
+adapter_type = "sortformer-v2"
+version  = "2.0"
+sample_rate = 16000
+num_speakers = 4

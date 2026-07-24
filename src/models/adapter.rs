@@ -20,6 +20,9 @@ pub enum AdapterStage {
     Clusterer,
     Scoring,
     Vad,
+    /// End-to-end diarizer (e.g. Sortformer) that replaces segmenter +
+    /// embedder + clusterer with a single model.
+    Diarizer,
 }
 
 impl AdapterStage {
@@ -31,6 +34,7 @@ impl AdapterStage {
             Self::Clusterer => "clusterer",
             Self::Scoring => "scoring",
             Self::Vad => "vad",
+            Self::Diarizer => "diarizer",
         }
     }
 
@@ -43,6 +47,7 @@ impl AdapterStage {
             "clusterer" | "clustering" => Some(Self::Clusterer),
             "scoring" | "score" => Some(Self::Scoring),
             "vad" => Some(Self::Vad),
+            "diarizer" | "e2e" | "e2e-diarizer" => Some(Self::Diarizer),
             _ => None,
         }
     }
@@ -139,6 +144,15 @@ impl AdapterRegistry {
         let _ = reg.register_alias(AdapterStage::Scoring, "latest", "cosine");
         let _ = reg.register_alias(AdapterStage::Vad, "latest", "silero");
         let _ = reg.register_alias(AdapterStage::Vad, "v1", "silero");
+
+        // Optional E2E Sortformer diarizer (feature-gated). Name marker only —
+        // concrete construction lives in `crate::sortformer`.
+        #[cfg(feature = "sortformer")]
+        {
+            reg.register_builtin(AdapterStage::Diarizer, "sortformer-v2");
+            let _ = reg.register_alias(AdapterStage::Diarizer, "latest", "sortformer-v2");
+            let _ = reg.register_alias(AdapterStage::Diarizer, "v2", "sortformer-v2");
+        }
         reg
     }
 
@@ -392,10 +406,29 @@ mod tests {
             AdapterStage::Clusterer,
             AdapterStage::Scoring,
             AdapterStage::Vad,
+            AdapterStage::Diarizer,
         ] {
             assert_eq!(AdapterStage::parse(stage.as_str()), Some(stage));
         }
         assert_eq!(AdapterStage::parse("segmenter"), Some(AdapterStage::Segmentation));
+        assert_eq!(AdapterStage::parse("e2e"), Some(AdapterStage::Diarizer));
         assert!(AdapterStage::parse("nope").is_none());
+    }
+
+    #[cfg(feature = "sortformer")]
+    #[test]
+    fn sortformer_builtin_registered_when_feature_on() {
+        let reg = AdapterRegistry::with_builtins();
+        assert!(reg.contains(AdapterStage::Diarizer, "sortformer-v2"));
+        assert_eq!(
+            reg.resolve(AdapterStage::Diarizer, "latest").unwrap(),
+            "sortformer-v2"
+        );
+        let handle = reg
+            .create(AdapterStage::Diarizer, "sortformer-v2")
+            .unwrap();
+        let builtin = handle.downcast_ref::<BuiltinAdapter>().expect("marker");
+        assert_eq!(builtin.id, "sortformer-v2");
+        assert_eq!(builtin.stage, AdapterStage::Diarizer);
     }
 }
