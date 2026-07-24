@@ -13,7 +13,7 @@
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
 use crate::features::{FbankExtractor, apply_cmvn};
-use crate::onnx::{InferenceRuntime, InferenceTensor, OrtSession};
+use crate::onnx::{InferenceRuntime, InferenceTensor, RuntimeSession};
 use crate::types::DiarizationConfig;
 use crate::utils::l2_normalize;
 use std::path::Path;
@@ -24,7 +24,7 @@ use std::path::Path;
     note = "use the v1.0 Embedder trait in polyvoice::embedder"
 )]
 pub struct FbankOnnxExtractor {
-    pool: crate::utils::ObjectPool<OrtSession>,
+    pool: crate::utils::ObjectPool<RuntimeSession>,
     embedding_dim: usize,
     fbank: FbankExtractor,
 }
