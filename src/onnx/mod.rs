@@ -3,23 +3,35 @@
 //!
 //! # Runtime boundary
 //!
-//! All `ort::` imports live in [`ort_session`]. Neural stages outside this
-//! module must depend only on [`InferenceRuntime`] / [`OrtSession`] and must
-//! **not** import `ort::` directly. A future pure-Rust backend can implement
-//! [`InferenceRuntime`] without touching stage code.
+//! All `ort::` imports live in [`ort_session`]. The optional tract backend
+//! lives in [`tract_session`] (feature `backend-tract`). Neural stages outside
+//! this module must depend only on [`InferenceRuntime`] / [`RuntimeSession`]
+//! and must **not** import `ort::` or `tract_onnx` directly.
+//!
+//! Default backend is always ort. Select tract with env
+//! `POLYVOICE_INFERENCE_BACKEND=tract` (requires `backend-tract`) or
+//! [`InferenceBackend::force`].
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
 use crate::types::DiarizationConfig;
 use crate::utils::l2_normalize;
 use std::path::Path;
 
+mod factory;
 mod ort_session;
 mod runtime;
+#[cfg(feature = "backend-tract")]
+mod tract_session;
+#[cfg(all(test, feature = "backend-tract"))]
+mod parity;
 
+pub use factory::{InferenceBackend, RuntimeSession};
 pub use ort_session::OrtSession;
 pub use runtime::{
     InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData,
 };
+#[cfg(feature = "backend-tract")]
+pub use tract_session::TractSession;
 
 /// Minimum plausible size for an ONNX file (header only).
 pub const ONNX_MIN_HEADER_BYTES: usize = 64;
@@ -63,23 +75,27 @@ impl ExecutionProvider {
 /// constructed: it validates the ONNX header BEFORE the backend ever parses
 /// the file (the validate-before-build invariant), then registers the EP.
 ///
-/// Returns [`OrtSession`] — the default [`InferenceRuntime`] implementation.
-/// Callers must not depend on the underlying `ort` types.
+/// Returns [`RuntimeSession`] — ort by default, or tract when the
+/// `backend-tract` feature is enabled and selected via
+/// [`InferenceBackend`] / `POLYVOICE_INFERENCE_BACKEND=tract`. Callers must
+/// depend only on [`InferenceRuntime`], not on underlying `ort` / tract types.
 ///
-/// `intra_threads`: `Some(n)` pins the session's intra-op thread count (the
-/// fbank embedder uses 1 because it parallelises across a session pool).
+/// `intra_threads`: `Some(n)` pins the session's intra-op thread count for ort
+/// (the fbank embedder uses 1 because it parallelises across a session pool).
+/// Ignored by tract.
 ///
-/// EP behavior: `Cpu` registers nothing. `CoreMl` registers CoreML when the
-/// build carries the `coreml` feature on macOS aarch64, else warns and runs on
-/// CPU. `Nnapi`/`Cuda`/`XnnPack` are not wired yet — they warn and run on CPU.
-/// EP registration failure is deliberately not an error: ort's built-in CPU
-/// fallback keeps inference correct.
+/// EP behavior (ort only): `Cpu` registers nothing. `CoreMl` registers CoreML
+/// when the build carries the `coreml` feature on macOS aarch64, else warns
+/// and runs on CPU. `Nnapi`/`Cuda`/`XnnPack` are not wired yet — they warn
+/// and run on CPU. EP registration failure is deliberately not an error:
+/// ort's built-in CPU fallback keeps inference correct. tract always uses
+/// pure-Rust CPU and ignores EP.
 pub fn build_session_with_ep(
     model_path: &Path,
     ep: ExecutionProvider,
     intra_threads: Option<usize>,
-) -> anyhow::Result<OrtSession> {
-    OrtSession::from_path(model_path, ep, intra_threads)
+) -> anyhow::Result<RuntimeSession> {
+    RuntimeSession::from_path(model_path, ep, intra_threads)
 }
 
 /// Read ONNX `metadata_props` (custom metadata key/value pairs) from `path`.
@@ -174,14 +190,14 @@ pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
 
 /// A pooled ONNX session for speaker embedding extraction.
 ///
-/// Wraps [`OrtSession`] in a blocking [`crate::utils::ObjectPool`]
+/// Wraps [`RuntimeSession`] in a blocking [`crate::utils::ObjectPool`]
 /// so concurrent extractors can reuse sessions (checkout waits; Drop returns).
 #[deprecated(
     since = "0.7.0",
     note = "use the v1.0 Embedder trait in polyvoice::embedder"
 )]
 pub struct OnnxEmbeddingExtractor {
-    pool: crate::utils::ObjectPool<OrtSession>,
+    pool: crate::utils::ObjectPool<RuntimeSession>,
     embedding_dim: usize,
     window_samples: usize,
 }
@@ -344,10 +360,19 @@ mod tests {
             // Skip if the model is missing (e.g. CI without models).
             return;
         }
-        assert!(build_session_with_ep(path, ExecutionProvider::Cpu, None).is_ok());
+        // Pin ort: silero does not load on tract today, and env/force must not
+        // flip this smoke test off the default backend.
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let built = build_session_with_ep(path, ExecutionProvider::Cpu, None);
+        assert!(
+            built.is_ok(),
+            "ort session build failed: {:?}",
+            built.err().map(|e| e.to_string())
+        );
         assert!(build_session_with_ep(path, ExecutionProvider::Cpu, Some(1)).is_ok());
         // Unwired providers warn and fall back to CPU — never panic or error.
         assert!(build_session_with_ep(path, ExecutionProvider::Cuda, None).is_ok());
         assert!(build_session_with_ep(path, ExecutionProvider::auto(), None).is_ok());
+        InferenceBackend::force(None);
     }
 }
