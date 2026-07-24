@@ -360,6 +360,11 @@ pub struct WordAlignment {
     pub time: TimeRange,
     pub speaker: Option<SpeakerId>,
     pub confidence: f32,
+    /// True when the word's timestamps were filled in by nearest-neighbor
+    /// interpolation because the ASR left them missing or zero-duration.
+    /// Downstream consumers can ignore or down-weight these if desired.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub interpolated: bool,
 }
 
 /// A single transcribed word with its time span and ASR confidence.

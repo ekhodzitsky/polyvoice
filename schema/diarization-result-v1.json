@@ -83,7 +83,11 @@
         "word": { "type": "string" },
         "time": { "$ref": "#/$defs/timeRange" },
         "speaker": { "type": ["integer", "null"], "description": "Attributed speaker id (dominant on overlap), or null." },
-        "confidence": { "type": "number", "description": "ASR confidence in [0,1], scaled by turn-coverage share." }
+        "confidence": { "type": "number", "description": "ASR confidence in [0,1], scaled by turn-coverage share." },
+        "interpolated": {
+          "type": "boolean",
+          "description": "ADDITIVE: true when timestamps were nearest-neighbor filled because ASR left them missing or zero-duration. Absent/false means ASR timestamps were used as-is."
+        }
       }
     },
     "audio": {
