@@ -132,6 +132,7 @@ mod tests {
             speaker: SpeakerId(id),
             time: TimeRange { start, end },
             text: text.map(|s| s.to_owned()),
+            stable: true,
         }
     }
 

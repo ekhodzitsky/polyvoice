@@ -321,6 +321,7 @@ fn run_v2_pipeline<C: Clusterer>(
             speaker: SpeakerId(lbl as u32),
             time: seg.time,
             text: None,
+            stable: true,
         })
         .collect();
     primary_turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));

@@ -25,6 +25,7 @@ fn miri_resegment_no_overlap() {
             end: 1.0,
         },
         text: None,
+        stable: true,
     }];
     let centroids = vec![SpeakerCentroid {
         speaker: SpeakerId(0),
@@ -50,6 +51,7 @@ fn miri_resegment_single_overlap() {
             end: 1.0,
         },
         text: None,
+        stable: true,
     }];
     let centroids = vec![
         SpeakerCentroid {
