@@ -130,4 +130,7 @@ fn schema_outputs_valid_json_contract() {
     // Additive who-said-what fields are documented in the schema.
     assert!(json["$defs"]["turn"]["properties"]["text"].is_object());
     assert!(json["$defs"]["word"].is_object());
+    // Additive exclusive timeline + optional speaker embeddings (v1 extension).
+    assert!(json["properties"]["exclusive_turns"].is_object());
+    assert!(json["$defs"]["speaker"]["properties"]["embedding"].is_object());
 }
