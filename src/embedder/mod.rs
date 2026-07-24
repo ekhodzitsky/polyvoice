@@ -90,16 +90,16 @@ pub fn apply_overlap_mask(
     out
 }
 
-use crossbeam_queue::ArrayQueue;
-use std::sync::Arc;
-
-/// Lock-free pool of `Embedder` instances for concurrent extraction.
+/// Pool of `Embedder` instances for concurrent extraction.
 ///
 /// Generic over `E: Embedder` so the same pool implementation works for
 /// `CamPlusPlusExtractor`, `ResNet34Adapter`, or any user-provided embedder.
 /// All embedders in a pool must share the same output dimension.
+///
+/// Backed by a blocking [`crate::utils::ObjectPool`] (`Mutex<Vec<E>>`): checkout
+/// waits until an embedder is free; Drop returns it.
 pub struct EmbedderPool<E: Embedder> {
-    queue: Arc<ArrayQueue<E>>,
+    pool: crate::utils::ObjectPool<E>,
     dim: usize,
     capacity: usize,
 }
@@ -123,13 +123,8 @@ impl<E: Embedder> EmbedderPool<E> {
             }
         }
         let capacity = embedders.len().max(1);
-        let queue = Arc::new(ArrayQueue::new(capacity));
-        for e in embedders {
-            // ArrayQueue::push only fails if full; capacity == count, so push always succeeds.
-            let _ = queue.push(e);
-        }
         Ok(Self {
-            queue,
+            pool: crate::utils::ObjectPool::new(embedders),
             dim,
             capacity,
         })
@@ -152,24 +147,14 @@ impl<E: Embedder> EmbedderPool<E> {
     /// `pub fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError>`
     /// { ret.as_ref().map_or(true, |v| v.len() == self.dim) }
     /// Extract a single embedding using the next-available pooled embedder.
-    /// Blocks (busy-spins) until one is free.
+    /// Blocks until one is free.
     pub fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
         if self.dim == 0 {
-            // Empty-construction case.
+            // Empty-construction case (no items in the pool).
             return Err(EmbedderError::Legacy("empty pool".to_owned()));
         }
-        // Acquire (busy-wait fallback for simplicity; real Pipeline use is
-        // through `rayon::par_iter` which already throttles concurrency).
-        let embedder = loop {
-            if let Some(e) = self.queue.pop() {
-                break e;
-            }
-            std::hint::spin_loop();
-        };
-        let result = embedder.embed(audio);
-        // Always return the embedder.
-        let _ = self.queue.push(embedder);
-        result
+        let embedder = self.pool.checkout();
+        embedder.embed(audio)
     }
 }
 

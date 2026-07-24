@@ -183,10 +183,10 @@ fn kmeans_on_features(features: &[Vec<f64>], k: usize, max_iter: usize) -> Vec<u
     // K-means++ initialization. Deterministic seed: this legacy path values
     // reproducibility (stable exact-k tests, identical runs on identical
     // input) over stochastic restarts; the production NME-SC path does not
-    // come through here.
+    // come through here. Uses in-tree xorshift64* (same seed constant).
     let mut centroids: Vec<Vec<f64>> = Vec::with_capacity(k);
-    let mut rng = fastrand::Rng::with_seed(0x504f_4c59_564f_4943);
-    let first_idx = rng.usize(0..n);
+    let mut rng = crate::utils::XorShift64Star::new(0x504f_4c59_564f_4943);
+    let first_idx = rng.usize(n);
     centroids.push(features[first_idx].clone());
 
     let mut dists = vec![f64::INFINITY; n];

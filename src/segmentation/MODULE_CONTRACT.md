@@ -91,6 +91,11 @@ dependencies:
     - module: types
       scope: data-shape
       reason: Confidence, TimeRange for segment timestamps.
+    - module: onnx
+      scope: inference
+      reason: >
+        PowersetSegmenter uses InferenceRuntime / OrtSession via
+        build_session_with_ep; does not import ort::.
   external: []
 consumers:
   - path: .
