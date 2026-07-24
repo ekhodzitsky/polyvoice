@@ -127,6 +127,12 @@ resegmentation = []
 # weights are optional download via the model registry (never bundled).
 sortformer = ["onnx"]
 
+# Optional pure-Rust earshot VAD (pykeio). Opt-in only — never default.
+# Silero remains the production default and the DER-parity reference.
+# Weights are compiled into the earshot crate (no ONNX, no download).
+# Verify default builds stay free of earshot: `cargo tree -e normal | rg earshot`.
+vad-earshot = ["dep:earshot"]
+
 # v1.0 word->speaker attribution join (ASR words -> diarization turns).
 # Pure-Rust, wasm32-clean — no onnx/model/IO. Operates only on TimeRange/SpeakerId.
 attribution = []
@@ -166,6 +172,10 @@ ort = { version = "2.0.0-rc.12", optional = true, default-features = false, feat
 # Pure-Rust ONNX loader/runtime (opt-in via `backend-tract`). Use tract-onnx
 # directly rather than the heavier facade crate (which pulls CUDA by default).
 tract-onnx = { version = "0.23.4", optional = true, default-features = false }
+
+# Pure-Rust VAD (opt-in via `vad-earshot`). Weights compiled into the crate;
+# no ONNX Runtime session. Default builds must not pull this dependency.
+earshot = { version = "1.2", optional = true, default-features = true }
 
 # WAV file I/O (always available; multi-format decode is behind `audio-io`)
 hound = "3.5"
