@@ -462,17 +462,48 @@ fn cmd_models_list() -> Result<()> {
 fn cmd_models_info(name: String) -> Result<()> {
     let registry = ModelRegistry::default()?;
     let manifest = registry.manifest();
-    if let Some(entry) = manifest.model(&name) {
-        println!("{name}:");
-        println!("  filename: {}", entry.filename);
-        println!("  url: {}", entry.url);
-        println!("  sha256: {}", entry.sha256);
-        println!("  size: {} bytes", entry.size.unwrap_or(0));
-        if let Some(cal) = &entry.calibration {
-            println!("  calibration: {cal}");
-        }
-    } else {
+    // Accept direct model ids and stage-scoped aliases (e.g. embedder/latest).
+    let resolved = manifest
+        .model(&name)
+        .map(|_| name.as_str())
+        .or_else(|| {
+            for stage in ["segmenter", "embedder", "vad"] {
+                if let Some(id) = manifest.resolve_model_ref(stage, &name) {
+                    return Some(id);
+                }
+            }
+            None
+        });
+    let Some(model_id) = resolved else {
         anyhow::bail!("model '{name}' not found in manifest");
+    };
+    let entry = manifest.model(model_id).expect("resolved id must exist");
+    if model_id != name {
+        println!("{name} -> {model_id}:");
+    } else {
+        println!("{name}:");
+    }
+    println!("  filename: {}", entry.filename);
+    println!("  url: {}", entry.url);
+    println!("  sha256: {}", entry.sha256);
+    println!("  size: {} bytes", entry.size.unwrap_or(0));
+    if let Some(cal) = &entry.calibration {
+        println!("  calibration: {cal}");
+    }
+    if let Some(v) = &entry.version {
+        println!("  version: {v}");
+    }
+    if let Some(a) = &entry.adapter_type {
+        println!("  adapter_type: {a}");
+    }
+    if let Some(l) = &entry.license {
+        println!("  license: {l}");
+    }
+    if let Some(u) = &entry.license_url {
+        println!("  license_url: {u}");
+    }
+    if let Some(p) = &entry.provenance {
+        println!("  provenance: {p}");
     }
     Ok(())
 }
