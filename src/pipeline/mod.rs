@@ -125,13 +125,20 @@ impl Pipeline {
         };
         let num_speakers = labels.iter().copied().max().map_or(0, |m| m + 1);
 
+        // Per-window confidence from cosine similarity to the speaker centroid
+        // (logistic map — ranking score, not a calibrated probability).
+        let speaker_ids: Vec<SpeakerId> = labels.iter().map(|&l| SpeakerId(l as u32)).collect();
+        let confidences =
+            crate::types::segment_confidences_from_embeddings(&speaker_ids, &embeddings);
+
         let mut segments: Vec<Segment> = labels
             .iter()
             .zip(time_ranges.iter())
-            .map(|(&label, &time)| Segment {
+            .enumerate()
+            .map(|(i, (&label, &time))| Segment {
                 time,
                 speaker: Some(SpeakerId(label as u32)),
-                confidence: None,
+                confidence: confidences.get(i).copied(),
             })
             .collect();
 
