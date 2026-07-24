@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in `audio-io` feature** for the loading layer: decode mp3/flac/ogg/m4a/aac
+  (and related containers) via unmodified [symphonia](https://github.com/pdeljanov/Symphonia)
+  (MPL-2.0 — see `NOTICE`), and resample any sample rate → 16 kHz mono via
+  [rubato](https://github.com/HEnquist/rubato). Multi-channel input is averaged
+  to mono. New API: `polyvoice::wav::load_audio`. Without the feature the CLI
+  keeps 16 kHz WAV-only behaviour and prints a rebuild hint for other formats
+  or rates. Default `cargo tree` does not pull rubato/symphonia.
+  Build the CLI with `--features "cli,audio-io"`. Opus is not supported (no
+  native libopus).
+
 ### Changed
 
 - **MSRV is now Rust 1.88.0** (was 1.85.0). The declared version was wrong for
