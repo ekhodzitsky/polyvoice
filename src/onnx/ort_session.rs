@@ -19,6 +19,7 @@ use std::path::Path;
 pub struct OrtSession {
     session: ort::session::Session,
     input_names: Vec<String>,
+    output_names: Vec<String>,
 }
 
 impl OrtSession {
@@ -79,9 +80,15 @@ impl OrtSession {
             .iter()
             .map(|i| i.name().to_owned())
             .collect();
+        let output_names = session
+            .outputs()
+            .iter()
+            .map(|o| o.name().to_owned())
+            .collect();
         Ok(Self {
             session,
             input_names,
+            output_names,
         })
     }
 
@@ -110,6 +117,10 @@ impl OrtSession {
 impl InferenceRuntime for OrtSession {
     fn input_names(&self) -> &[String] {
         &self.input_names
+    }
+
+    fn output_names(&self) -> &[String] {
+        &self.output_names
     }
 
     fn run(
