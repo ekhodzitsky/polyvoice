@@ -82,6 +82,21 @@ pub fn build_session_with_ep(
     OrtSession::from_path(model_path, ep, intra_threads)
 }
 
+/// Read ONNX `metadata_props` (custom metadata key/value pairs) from `path`.
+///
+/// Opens a short-lived CPU session solely to query model metadata, then drops
+/// it. Used by `models::metadata::load_model_config` so stage adapters can take
+/// geometry / license / adapter_type from the model itself (sherpa-onnx pattern).
+///
+/// Returns an empty map when the model has no custom props (not an error).
+pub fn read_model_metadata_props(
+    path: &Path,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    let session = OrtSession::from_path(path, ExecutionProvider::Cpu, Some(1))
+        .map_err(|e| format!("open for metadata: {e}"))?;
+    session.custom_metadata_props()
+}
+
 /// Error raised when an ONNX file fails structural header validation.
 #[derive(thiserror::Error, Debug)]
 #[error("ONNX header validation failed for {path}: {detail}")]
