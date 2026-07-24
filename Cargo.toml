@@ -74,6 +74,11 @@ download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify
 # CLI binary (polyvoice command).
 cli = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "dep:clap", "dep:clap_complete"]
 
+# Multi-format audio decode (symphonia) + resampling to 16 kHz (rubato) for the
+# CLI / loading layer. Opt-in only — keeps the default library surface free of
+# media-codec deps. Rebuild the CLI with `--features "cli,audio-io"`.
+audio-io = ["dep:rubato", "dep:symphonia"]
+
 # Execution providers (forward `ort` features). Used by Pipeline implementations from M1+.
 coreml = ["onnx", "ort/coreml"]
 nnapi = ["onnx", "ort/nnapi"]
@@ -151,8 +156,20 @@ mcp = [
 # ONNX Runtime — matches the ecosystem version.
 ort = { version = "2.0.0-rc.12", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs"] }
 
-# WAV file I/O
+# WAV file I/O (always available; multi-format decode is behind `audio-io`)
 hound = "3.5"
+
+# Opt-in multi-format audio decode + resampling (feature `audio-io`)
+rubato = { version = "4.0", optional = true }
+# MPL-2.0: unmodified dependency only — never patch or vendor (see NOTICE).
+symphonia = { version = "0.6", optional = true, default-features = true, features = [
+    "mp3",
+    "aac",
+    "isomp4",
+    "aiff",
+    "caf",
+    "alac",
+] }
 
 # Error handling
 anyhow = "1"
