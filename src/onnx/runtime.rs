@@ -2,9 +2,8 @@
 //!
 //! Neural stages (Silero VAD, powerset segmenter, embedders) must depend only
 //! on this module — never on a concrete ONNX Runtime binding. The default
-//! implementation is [`crate::onnx::OrtSession`]; a pure-Rust backend can
-//! implement [`InferenceRuntime`] behind a future feature flag without
-//! touching stage code.
+//! implementation is ort via [`crate::onnx::RuntimeSession`]; a pure-Rust
+//! tract backend implements the same trait behind the `backend-tract` feature.
 
 use std::fmt;
 

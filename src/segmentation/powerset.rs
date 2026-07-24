@@ -6,7 +6,7 @@
 //! Inference goes through [`crate::onnx::InferenceRuntime`]; this module does
 //! not import `ort::`.
 
-use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, OrtSession};
+use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, RuntimeSession};
 use crate::segmentation::aggregator::{AggregationConfig, Aggregator, WindowOutput};
 use crate::segmentation::{MIN_AUDIO_SAMPLES, RawSegment, SegmentationError, Segmenter};
 use std::path::{Path, PathBuf};
@@ -63,7 +63,7 @@ impl PowersetConfig {
 
 /// ONNX-backed powerset speaker segmenter.
 pub struct PowersetSegmenter {
-    session: Mutex<OrtSession>,
+    session: Mutex<RuntimeSession>,
     input_name: String,
     config: PowersetConfig,
     model_path: PathBuf,
