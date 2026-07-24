@@ -111,7 +111,9 @@ pub use resegmentation::extract_overlap_time_ranges;
 pub mod attribution;
 #[cfg(feature = "attribution")]
 pub use attribution::{
-    WhoSaidWhat, attribute_and_fill, attribute_words, fill_turn_text, who_said_what,
+    AttributionConfig, WhoSaidWhat, WordAnchor, attribute_and_fill, attribute_and_fill_with_config,
+    attribute_words, attribute_words_with_config, fill_turn_text, fill_turn_text_with_config,
+    interpolate_word_timestamps, who_said_what, who_said_what_with_config,
 };
 
 pub mod pipeline;
