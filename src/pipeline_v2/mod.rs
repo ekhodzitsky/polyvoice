@@ -315,7 +315,8 @@ impl Pipeline {
                         continue;
                     }
                     let mid = (seg.time.start + seg.time.end) / 2.0;
-                    if mid >= t.time.start && mid < t.time.end
+                    if mid >= t.time.start
+                        && mid < t.time.end
                         && let Some(&c) = window_conf.get(i)
                     {
                         sum += c;

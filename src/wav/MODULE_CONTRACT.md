@@ -5,8 +5,9 @@ module: src/wav
 level: subsystem
 layer: io
 purpose: >
-  Owns WAV file reading via hound crate. Returns samples and sample rate.
-  Does NOT own audio playback or feature extraction.
+  Owns audio file loading for the pipeline. WAV via hound; optional multi-format
+  decode (symphonia) and resampling to 16 kHz mono (rubato) behind feature
+  `audio-io`. Does NOT own audio playback or feature extraction.
 status: stable
 owners:
   - polyvoice-core
@@ -35,19 +36,30 @@ surface:
     visibility: public
     contract: >
       Reads a WAV file and returns (samples as f32 Vec, sample_rate_hz).
+      Does not resample.
     proof:
       kind: unit-test
       target: src/wav::mod::tests::missing_file_error
+      command: cargo test --lib wav
+  - name: load_audio
+    kind: function
+    visibility: public
+    contract: >
+      Returns mono f32 at TARGET_SAMPLE_RATE (16 kHz). Without audio-io:
+      16 kHz WAV only. With audio-io: multi-format decode + resample.
+    proof:
+      kind: unit-test
+      target: src/wav::mod::tests::load_audio_accepts_16k_wav
       command: cargo test --lib wav
   - name: WavError
     kind: enum
     visibility: public
     contract: >
-      Error type for WAV read failures.
+      Error type for audio load failures (WAV, decode, resample, feature hints).
     proof:
-      kind: integration-test
-      target: tests/e2e_smoke_test.rs
-      command: cargo test --test e2e_smoke_test --features onnx,download
+      kind: unit-test
+      target: src/wav::mod::tests::wav_error_display
+      command: cargo test --lib wav
 dependencies:
   internal: []
   external: []
@@ -56,6 +68,7 @@ consumers:
   - path: .
     uses:
       - read_wav
+      - load_audio
       - WavError
       - polyvoice_internal
 invariants:
@@ -63,20 +76,30 @@ invariants:
     rule: read_wav returns the actual sample rate from the WAV header.
     proof:
       kind: integration-test
-      target: tests/e2e_smoke_test.rs
-      command: cargo test --test e2e_smoke_test --features onnx,download
+      target: tests/test_wav.rs
+      command: cargo test --test test_wav
+  - id: load-audio-target-rate
+    rule: load_audio success always returns TARGET_SAMPLE_RATE (16000).
+    proof:
+      kind: unit-test
+      target: src/wav::mod::tests::load_audio_accepts_16k_wav
+      command: cargo test --lib wav
 verification:
   pre_change:
-    - cargo check --all-features
+    - cargo check --features audio-io
   full:
-    - cargo test --test e2e_smoke_test --features onnx,download
-    - cargo clippy --all-targets --all-features -- -D warnings
+    - cargo test --lib wav
+    - cargo test --lib wav --features audio-io
+    - cargo test --test test_wav --features audio-io
+    - cargo tree -e normal | rg "rubato|symphonia"  # empty without audio-io
 agent_policy:
   allowed_mutations:
     - Adding WAV format support.
     - Optimizing read buffer sizes.
+    - Extending audio-io decode/resample paths.
   forbidden_mutations:
     - Changing read_wav return type without migration lease.
+    - Pulling rubato/symphonia into default features.
   escalation:
     - Changes to WAV read semantics or error variants.
 ---

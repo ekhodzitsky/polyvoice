@@ -589,10 +589,7 @@ pub fn exclusive_turns(turns: &[SpeakerTurn]) -> Vec<SpeakerTurn> {
     if turns.is_empty() {
         return Vec::new();
     }
-    let max_time = turns
-        .iter()
-        .map(|t| t.time.end)
-        .fold(0.0f64, f64::max);
+    let max_time = turns.iter().map(|t| t.time.end).fold(0.0f64, f64::max);
     if !max_time.is_finite() || max_time <= 0.0 {
         return Vec::new();
     }
@@ -603,20 +600,16 @@ pub fn exclusive_turns(turns: &[SpeakerTurn]) -> Vec<SpeakerTurn> {
     // Per frame: best (speaker, covering_turn_duration). None = silence.
     let mut best: Vec<Option<(u32, f64)>> = vec![None; n_frames];
     for turn in turns {
-        if !turn.time.start.is_finite() || !turn.time.end.is_finite() || turn.time.end <= turn.time.start
+        if !turn.time.start.is_finite()
+            || !turn.time.end.is_finite()
+            || turn.time.end <= turn.time.start
         {
             continue;
         }
         let dur = turn.time.duration();
         let start_f = (turn.time.start / EXCLUSIVE_FRAME_SECS).max(0.0) as usize;
-        let end_f = (turn.time.end / EXCLUSIVE_FRAME_SECS)
-            .ceil()
-            .max(0.0) as usize;
-        for frame in best
-            .iter_mut()
-            .take(end_f.min(n_frames))
-            .skip(start_f)
-        {
+        let end_f = (turn.time.end / EXCLUSIVE_FRAME_SECS).ceil().max(0.0) as usize;
+        for frame in best.iter_mut().take(end_f.min(n_frames)).skip(start_f) {
             match frame {
                 None => *frame = Some((turn.speaker.0, dur)),
                 Some((spk, best_dur)) => {
@@ -716,11 +709,7 @@ pub fn confidence_from_similarity_params(sim: f32, midpoint: f32, steepness: f32
 /// Monotone **decreasing** in `distance`. Equivalent to
 /// [`confidence_from_similarity`]`(1 − distance)`.
 pub fn confidence_from_distance(distance: f32) -> f32 {
-    let d = if distance.is_finite() {
-        distance
-    } else {
-        2.0
-    };
+    let d = if distance.is_finite() { distance } else { 2.0 };
     confidence_from_similarity(1.0 - d)
 }
 
@@ -1140,7 +1129,10 @@ mod diarization_result_tests {
         let mut prev = -1.0f32;
         for &s in &sims {
             let c = confidence_from_similarity(s);
-            assert!((0.0..=1.0).contains(&c), "conf {c} out of range for sim {s}");
+            assert!(
+                (0.0..=1.0).contains(&c),
+                "conf {c} out of range for sim {s}"
+            );
             assert!(
                 c + 1e-6 >= prev,
                 "not monotone: sim {s} conf {c} < prev {prev}"
@@ -1155,12 +1147,7 @@ mod diarization_result_tests {
 
     #[test]
     fn mean_speaker_embeddings_are_l2_normalized_and_deterministic() {
-        let labels = [
-            SpeakerId(0),
-            SpeakerId(0),
-            SpeakerId(1),
-            SpeakerId(1),
-        ];
+        let labels = [SpeakerId(0), SpeakerId(0), SpeakerId(1), SpeakerId(1)];
         let embeddings = vec![
             vec![3.0, 0.0],
             vec![0.0, 4.0],
