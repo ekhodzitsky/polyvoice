@@ -253,6 +253,7 @@ impl Pipeline {
                 speaker: SpeakerId(lbl as u32),
                 time: seg.time,
                 text: None,
+                stable: true,
             })
             .collect();
 
@@ -338,6 +339,7 @@ impl Pipeline {
                     speaker: spk,
                     time: s.time,
                     text: None,
+                    stable: true,
                 })
             })
             .collect();

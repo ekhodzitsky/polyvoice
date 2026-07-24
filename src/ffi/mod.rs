@@ -368,6 +368,7 @@ mod tests {
                 end: 2.0,
             },
             text: Some("hello".to_owned()),
+            stable: true,
         }];
         DiarizationResult::new(vec![], turns, 1)
     }

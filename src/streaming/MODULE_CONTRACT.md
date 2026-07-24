@@ -35,7 +35,8 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Online diarization pipeline that processes audio incrementally.
+      Online diarization pipeline that processes audio incrementally with an
+      AOSC-style arrival-order speaker cache and optional LatencyPreset.
     proof:
       kind: unit-test
       target: src/streaming::mod::tests
@@ -49,29 +50,48 @@ surface:
       kind: unit-test
       target: src/streaming::mod::tests
       command: cargo test --lib streaming
+  - name: LatencyPreset
+    kind: enum
+    visibility: public
+    contract: >
+      Named realtime/balanced/accurate latency presets for streaming geometry.
+    proof:
+      kind: unit-test
+      target: src/streaming::latency::tests
+      command: cargo test --lib streaming
+  - name: ArrivalOrderSpeakerCache
+    kind: struct
+    visibility: public
+    contract: >
+      Bounded arrival-order speaker cache; len never exceeds cap.
+    proof:
+      kind: unit-test
+      target: src/streaming::cache::tests
+      command: cargo test --lib streaming
 dependencies:
   internal:
     - module: types
       scope: data-shape
-      reason: DiarizationConfig, SpeakerTurn, ClusterConfig.
+      reason: DiarizationConfig, SpeakerTurn (stable flag), ClusterConfig.
     - module: vad
       scope: trait
       reason: VoiceActivityDetector for speech segmentation.
     - module: window
       scope: utility
       reason: WindowBuffer for audio framing.
-    - module: cluster
-      scope: algorithm
-      reason: SpeakerCluster for incremental clustering.
-    - module: embedder
+    - module: embedding
       scope: trait
-      reason: Embedder for embedding extraction.
+      reason: EmbeddingExtractor for window embeddings (legacy path).
+    - module: utils
+      scope: utility
+      reason: cosine similarity and L2 normalize for cache matching.
   external: []
 consumers:
   - path: .
     uses:
       - StreamingPipeline
       - StreamingError
+      - LatencyPreset
       - polyvoice_internal
 invariants:
   - id: turns-monotonic
@@ -87,6 +107,20 @@ invariants:
     proof:
       kind: unit-test
       target: src/streaming::mod::tests::turns_accumulates_across_feed_and_flush
+      command: cargo test --lib streaming
+  - id: cache-bounded
+    rule: ArrivalOrderSpeakerCache length never exceeds its configured cap.
+    proof:
+      kind: unit-test
+      target: src/streaming::cache::tests::cache_size_never_exceeds_cap
+      command: cargo test --lib streaming
+  - id: arrival-order-stable
+    rule: >
+      Cross-chunk speaker re-match preserves arrival-order IDs (no global
+      recluster permutation).
+    proof:
+      kind: unit-test
+      target: src/streaming::cache::tests::arrival_order_ids_are_stable_across_chunks
       command: cargo test --lib streaming
 verification:
   pre_change:

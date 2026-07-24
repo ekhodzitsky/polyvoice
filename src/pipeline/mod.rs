@@ -153,6 +153,7 @@ impl Pipeline {
                     speaker: spk,
                     time: s.time,
                     text: None,
+                    stable: true,
                 })
             })
             .collect();
