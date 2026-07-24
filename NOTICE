@@ -41,7 +41,7 @@ ogg/vorbis, m4a/aac, and related containers).
 
   Homepage: https://github.com/pdeljanov/Symphonia
   License text: https://www.mozilla.org/en-US/MPL/2.0/
-=======
+
 Streaming Sortformer v2 (opt-in `sortformer` feature)
 -----------------------------------------------------
 When the optional Sortformer adapter downloads weights, they come from the
