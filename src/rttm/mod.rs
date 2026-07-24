@@ -143,6 +143,7 @@ pub fn to_speaker_turns(
                     end: seg.end(),
                 },
                 text: None,
+                stable: true,
             }
         })
         .collect();
@@ -215,6 +216,7 @@ SPEAKER file1 1 2.0 1.0 <NA> <NA> B <NA> <NA>
                     end: 2.8,
                 },
                 text: None,
+                stable: true,
             },
             SpeakerTurn {
                 speaker: SpeakerId(1),
@@ -223,6 +225,7 @@ SPEAKER file1 1 2.0 1.0 <NA> <NA> B <NA> <NA>
                     end: 4.5,
                 },
                 text: None,
+                stable: true,
             },
         ];
         let mut buf = Vec::new();
