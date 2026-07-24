@@ -96,6 +96,12 @@ struct DiarizeArgs {
     /// per-session defaults.
     #[arg(long, default_value = "auto")]
     execution_provider: String,
+    /// Also emit a single-speaker (exclusive) timeline. In JSON this is the
+    /// additive `exclusive_turns` field beside the overlap-aware `turns`. For
+    /// RTTM/SRT/VTT/TXT the exclusive timeline is written instead (ASR-
+    /// reconciliation surface — concurrent speakers are collapsed per frame).
+    #[arg(long)]
+    exclusive: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -166,6 +172,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         vbx_plda_dir,
         embed_window,
         execution_provider,
+        exclusive,
     } = args;
 
     let wav = wav.ok_or_else(|| {
@@ -201,7 +208,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     // clusterer ceiling (`--speakers` wins when both are set).
     let max_clusters = speakers.or(max_speakers);
 
-    let result = if v2 {
+    let mut result = if v2 {
         run_v2_pipeline(
             &wav,
             profile,
@@ -217,15 +224,24 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         run_legacy_pipeline(&wav, profile, &registry, threshold, max_clusters, quiet)?
     };
 
-    write_output(&result, &wav, format, output)
+    if exclusive {
+        result = result.with_exclusive();
+    }
+
+    write_output(&result, &wav, format, exclusive, output)
 }
 
 /// Project the result into the requested format and write it to a file or stdout.
 /// The bytes are built in a buffer first, so stdout receives ONLY the result.
+///
+/// When `exclusive` is set and the format is not JSON, the exclusive single-
+/// speaker timeline is projected (RTTM/SRT/VTT/TXT). JSON always serializes the
+/// full result, so both `turns` and `exclusive_turns` appear side by side.
 fn write_output(
     result: &DiarizationResult,
     wav: &Path,
     format: OutputFormat,
+    exclusive: bool,
     output: Option<PathBuf>,
 ) -> Result<()> {
     let file_id = wav
@@ -234,14 +250,20 @@ fn write_output(
         .unwrap_or("audio")
         .to_string();
 
+    let project_turns = if exclusive && !result.exclusive_turns.is_empty() {
+        &result.exclusive_turns
+    } else {
+        &result.turns
+    };
+
     let mut buf: Vec<u8> = Vec::new();
     match format {
         OutputFormat::Rttm => {
-            write_rttm(&mut buf, &file_id, &result.turns).context("write RTTM")?
+            write_rttm(&mut buf, &file_id, project_turns).context("write RTTM")?
         }
-        OutputFormat::Srt => write_srt(&mut buf, &result.turns).context("write SRT")?,
-        OutputFormat::Vtt => write_vtt(&mut buf, &result.turns).context("write VTT")?,
-        OutputFormat::Txt => write_txt(&mut buf, &result.turns).context("write TXT")?,
+        OutputFormat::Srt => write_srt(&mut buf, project_turns).context("write SRT")?,
+        OutputFormat::Vtt => write_vtt(&mut buf, project_turns).context("write VTT")?,
+        OutputFormat::Txt => write_txt(&mut buf, project_turns).context("write TXT")?,
         OutputFormat::Json => {
             let json = serde_json::to_string_pretty(result).context("serialize JSON")?;
             buf.extend_from_slice(json.as_bytes());
