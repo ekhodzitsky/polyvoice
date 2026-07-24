@@ -20,7 +20,7 @@ use std::path::Path;
     note = "use the v1.0 Embedder trait in polyvoice::embedder"
 )]
 pub struct FbankOnnxExtractor {
-    pool: crossbeam_queue::ArrayQueue<ort::session::Session>,
+    pool: crate::utils::ObjectPool<ort::session::Session>,
     embedding_dim: usize,
     fbank: FbankExtractor,
 }
@@ -29,7 +29,7 @@ pub struct FbankOnnxExtractor {
 impl FbankOnnxExtractor {
     /// { pool_size > 0 }
     /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
-    /// { ret.pool.len() == pool_size }
+    /// { true }
     pub fn new(
         model_path: &Path,
         embedding_dim: usize,
@@ -39,26 +39,18 @@ impl FbankOnnxExtractor {
         if pool_size == 0 {
             anyhow::bail!("pool_size must be > 0");
         }
-        let pool = crossbeam_queue::ArrayQueue::new(pool_size);
+        let mut sessions = Vec::with_capacity(pool_size);
         for i in 0..pool_size {
             // intra_threads(1): this extractor parallelises across the session
             // pool, so each session stays single-threaded.
             let session = crate::onnx::build_session_with_ep(model_path, ep, Some(1))
                 .map_err(|e| EmbeddingError::InferenceFailed(format!("session {i}: {e}")))?;
-            pool.push(session)
-                .map_err(|_| anyhow::anyhow!("failed to push session into pool"))?;
+            sessions.push(session);
         }
         Ok(Self {
-            pool,
+            pool: crate::utils::ObjectPool::new(sessions),
             embedding_dim,
             fbank: FbankExtractor::new(crate::features::FbankConfig::default()),
-        })
-    }
-
-    fn checkout(&self) -> Option<PooledSession<'_>> {
-        self.pool.pop().map(|s| PooledSession {
-            session: Some(s),
-            pool: &self.pool,
         })
     }
 }
@@ -70,9 +62,7 @@ impl EmbeddingExtractor for FbankOnnxExtractor {
         samples: &[f32],
         _config: &DiarizationConfig,
     ) -> Result<Vec<f32>, EmbeddingError> {
-        let mut guard = self.checkout().ok_or_else(|| {
-            EmbeddingError::InferenceFailed("ONNX session pool exhausted".to_string())
-        })?;
+        let mut session = self.pool.checkout();
 
         // Zero-pad short inputs to the minimum window length required by fbank.
         let min_samples = self.fbank.config.win_length;
@@ -111,10 +101,6 @@ impl EmbeddingExtractor for FbankOnnxExtractor {
         let tensor = ort::value::TensorRef::from_array_view(&array)
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
-        let session = guard
-            .session
-            .as_mut()
-            .ok_or_else(|| EmbeddingError::InferenceFailed("session not available".to_string()))?;
         let outputs = session
             .run(ort::inputs![tensor])
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
@@ -144,21 +130,6 @@ impl EmbeddingExtractor for FbankOnnxExtractor {
 
     fn embedding_dim(&self) -> usize {
         self.embedding_dim
-    }
-}
-
-#[cfg(feature = "onnx")]
-struct PooledSession<'a> {
-    session: Option<ort::session::Session>,
-    pool: &'a crossbeam_queue::ArrayQueue<ort::session::Session>,
-}
-
-#[cfg(feature = "onnx")]
-impl Drop for PooledSession<'_> {
-    fn drop(&mut self) {
-        if let Some(session) = self.session.take() {
-            let _ = self.pool.push(session);
-        }
     }
 }
 

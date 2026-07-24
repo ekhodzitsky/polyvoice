@@ -1,9 +1,10 @@
 #![allow(clippy::unwrap_used)]
 //! Loom model-checking for the session-pool checkout/drop pattern.
 //!
-//! This test verifies that the `PooledSession`-style guard (checkout from a
-//! lock-free queue, return on Drop) is sound under all possible thread
-//! interleavings.
+//! This test verifies that a `PooledGuard`-style RAII checkout (take from a
+//! pool, return on Drop) is sound under all possible thread interleavings.
+//! Production code uses `crate::utils::ObjectPool` (`Mutex<Vec<T>>`); Loom
+//! models the same checkout/return contract with a loom-aware channel.
 //!
 //! To run with full Loom model checking (slower but exhaustive):
 //! ```bash
@@ -21,8 +22,8 @@ struct MockSession {
     id: usize,
 }
 
-/// A mock lock-free pool using `loom`'s rendezvous channel as a stand-in
-/// for `crossbeam_queue::ArrayQueue` (which is not loom-aware).
+/// A mock pool using `loom`'s channel as a loom-aware stand-in for the
+/// production `Mutex<Vec<T>>` object pool.
 struct MockPool {
     #[allow(dead_code)]
     sender: loom::sync::mpsc::Sender<MockSession>,
