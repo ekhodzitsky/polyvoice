@@ -1,10 +1,25 @@
 #![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! ONNX-based speaker embedding extractor with a session pool.
+//!
+//! # Runtime boundary
+//!
+//! All `ort::` imports live in [`ort_session`]. Neural stages outside this
+//! module must depend only on [`InferenceRuntime`] / [`OrtSession`] and must
+//! **not** import `ort::` directly. A future pure-Rust backend can implement
+//! [`InferenceRuntime`] without touching stage code.
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
 use crate::types::DiarizationConfig;
 use crate::utils::l2_normalize;
 use std::path::Path;
+
+mod ort_session;
+mod runtime;
+
+pub use ort_session::OrtSession;
+pub use runtime::{
+    InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData,
+};
 
 /// Minimum plausible size for an ONNX file (header only).
 pub const ONNX_MIN_HEADER_BYTES: usize = 64;
@@ -14,6 +29,9 @@ pub const ONNX_MIN_HEADER_BYTES: usize = 64;
 /// Canonical home is here (the module that owns session creation) so the
 /// low-level constructors can name it without depending on `pipeline_v2`;
 /// `pipeline_v2::config` re-exports it, so existing imports keep compiling.
+///
+/// EP is **ort-specific config** — it is not part of [`InferenceRuntime`].
+/// Stages pass it only at session construction via [`build_session_with_ep`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ExecutionProvider {
     Cpu,
@@ -40,10 +58,13 @@ impl ExecutionProvider {
     }
 }
 
-/// Build an `ort` session for `model_path` with the requested execution
+/// Build an inference session for `model_path` with the requested execution
 /// provider. This is the ONE place embedding/segmentation sessions are
-/// constructed: it validates the ONNX header BEFORE ort ever parses the file
-/// (the validate-before-build invariant), then registers the EP.
+/// constructed: it validates the ONNX header BEFORE the backend ever parses
+/// the file (the validate-before-build invariant), then registers the EP.
+///
+/// Returns [`OrtSession`] — the default [`InferenceRuntime`] implementation.
+/// Callers must not depend on the underlying `ort` types.
 ///
 /// `intra_threads`: `Some(n)` pins the session's intra-op thread count (the
 /// fbank embedder uses 1 because it parallelises across a session pool).
@@ -57,52 +78,8 @@ pub fn build_session_with_ep(
     model_path: &Path,
     ep: ExecutionProvider,
     intra_threads: Option<usize>,
-) -> anyhow::Result<ort::session::Session> {
-    validate_onnx_header(model_path)?;
-    // ort::Error is not Send+Sync, so it cannot ride `?` into anyhow — stringify.
-    let mut builder =
-        ort::session::Session::builder().map_err(|e| anyhow::anyhow!("session builder: {e}"))?;
-    if let Some(n) = intra_threads {
-        builder = builder
-            .with_intra_threads(n)
-            .map_err(|e| anyhow::anyhow!("intra threads: {e}"))?;
-    }
-    match ep {
-        ExecutionProvider::Cpu => {}
-        ExecutionProvider::CoreMl => {
-            #[cfg(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))]
-            {
-                let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
-                builder = builder
-                    .with_execution_providers([coreml.build()])
-                    .map_err(|e| anyhow::anyhow!("coreml ep: {e}"))?;
-            }
-            #[cfg(not(all(feature = "coreml", target_os = "macos", target_arch = "aarch64")))]
-            tracing::warn!(
-                "execution provider CoreMl is not compiled in (needs the `coreml` feature on \
-                 macOS aarch64) — falling back to CPU"
-            );
-        }
-        ExecutionProvider::XnnPack => {
-            #[cfg(feature = "xnnpack")]
-            {
-                let xnnpack = ort::execution_providers::XNNPACKExecutionProvider::default();
-                builder = builder
-                    .with_execution_providers([xnnpack.build()])
-                    .map_err(|e| anyhow::anyhow!("xnnpack ep: {e}"))?;
-            }
-            #[cfg(not(feature = "xnnpack"))]
-            tracing::warn!(
-                "execution provider XnnPack is not compiled in (needs the `xnnpack` feature) —                  falling back to CPU"
-            );
-        }
-        ExecutionProvider::Nnapi | ExecutionProvider::Cuda => {
-            tracing::warn!("execution provider {ep:?} is not wired yet — falling back to CPU");
-        }
-    }
-    builder
-        .commit_from_file(model_path)
-        .map_err(|e| anyhow::anyhow!("commit_from_file: {e}"))
+) -> anyhow::Result<OrtSession> {
+    OrtSession::from_path(model_path, ep, intra_threads)
 }
 
 /// Error raised when an ONNX file fails structural header validation.
@@ -126,9 +103,9 @@ pub struct OnnxValidationError {
 ///    - The first byte is `0x08` (protobuf tag for field 1, wire-type varint),
 ///      indicating a valid ONNX ModelProto protobuf header.
 ///
-/// This is intentionally lightweight — it runs **before** any `ort::Session`
-/// creation so that garbage or truncated files never reach the C++ ONNX
-/// Runtime parser (mitigates DOS-003).
+/// This is intentionally lightweight — it runs **before** any runtime session
+/// creation so that garbage or truncated files never reach the backend parser
+/// (mitigates DOS-003).
 pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
     let metadata = std::fs::metadata(path).map_err(|e| OnnxValidationError {
         path: path.to_path_buf(),
@@ -182,20 +159,18 @@ pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
 
 /// A pooled ONNX session for speaker embedding extraction.
 ///
-/// Wraps `ort::session::Session` in a blocking [`crate::utils::ObjectPool`]
+/// Wraps [`OrtSession`] in a blocking [`crate::utils::ObjectPool`]
 /// so concurrent extractors can reuse sessions (checkout waits; Drop returns).
-#[cfg(feature = "onnx")]
 #[deprecated(
     since = "0.7.0",
     note = "use the v1.0 Embedder trait in polyvoice::embedder"
 )]
 pub struct OnnxEmbeddingExtractor {
-    pool: crate::utils::ObjectPool<ort::session::Session>,
+    pool: crate::utils::ObjectPool<OrtSession>,
     embedding_dim: usize,
     window_samples: usize,
 }
 
-#[cfg(feature = "onnx")]
 impl OnnxEmbeddingExtractor {
     /// { pool_size > 0 }
     /// `fn new(model_path: &Path, embedding_dim: usize, window_samples: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
@@ -224,7 +199,6 @@ impl OnnxEmbeddingExtractor {
     }
 }
 
-#[cfg(feature = "onnx")]
 impl EmbeddingExtractor for OnnxEmbeddingExtractor {
     fn extract(
         &self,
@@ -240,21 +214,16 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
             });
         }
 
-        let input_tensor =
-            ort::value::TensorRef::from_array_view(([1_usize, self.window_samples], samples))
-                .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
-
+        let input = InferenceTensor::f32(vec![1, self.window_samples], samples.to_vec());
         let outputs = session
-            .run(ort::inputs![input_tensor])
+            .run_ordered(&[&input])
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
-        if outputs.iter().next().is_none() {
-            return Err(EmbeddingError::InferenceFailed(
-                "ONNX model produced no outputs".to_string(),
-            ));
-        }
-        let (_, data) = &outputs[0]
-            .try_extract_tensor::<f32>()
+        let first = outputs.into_iter().next().ok_or_else(|| {
+            EmbeddingError::InferenceFailed("ONNX model produced no outputs".to_string())
+        })?;
+        let data = first
+            .into_f32()
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
         let data_len = data.len();
@@ -264,8 +233,7 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
                 self.embedding_dim, data_len
             )));
         }
-        let mut embedding = vec![0.0f32; self.embedding_dim];
-        embedding.copy_from_slice(data);
+        let mut embedding = data;
         l2_normalize(&mut embedding);
 
         Ok(embedding)
@@ -273,29 +241,6 @@ impl EmbeddingExtractor for OnnxEmbeddingExtractor {
 
     fn embedding_dim(&self) -> usize {
         self.embedding_dim
-    }
-}
-
-/// Stub when the `onnx` feature is disabled.
-#[cfg(not(feature = "onnx"))]
-#[deprecated(
-    since = "0.7.0",
-    note = "use the v1.0 Embedder trait in polyvoice::embedder"
-)]
-pub struct OnnxEmbeddingExtractor;
-
-#[cfg(not(feature = "onnx"))]
-impl OnnxEmbeddingExtractor {
-    /// { false } // Always fails because onnx feature is disabled.
-    /// `fn new(_model_path: &Path, _embedding_dim: usize, _window_samples: usize, _pool_size: usize) -> Result<Self, anyhow::Error>`
-    /// { false }
-    pub fn new(
-        _model_path: &Path,
-        _embedding_dim: usize,
-        _window_samples: usize,
-        _pool_size: usize,
-    ) -> anyhow::Result<Self> {
-        anyhow::bail!("the `onnx` feature is not enabled")
     }
 }
 
