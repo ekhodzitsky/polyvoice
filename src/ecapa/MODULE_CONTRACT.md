@@ -55,10 +55,10 @@ dependencies:
     - module: utils
       scope: utility
       reason: l2_normalize.
-  external:
-    - name: ort
-      scope: ml-runtime
-      reason: ONNX inference.
+    - module: onnx
+      scope: inference
+      reason: InferenceRuntime / OrtSession / build_session_with_ep (no direct ort::).
+  external: []
 consumers:
   - path: src/lib.rs
     uses:

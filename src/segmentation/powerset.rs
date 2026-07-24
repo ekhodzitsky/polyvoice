@@ -3,10 +3,12 @@
 //!
 //! Slides a 10-second window across the audio with a 1.0s hop (90% overlap),
 //! runs ONNX inference per window, and feeds outputs into `Aggregator`.
+//! Inference goes through [`crate::onnx::InferenceRuntime`]; this module does
+//! not import `ort::`.
 
+use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, OrtSession};
 use crate::segmentation::aggregator::{AggregationConfig, Aggregator, WindowOutput};
 use crate::segmentation::{MIN_AUDIO_SAMPLES, RawSegment, SegmentationError, Segmenter};
-use ort::session::Session;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -36,7 +38,7 @@ impl Default for PowersetConfig {
 
 /// ONNX-backed powerset speaker segmenter.
 pub struct PowersetSegmenter {
-    session: Mutex<Session>,
+    session: Mutex<OrtSession>,
     input_name: String,
     config: PowersetConfig,
     model_path: PathBuf,
@@ -73,10 +75,9 @@ impl PowersetSegmenter {
             }
         })?;
         let input_name = session
-            .inputs()
-            .first()
-            .map(|i| i.name().to_owned())
-            .unwrap_or_else(|| "waveform".to_owned());
+            .primary_input_name()
+            .unwrap_or("waveform")
+            .to_owned();
         Ok(Self {
             session: Mutex::new(session),
             input_name,
@@ -120,44 +121,40 @@ impl PowersetSegmenter {
         let n = window.len().min(win_samples);
         buf[..n].copy_from_slice(&window[..n]);
 
-        // Build input tensor with shape [1, 1, win_samples] matching the model's
-        // "waveform" input. Uses the same TensorRef::from_array_view pattern as
-        // silero_vad.rs (flat slice with explicit shape tuple).
-        let input_tensor = ort::value::TensorRef::from_array_view((
-            [1_usize, 1_usize, win_samples],
-            buf.as_slice(),
-        ))
-        .map_err(|e| SegmentationError::InferenceFailed {
-            window_idx,
-            detail: format!("input tensor: {e}"),
-        })?;
+        // Shape [1, 1, win_samples] matching the model's "waveform" input.
+        let input_tensor = InferenceTensor::f32(vec![1, 1, win_samples], buf);
 
         let mut guard = self.session.lock().unwrap_or_else(|e| e.into_inner());
         let outputs = guard
-            .run(ort::inputs![self.input_name.as_str() => input_tensor])
+            .run(&[NamedTensor::new(self.input_name.as_str(), &input_tensor)])
             .map_err(|e| SegmentationError::InferenceFailed {
                 window_idx,
                 detail: format!("session.run: {e}"),
             })?;
 
-        // Extract first output by index (robust to any output name).
-        // try_extract_tensor returns (shape_slice, data_slice) matching ecapa.rs pattern.
-        let (shape, data) = outputs[0].try_extract_tensor::<f32>().map_err(|e| {
+        let first = outputs.into_iter().next().ok_or_else(|| {
             SegmentationError::InferenceFailed {
                 window_idx,
-                detail: format!("try_extract_tensor: {e}"),
+                detail: "model produced no outputs".to_string(),
             }
         })?;
 
+        let shape_vec = first.shape.clone();
+        let data = first
+            .into_f32()
+            .map_err(|e| SegmentationError::InferenceFailed {
+                window_idx,
+                detail: format!("extract f32: {e}"),
+            })?;
+
         // Expected shape: [1, num_frames, 7].
-        let shape_vec: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
         if shape_vec.len() != 3 || shape_vec[0] != 1 || shape_vec[2] != 7 {
             return Err(SegmentationError::InvalidOutputShape {
                 actual_shape: shape_vec,
             });
         }
         let num_frames = shape_vec[1];
-        Ok((data.to_vec(), num_frames))
+        Ok((data, num_frames))
     }
 }
 
