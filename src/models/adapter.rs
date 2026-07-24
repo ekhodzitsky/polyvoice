@@ -124,6 +124,11 @@ impl AdapterRegistry {
         // Embedders
         reg.register_builtin(AdapterStage::Embedder, "wespeaker-resnet34");
         reg.register_builtin(AdapterStage::Embedder, "cam++");
+        // Optional domain / short-segment embedders (weights not profile-default).
+        reg.register_builtin(AdapterStage::Embedder, "eres2netv2");
+        reg.register_builtin(AdapterStage::Embedder, "cam++-zh");
+        let _ = reg.register_alias(AdapterStage::Embedder, "eres2net-v2", "eres2netv2");
+        let _ = reg.register_alias(AdapterStage::Embedder, "campplus-zh", "cam++-zh");
         // Clusterers
         reg.register_builtin(AdapterStage::Clusterer, "ahc");
         reg.register_builtin(AdapterStage::Clusterer, "nme-sc");
