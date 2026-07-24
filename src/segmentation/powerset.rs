@@ -27,12 +27,37 @@ pub struct PowersetConfig {
 
 impl Default for PowersetConfig {
     fn default() -> Self {
+        // Hard-coded fallbacks used when the ONNX has no metadata_props and
+        // the manifest entry lacks geometry fields. Prefer loading via
+        // `models::metadata::load_model_config` + `with_model_meta` so
+        // self-describing models win when present.
         Self {
             window_secs: 10.0,
             hop_secs: 1.0,
             sample_rate: 16000,
             aggregation: AggregationConfig::default(),
         }
+    }
+}
+
+impl PowersetConfig {
+    /// Overlay fields from a [`crate::models::ModelConfigMeta`] onto this
+    /// config. Only non-`None` meta fields replace the current values — stage
+    /// defaults stay for anything the model/manifest did not carry.
+    ///
+    /// Available when the `download` feature (models module) is enabled.
+    #[cfg(feature = "download")]
+    pub fn with_model_meta(mut self, meta: &crate::models::ModelConfigMeta) -> Self {
+        if let Some(sr) = meta.sample_rate {
+            self.sample_rate = sr;
+        }
+        if let Some(w) = meta.window_secs {
+            self.window_secs = w;
+        }
+        if let Some(h) = meta.hop_secs {
+            self.hop_secs = h;
+        }
+        self
     }
 }
 
