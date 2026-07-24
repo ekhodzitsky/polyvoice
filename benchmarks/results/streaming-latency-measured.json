@@ -1,0 +1,55 @@
+{
+  "schema": "polyvoice-streaming-latency-v1",
+  "hardware": {
+    "cpu": "Apple M1 Pro",
+    "arch": "aarch64",
+    "cores": 10
+  },
+  "chunk_samples": 3200,
+  "max_files": 10,
+  "dataset": "data/voxconverse-test",
+  "rows": [
+    {
+      "preset": "realtime",
+      "window_secs": 1.0,
+      "hop_secs": 0.5,
+      "right_context_secs": 0.0,
+      "cache_cap": 16,
+      "input_buffer_latency_secs": 1.032,
+      "mean_rtf": 0.1172255634718057,
+      "macro_der_collar_0": 42.15045515133083,
+      "macro_der_collar_025": 32.741413087995795,
+      "files": 10,
+      "total_audio_secs": 6700.928,
+      "total_wall_secs": 785.520060584
+    },
+    {
+      "preset": "balanced",
+      "window_secs": 1.5,
+      "hop_secs": 0.75,
+      "right_context_secs": 0.0,
+      "cache_cap": 32,
+      "input_buffer_latency_secs": 1.532,
+      "mean_rtf": 0.10916672022278108,
+      "macro_der_collar_0": 29.985806906589648,
+      "macro_der_collar_025": 20.15146661344088,
+      "files": 10,
+      "total_audio_secs": 6700.928,
+      "total_wall_secs": 731.5183322089999
+    },
+    {
+      "preset": "accurate",
+      "window_secs": 2.0,
+      "hop_secs": 1.0,
+      "right_context_secs": 0.25,
+      "cache_cap": 64,
+      "input_buffer_latency_secs": 2.282,
+      "mean_rtf": 0.1113372982322747,
+      "macro_der_collar_0": 30.097206304580766,
+      "macro_der_collar_025": 20.852892782766553,
+      "files": 10,
+      "total_audio_secs": 6700.928,
+      "total_wall_secs": 746.063219169
+    }
+  ]
+}

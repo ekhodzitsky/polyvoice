@@ -1,0 +1,69 @@
+{
+  "schema": "polyvoice-embedder-short-v1",
+  "hardware": {
+    "cpu": "Apple M1 Pro",
+    "arch": "aarch64",
+    "cores": 10
+  },
+  "max_pairs": 400,
+  "default_embedder": {
+    "name": "wespeaker-resnet34",
+    "model_id": "wespeaker_resnet34",
+    "dim": 256,
+    "short_seg_eer": [
+      {
+        "duration_secs": 0.5,
+        "pairs": 400,
+        "eer": 18.859252561784206
+      },
+      {
+        "duration_secs": 1.0,
+        "pairs": 400,
+        "eer": 7.210669077757685
+      },
+      {
+        "duration_secs": 2.0,
+        "pairs": 400,
+        "eer": 4.754370102471368
+      },
+      {
+        "duration_secs": 3.0,
+        "pairs": 400,
+        "eer": 3.842676311030741
+      }
+    ],
+    "der_macro_collar_0": 23.888325743585234,
+    "der_macro_collar_025": 15.824715873906694,
+    "der_files": 10
+  },
+  "eres2netv2": {
+    "name": "eres2netv2",
+    "model_id": "eres2netv2",
+    "dim": 192,
+    "short_seg_eer": [
+      {
+        "duration_secs": 0.5,
+        "pairs": 400,
+        "eer": 27.45629897528632
+      },
+      {
+        "duration_secs": 1.0,
+        "pairs": 400,
+        "eer": 20.087402049427368
+      },
+      {
+        "duration_secs": 2.0,
+        "pairs": 400,
+        "eer": 13.034960819770946
+      },
+      {
+        "duration_secs": 3.0,
+        "pairs": 400,
+        "eer": 10.736889692585896
+      }
+    ],
+    "der_macro_collar_0": 53.83500763335918,
+    "der_macro_collar_025": 49.17506984618186,
+    "der_files": 10
+  }
+}

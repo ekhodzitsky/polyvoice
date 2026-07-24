@@ -1,0 +1,31 @@
+{
+  "schema": "polyvoice-vad-parity-v1",
+  "hardware": {
+    "cpu": "Apple M1 Pro",
+    "arch": "aarch64",
+    "cores": 10
+  },
+  "max_files": 10,
+  "dataset": "data/voxconverse-test",
+  "silero": {
+    "name": "silero",
+    "frame_size": 512,
+    "macro_der_collar_0": 23.888325743585234,
+    "macro_der_collar_025": 15.824715873906694,
+    "mean_rtf": 0.10182845274057563,
+    "files": 10
+  },
+  "earshot": {
+    "name": "earshot",
+    "frame_size": 256,
+    "macro_der_collar_0": 26.539808095859325,
+    "macro_der_collar_025": 18.682183829021533,
+    "mean_rtf": 0.0993286450588635,
+    "files": 10
+  },
+  "delta_der_collar_0_pp": 2.6514823522740905,
+  "delta_der_collar_025_pp": 2.8574679551148385,
+  "parity_gate_abs_pp": 0.3,
+  "parity_pass_collar_0": false,
+  "parity_pass_collar_025": false
+}
