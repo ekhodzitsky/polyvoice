@@ -48,6 +48,8 @@ Options:
           v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Only affects `--v2`
       --execution-provider <EXECUTION_PROVIDER>
           ONNX execution provider: `auto` (CoreML on Apple Silicon, XNNPACK on aarch64 Linux, else CPU), `cpu`, `coreml`, `nnapi`, `cuda`, `xnnpack`. Providers not compiled into this build log a warning and run on CPU. Only affects `--v2`; the legacy default pipeline keeps its built-in per-session defaults [default: auto]
+      --exclusive
+          Also emit a single-speaker (exclusive) timeline. In JSON this is the additive `exclusive_turns` field beside the overlap-aware `turns`. For RTTM/SRT/VTT/TXT the exclusive timeline is written instead (ASR- reconciliation surface — concurrent speakers are collapsed per frame)
   -h, --help
           Print help
   -V, --version

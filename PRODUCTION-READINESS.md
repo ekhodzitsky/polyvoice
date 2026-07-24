@@ -1,14 +1,57 @@
 # Production Readiness Assessment
 
-> **Version:** 0.7.0 | **Date:** 2026-06-14 | **Scope:** Rust library + Python bindings + FFI
+> **Version:** 0.10.x | **Date:** 2026-07-24 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
-> **Last updated:** 2026-06-14 — refreshed for 0.7.0. The legacy v0.5 pipeline is the validated CLI/Python default; pipeline v2 was reverted from the CLI default after the 0.6.1 long-form DER regression and remains opt-in (`--v2`). No longer an alpha — this is a 0.7.x pre-1.0 release.
+> **Last updated:** 2026-07-24 — refreshed for the 0.10.x line. Canonical accuracy
+> numbers live in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md); this file is the
+> deployment GO / NO-GO judgment, not a second leaderboard.
 
 ## Executive Summary
 
-**Status: NOT production-ready.**
+**Status: NOT GO for public unattended production. OK for controlled internal use.**
 
-**(As of 0.7.0.)** The project is hardened against common attack vectors and passes an extensive CI matrix, but it is a pre-1.0 (`0.7.x`) release with no backward-compatibility commitment until `1.0.0`, a key dependency (`ort`) is still a release candidate (`2.0.0-rc.12`), and cross-dataset validation is thin. It is suitable for **controlled internal deployments** where the audio pipeline and environment are known. It is not yet suitable for **public APIs** or **unattended production services**.
+As of **0.10.x**, polyvoice is a hardened pre-1.0 engine: model signing is
+enforced on release builds, the ONNX Runtime native binary is hash-pinned and
+documented, CI covers the main desktop targets, and DER gates exist for the
+legacy default path. It is still **not** ready for multi-tenant public APIs or
+unattended production services, because:
+
+1. **Pre-1.0 API** — no backward-compatibility commitment until `1.0.0`.
+2. **`ort` is still a release candidate** (`2.0.0-rc.12`) and remains the only
+   production inference backend.
+3. **Dual pipeline** — the CLI/Python default is still the validated **legacy**
+   path; **pipeline v2** is experimental (`--v2`) and not the single shipped
+   default.
+4. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
+   CALLHOME / DIHARD (and similar) not gated for release.
+
+**Suitable for:** controlled internal services, desktop apps, and edge pilots
+where audio conditions are known and operators can pin versions and re-verify
+DER after upgrades.
+
+**Not suitable for:** public multi-tenant APIs, unattended SLA-bound services,
+or security-critical deployments that require a stable runtime + multi-corpus
+proof.
+
+---
+
+## Current surface (0.10.x truth)
+
+| Area | State |
+|------|--------|
+| Crate version | `0.10.0` (0.10.x line) |
+| CLI / Python default | **Legacy** pipeline (Silero VAD → embeddings → AHC) |
+| Experimental path | **Pipeline v2** via `--v2` (powerset → ResNet34 → AHC/VBx) |
+| Clustering upgrades | cVBx-style knobs landed (short-embedding filter, GMM-VBx option, ASC stop API, gap-fill defaults); **full multi-corpus DER re-measurement still thin** |
+| Inference | `InferenceRuntime` trait exists; **only `OrtSession` (ort) is a production impl** |
+| Models | Bundled models minisign-signed; release builds refuse unsigned profile-resolved models |
+| Native ORT binary | Hash-pinned via ort-sys `dist.txt`; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
+
+Honest dual-pipeline reading: legacy is the robust default on full VoxConverse
+and AMI splits. Pipeline v2 + VBx is competitive on conversational subsets and
+the main accuracy workstream, but is **not** the validated default and must not
+be marketed as “the” production path until it becomes the single default under
+a DER gate.
 
 ---
 
@@ -18,13 +61,15 @@
 
 | Item | Status | Risk |
 |------|--------|------|
-| Semantic version | `0.7.0` | Pre-1.0 — API may change between `0.x` minors |
-| `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 allows breaking changes |
-| CHANGELOG | Exists | Good; the `0.6.x` patch cadence is rapid |
+| Semantic version | `0.10.0` | Pre-1.0 — API may change between `0.x` minors |
+| `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
+| CHANGELOG | Maintained | 0.10.0 documented source-breaking enum/struct additions |
 
-**Gap:** No commitment to backward compatibility until `1.0.0`. Consumers should pin to a `0.7.x` minor and review the CHANGELOG before upgrading.
+**Gap:** No commitment to backward compatibility until `1.0.0`. Consumers should
+pin a `0.10.x` (or tighter) and read the CHANGELOG before upgrading.
 
-**Remediation:** Stabilize the public API toward `1.0.0`, then adhere to semver.
+**Remediation:** Freeze the public API, publish a semver policy, then ship
+`1.0.0`.
 
 ---
 
@@ -32,16 +77,23 @@
 
 | Dependency | Version | Risk |
 |------------|---------|------|
-| `ort` (ONNX Runtime) | `2.0.0-rc.12` | **RC, not stable.** Runtime behavior may change. No security advisory channel for RCs. |
-| `faer` (spectral clustering) | Latest | Optional (`spectral` feature). Not used in default pipeline. |
-| `paste` | Latest | Unmaintained (LOW severity, no CVE). |
+| `ort` (ONNX Runtime) | `2.0.0-rc.12` | **RC, not stable.** Single production inference backend. EP / API churn possible. |
+| Native ORT binary | pinned via ort-sys | Hash-verified download; residual trust in pyke builds + CDN cold-fetch |
+| `faer` (spectral clustering) | Optional | Not used in the default pipeline |
+| `paste` | Latest | Unmaintained (LOW; no CVE) |
 
-**Gap:** `ort` is the single highest-risk dependency. It bridges Rust to a large C++ runtime (ONNX Runtime). An `ort` 2.0 stable release could introduce breaking changes or require model re-export.
+**Gap:** `ort` is still the highest-risk dependency: RC track + C++ native
+runtime + only production `InferenceRuntime` implementation. A pure-Rust
+optional backend (e.g. tract) is a spike/goal, not shipped parity.
 
 **Remediation:**
-- Track `ort` 2.0 stable release. Test immediately on RC → stable transition.
-- Pin `ort` to exact RC version with a comment linking to the stable tracking issue.
-- Consider vendoring ONNX Runtime or providing a static-link option for supply-chain isolation.
+- Track `ort` 2.0 stable; re-verify pins and DER on every RC → stable bump.
+- Keep the `InferenceRuntime` surface clean so a second backend can land without
+  rewriting stages.
+- Retain provenance docs and CI cache of the verified native binary.
+
+Evidence: [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md),
+`Cargo.toml` pin, `scripts/check-ort-version.sh`.
 
 ---
 
@@ -49,14 +101,16 @@
 
 | Control | Status | Evidence |
 |---------|--------|----------|
-| Model signing (Minisign) | Implemented | Streaming verification in 64 KB chunks, pubkey baked into binary |
-| ONNX header validation | Implemented | Pre-load DOS guard (`ONNX_MIN_HEADER_BYTES`) |
-| TLS pinning | Implemented | `ureq` → `rustls` with `webpki-roots` |
-| FFI sandbox | Implemented | Path traversal guard, `MAX_SAMPLES` limit, panic logging |
-| `cargo audit` | Passes | 0 HIGH, 0 MEDIUM, 0 CVEs |
-| Fuzzing | Active | `fuzz_cluster_assign` (libFuzzer) |
+| Model signing (Minisign) | Implemented | Streaming verify; pubkey baked in; **release builds require signatures** for profile-resolved models |
+| ONNX header validation | Implemented | Pre-load DOS guard |
+| ORT native binary provenance | Documented + CI-cached | [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
+| TLS for downloads | Implemented | `ureq` + `rustls` + `webpki-roots` |
+| FFI sandbox | Implemented | Path traversal guard, sample limits, panic logging |
+| `cargo audit` | In CI | 0 HIGH / 0 MEDIUM expected on green main |
+| Fuzzing | Active | libFuzzer targets for fbank, VAD, overlap, cluster assign |
 
-**Gap:** Only LOW findings remain (`paste` unmaintained, JSON null-byte graceful failure). No critical gaps.
+**Gap:** Residual LOW noise (e.g. unmaintained transitive crates). No independent
+third-party security audit. RC-track runtime is itself a supply-chain residual.
 
 ---
 
@@ -64,120 +118,179 @@
 
 | Tool | Coverage | Note |
 |------|----------|------|
-| Unit tests | 175+ tests in `src/` | Good structural coverage |
-| Miri | Runs on `--lib`, `--test test_ahc` | **Takes ~2 hours on CI** (see §6) |
-| Loom | `loom_pool.rs` | Concurrency model checking for session pool |
-| Proptest | In CI | `property_der_test`, `property_kmeans_test` run in the `test` job |
+| Unit / integration tests | Broad `src/` + `tests/` | Structural coverage good |
+| Miri | Focused PR-gate set | `ffi_smoke`, `miri_resegmentation`, `test_ahc` — not a full-lib multi-hour run |
+| Loom | `loom_pool.rs` | Session / pool concurrency model |
+| Proptest | In CI | DER / k-means / AHC / types property suites |
+| DER regression gates | Legacy + selected v2 smoke | Headline no-collar metric release-gated for legacy subsets |
 
-**Gap:** Miri runtime is a CI bottleneck. If it is skipped or times out, UB coverage is lost.
+**Gap:** Full-lib Miri is intentionally not the PR gate (cost). Experimental
+pipeline paths have thinner automated DER coverage than legacy.
 
 ---
 
-### 5. Dataset Validation ❌
+### 5. Dataset Validation ⚠️ / ❌
 
-| Dataset | Files | DER (0.25 s collar) | Used in CI? |
-|---------|-------|---------------------|-------------|
-| VoxConverse test (legacy) | 232 | 13.83% (no-collar not measured) | No (232-file not gated) |
-| VoxConverse test (legacy) | 10 | 17.43% collar / 25.99% no-collar | Yes (10-file gated) |
-| e2e smoke (legacy) | 1 | 6.62% | Yes (gated) |
-| AMI EN2002a (legacy, 1 meeting) | 1 | 36.30% collar / 44.73% no-collar | Yes (gated) |
-| CALLHOME | — | — | Not measured |
-| CHiME | — | — | Not measured |
-| VoxCeleb1 | Subset only | — | Speaker ID, not diarization |
+Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
+`tests/der_baseline.json` (legacy unless noted).
 
-All DER figures are sourced from `tests/der_baseline.json`.
+| Dataset | Files | DER (collar 0) | DER (0.25 s) | Used in CI? |
+|---------|-------|----------------|--------------|-------------|
+| VoxConverse test (legacy) | 232 | **18.54%** | 12.91% | Full split not PR-gated; numbers are release-canonical |
+| VoxConverse test (legacy, 10-file) | 10 | 27.08% (micro) | 15.82% (macro gate) | Yes (gated subset) |
+| e2e smoke (legacy) | 1 | 14.52% | 6.62% | Yes |
+| AMI test Mix-Headset (legacy) | 16 | **32.87%** | 25.20% | Full split tracked; long-form floor via single-meeting gate |
+| AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
+| pipeline v2 + VBx | subset (e.g. 60-file) | ~17% no-collar (CI-wide) | — | Experimental; not the default path |
+| CALLHOME | — | — | — | **Not measured / not gated** |
+| DIHARD | — | — | — | **Not measured / not gated** |
 
-**Gap:** DER numbers exist for only VoxConverse + a single AMI meeting; the AMI figure is **one** meeting (EN2002a, ~79% overlap), **not** a 16-meeting average (the older "~23%" claim had no committed backing and is withdrawn). No cross-corpora validation. The default pipeline is the legacy v0.5.2 (DER 13.83%, 232-file collar=0.25) — the experimental M6b `pipeline_v1` was demoted due to DER 52–64%.
+**Gap:** Strong conversational (VoxConverse) and meeting (AMI) numbers exist for
+**legacy**. cVBx / v2 clustering work has landed algorithmically, but **full
+multi-corpus DER remains thin** (subset experiments + missing corpora). No
+CALLHOME/DIHARD release gate. Accuracy still trails pyannote-class systems by
+roughly ~7 pp no-collar on VoxConverse (see benchmarks).
 
 **Remediation:**
-- Run AMI full-test DER in CI (currently `perf-regression` is schedule-only).
-- Add CALLHOME and CHiME evaluation scripts.
-- Document expected DER variance per dataset in README.
+- Keep legacy as the honesty baseline until a single default pipeline wins on
+  both VoxConverse **and** AMI under documented gates.
+- Add at least one additional corpus (CALLHOME and/or DIHARD subset) to the
+  release DER matrix.
+- Re-measure full Vox + AMI after clustering upgrades land on the default path.
 
 ---
 
-### 6. CI / DX Performance ⚠️
+### 6. Pipeline story (honest dual path) ⚠️
 
-| Job | Runtime | Issue |
-|-----|---------|-------|
-| `miri` | **~2 hours** | Blocks merge feedback loop |
-| `e2e-smoke` | ~1.5 min (after fix) | Was ~25 min before bundled test clip |
-| `test (windows-latest)` | ~4 min | Acceptable |
-| `build (windows-latest, py)` | ~3 min | Acceptable |
+| Path | How to run | Role in 0.10.x |
+|------|------------|----------------|
+| **Legacy (default)** | CLI without `--v2`; validated Python/FFI defaults for production claims | Ship path; DER gates and README claims |
+| **Pipeline v2** | CLI `--v2` | Experimental; powerset segmentation + denser embeddings |
+| **v2 + VBx** | `--v2` + VBx clusterer / PLDA dir | Best experimental accuracy path on several meeting subsets; PLDA weights shipping story separate |
 
-**Gap:** Miri is the single longest job. It dominates wall-clock CI time. If it fails, the failure surface is large (all lib tests + integration tests in one sequential run).
-
-**Root cause analysis (Miri):**
-- `cargo miri test --features ffi --lib` compiles and runs 175 unit tests.
-- `cargo miri test --features ffi --test integration` references a **deleted** target (`tests/integration.rs` removed in `75d92ca`). This command exits with code 101, but the CI job historically passed because the file existed on the commit that produced the 2h9m run.
-- The old `tests/integration.rs` contained `OfflineDiarizer` / `OnlineDiarizer` tests over 10 s of synthetic audio. Miri interprets every instruction; even lightweight float loops are ~100× slower.
-- **Compounding factor:** `ort` crate pulls in heavy build-time logic. Miri must interpret any `unsafe` init paths in `ort`.
-
-**Remediation:**
-1. **Fix the CI command:** Remove `--test integration` (target no longer exists).
-2. **Split Miri into parallel jobs:** `--lib`, `--test miri_resegmentation`, `--test test_ahc`. Reduces single-job runtime and provides granular failure signals.
-3. **Tag heavy tests with `#[cfg_attr(miri, ignore)]`:** Already done for `test_fbank_shape`. Audit remaining 174 tests for any that exercise large loops or `ort` init.
-4. **Consider `cargo miri nextest`:** Parallel test runner reduces wall-clock time.
-5. **Schedule Miri nightly, not per-PR:** Move Miri from PR gates to a scheduled run. Keep a fast Miri smoke test (e.g., `miri_resegmentation.rs`) in PR.
+**Gap:** Dual pipelines tax docs, gates, and bindings. 1.0 should not ship with
+two first-class defaults. Flip to a **single** default only after v2 (or its
+successor) is ≤ legacy on the documented Vox **and** AMI gates.
 
 ---
 
-### 7. Platform Coverage ✅
+### 7. Inference runtime independence ⚠️
+
+| Item | Status |
+|------|--------|
+| `InferenceRuntime` trait | **Exists** (`src/onnx/runtime.rs`) |
+| Production implementation | **`OrtSession` only** (`ort` 2.0.0-rc.12) |
+| Pure-Rust optional backend | Not shipped (spike/goal; full-pipeline pure-Rust parity not proven) |
+| Execution providers | CoreML / XNNPACK (and related) wired as **ort-specific** config, not alternate runtimes |
+
+**Gap:** Runtime lock-in to ort remains a production risk even after the trait
+extraction. Trait existence is necessary but not sufficient for independence.
+
+---
+
+### 8. CI / Platform Coverage ✅
 
 | Target | CI | Notes |
 |--------|-----|-------|
 | x86_64 Linux | ✅ | Primary |
-| x86_64 macOS | ✅ | |
+| x86_64 / aarch64 macOS | ✅ | CoreML path exercised where configured |
 | x86_64 Windows | ✅ | |
-| aarch64 Linux | ✅ | `cross-aarch64-linux` |
-| wasm32 | ✅ | `wasm32-smoke` (compilation only) |
-| Python (macOS/Linux/Windows) | ✅ | Maturin wheels |
+| aarch64 Linux | ✅ | Cross job |
+| wasm32 | ✅ | Compile / smoke (not full ONNX diarization) |
+| Python wheels | ✅ | Maturin (macOS / Linux / Windows) |
+
+Miri is a **focused** PR gate rather than a multi-hour full-suite job. Fuzz and
+audit remain active.
 
 ---
 
-### 8. Documentation & Onboarding ✅
+### 9. Documentation & Onboarding ✅
 
 | Asset | Status |
 |-------|--------|
-| README | Hook, install, usage, and links to the detailed docs |
-| `docs/` | Formalism, glossary, pipeline, severity, migrating guides, benchmarks |
-| `CONTRIBUTING.md` | Setup, test, and contribution guidelines |
-| FFI examples | C header + Python tests |
+| README | Install, usage, links, honest accuracy framing |
+| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Canonical DER / RTF with collar protocol |
+| [`docs/PIPELINE.md`](docs/PIPELINE.md) | Architecture |
+| Security provenance | ORT native binary + model signing story |
+| `CONTRIBUTING.md` | Setup and contribution guidelines |
+| FFI | C header + examples / smoke tests |
 
 ---
 
 ## Go/No-Go Matrix
 
-_As of 0.7.0 — `ort` is still `2.0.0-rc.12` and cross-corpora validation is still thin, so the NO-GO verdicts below stand._
+_As of 0.10.x — `ort` remains `2.0.0-rc.12`, the default path is still dual with
+legacy preferred, and multi-corpus DER is incomplete. Public unattended stays
+NO-GO._
 
 | Scenario | Verdict | Rationale |
 |----------|---------|-----------|
-| Internal microservice (controlled audio, ops on-call) | **GO with caveats** | Pin `ort` RC, monitor memory, no public SLA |
-| Desktop app (local processing) | **GO** | User owns the hardware, can tolerate ~30 MB RAM |
-| Public cloud API (multi-tenant) | **NO-GO** | `ort` RC risk, no CHiME/CALLHOME validation, API may break |
-| Embedded / edge (aarch64) | **GO with testing** | Cross-compilation works, but measure DER on target hardware |
-| Security-critical (government, finance) | **NO-GO** | Needs `ort` stable + independent security audit |
+| Internal microservice (controlled audio, ops on-call) | **GO with caveats** | Pin crate + `ort` RC, monitor memory, re-run DER after upgrades, no public SLA |
+| Desktop app (local processing) | **GO** | User owns hardware; ~30 MB class footprint; tolerate pre-1.0 API |
+| Public cloud API (multi-tenant, unattended) | **NO-GO** | RC runtime, dual pipeline, thin multi-corpus proof, pre-1.0 API |
+| Embedded / edge (aarch64) | **GO with testing** | Cross-compile works; measure DER/RTF on target hardware |
+| Security-critical (government, finance) | **NO-GO** | Needs stable runtime story + broader audit + multi-corpus validation |
 
 ---
 
-## Recommended Blockers for `1.0.0` Stable
+## 1.0 GO checklist
 
-1. [ ] `ort` 2.0 stable released and integrated
-2. [ ] Miri CI split into parallel jobs or moved to nightly
-3. [ ] CALLHOME + CHiME DER benchmarks documented
-4. [ ] API frozen (no `#[doc(hidden)]` churn for 2 weeks)
-5. [ ] Python wheel tested on a clean VM (no Rust toolchain)
+All items must be true before declaring production-ready / shipping `1.0.0` as
+**GO** for broader deployment. Worded as outcomes — not internal tracker IDs.
+
+- [ ] **Single default pipeline.** One validated CLI/Python/FFI path; no dual
+      “legacy vs experimental” default. Experimental flags may remain for R&D
+      but must not be required for the shipped claim.
+- [ ] **Public API freeze + semver policy.** Documented stability rules; no
+      silent breaking churn on the advertised surface for a freeze window; then
+      `1.0.0`.
+- [ ] **Runtime story closed.** Either `ort` 2.x **stable** is integrated and
+      re-verified, **or** a documented pure-Rust optional backend exists with
+      measured parity on the default pipeline (not trait-only scaffolding).
+- [ ] **Multi-corpus DER gate.** Release-blocking DER on VoxConverse **and** AMI
+      **and** at least one additional corpus (CALLHOME and/or DIHARD subset),
+      with collar and overlap policy published next to the numbers.
+- [ ] **Accuracy target path.** VoxConverse-test no-collar success metric on the
+      default path at **≤13–14%** (stretch ≤12%), with AMI not stagnating in the
+      high-20s/30s without a documented plan — see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+- [ ] **This document says GO.** `PRODUCTION-READINESS.md` re-reviewed and
+      signed off for the intended deployment class (internal vs public).
+
+Until every box is checked, the honest status remains:
+
+> **NOT GO for public unattended production; OK for controlled internal use.**
 
 ---
 
-## Metrics
+## Recommended blockers (summary)
+
+| Blocker | Why it blocks 1.0 / public GO |
+|---------|-------------------------------|
+| Dual default pipeline | Split gates, split docs, split user trust |
+| `ort` RC-only + single backend | Supply-chain and upgrade risk |
+| Thin multi-corpus DER | Unknown behavior outside Vox/AMI |
+| Pre-1.0 API | Breaking changes without major bump |
+| Accuracy gap vs leaders | ~7 pp no-collar on VoxConverse; speaker counting still dominant error |
+
+---
+
+## Metrics (snapshot, 0.10.x)
 
 | Metric | Value |
 |--------|-------|
-| Crate size (crates.io) | 1.5 MiB |
-| Runtime memory (Balanced profile) | ~30 MB |
-| Speed (CPU) | 10× RT |
-| VoxConverse DER (legacy, 232, 0.25 s collar) | 13.83% |
-| AMI DER (legacy, EN2002a single, 0.25 s collar) | 36.30% (44.73% no-collar) |
-| CI checks | 30 |
-| Security audit | 0 HIGH, 0 MEDIUM, 0 CVE |
+| Crate version | 0.10.0 |
+| Deployable footprint | ~30 MB class |
+| Speed (CPU, legacy steady-state) | ~10× realtime (RTF ~0.10) |
+| VoxConverse-test DER (legacy, 232, collar 0) | **18.54%** |
+| VoxConverse-test DER (legacy, 232, collar 0.25) | 12.91% |
+| AMI-test DER (legacy, 16, collar 0) | **32.87%** |
+| AMI-test DER (legacy, 16, collar 0.25) | 25.20% |
+| Default pipeline | Legacy |
+| Experimental pipeline | v2 (`--v2`); VBx opt-in |
+| Inference backends | ort only (via `InferenceRuntime` → `OrtSession`) |
+| Model authenticity | Minisign; required on release profile resolution |
+| Security audit (cargo audit on green main) | 0 HIGH, 0 MEDIUM expected |
+
+For competitor context, collar protocol, and reproduction commands, use
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) — do not treat this readiness file as
+the accuracy source of truth.
