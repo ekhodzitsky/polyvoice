@@ -7,9 +7,13 @@
 //! Expected ONNX I/O:
 //! - Input: `[batch, time, n_mels]` f32 (typically `n_mels = 80`)
 //! - Output: `[batch, embedding_dim]` f32
+//!
+//! Inference goes through [`crate::onnx::InferenceRuntime`]; this module does
+//! not import `ort::`.
 
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
 use crate::features::{FbankExtractor, apply_cmvn};
+use crate::onnx::{InferenceRuntime, InferenceTensor, OrtSession};
 use crate::types::DiarizationConfig;
 use crate::utils::l2_normalize;
 use std::path::Path;
@@ -20,7 +24,7 @@ use std::path::Path;
     note = "use the v1.0 Embedder trait in polyvoice::embedder"
 )]
 pub struct FbankOnnxExtractor {
-    pool: crate::utils::ObjectPool<ort::session::Session>,
+    pool: crate::utils::ObjectPool<OrtSession>,
     embedding_dim: usize,
     fbank: FbankExtractor,
 }
@@ -96,22 +100,16 @@ impl EmbeddingExtractor for FbankOnnxExtractor {
         let n_mels = fbank[0].len();
         let flat: Vec<f32> = fbank.into_iter().flatten().collect();
 
-        let array = ndarray::Array3::from_shape_vec((1, n_frames, n_mels), flat)
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
-        let tensor = ort::value::TensorRef::from_array_view(&array)
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
-
+        let input = InferenceTensor::f32(vec![1, n_frames, n_mels], flat);
         let outputs = session
-            .run(ort::inputs![tensor])
+            .run_ordered(&[&input])
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
-        if outputs.iter().next().is_none() {
-            return Err(EmbeddingError::InferenceFailed(
-                "ONNX model produced no outputs".to_string(),
-            ));
-        }
-        let (_, data) = &outputs[0]
-            .try_extract_tensor::<f32>()
+        let first = outputs.into_iter().next().ok_or_else(|| {
+            EmbeddingError::InferenceFailed("ONNX model produced no outputs".to_string())
+        })?;
+        let data = first
+            .into_f32()
             .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
 
         let data_len = data.len();
@@ -121,8 +119,7 @@ impl EmbeddingExtractor for FbankOnnxExtractor {
                 self.embedding_dim, data_len
             )));
         }
-        let mut embedding = vec![0.0f32; self.embedding_dim];
-        embedding.copy_from_slice(data);
+        let mut embedding = data;
         l2_normalize(&mut embedding);
 
         Ok(embedding)
