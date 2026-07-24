@@ -173,7 +173,10 @@ mod tests {
         }
         let msg = format!("{err}");
         assert!(msg.contains("4"), "{msg}");
-        assert!(msg.contains("VBx") || msg.contains("vbx") || msg.contains("speakers"), "{msg}");
+        assert!(
+            msg.contains("VBx") || msg.contains("vbx") || msg.contains("speakers"),
+            "{msg}"
+        );
     }
 
     #[test]

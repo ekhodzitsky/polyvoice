@@ -4,9 +4,7 @@
 //! through [`InferenceRuntime`] / [`OrtSession`] instead. Future backends
 //! (e.g. tract) live in sibling modules and implement the same trait.
 
-use super::runtime::{
-    InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData,
-};
+use super::runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
 use super::{ExecutionProvider, validate_onnx_header};
 use std::path::Path;
 
@@ -31,8 +29,8 @@ impl OrtSession {
     ) -> anyhow::Result<Self> {
         validate_onnx_header(model_path)?;
         // ort::Error is not Send+Sync, so it cannot ride `?` into anyhow — stringify.
-        let mut builder =
-            ort::session::Session::builder().map_err(|e| anyhow::anyhow!("session builder: {e}"))?;
+        let mut builder = ort::session::Session::builder()
+            .map_err(|e| anyhow::anyhow!("session builder: {e}"))?;
         if let Some(n) = intra_threads {
             builder = builder
                 .with_intra_threads(n)
@@ -95,7 +93,9 @@ impl OrtSession {
     ///
     /// Empty when the model carries no custom metadata. Used by the
     /// self-describing model config loader (`models::metadata`).
-    pub fn custom_metadata_props(&self) -> Result<std::collections::HashMap<String, String>, String> {
+    pub fn custom_metadata_props(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, String> {
         let meta = self
             .session
             .metadata()
@@ -122,10 +122,7 @@ impl InferenceRuntime for OrtSession {
         &self.output_names
     }
 
-    fn run(
-        &mut self,
-        inputs: &[NamedTensor<'_>],
-    ) -> Result<Vec<InferenceTensor>, InferenceError> {
+    fn run(&mut self, inputs: &[NamedTensor<'_>]) -> Result<Vec<InferenceTensor>, InferenceError> {
         let mut owned: Vec<(String, ort::session::SessionInputValue<'_>)> =
             Vec::with_capacity(inputs.len());
         // Build owned ort tensors first so SessionInputValue can borrow them.
@@ -176,8 +173,8 @@ fn to_ort_tensor(t: &InferenceTensor) -> Result<ort::value::DynTensor, String> {
             // for some EP paths — match historical ndarray::arr0 usage.
             if t.shape.is_empty() {
                 let value = data.first().copied().unwrap_or(0);
-                let tensor = ort::value::Tensor::from_array(((), vec![value]))
-                    .map_err(|e| e.to_string())?;
+                let tensor =
+                    ort::value::Tensor::from_array(((), vec![value])).map_err(|e| e.to_string())?;
                 Ok(tensor.upcast())
             } else {
                 let tensor = ort::value::Tensor::from_array((t.shape.clone(), data.clone()))

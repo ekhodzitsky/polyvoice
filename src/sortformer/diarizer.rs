@@ -184,8 +184,8 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
             let chunk_preds = self.streaming_update(&chunk_feat, current_len)?;
             let filtered = self.median_filter(&chunk_preds);
             let sample_offset = self.elapsed_samples as f64 / SAMPLE_RATE as f64;
-            let chunk_dur = (self.config.chunk_len * SUBSAMPLING * HOP_LENGTH) as f64
-                / SAMPLE_RATE as f64;
+            let chunk_dur =
+                (self.config.chunk_len * SUBSAMPLING * HOP_LENGTH) as f64 / SAMPLE_RATE as f64;
             let mut turns = self.binarize(&filtered);
             for t in &mut turns {
                 t.time.start += sample_offset;
@@ -308,18 +308,18 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
 
         let by_name = map_outputs(self.session.output_names(), outputs)?;
 
-        let preds_t = by_name.get(OUT_PREDS).ok_or_else(|| {
-            SortformerError::MissingOutput {
+        let preds_t = by_name
+            .get(OUT_PREDS)
+            .ok_or_else(|| SortformerError::MissingOutput {
                 name: OUT_PREDS,
                 available: by_name.keys().cloned().collect(),
-            }
-        })?;
-        let embs_t = by_name.get(OUT_EMBS).ok_or_else(|| {
-            SortformerError::MissingOutput {
+            })?;
+        let embs_t = by_name
+            .get(OUT_EMBS)
+            .ok_or_else(|| SortformerError::MissingOutput {
                 name: OUT_EMBS,
                 available: by_name.keys().cloned().collect(),
-            }
-        })?;
+            })?;
 
         let preds = preds_t
             .as_f32_slice()
@@ -347,8 +347,7 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
         for t in 0..keep {
             let src = (prefix + t) * MAX_SPEAKERS;
             let dst = t * MAX_SPEAKERS;
-            chunk_preds[dst..dst + MAX_SPEAKERS]
-                .copy_from_slice(&preds[src..src + MAX_SPEAKERS]);
+            chunk_preds[dst..dst + MAX_SPEAKERS].copy_from_slice(&preds[src..src + MAX_SPEAKERS]);
         }
 
         // FIFO predictions for current fifo frames (recomputed).
@@ -384,7 +383,8 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
         // Pop FIFO → speaker cache when over limit.
         if self.fifo_frames > self.config.fifo_len {
             let mut pop_out_len = self.config.chunk_len;
-            pop_out_len = pop_out_len.max(valid_frames.saturating_sub(self.config.fifo_len) + fifo_len);
+            pop_out_len =
+                pop_out_len.max(valid_frames.saturating_sub(self.config.fifo_len) + fifo_len);
             pop_out_len = pop_out_len.min(self.fifo_frames);
 
             let pop_embs = self.fifo[..pop_out_len * EMB_DIM].to_vec();
@@ -424,9 +424,7 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
 
     fn update_silence_profile(&mut self, embs: &[f32], preds: &[f32], n_frames: usize) {
         for t in 0..n_frames {
-            let sum: f32 = (0..MAX_SPEAKERS)
-                .map(|s| preds[t * MAX_SPEAKERS + s])
-                .sum();
+            let sum: f32 = (0..MAX_SPEAKERS).map(|s| preds[t * MAX_SPEAKERS + s]).sum();
             if sum < SIL_THRESHOLD {
                 let emb = &embs[t * EMB_DIM..(t + 1) * EMB_DIM];
                 let old_n = self.n_sil_frames as f32;
@@ -475,8 +473,12 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
             }
         }
 
-        let (indices, disabled) =
-            get_topk_indices(&padded, n_frames + SPKCACHE_SIL_FRAMES_PER_SPK, n_frames, self.config.spkcache_len);
+        let (indices, disabled) = get_topk_indices(
+            &padded,
+            n_frames + SPKCACHE_SIL_FRAMES_PER_SPK,
+            n_frames,
+            self.config.spkcache_len,
+        );
 
         let (new_embs, new_preds) =
             self.gather_spkcache(&indices, &disabled, self.config.spkcache_len);
@@ -493,15 +495,18 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
     ) -> (Vec<f32>, Vec<f32>) {
         let mut new_embs = vec![0.0f32; out_len * EMB_DIM];
         let mut new_preds = vec![0.0f32; out_len * MAX_SPEAKERS];
-        let cache_preds = self.spkcache_preds.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
+        let cache_preds = self
+            .spkcache_preds
+            .as_ref()
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
 
         for (i, (&idx, &is_dis)) in indices.iter().zip(disabled.iter()).enumerate() {
             if i >= out_len {
                 break;
             }
             if is_dis {
-                new_embs[i * EMB_DIM..(i + 1) * EMB_DIM]
-                    .copy_from_slice(&self.mean_sil_emb);
+                new_embs[i * EMB_DIM..(i + 1) * EMB_DIM].copy_from_slice(&self.mean_sil_emb);
             } else if idx < self.spkcache_frames {
                 new_embs[i * EMB_DIM..(i + 1) * EMB_DIM]
                     .copy_from_slice(&self.spkcache[idx * EMB_DIM..(idx + 1) * EMB_DIM]);
@@ -572,11 +577,9 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
                 }
             }
             if in_seg {
-                let start = (seg_start as f64 * FRAME_DURATION_SECS as f64
-                    - post.pad_onset as f64)
+                let start = (seg_start as f64 * FRAME_DURATION_SECS as f64 - post.pad_onset as f64)
                     .max(0.0);
-                let end =
-                    n_frames as f64 * FRAME_DURATION_SECS as f64 + post.pad_offset as f64;
+                let end = n_frames as f64 * FRAME_DURATION_SECS as f64 + post.pad_offset as f64;
                 if end - start >= post.min_duration_on as f64 {
                     temp.push(SpeakerTurn {
                         speaker: SpeakerId(spk as u32),
