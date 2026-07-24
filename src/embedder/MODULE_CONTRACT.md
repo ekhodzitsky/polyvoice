@@ -53,7 +53,7 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Lock-free pool of Embedder instances using crossbeam-queue.
+      Blocking pool of Embedder instances using Mutex<Vec<E>> (utils::ObjectPool).
     proof:
       kind: unit-test
       target: src/embedder::mod::tests
@@ -91,9 +91,6 @@ dependencies:
     - name: ort
       scope: ml-runtime
       reason: ONNX inference for CAM++ and ResNet34 adapters.
-    - name: crossbeam-queue
-      scope: concurrency
-      reason: Lock-free queue for EmbedderPool.
 consumers:
   - path: .
     uses:
@@ -104,7 +101,6 @@ consumers:
       - CamPlusPlusExtractor
       - ResNet34Adapter
       - ort
-      - crossbeam-queue
       - polyvoice_internal
 invariants:
   - id: embedder-output-normalized
