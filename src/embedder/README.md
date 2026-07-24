@@ -18,7 +18,7 @@ polyvoice.
 ## Dependencies
 
 - `ort` — ONNX Runtime (for adapters)
-- `crossbeam-queue` — lock-free queue (for pool)
+- in-tree `ObjectPool` (`Mutex<Vec<_>>`) — blocking embedder pool
 
 ## Invariants
 
