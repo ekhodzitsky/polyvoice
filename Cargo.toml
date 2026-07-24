@@ -114,6 +114,11 @@ vbx = ["clusterer"]
 # caller (M6 Pipeline wires the embedder pool into this).
 resegmentation = []
 
+# Optional NVIDIA Streaming Sortformer v2 E2E diarizer (≤4 speakers).
+# Opt-in only — never default. Requires onnx for InferenceRuntime. Model
+# weights are optional download via the model registry (never bundled).
+sortformer = ["onnx"]
+
 # v1.0 word->speaker attribution join (ASR words -> diarization turns).
 # Pure-Rust, wasm32-clean — no onnx/model/IO. Operates only on TimeRange/SpeakerId.
 attribution = []

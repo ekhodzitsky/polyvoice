@@ -26,7 +26,6 @@ attribution to pyannote. The raw inputs are mirrored at the Apache-2.0
 `avencera/speakrs` project's `avencera/speakrs-models` model repository.
 
 Third-party Rust crates (opt-in features)
-=========================================
 
 Symphonia (feature `audio-io`)
 ------------------------------
@@ -42,3 +41,18 @@ ogg/vorbis, m4a/aac, and related containers).
 
   Homepage: https://github.com/pdeljanov/Symphonia
   License text: https://www.mozilla.org/en-US/MPL/2.0/
+=======
+Streaming Sortformer v2 (opt-in `sortformer` feature)
+-----------------------------------------------------
+When the optional Sortformer adapter downloads weights, they come from the
+community ONNX export of NVIDIA Streaming Sortformer 4spk v2
+(`nvidia/diar_streaming_sortformer_4spk-v2`), mirrored at
+`cgus/diar_streaming_sortformer_4spk-v2-onnx` (export by Altunenes for
+parakeet-rs).
+
+  Licensed under CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/).
+  Attribution: NVIDIA Corporation (Sortformer v2).
+
+Weights are never bundled with polyvoice. Redistributors who ship the ONNX
+file must provide the CC-BY-4.0 attribution above. Sortformer v2.1 (NVIDIA
+Open Model License) is not used.
