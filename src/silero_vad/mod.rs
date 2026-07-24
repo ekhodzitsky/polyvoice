@@ -13,13 +13,13 @@
 //! [`crate::onnx::InferenceRuntime`]; this module does not import `ort::`.
 
 #[cfg(feature = "onnx")]
-use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, OrtSession};
+use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, RuntimeSession};
 #[cfg(feature = "onnx")]
 use crate::vad::{VadError, VoiceActivityDetector};
 
 #[cfg(feature = "onnx")]
 pub struct SileroVad {
-    session: OrtSession,
+    session: RuntimeSession,
     state: Vec<f32>,
     context: Vec<f32>,
     sample_rate: u32,
