@@ -84,6 +84,14 @@ coreml = ["onnx", "ort/coreml"]
 nnapi = ["onnx", "ort/nnapi"]
 xnnpack = ["onnx", "ort/xnnpack"]
 
+# Pure-Rust ONNX inference via tract (Sonos). Opt-in alternative to ort behind
+# InferenceRuntime. Default builds must not pull tract (verify with cargo tree).
+# Requires the `onnx` feature so the shared runtime surface is available; ort
+# remains the default backend even when this feature is enabled.
+# Note: tract-onnx declares MSRV 1.91 — higher than this crate's rust-version
+# (1.88). Enabling this feature needs a newer toolchain; we do not bump MSRV.
+backend-tract = ["onnx", "dep:tract-onnx"]
+
 # Spectral clustering backend (pulls faer for SVD/eigendecomp).
 spectral = ["dep:faer"]
 
@@ -155,6 +163,9 @@ mcp = [
 [dependencies]
 # ONNX Runtime — matches the ecosystem version.
 ort = { version = "2.0.0-rc.12", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs"] }
+# Pure-Rust ONNX loader/runtime (opt-in via `backend-tract`). Use tract-onnx
+# directly rather than the heavier facade crate (which pulls CUDA by default).
+tract-onnx = { version = "0.23.4", optional = true, default-features = false }
 
 # WAV file I/O (always available; multi-format decode is behind `audio-io`)
 hound = "3.5"
