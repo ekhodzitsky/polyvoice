@@ -220,7 +220,9 @@ pub fn load_model_config(
     meta.fill_from(defaults);
     if meta != before {
         used_defaults = true;
-        tracing::warn!("using hard-coded defaults for model config fields not present in ONNX/manifest");
+        tracing::warn!(
+            "using hard-coded defaults for model config fields not present in ONNX/manifest"
+        );
     }
 
     meta.source = Some(match (used_onnx, used_manifest, used_defaults) {
