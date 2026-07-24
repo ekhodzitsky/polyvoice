@@ -1,15 +1,25 @@
-//! Silero VAD v5 ONNX integration.
+//! Silero VAD (v6-generation) ONNX integration.
 //!
-//! Implements `VoiceActivityDetector` using the Silero VAD v5 ONNX model.
+//! Implements `VoiceActivityDetector` using the shipped Silero VAD ONNX model
+//! (v6-generation weights; upstream v6.0 replaced the master file 2025-08-25,
+//! releases through v6.2.1 keep the same architecture). The pinned SHA-256 in
+//! `src/models/manifest.toml` (`1a153a22…`) is the source of truth for the
+//! file we download — the upstream URL still tracks `master`, so a force-push
+//! can break fresh installs (hash check fails closed). See
+//! `scripts/mirror-silero-vad.md` for the release-asset mirror procedure.
+//!
 //! The model is stateful (LSTM) — hidden state is carried between calls
-//! to `process()` and reset via `reset()`.
+//! to `process()` and reset via `reset()`. Inference goes through
+//! [`crate::onnx::InferenceRuntime`]; this module does not import `ort::`.
 
+#[cfg(feature = "onnx")]
+use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, OrtSession};
 #[cfg(feature = "onnx")]
 use crate::vad::{VadError, VoiceActivityDetector};
 
 #[cfg(feature = "onnx")]
 pub struct SileroVad {
-    session: ort::session::Session,
+    session: OrtSession,
     state: Vec<f32>,
     context: Vec<f32>,
     sample_rate: u32,
@@ -62,22 +72,18 @@ impl SileroVad {
         input.extend_from_slice(&self.context);
         input.extend_from_slice(chunk);
 
-        let input_tensor =
-            ort::value::TensorRef::from_array_view(([1_usize, input.len()], input.as_slice()))
-                .map_err(|e| VadError::Model(e.to_string()))?;
-
-        let sr_array = ndarray::arr0(self.sample_rate as i64);
-        let sr_tensor = ort::value::TensorRef::from_array_view(&sr_array)
-            .map_err(|e| VadError::Model(e.to_string()))?;
-
-        let state_array = ndarray::Array3::from_shape_vec((2, 1, 128), self.state.clone())
-            .map_err(|e| VadError::Model(e.to_string()))?;
-        let state_tensor = ort::value::TensorRef::from_array_view(&state_array)
-            .map_err(|e| VadError::Model(e.to_string()))?;
+        let input_len = input.len();
+        let input_tensor = InferenceTensor::f32(vec![1, input_len], input);
+        let sr_tensor = InferenceTensor::i64_scalar(self.sample_rate as i64);
+        let state_tensor = InferenceTensor::f32(vec![2, 1, 128], self.state.clone());
 
         let outputs = self
             .session
-            .run(ort::inputs!["input" => input_tensor, "state" => state_tensor, "sr" => sr_tensor])
+            .run(&[
+                NamedTensor::new("input", &input_tensor),
+                NamedTensor::new("state", &state_tensor),
+                NamedTensor::new("sr", &sr_tensor),
+            ])
             .map_err(|e| VadError::Model(e.to_string()))?;
 
         if outputs.len() < 2 {
@@ -86,12 +92,11 @@ impl SileroVad {
             ));
         }
 
-        let (_, prob_data) = outputs[0]
-            .try_extract_tensor::<f32>()
+        let prob_data = outputs[0]
+            .as_f32_slice()
             .map_err(|e| VadError::Model(e.to_string()))?;
-
-        let (_, new_state) = outputs[1]
-            .try_extract_tensor::<f32>()
+        let new_state = outputs[1]
+            .as_f32_slice()
             .map_err(|e| VadError::Model(e.to_string()))?;
 
         let prob = prob_data
@@ -117,7 +122,7 @@ impl VoiceActivityDetector for SileroVad {
     }
 
     fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, VadError> {
-        if samples.len() % self.chunk_size != 0 {
+        if !samples.len().is_multiple_of(self.chunk_size) {
             return Err(VadError::InvalidChunkSize {
                 expected: self.chunk_size,
                 got: samples.len(),

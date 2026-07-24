@@ -50,9 +50,12 @@ fn kmeans_pp_with_seed(
     let k = k.min(n);
 
     // K-means++ initialization.
+    // PRNG: in-tree xorshift64* (not fastrand). Seed inputs are unchanged;
+    // the draw sequence differs from fastrand, so exact labels on a fixed seed
+    // may shift — quality tests and silhouette selection still apply.
     let mut centroids: Vec<Vec<f64>> = Vec::with_capacity(k);
-    let mut rng = fastrand::Rng::with_seed(seed);
-    let first_idx = rng.usize(0..n);
+    let mut rng = crate::utils::XorShift64Star::new(seed);
+    let first_idx = rng.usize(n);
     centroids.push(embeddings[first_idx].iter().map(|&v| v as f64).collect());
 
     let mut dists = vec![f64::INFINITY; n];

@@ -36,10 +36,10 @@ surface:
     visibility: public
     contract: >
       ONNX-backed Silero VAD. Implements VoiceActivityDetector.
-      Requires 512-sample frames at 16kHz. The ort session is built via the
-      shared EP-aware helper (onnx::build_session_with_ep): new() keeps the
-      historical CPU default (signature unchanged per escalation policy);
-      with_ep() selects an execution provider explicitly.
+      Requires 512-sample frames at 16kHz. The session is an OrtSession built
+      via onnx::build_session_with_ep (InferenceRuntime); this module does not
+      import ort::. new() keeps the historical CPU default; with_ep() selects
+      an execution provider explicitly.
     proof:
       kind: unit-test
       target: src/silero_vad::mod::tests
@@ -49,10 +49,10 @@ dependencies:
     - module: vad
       scope: trait
       reason: VoiceActivityDetector trait implementation.
-  external:
-    - name: ort
-      scope: ml-runtime
-      reason: ONNX inference for Silero model.
+    - module: onnx
+      scope: inference
+      reason: InferenceRuntime / OrtSession / build_session_with_ep.
+  external: []
 consumers:
   - path: src/ffi/mod.rs
     uses:
