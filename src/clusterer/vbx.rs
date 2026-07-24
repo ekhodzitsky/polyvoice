@@ -33,6 +33,9 @@ pub struct VbxConfig {
     /// (no temporal model, matches the speakrs reference fixtures); `> 0.0`
     /// enables the canonical forward-backward VBx whose self-loop-favoring
     /// transitions smooth labels over time and curb over-clustering.
+    ///
+    /// **GMM-VBx** is exactly `loop_prob = 0`: use it when embeddings are not a
+    /// contiguous frame sequence (dense windowed extract, non-ordered batches).
     pub loop_prob: f64,
 }
 
@@ -48,6 +51,27 @@ impl Default for VbxConfig {
             init_smoothing: 7.0,
             loop_prob: 0.0,
         }
+    }
+}
+
+impl VbxConfig {
+    /// Explicit GMM-VBx (`loop_prob = 0`): independent-frame updates, no HMM
+    /// self-loop. Prefer this when embeddings come from non-contiguous windows.
+    pub fn gmm(mut self) -> Self {
+        self.loop_prob = 0.0;
+        self
+    }
+
+    /// Canonical forward-backward HMM-VBx with the given self-loop probability
+    /// (clamped into `[0, 1]`).
+    pub fn hmm(mut self, loop_prob: f64) -> Self {
+        self.loop_prob = loop_prob.clamp(0.0, 1.0);
+        self
+    }
+
+    /// True when this config runs GMM-VBx (no temporal self-loop).
+    pub fn is_gmm(&self) -> bool {
+        self.loop_prob <= 0.0
     }
 }
 
@@ -322,7 +346,8 @@ use crate::clusterer::{Clusterer, ClustererError};
 /// VBx clusterer: PLDA-transform 256-d embeddings, seed with an over-segmented
 /// AHC pass, then run VBx variational inference whose prior auto-determines the
 /// speaker count. Implements the [`Clusterer`] trait; embeddings are assumed to
-/// arrive in temporal order (the seed and inference treat them as a sequence).
+/// arrive in temporal order (the seed and inference treat them as a sequence)
+/// unless GMM mode (`loop_prob = 0`) is selected for windowed extract.
 pub struct VbxClusterer {
     plda: PldaModel,
     config: VbxConfig,
@@ -334,6 +359,13 @@ pub struct VbxClusterer {
     /// transform, to restore the raw WeSpeaker magnitude the PLDA mean-centering
     /// expects (the pipeline embedder L2-normalizes by contract, discarding it).
     emb_scale: f32,
+    /// Exclude embeddings shorter than this many seconds from AHC/VB; reassign
+    /// afterward by nearest PLDA-feature centroid. `0.0` disables filtering.
+    /// Default for production is 1.6 s (cVBx short-segment recipe).
+    min_embedding_secs: f64,
+    /// cAHC-ASC stop for the AHC seed: refuse to merge two clusters that both
+    /// already have at least this many members. `0` disables.
+    ahc_established_min_members: usize,
 }
 
 impl VbxClusterer {
@@ -353,7 +385,37 @@ impl VbxClusterer {
             max_speakers: max_speakers.max(1),
             lda_dim,
             emb_scale,
+            min_embedding_secs: 0.0,
+            ahc_established_min_members: 0,
         }
+    }
+
+    /// Exclude embeddings shorter than `secs` from AHC/VB (reassign after).
+    /// Pass `0.0` to disable. The cVBx recipe starts at 1.6 s.
+    pub fn with_min_embedding_secs(mut self, secs: f64) -> Self {
+        self.min_embedding_secs = secs.max(0.0);
+        self
+    }
+
+    /// Enable cAHC-ASC on the AHC seed: stop before merging two clusters that
+    /// both already have ≥ `min_members` members. `0` disables.
+    pub fn with_ahc_established_min_members(mut self, min_members: usize) -> Self {
+        self.ahc_established_min_members = min_members;
+        self
+    }
+
+    /// Force GMM-VBx (`loop_prob = 0`) or HMM-VBx with the current loop_prob.
+    pub fn with_gmm_mode(mut self, gmm: bool) -> Self {
+        if gmm {
+            self.config = self.config.gmm();
+        }
+        self
+    }
+
+    /// Override the full VBx hyperparameter block.
+    pub fn with_config(mut self, config: VbxConfig) -> Self {
+        self.config = config;
+        self
     }
 
     /// Construct from an explicit PLDA directory — the precomputed
@@ -363,8 +425,10 @@ impl VbxClusterer {
     ///
     /// Hyperparameters default to the dev-calibrated optimum (fa=0.3,
     /// loop_prob=0.9 i.e. the canonical forward-backward VBx, ahc_threshold=0.5,
-    /// emb_scale=4.88); the `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE}`
-    /// env vars override each one for offline tuning.
+    /// emb_scale=4.88, min_embedding_secs=1.6); the
+    /// `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,AHC_ASC_MEMBERS}`
+    /// env vars override each one for offline tuning. One global set — never
+    /// branch on dataset name.
     pub fn from_dir(
         plda_dir: &std::path::Path,
         max_speakers: usize,
@@ -400,14 +464,20 @@ impl VbxClusterer {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(4.88);
-        Ok(Self::new(
-            plda,
-            config,
-            ahc_threshold,
-            max_speakers,
-            128,
-            emb_scale,
-        ))
+        // cVBx short-segment filter default (1.6 s); set 0 to disable.
+        let min_embedding_secs = std::env::var("POLYVOICE_VBX_MIN_EMB_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1.6);
+        let ahc_established_min_members = std::env::var("POLYVOICE_VBX_AHC_ASC_MEMBERS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        Ok(
+            Self::new(plda, config, ahc_threshold, max_speakers, 128, emb_scale)
+                .with_min_embedding_secs(min_embedding_secs)
+                .with_ahc_established_min_members(ahc_established_min_members),
+        )
     }
 
     /// Construct from the `POLYVOICE_VBX_PLDA_DIR` env var (dev wiring). Shipped
@@ -420,10 +490,22 @@ impl VbxClusterer {
         })?;
         Self::from_dir(std::path::Path::new(&dir), max_speakers)
     }
-}
 
-impl Clusterer for VbxClusterer {
-    fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
+    /// When embeddings come from dense non-contiguous windows, force GMM-VBx
+    /// (HMM self-loop assumption is invalid). Explicit env override still wins
+    /// if `POLYVOICE_VBX_LOOP_PROB` is set.
+    pub fn auto_gmm_for_windowed(mut self, windowed: bool) -> Self {
+        if windowed && std::env::var("POLYVOICE_VBX_LOOP_PROB").is_err() {
+            self.config = self.config.gmm();
+        }
+        self
+    }
+
+    fn cluster_inner(
+        &self,
+        embeddings: &[Vec<f32>],
+        durations_secs: &[f64],
+    ) -> Result<Vec<usize>, ClustererError> {
         if embeddings.is_empty() {
             return Ok(Vec::new());
         }
@@ -440,7 +522,33 @@ impl Clusterer for VbxClusterer {
                 });
             }
         }
-        // Stack into (N, dim) and PLDA-transform to (N, lda_dim).
+
+        // Optional short-segment filter: cluster only long enough embeddings.
+        // Durations are used only when they align 1:1 with embeddings.
+        let (kept, short) =
+            if self.min_embedding_secs > 0.0 && durations_secs.len() == embeddings.len() {
+                crate::clusterer::partition_by_min_duration(durations_secs, self.min_embedding_secs)
+            } else {
+                ((0..embeddings.len()).collect(), Vec::new())
+            };
+
+        let kept_embs: Vec<&[f32]> = kept.iter().map(|&i| embeddings[i].as_slice()).collect();
+        let labels_kept = self.cluster_kept(&kept_embs)?;
+
+        if short.is_empty() {
+            // Reconstruct full order when kept is a proper subset without short
+            // (should not happen) or kept is identity.
+            if kept.len() == embeddings.len() && kept.iter().enumerate().all(|(i, &k)| i == k) {
+                return Ok(labels_kept);
+            }
+            let mut full = vec![0usize; embeddings.len()];
+            for (&idx, &lab) in kept.iter().zip(labels_kept.iter()) {
+                full[idx] = lab;
+            }
+            return Ok(full);
+        }
+
+        // PLDA features for reassignment of short embeddings.
         let n = embeddings.len();
         let mut flat = Vec::with_capacity(n * dim);
         for e in embeddings {
@@ -451,21 +559,69 @@ impl Clusterer for VbxClusterer {
                 detail: format!("embedding reshape: {e}"),
             }
         })?;
-        // Restore the raw WeSpeaker magnitude the PLDA mean-centering expects.
+        let emb = emb * self.emb_scale;
+        let features = self.plda.transform(&emb.view(), self.lda_dim);
+        let feat_vecs: Vec<Vec<f32>> = features.rows().into_iter().map(|r| r.to_vec()).collect();
+        Ok(crate::clusterer::reassign_short_by_features(
+            &feat_vecs,
+            &kept,
+            &labels_kept,
+            &short,
+        ))
+    }
+
+    fn cluster_kept(&self, kept_embs: &[&[f32]]) -> Result<Vec<usize>, ClustererError> {
+        let n = kept_embs.len();
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+        if n == 1 {
+            return Ok(vec![0]);
+        }
+        let dim = kept_embs[0].len();
+        let mut flat = Vec::with_capacity(n * dim);
+        for e in kept_embs {
+            flat.extend_from_slice(e);
+        }
+        let emb = Array2::from_shape_vec((n, dim), flat).map_err(|e| {
+            ClustererError::AlgorithmFailed {
+                detail: format!("embedding reshape: {e}"),
+            }
+        })?;
         let emb = emb * self.emb_scale;
         let features = self.plda.transform(&emb.view(), self.lda_dim);
         let phi = self.plda.phi();
 
-        // Over-segmenting AHC seed on the PLDA features (cosine linkage).
         let feat_vecs: Vec<Vec<f32>> = features.rows().into_iter().map(|r| r.to_vec()).collect();
-        let ahc_labels = crate::ahc::agglomerative_cluster_max_clusters(
+        let stop = if self.ahc_established_min_members > 0 {
+            crate::ahc::AscStop::MinMembers(self.ahc_established_min_members)
+        } else {
+            crate::ahc::AscStop::Off
+        };
+        let ahc_labels = crate::ahc::agglomerative_cluster_asc(
             &feat_vecs,
             self.ahc_threshold,
             self.max_speakers,
+            stop,
+            None,
         );
 
         let (gamma, _pi) = cluster_vbx(&ahc_labels, &features.view(), &phi.view(), &self.config);
         Ok(hard_labels(&gamma))
+    }
+}
+
+impl Clusterer for VbxClusterer {
+    fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
+        self.cluster_inner(embeddings, &[])
+    }
+
+    fn cluster_with_durations(
+        &self,
+        embeddings: &[Vec<f32>],
+        durations_secs: &[f64],
+    ) -> Result<Vec<usize>, ClustererError> {
+        self.cluster_inner(embeddings, durations_secs)
     }
 
     fn max_clusters(&self) -> usize {
@@ -616,5 +772,50 @@ mod tests {
         // Used columns are 1 and 2 → compacted to 0 and 1.
         let labels = hard_labels(&gamma);
         assert_eq!(labels, vec![0, 1, 1]);
+    }
+
+    #[test]
+    fn gmm_mode_helpers() {
+        let cfg = VbxConfig::default();
+        assert!(cfg.is_gmm(), "default fixture config is GMM (loop_prob=0)");
+        let hmm = cfg.hmm(0.9);
+        assert!(!hmm.is_gmm());
+        assert!((hmm.loop_prob - 0.9).abs() < 1e-12);
+        let back = hmm.gmm();
+        assert!(back.is_gmm());
+        assert_eq!(back.loop_prob, 0.0);
+    }
+
+    #[test]
+    fn gmm_and_hmm_agree_on_shuffled_order_for_separated_clusters() {
+        // When frames of two speakers are interleaved (non-contiguous), GMM-VBx
+        // is the correct model; HMM with high loop_prob may over-smooth. Both
+        // must still recover two clusters on strongly separated features.
+        let features = array![
+            [10.0, 0.0],
+            [-10.0, 0.0],
+            [10.1, 0.1],
+            [-10.1, 0.1],
+            [9.9, -0.1],
+            [-9.9, -0.1],
+        ];
+        let phi = array![1.0, 1.0];
+        let mut gamma_init = Array2::zeros((6, 2));
+        for t in [0, 2, 4] {
+            gamma_init[[t, 0]] = 0.999;
+            gamma_init[[t, 1]] = 0.001;
+        }
+        for t in [1, 3, 5] {
+            gamma_init[[t, 0]] = 0.001;
+            gamma_init[[t, 1]] = 0.999;
+        }
+        let gmm_cfg = VbxConfig::default().gmm();
+        let (gamma_gmm, _) = vbx(&features.view(), &phi.view(), &gamma_init, &gmm_cfg);
+        let labels_gmm = hard_labels(&gamma_gmm);
+        assert_eq!(labels_gmm[0], labels_gmm[2]);
+        assert_eq!(labels_gmm[0], labels_gmm[4]);
+        assert_eq!(labels_gmm[1], labels_gmm[3]);
+        assert_eq!(labels_gmm[1], labels_gmm[5]);
+        assert_ne!(labels_gmm[0], labels_gmm[1]);
     }
 }

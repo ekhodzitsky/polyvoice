@@ -237,7 +237,12 @@ impl Pipeline {
         }
 
         let t = std::time::Instant::now();
-        let labels = self.clusterer.cluster(&embeddings)?;
+        // Per-embedding durations enable cVBx short-segment filtering inside
+        // clusterers that opt in (VBx); others ignore the slice.
+        let durations: Vec<f64> = valid_segments.iter().map(|s| s.time.duration()).collect();
+        let labels = self
+            .clusterer
+            .cluster_with_durations(&embeddings, &durations)?;
         timings.clustering_secs = t.elapsed().as_secs_f64();
 
         // Fix 1: zip valid_segments (survivors only) with labels — not primary_segments.
@@ -254,12 +259,14 @@ impl Pipeline {
         let centroids: Vec<SpeakerCentroid> = compute_centroids(&embeddings, &labels);
 
         // Bridge the powerset segmenter's file-consistent local speaker indices
-        // to global clusters: every primary segment carries both its local index
-        // and (post-clustering) a global label, so a duration-weighted majority
-        // vote maps local → global. Overlap regions then reuse the segmenter's
-        // own two-speaker assignment instead of re-guessing the second speaker
-        // from a degraded mixed-voice embedding.
-        let local_to_global = Self::map_local_to_global(&valid_segments, &labels);
+        // to global clusters via Hungarian assignment on co-occurrence duration,
+        // with cannot-link constraints from overlap pairs (two locals that share
+        // an overlap must not collapse onto one global).
+        let cannot_link: Vec<(u8, u8)> = overlap_ranges
+            .iter()
+            .map(|(_, lo, hi)| (*lo.min(hi), *lo.max(hi)))
+            .collect();
+        let local_to_global = Self::map_local_to_global(&valid_segments, &labels, &cannot_link);
 
         let t = std::time::Instant::now();
         let mut all_turns: Vec<SpeakerTurn> = if self.config.resegment_overlap
@@ -326,13 +333,15 @@ impl Pipeline {
         Ok((result, timings))
     }
 
-    /// Duration-weighted majority map from each file-consistent local speaker
-    /// index to the global cluster its primary segments landed in. A local index
-    /// whose segments scattered across clusters resolves to the dominant one;
-    /// a local index that never appeared as a solo segment is simply absent.
+    /// Hungarian co-occurrence map from each file-consistent local speaker
+    /// index to a global cluster. Only locals that appear as primary segments
+    /// participate (inactive locals are never invented — the pyannote-style
+    /// "inactive speakers in the similarity matrix" anti-pattern). Cannot-link
+    /// pairs from overlap regions are forced onto distinct globals.
     fn map_local_to_global(
         valid_segments: &[&crate::segmentation::RawSegment],
         labels: &[usize],
+        cannot_link: &[(u8, u8)],
     ) -> std::collections::HashMap<u8, SpeakerId> {
         // Ablation toggle: when set, return an empty map so every overlap region
         // takes the mixed-embedding fallback. Lets the segmentation-derived
@@ -340,24 +349,14 @@ impl Pipeline {
         if std::env::var_os("POLYVOICE_V2_DISABLE_SEG_OVERLAP").is_some() {
             return std::collections::HashMap::new();
         }
-        let mut local_dur: std::collections::HashMap<u8, std::collections::HashMap<u32, f64>> =
-            std::collections::HashMap::new();
-        for (seg, &lbl) in valid_segments.iter().zip(labels.iter()) {
-            *local_dur
-                .entry(seg.local_speaker_idx)
-                .or_default()
-                .entry(lbl as u32)
-                .or_default() += seg.time.duration();
+        let local_idx: Vec<u8> = valid_segments.iter().map(|s| s.local_speaker_idx).collect();
+        let durations: Vec<f64> = valid_segments.iter().map(|s| s.time.duration()).collect();
+        let cooc = crate::clusterer::build_cooccurrence(&local_idx, labels, &durations);
+        // Ablation: majority vote instead of Hungarian.
+        if std::env::var_os("POLYVOICE_V2_MAJORITY_LOCAL_MAP").is_some() {
+            return crate::clusterer::majority_local_to_global(&cooc);
         }
-        local_dur
-            .iter()
-            .filter_map(|(&loc, per_global)| {
-                per_global
-                    .iter()
-                    .max_by(|a, b| a.1.total_cmp(b.1))
-                    .map(|(&g, _)| (loc, SpeakerId(g)))
-            })
-            .collect()
+        crate::clusterer::hungarian_local_to_global(&cooc, cannot_link)
     }
 
     fn build_overlap_inputs(
