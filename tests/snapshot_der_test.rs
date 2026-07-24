@@ -10,6 +10,7 @@ fn turn(start: f64, end: f64, speaker: u32) -> SpeakerTurn {
         time: polyvoice::types::TimeRange { start, end },
         speaker: SpeakerId(speaker),
         text: None,
+        stable: true,
     }
 }
 

@@ -21,6 +21,7 @@ fn turn(start: f64, end: f64, spk: u32) -> SpeakerTurn {
         speaker: SpeakerId(spk),
         time: TimeRange { start, end },
         text: None,
+        stable: true,
     }
 }
 

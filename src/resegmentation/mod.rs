@@ -287,12 +287,14 @@ impl Resegmenter for OverlapResegmenter {
                         speaker: region.primary_speaker,
                         time: region.time,
                         text: None,
+                        stable: true,
                     });
                     if secondary != region.primary_speaker {
                         out.push(SpeakerTurn {
                             speaker: secondary,
                             time: region.time,
                             text: None,
+                            stable: true,
                         });
                     }
                 }
@@ -342,6 +344,7 @@ impl Resegmenter for OverlapResegmenter {
                                 speaker: id,
                                 time: region.time,
                                 text: None,
+                                stable: true,
                             });
                         }
                     }
@@ -378,6 +381,7 @@ mod trait_tests {
             speaker: SpeakerId(spk),
             time: TimeRange { start, end },
             text: None,
+            stable: true,
         }
     }
 
@@ -599,6 +603,7 @@ mod resegmenter_tests {
             speaker: SpeakerId(spk),
             time: TimeRange { start, end },
             text: None,
+            stable: true,
         }
     }
 

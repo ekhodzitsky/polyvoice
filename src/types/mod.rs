@@ -343,6 +343,14 @@ pub struct Segment {
     pub confidence: Option<f32>,
 }
 
+fn default_turn_stable() -> bool {
+    true
+}
+
+fn is_true(v: &bool) -> bool {
+    *v
+}
+
 /// A speaker turn: continuous stretch of speech by one speaker.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SpeakerTurn {
@@ -351,6 +359,38 @@ pub struct SpeakerTurn {
     /// Transcript text, if available from an ASR downstream.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+    /// Whether the speaker label has stabilized.
+    ///
+    /// Offline pipeline turns are always `true`. Streaming may emit provisional
+    /// labels (`stable: false`) that can still change until the speaker cache
+    /// reaches its stability threshold; once `true`, the label for that speaker
+    /// identity is treated as immutable. Absent in older JSON (defaults to
+    /// `true`); omitted from serialization when `true` so offline payloads stay
+    /// unchanged.
+    #[serde(default = "default_turn_stable", skip_serializing_if = "is_true")]
+    pub stable: bool,
+}
+
+impl SpeakerTurn {
+    /// Construct a turn with no transcript text and `stable: true` (offline default).
+    pub fn new(speaker: SpeakerId, time: TimeRange) -> Self {
+        Self {
+            speaker,
+            time,
+            text: None,
+            stable: true,
+        }
+    }
+
+    /// Construct a turn with an explicit stability flag (used by streaming).
+    pub fn with_stability(speaker: SpeakerId, time: TimeRange, stable: bool) -> Self {
+        Self {
+            speaker,
+            time,
+            text: None,
+            stable,
+        }
+    }
 }
 
 /// Alignment of a single word to a speaker and time range.
@@ -640,14 +680,13 @@ pub fn exclusive_turns(turns: &[SpeakerTurn]) -> Vec<SpeakerTurn> {
                 _ => break,
             }
         }
-        out.push(SpeakerTurn {
-            speaker: SpeakerId(spk),
-            time: TimeRange {
+        out.push(SpeakerTurn::new(
+            SpeakerId(spk),
+            TimeRange {
                 start: start as f64 * EXCLUSIVE_FRAME_SECS,
                 end: i as f64 * EXCLUSIVE_FRAME_SECS,
             },
-            text: None,
-        });
+        ));
     }
     out
 }
@@ -991,11 +1030,7 @@ mod diarization_result_tests {
     use super::*;
 
     fn turn(id: u32, start: f64, end: f64) -> SpeakerTurn {
-        SpeakerTurn {
-            speaker: SpeakerId(id),
-            time: TimeRange { start, end },
-            text: None,
-        }
+        SpeakerTurn::new(SpeakerId(id), TimeRange { start, end })
     }
 
     #[test]

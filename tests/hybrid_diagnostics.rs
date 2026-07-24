@@ -332,6 +332,7 @@ fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>, file_key:
                             speaker: spk,
                             time: s.time,
                             text: None,
+                            stable: true,
                         })
                     })
                     .collect();
@@ -442,6 +443,7 @@ fn analyze_file(stem: &str, audio_dir: &Path, rttm_dir: Option<&Path>, file_key:
                             speaker: spk,
                             time: s.time,
                             text: None,
+                            stable: true,
                         })
                     })
                     .collect();

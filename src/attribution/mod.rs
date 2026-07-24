@@ -556,6 +556,7 @@ pub fn fill_turn_text_with_config(
                 speaker: turn.speaker,
                 time: turn.time,
                 text,
+                stable: turn.stable,
             }
         })
         .collect()
@@ -672,6 +673,7 @@ mod tests {
             speaker: SpeakerId(id),
             time: TimeRange { start, end },
             text: None,
+            stable: true,
         }
     }
 
@@ -1005,6 +1007,7 @@ mod tests {
             speaker: SpeakerId(id),
             time,
             text: None,
+            stable: true,
         })
     }
 
