@@ -5,7 +5,9 @@
 //! reusing the same overlap definition as `der::compute_der`.
 
 use crate::asr::{Asr, AsrError};
-use crate::types::{SampleRate, SpeakerId, SpeakerTurn, TimeRange, Word, WordAlignment};
+use crate::types::{
+    SampleRate, SpeakerId, SpeakerTurn, TimeRange, Word, WordAlignment, mean_speaker_embeddings,
+};
 
 /// Overlap of two time intervals in seconds (0 when disjoint).
 fn overlap(a: &TimeRange, b: &TimeRange) -> f64 {
@@ -89,6 +91,14 @@ fn attribute_one(word: &Word, turns: &[SpeakerTurn]) -> WordAlignment {
     make(Some(turns[nearest].speaker), word.confidence)
 }
 
+/// L2-normalized mean embedding for one speaker (opt-in attribution export).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpeakerEmbedding {
+    pub speaker: SpeakerId,
+    /// Unit-norm embedding vector (embedder dimension).
+    pub embedding: Vec<f32>,
+}
+
 /// Result of the who-said-what cascade: ASR words tagged with speakers, plus the
 /// diarization turns with [`SpeakerTurn::text`] filled from those words.
 #[derive(Debug, Clone, PartialEq)]
@@ -98,6 +108,9 @@ pub struct WhoSaidWhat {
     pub words: Vec<WordAlignment>,
     /// Diarization turns, each with `text` assembled from its words in time order.
     pub turns: Vec<SpeakerTurn>,
+    /// Optional per-speaker embeddings (WhisperX `return_embeddings` pattern).
+    /// `None` unless filled via [`WhoSaidWhat::with_speaker_embeddings`].
+    pub speaker_embeddings: Option<Vec<SpeakerEmbedding>>,
 }
 
 /// Assemble [`SpeakerTurn::text`] for each turn from `aligned` words. A word
@@ -145,7 +158,42 @@ pub fn attribute_and_fill(words: &[Word], turns: &[SpeakerTurn]) -> WhoSaidWhat 
     WhoSaidWhat {
         words: aligned,
         turns,
+        speaker_embeddings: None,
     }
+}
+
+impl WhoSaidWhat {
+    /// Attach L2-normalized per-speaker embeddings (opt-in).
+    ///
+    /// Each input vector is re-normalized. Speakers are stored sorted by numeric
+    /// id. Pass the output of [`mean_speaker_embeddings`] or any
+    /// `(SpeakerId, Vec<f32>)` list from the diarization stage.
+    pub fn with_speaker_embeddings(mut self, embeddings: &[(SpeakerId, Vec<f32>)]) -> Self {
+        let mut out: Vec<SpeakerEmbedding> = embeddings
+            .iter()
+            .map(|(spk, emb)| {
+                let mut v = emb.clone();
+                crate::utils::l2_normalize(&mut v);
+                SpeakerEmbedding {
+                    speaker: *spk,
+                    embedding: v,
+                }
+            })
+            .collect();
+        out.sort_by_key(|e| e.speaker.0);
+        self.speaker_embeddings = Some(out);
+        self
+    }
+}
+
+/// Average and L2-normalize embeddings per speaker label.
+///
+/// Thin wrapper around [`mean_speaker_embeddings`] for attribution callers.
+pub fn speaker_embeddings_from_segments(
+    labels: &[SpeakerId],
+    embeddings: &[Vec<f32>],
+) -> Vec<(SpeakerId, Vec<f32>)> {
+    mean_speaker_embeddings(labels, embeddings)
 }
 
 /// Cascaded who-said-what: run **one** ASR pass over the whole audio, then join
@@ -326,5 +374,26 @@ mod tests {
         let wsw = who_said_what(&turns, &asr, &[0.0_f32; 16], sr).unwrap();
         assert_eq!(wsw.words.len(), 2);
         assert_eq!(wsw.turns[0].text.as_deref(), Some("one two"));
+        assert!(wsw.speaker_embeddings.is_none());
+    }
+
+    #[test]
+    fn speaker_embeddings_opt_in_are_l2_normalized() {
+        let turns = vec![turn(0, 0.0, 5.0), turn(1, 5.0, 10.0)];
+        let wsw = attribute_and_fill(&[word("hi", 1.0, 1.5, 1.0)], &turns);
+        let labels = [SpeakerId(0), SpeakerId(0), SpeakerId(1)];
+        let embs = vec![vec![3.0, 0.0], vec![0.0, 4.0], vec![0.0, 2.0]];
+        let means = speaker_embeddings_from_segments(&labels, &embs);
+        let wsw = wsw.with_speaker_embeddings(&means);
+        let se = wsw.speaker_embeddings.as_ref().expect("embeddings attached");
+        assert_eq!(se.len(), 2);
+        for e in se {
+            let n: f32 = e.embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((n - 1.0).abs() < 1e-5, "norm {n}");
+        }
+        // Deterministic.
+        let again = attribute_and_fill(&[word("hi", 1.0, 1.5, 1.0)], &turns)
+            .with_speaker_embeddings(&means);
+        assert_eq!(wsw.speaker_embeddings, again.speaker_embeddings);
     }
 }
