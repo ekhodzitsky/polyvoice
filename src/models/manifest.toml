@@ -176,6 +176,37 @@ trusted comment: polyvoice v0.6.0-alpha.3 | resnet34_int8.onnx
 OdzDgAbIm1wmfjPhvZFqPYFl5dvBTlquEGjx1ZCJ10xpvY2IVP1xFvOtzGPT4hrzuf9h94KFUuya8/yvcSN/DQ==
 '''
 
+# Optional ERes2NetV2 (Apache-2.0, ungated). Short-utterance-oriented 192-d
+# embedder. NEVER profile-default / never bundled. SHA-256 from upstream LFS oid.
+# Signature omitted until a release-signed asset exists.
+[models.eres2netv2]
+url      = "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx?download=true"
+sha256   = "bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239"
+size     = 71441526
+filename = "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx"
+license  = "Apache-2.0"
+license_url = "https://www.apache.org/licenses/LICENSE-2.0"
+provenance = "3D-Speaker / ModelScope iic speech_eres2netv2_sv_zh-cn_16k-common; ONNX mirror csukuangfj/speaker-embedding-models"
+adapter_type = "eres2netv2"
+version  = "1.0"
+sample_rate = 16000
+embedding_dim = 192
+
+# Optional CAM++ trained on 200k Chinese speakers (domain variant for CJK audio).
+# Same fbank pipeline as default CAM++; select via adapter "cam++-zh".
+[models.cam_pp_zh]
+url      = "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx?download=true"
+sha256   = "f682b514c05d947ee3fa91cd6ec6c5c7543479a128373fa29b1faedccd21fd11"
+size     = 28281138
+filename = "3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx"
+license  = "Apache-2.0"
+license_url = "https://www.apache.org/licenses/LICENSE-2.0"
+provenance = "3D-Speaker / ModelScope campplus zh-cn common; ONNX mirror csukuangfj/speaker-embedding-models"
+adapter_type = "cam++-zh"
+version  = "1.0"
+sample_rate = 16000
+embedding_dim = 192
+
 # Optional E2E Streaming Sortformer v2 (≤4 speakers). NEVER default, NEVER
 # bundled, NEVER pulled by profile resolution or default CI. Download only via
 # explicit ModelRegistry::ensure("sortformer_v2") under the `sortformer` feature.
