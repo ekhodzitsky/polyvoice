@@ -143,10 +143,7 @@ pub trait InferenceRuntime: Send {
     }
 
     /// Run with named inputs (Silero, powerset, any multi-input graph).
-    fn run(
-        &mut self,
-        inputs: &[NamedTensor<'_>],
-    ) -> Result<Vec<InferenceTensor>, InferenceError>;
+    fn run(&mut self, inputs: &[NamedTensor<'_>]) -> Result<Vec<InferenceTensor>, InferenceError>;
 
     /// Run with positional inputs in model input order (embedders).
     fn run_ordered(

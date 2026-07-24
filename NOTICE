@@ -25,6 +25,23 @@ Redistribution of these derived parameters is permitted under CC-BY-4.0 with
 attribution to pyannote. The raw inputs are mirrored at the Apache-2.0
 `avencera/speakrs` project's `avencera/speakrs-models` model repository.
 
+Third-party Rust crates (opt-in features)
+
+Symphonia (feature `audio-io`)
+------------------------------
+polyvoice optionally depends on [Symphonia](https://github.com/pdeljanov/Symphonia)
+(and its codec/format sub-crates) for multi-format audio decoding (mp3, flac,
+ogg/vorbis, m4a/aac, and related containers).
+
+  Licensed under the Mozilla Public License 2.0 (MPL-2.0).
+  Used as an **unmodified** dependency from crates.io only — sources are neither
+  vendored nor patched. MPL-2.0 is a file-level weak copyleft: linking to the
+  unmodified published crates from an MIT project is permitted; modifications to
+  Symphonia source files would require sharing those files under MPL-2.0.
+
+  Homepage: https://github.com/pdeljanov/Symphonia
+  License text: https://www.mozilla.org/en-US/MPL/2.0/
+
 Streaming Sortformer v2 (opt-in `sortformer` feature)
 -----------------------------------------------------
 When the optional Sortformer adapter downloads weights, they come from the

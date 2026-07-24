@@ -157,12 +157,14 @@ impl PowersetSegmenter {
                 detail: format!("session.run: {e}"),
             })?;
 
-        let first = outputs.into_iter().next().ok_or_else(|| {
-            SegmentationError::InferenceFailed {
-                window_idx,
-                detail: "model produced no outputs".to_string(),
-            }
-        })?;
+        let first =
+            outputs
+                .into_iter()
+                .next()
+                .ok_or_else(|| SegmentationError::InferenceFailed {
+                    window_idx,
+                    detail: "model produced no outputs".to_string(),
+                })?;
 
         let shape_vec = first.shape.clone();
         let data = first
