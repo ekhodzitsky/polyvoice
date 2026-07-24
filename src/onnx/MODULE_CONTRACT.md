@@ -5,9 +5,10 @@ module: src/onnx
 level: subsystem
 layer: infrastructure
 purpose: >
-  Owns ONNX model validation (header checks) and the legacy OnnxEmbeddingExtractor
-  struct. Does NOT own model download/registry (models/) or specific model
-  adapters (embedder.rs, ecapa.rs).
+  Owns ONNX model validation (header checks), the InferenceRuntime trait,
+  the OrtSession implementation, and the legacy OnnxEmbeddingExtractor.
+  Does NOT own model download/registry (models/) or specific model adapters
+  (embedder.rs, ecapa.rs).
 status: stable
 owners:
   - polyvoice-core
@@ -31,6 +32,26 @@ authority:
     - cross-workcell write
     - public surface migration
 surface:
+  - name: InferenceRuntime
+    kind: trait
+    visibility: public
+    contract: >
+      Minimal pluggable inference session: named/ordered tensor run + input
+      names. Neural stages depend only on this trait; they must not import ort::.
+    proof:
+      kind: unit-test
+      target: src/onnx::runtime::tests
+      command: cargo test --lib onnx --features onnx
+  - name: OrtSession
+    kind: struct
+    visibility: public
+    contract: >
+      Default InferenceRuntime implementation wrapping ort. Sole production
+      module allowed to import ort:: (src/onnx/ort_session.rs).
+    proof:
+      kind: unit-test
+      target: src/onnx::mod::tests
+      command: cargo test --lib onnx --features onnx
   - name: validate_onnx_header
     kind: function
     visibility: public
@@ -44,9 +65,10 @@ surface:
     kind: enum
     visibility: public
     contract: >
-      Canonical execution-provider selector (Cpu/CoreMl/Nnapi/Cuda/XnnPack)
-      with a target-aware auto(). Lives here (the module that owns session
-      creation); pipeline_v2::config re-exports it.
+      Canonical ort-specific EP selector (Cpu/CoreMl/Nnapi/Cuda/XnnPack)
+      with a target-aware auto(). Not part of InferenceRuntime; stages pass
+      it only at construction via build_session_with_ep. pipeline_v2::config
+      re-exports it.
     proof:
       kind: unit-test
       target: src/onnx::mod::tests
@@ -55,11 +77,10 @@ surface:
     kind: function
     visibility: public
     contract: >
-      THE single ort session constructor for embedding + segmentation paths.
-      Validates the ONNX header BEFORE ort parses the file, optionally pins
-      intra-op threads, then registers the requested EP. Unwired providers
-      warn (tracing) and fall back to CPU; EP registration failure is never
-      fatal (ort's CPU fallback keeps inference correct).
+      THE single session constructor for embedding + segmentation paths.
+      Validates the ONNX header BEFORE the backend parses the file, optionally
+      pins intra-op threads, then registers the requested EP. Returns OrtSession.
+      Unwired providers warn (tracing) and fall back to CPU.
     proof:
       kind: unit-test
       target: src/onnx::mod::tests
@@ -77,7 +98,7 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Legacy ONNX embedding extractor wrapper.
+      Legacy ONNX embedding extractor wrapper (pooled OrtSession).
     proof:
       kind: unit-test
       target: src/onnx::mod::tests
@@ -93,15 +114,17 @@ dependencies:
   external:
     - name: ort
       scope: ml-runtime
-      reason: ONNX Runtime inference.
+      reason: Default InferenceRuntime backend (confined to ort_session.rs).
 consumers:
   - path: .
     uses:
       - validate_onnx_header
       - OnnxValidationError
       - OnnxEmbeddingExtractor
-      - ort
-      - polyvoice_internal
+      - InferenceRuntime
+      - OrtSession
+      - build_session_with_ep
+      - ExecutionProvider
 invariants:
   - id: header-validation-false-positive-rate
     rule: validate_onnx_header rejects non-ONNX files and accepts valid ONNX files.
@@ -109,6 +132,14 @@ invariants:
       kind: unit-test
       target: src/onnx::mod::tests
       command: cargo test --lib onnx --features onnx
+  - id: ort-confined-to-ort-session
+    rule: >
+      No production module outside src/onnx/ort_session.rs may import ort::.
+      New neural stages must use InferenceRuntime / build_session_with_ep only.
+    proof:
+      kind: unit-test
+      target: src/onnx::mod::tests
+      command: rg 'ort::' src --type rust
 verification:
   pre_change:
     - cargo test --lib onnx --features onnx
@@ -118,12 +149,21 @@ verification:
 agent_policy:
   allowed_mutations:
     - Adding new validation checks.
+    - Adding InferenceRuntime backends behind feature flags.
   forbidden_mutations:
     - Removing validate_onnx_header without migration lease.
+    - Re-introducing ort:: imports into neural stages outside ort_session.rs.
   escalation:
     - Changes to ONNX validation semantics.
+    - Changes to InferenceRuntime surface used by stages.
 ---
 
 # src/onnx
 
-ONNX model validation and legacy embedding extractor wrapper.
+ONNX validation, runtime-agnostic inference trait, and default ort backend.
+
+## Rule for new neural stages
+
+**Do not import `ort::`.** Load sessions via `build_session_with_ep` (or a future
+backend factory) and run inference through `InferenceRuntime`. The only module
+allowed to import `ort::` is `src/onnx/ort_session.rs`.
