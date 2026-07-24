@@ -517,13 +517,41 @@ mod tests {
     }
 
     #[test]
-    fn every_bundled_model_is_signed() {
-        // The strict release-build gate is only non-breaking while this holds.
+    fn every_profile_model_is_signed() {
+        // Profile resolution in release builds requires signatures. Optional
+        // models (e.g. sortformer_v2) are not profile-resolved and may ship
+        // with SHA-256-only integrity until a signed release artifact exists.
         let m = default_manifest();
-        for (id, entry) in &m.models {
-            assert!(
-                entry.signature.is_some(),
-                "bundled model '{id}' has no signature — release profile resolution would fail"
+        for (profile_id, prof) in &m.profiles {
+            for model_id in [&prof.segmenter, &prof.embedder] {
+                let entry = m.models.get(model_id).unwrap_or_else(|| {
+                    panic!("profile '{profile_id}' references missing model '{model_id}'")
+                });
+                assert!(
+                    entry.signature.is_some(),
+                    "profile model '{model_id}' (via '{profile_id}') has no signature — \
+                     release profile resolution would fail"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn optional_sortformer_entry_present_but_not_in_profiles() {
+        let m = default_manifest();
+        let entry = m.model("sortformer_v2").expect("sortformer_v2 in manifest");
+        assert_eq!(entry.adapter_type.as_deref(), Some("sortformer-v2"));
+        assert_eq!(entry.license.as_deref(), Some("CC-BY-4.0"));
+        assert_eq!(entry.num_speakers, Some(4));
+        // Must never be a default profile target (opt-in download only).
+        for (pid, prof) in &m.profiles {
+            assert_ne!(
+                prof.segmenter, "sortformer_v2",
+                "profile {pid} must not pull sortformer as segmenter"
+            );
+            assert_ne!(
+                prof.embedder, "sortformer_v2",
+                "profile {pid} must not pull sortformer as embedder"
             );
         }
     }
