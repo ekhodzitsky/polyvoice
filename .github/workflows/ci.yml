@@ -290,11 +290,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.85.0
+      # Declared MSRV is 1.88 (matches ort 2.0.0-rc.11+). Keep this pin in
+      # lockstep with package.rust-version in Cargo.toml.
+      - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
-      # MSRV applies to the core library (default features). ONNX-dependent
-      # features pull ort which requires a newer Rust compiler.
       - run: cargo check --lib
+      # Real (ort-enabled) surface also builds on the declared MSRV.
+      - run: cargo check --lib --features "onnx,segmentation,embedder,clusterer,resegmentation"
 
   machete:
     runs-on: ubuntu-latest
