@@ -17,6 +17,7 @@ fn to_speaker_turns(hypothesis: &[(f64, f64, u32)]) -> Vec<SpeakerTurn> {
             speaker: SpeakerId(spk),
             time: TimeRange { start, end },
             text: None,
+            stable: true,
         })
         .collect()
 }

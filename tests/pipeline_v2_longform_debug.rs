@@ -153,6 +153,7 @@ fn debug_v2_segments_on_aepyx() {
                 speaker: polyvoice::types::SpeakerId(s.local_speaker_idx as u32),
                 time: s.time,
                 text: None,
+                stable: true,
             })
             .collect();
         let der = polyvoice::der::compute_der(&ref_turns, &turns, 0.25);

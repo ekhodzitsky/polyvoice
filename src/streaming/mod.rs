@@ -5,20 +5,55 @@
 //! Unlike the offline [`Pipeline`](crate::pipeline::Pipeline), `StreamingPipeline`
 //! emits [`SpeakerTurn`]s as soon as each embedding window is processed.
 //!
-//! Latency is bounded by `DiarizationConfig::window_secs` plus VAD look-ahead.
+//! # Latency
+//!
+//! Input-buffer latency is bounded by the active [`LatencyPreset`]:
+//!
+//! ```text
+//! input_buffer_latency ≈ window_secs + right_context_secs + vad_frame_secs
+//! ```
+//!
+//! At 16 kHz with EnergyVad frame size 512, `vad_frame_secs ≈ 0.032 s`.
+//! Report **latency**, **RTF**, and **DER** as separate numbers (see
+//! `docs/BENCHMARKS.md`).
+//!
+//! | Preset     | window | hop  | right ctx | cache cap | budget @16 kHz |
+//! |------------|--------|------|-----------|-----------|----------------|
+//! | `realtime` | 1.0 s  | 0.5  | 0.0       | 16        | ≈ 1.03 s       |
+//! | `balanced` | 1.5 s  | 0.75 | 0.0       | 32        | ≈ 1.53 s       |
+//! | `accurate` | 2.0 s  | 1.0  | 0.25      | 64        | ≈ 2.28 s       |
+//!
+//! `balanced` matches [`DiarizationConfig::default`] window geometry.
+//!
+//! # Provisional labels
+//!
+//! Turns may be emitted with [`SpeakerTurn::stable`]` == false` while a speaker
+//! is still gathering hits in the arrival-order cache. Until the cache entry
+//! reaches `min_hits_to_stable`, the label is **provisional** (Unknown-class):
+//! subsequent windows for that talker may still flip under hysteresis. Once
+//! `stable` is `true`, the speaker ID for that cache entry is immutable.
+//! Already-emitted history is not rewritten — callers that need only final
+//! labels should wait for `stable: true` turns (Azure DiarizeIntermediateResults
+//! pattern).
+//!
+//! # Speaker cap / overflow
+//!
+//! The arrival-order cache is hard-capped (`speaker_cache_cap`). When full,
+//! unmatched embeddings are **force-merged** into the closest existing speaker
+//! (AWS-style overflow). Per-chunk work stays O(cap).
 //!
 //! # Example
 //! ```rust,no_run
-//! use polyvoice::streaming::StreamingPipeline;
+//! use polyvoice::streaming::{LatencyPreset, StreamingPipeline};
 //! use polyvoice::{EnergyVad, DummyExtractor, DiarizationConfig, VadConfig};
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let vad = EnergyVad::new(-40.0, 16000, 512);
 //!     let extractor = DummyExtractor::new(256);
-//!     let mut pipeline = StreamingPipeline::new(
+//!     let mut pipeline = StreamingPipeline::with_latency_preset(
 //!         vad,
 //!         extractor,
-//!         DiarizationConfig::default(),
+//!         LatencyPreset::Balanced,
 //!         VadConfig::default(),
 //!     )?;
 //!     let chunk = vec![0.0f32; 16000];
@@ -27,10 +62,16 @@
 //! }
 //! ```
 
+mod cache;
+mod latency;
+mod stability;
+
+pub use cache::{ArrivalOrderSpeakerCache, AssignResult};
+pub use latency::{LatencyPreset, StreamingParams};
+pub use stability::{label_flip_rate, prefer_current_speaker};
+
 use crate::VadConfig;
-use crate::cluster::SpeakerCluster;
 use crate::embedding::{EmbeddingError, EmbeddingExtractor};
-use crate::types::ClusterConfig;
 use crate::types::{DiarizationConfig, SpeakerTurn, TimeRange};
 use crate::vad::{VadError, VadEvent, VadStateMachine, VoiceActivityDetector};
 use crate::window::WindowBuffer;
@@ -47,11 +88,15 @@ pub enum StreamingError {
 /// Stateful streaming diarization pipeline.
 ///
 /// Generic over a [`VoiceActivityDetector`] `V` and an [`EmbeddingExtractor`] `E`.
+/// Speaker assignment uses an AOSC-style [`ArrivalOrderSpeakerCache`] (bounded,
+/// arrival-order IDs, provisional→stable labels, prefer-current hysteresis).
 pub struct StreamingPipeline<V, E> {
     vad: V,
     extractor: E,
-    cluster: SpeakerCluster,
+    cache: ArrivalOrderSpeakerCache,
     config: DiarizationConfig,
+    params: StreamingParams,
+    preset: Option<LatencyPreset>,
     frame_size: usize,
     sample_rate: u32,
     // VAD buffering
@@ -70,7 +115,12 @@ where
     V: VoiceActivityDetector,
     E: EmbeddingExtractor,
 {
-    /// Create a new streaming pipeline.
+    /// Create a new streaming pipeline with explicit diarization + VAD config.
+    ///
+    /// Uses balanced-equivalent cache defaults derived from `config.cluster`
+    /// (`max_speakers` as cache cap, `threshold` as match threshold) and the
+    /// balanced stability knobs (`min_hits_to_stable = 3`, prefer-current margin
+    /// `0.08`). Prefer [`Self::with_latency_preset`] for named latency modes.
     ///
     /// # Errors
     /// Returns `VadError::InvalidChunkSize` if the VAD `frame_size` is zero.
@@ -79,6 +129,58 @@ where
         extractor: E,
         config: DiarizationConfig,
         vad_config: VadConfig,
+    ) -> Result<Self, StreamingError> {
+        let params = StreamingParams {
+            window_secs: config.window.window_secs,
+            hop_secs: config.window.hop_secs,
+            right_context_secs: 0.0,
+            speaker_cache_cap: config.cluster.max_speakers.max(1),
+            min_hits_to_stable: LatencyPreset::Balanced.params().min_hits_to_stable,
+            prefer_current_margin: LatencyPreset::Balanced.params().prefer_current_margin,
+            match_threshold: config.cluster.threshold,
+        };
+        Self::from_parts(vad, extractor, config, vad_config, params, None)
+    }
+
+    /// Construct a pipeline from a named [`LatencyPreset`].
+    ///
+    /// Applies the preset's window geometry onto a default [`DiarizationConfig`]
+    /// and installs the matching cache / stability parameters.
+    pub fn with_latency_preset(
+        vad: V,
+        extractor: E,
+        preset: LatencyPreset,
+        vad_config: VadConfig,
+    ) -> Result<Self, StreamingError> {
+        let mut config = DiarizationConfig::default();
+        preset.apply(&mut config);
+        let params = preset.params();
+        Self::from_parts(vad, extractor, config, vad_config, params, Some(preset))
+    }
+
+    /// Construct with full control over diarization config and streaming params.
+    pub fn with_params(
+        vad: V,
+        extractor: E,
+        mut config: DiarizationConfig,
+        vad_config: VadConfig,
+        params: StreamingParams,
+    ) -> Result<Self, StreamingError> {
+        // Keep window geometry on the diarization config aligned with params.
+        config.window.window_secs = params.window_secs;
+        config.window.hop_secs = params.hop_secs;
+        config.cluster.threshold = params.match_threshold;
+        config.cluster.max_speakers = params.speaker_cache_cap;
+        Self::from_parts(vad, extractor, config, vad_config, params, None)
+    }
+
+    fn from_parts(
+        vad: V,
+        extractor: E,
+        config: DiarizationConfig,
+        vad_config: VadConfig,
+        params: StreamingParams,
+        preset: Option<LatencyPreset>,
     ) -> Result<Self, StreamingError> {
         let frame_size = vad_config.frame_size;
         if frame_size == 0 {
@@ -95,11 +197,12 @@ where
         let min_speech_frames =
             ((config.speech_filter.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
 
-        let cluster = SpeakerCluster::new(ClusterConfig {
-            threshold: config.cluster.threshold,
-            max_speakers: config.cluster.max_speakers,
-            ..Default::default()
-        });
+        let cache = ArrivalOrderSpeakerCache::new(
+            params.speaker_cache_cap,
+            params.match_threshold,
+            params.min_hits_to_stable,
+            params.prefer_current_margin,
+        );
 
         let vad_state =
             VadStateMachine::new(vad_config.threshold, min_silence_frames, min_speech_frames);
@@ -107,8 +210,10 @@ where
         Ok(Self {
             vad,
             extractor,
-            cluster,
+            cache,
             config,
+            params,
+            preset,
             frame_size,
             sample_rate,
             vad_buffer: Vec::new(),
@@ -119,6 +224,26 @@ where
         })
     }
 
+    /// Active streaming parameters (window, cache cap, stability knobs).
+    pub fn params(&self) -> StreamingParams {
+        self.params
+    }
+
+    /// Named preset if the pipeline was built via [`Self::with_latency_preset`].
+    pub fn latency_preset(&self) -> Option<LatencyPreset> {
+        self.preset
+    }
+
+    /// Hard cap on the speaker cache (`params.speaker_cache_cap`).
+    pub fn speaker_cache_cap(&self) -> usize {
+        self.cache.cap()
+    }
+
+    /// Current number of cache entries (always `<= speaker_cache_cap()`).
+    pub fn cache_len(&self) -> usize {
+        self.cache.len()
+    }
+
     /// Feed a chunk of audio samples and return any newly finalized speaker turns.
     ///
     /// The pipeline internally buffers samples until a full VAD frame is available,
@@ -127,6 +252,8 @@ where
     ///
     /// Callers should feed chunks as they arrive from the audio source (e.g. microphone).
     /// There is no minimum chunk size; sub-frame chunks are buffered transparently.
+    ///
+    /// Returned turns may have `stable: false` (provisional); see module docs.
     pub fn feed(&mut self, samples: &[f32]) -> Result<Vec<SpeakerTurn>, StreamingError> {
         let mut new_turns = Vec::new();
         self.vad_buffer.extend_from_slice(samples);
@@ -212,17 +339,11 @@ where
         Ok(new_turns)
     }
 
-    /// { self.cluster.num_speakers() >= 0 }
-    /// `pub fn num_speakers(&self) -> usize`
-    /// { ret == self.cluster.num_speakers() }
     /// Return the number of distinct speakers observed so far.
     pub fn num_speakers(&self) -> usize {
-        self.cluster.num_speakers()
+        self.cache.len()
     }
 
-    /// { true }
-    /// `pub fn turns(&self) -> &[SpeakerTurn]`
-    /// { ret.iter().all(|t| t.time.start <= t.time.end) }
     /// Return all turns emitted so far (including those from prior `feed` calls).
     ///
     /// History is cumulative across `feed`/`flush`; `flush` does not reset it.
@@ -242,16 +363,17 @@ where
 
         while let Some((start, chunk)) = self.window_buffer.try_pop() {
             let embedding = self.extractor.extract(&chunk, &self.config)?;
-            let (speaker, _conf) = self.cluster.assign(&embedding);
+            let assigned = self.cache.assign(&embedding);
+            debug_assert!(self.cache.len() <= self.cache.cap());
             let end = start + chunk.len();
-            turns.push(SpeakerTurn {
-                speaker,
-                time: TimeRange {
+            turns.push(SpeakerTurn::with_stability(
+                assigned.speaker,
+                TimeRange {
                     start: start as f64 / sr_f,
                     end: end as f64 / sr_f,
                 },
-                text: None,
-            });
+                assigned.stable,
+            ));
         }
 
         Ok(turns)
@@ -267,16 +389,17 @@ where
 
         if let Some((start, padded)) = self.window_buffer.flush() {
             let embedding = self.extractor.extract(&padded, &self.config)?;
-            let (speaker, _conf) = self.cluster.assign(&embedding);
+            let assigned = self.cache.assign(&embedding);
+            debug_assert!(self.cache.len() <= self.cache.cap());
             let end = seg_end_sample.min(start + padded.len());
-            turns.push(SpeakerTurn {
-                speaker,
-                time: TimeRange {
+            turns.push(SpeakerTurn::with_stability(
+                assigned.speaker,
+                TimeRange {
                     start: start as f64 / sr_f,
                     end: end as f64 / sr_f,
                 },
-                text: None,
-            });
+                assigned.stable,
+            ));
         }
 
         Ok(turns)
@@ -288,6 +411,7 @@ where
 mod tests {
     use super::*;
     use crate::embedding::DummyExtractor;
+    use crate::types::SpeakerId;
     use crate::{EnergyVad, VadConfig};
 
     fn default_config() -> DiarizationConfig {
@@ -302,6 +426,13 @@ mod tests {
         let vad = EnergyVad::new(-40.0, 16000, 512);
         let extractor = DummyExtractor::new(256);
         StreamingPipeline::new(vad, extractor, default_config(), default_vad_config()).unwrap()
+    }
+
+    fn pipeline_preset(preset: LatencyPreset) -> StreamingPipeline<EnergyVad, DummyExtractor> {
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        StreamingPipeline::with_latency_preset(vad, extractor, preset, default_vad_config())
+            .unwrap()
     }
 
     /// Loud samples that should trigger speech detection.
@@ -322,6 +453,8 @@ mod tests {
         let p = pipeline();
         assert_eq!(p.num_speakers(), 0);
         assert!(p.turns().is_empty());
+        assert_eq!(p.cache_len(), 0);
+        assert!(p.speaker_cache_cap() >= 1);
     }
 
     #[test]
@@ -400,5 +533,117 @@ mod tests {
             emitted.as_slice(),
             "turns() must accumulate every feed()/flush() return in order"
         );
+    }
+
+    #[test]
+    fn balanced_preset_matches_default_window() {
+        let p = pipeline_preset(LatencyPreset::Balanced);
+        let d = DiarizationConfig::default();
+        assert!((p.params().window_secs - d.window.window_secs).abs() < 1e-6);
+        assert!((p.params().hop_secs - d.window.hop_secs).abs() < 1e-6);
+        assert_eq!(p.latency_preset(), Some(LatencyPreset::Balanced));
+    }
+
+    #[test]
+    fn realtime_preset_has_shorter_window() {
+        let p = pipeline_preset(LatencyPreset::Realtime);
+        assert!((p.params().window_secs - 1.0).abs() < 1e-6);
+        assert_eq!(p.speaker_cache_cap(), 16);
+    }
+
+    #[test]
+    fn cache_never_exceeds_cap_under_long_feed() {
+        // Tight cap: force overflow merge path under continuous speech.
+        let params = StreamingParams {
+            window_secs: 1.0,
+            hop_secs: 0.5,
+            right_context_secs: 0.0,
+            speaker_cache_cap: 2,
+            min_hits_to_stable: 2,
+            prefer_current_margin: 0.05,
+            match_threshold: 0.45,
+        };
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let mut p = StreamingPipeline::with_params(
+            vad,
+            extractor,
+            DiarizationConfig::default(),
+            default_vad_config(),
+            params,
+        )
+        .unwrap();
+        let _ = p.feed(&loud_samples(20.0)).unwrap();
+        let _ = p.flush().unwrap();
+        assert!(
+            p.cache_len() <= p.speaker_cache_cap(),
+            "cache len {} > cap {}",
+            p.cache_len(),
+            p.speaker_cache_cap()
+        );
+        assert!(p.cache_len() <= 2);
+    }
+
+    #[test]
+    fn emitted_turns_carry_stable_flag() {
+        // DummyExtractor yields a fresh pseudo-random unit vector per call, so
+        // use a tiny cache + high match threshold so force-merge reuses speakers
+        // and stability can latch.
+        let params = StreamingParams {
+            window_secs: 1.0,
+            hop_secs: 0.5,
+            right_context_secs: 0.0,
+            speaker_cache_cap: 2,
+            min_hits_to_stable: 2,
+            prefer_current_margin: 0.05,
+            match_threshold: 0.99,
+        };
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let mut p = StreamingPipeline::with_params(
+            vad,
+            extractor,
+            DiarizationConfig::default(),
+            default_vad_config(),
+            params,
+        )
+        .unwrap();
+        let turns = p.feed(&loud_samples(6.0)).unwrap();
+        assert!(!turns.is_empty());
+        let all = p.turns();
+        // First hits for a speaker are provisional; overflow re-hits latch stability.
+        assert!(
+            all.iter().any(|t| !t.stable),
+            "first hits for a speaker are provisional"
+        );
+        assert!(
+            all.iter().any(|t| t.stable),
+            "expected at least one stable turn after repeated overflow hits"
+        );
+    }
+
+    #[test]
+    fn model_long_stream_cache_stays_bounded() {
+        // Model-level stand-in for the ≥1 h bench: many assign steps must not
+        // grow cache past cap (O(cap) state, no O(t) centroid list growth).
+        let mut cache = ArrivalOrderSpeakerCache::new(8, 0.5, 3, 0.05);
+        let dim = 32;
+        for i in 0..5_000 {
+            let mut emb = vec![0.0f32; dim];
+            emb[i % dim] = 1.0;
+            emb[(i * 3) % dim] += 0.1;
+            crate::utils::l2_normalize(&mut emb);
+            cache.assign(&emb);
+            assert!(cache.len() <= cache.cap());
+        }
+        assert_eq!(cache.cap(), 8);
+        assert!(cache.len() <= 8);
+    }
+
+    #[test]
+    fn flip_rate_helper_exported() {
+        let first = [SpeakerId(0), SpeakerId(1)];
+        let final_ = [SpeakerId(0), SpeakerId(0)];
+        assert!((label_flip_rate(&first, &final_) - 0.5).abs() < 1e-6);
     }
 }

@@ -572,6 +572,7 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
                             speaker: SpeakerId(spk as u32),
                             time: TimeRange { start, end },
                             text: None,
+                            stable: true,
                         });
                     }
                 }
@@ -585,6 +586,7 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
                         speaker: SpeakerId(spk as u32),
                         time: TimeRange { start, end },
                         text: None,
+                        stable: true,
                     });
                 }
             }
