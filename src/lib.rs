@@ -147,6 +147,11 @@ pub use onnx::OnnxEmbeddingExtractor;
 #[cfg(feature = "onnx")]
 pub mod ecapa;
 
+/// Optional NVIDIA Streaming Sortformer v2 E2E diarizer (≤4 speakers).
+/// Opt-in via `--features sortformer`. See `docs/sortformer.md`.
+#[cfg(feature = "sortformer")]
+pub mod sortformer;
+
 // Public re-exports for ergonomic use.
 pub use cluster::SpeakerCluster;
 #[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
