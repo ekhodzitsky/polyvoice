@@ -767,6 +767,7 @@ mod tests {
             time: TimeRange { start, end },
             speaker: spk.map(SpeakerId),
             confidence: 1.0,
+            interpolated: false,
         }
     }
 
