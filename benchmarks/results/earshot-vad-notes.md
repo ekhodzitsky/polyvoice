@@ -116,16 +116,17 @@ POLYVOICE_DER_EVAL=1 cargo run --features "cli,vad-earshot" --bin polyvoice-benc
 
 If the CLI has no `--vad earshot` switch yet, drive the legacy `Pipeline` from a small harness that constructs `EarshotVad` vs `SileroVad` and reuses the same DER evaluation path as `polyvoice-bench`.
 
-### Verdict template
+### Measured verdict (2026-07-24)
 
 ```
-Dataset: …
-Collar: …
-Silero DER: …
-earshot DER: …
-Δ DER (earshot − Silero): …
-Verdict: parity | regression   (tol = 0.3 abs)
-Vendor RTF claim 0.0003: confirmed | refuted | not measured
+Dataset: VoxConverse-test first 10 files (sorted), legacy pipeline, ResNet34 embedder
+Hardware: Apple M1 Pro, 10 cores, release build
+Collar 0:   Silero 23.89%  earshot 26.54%  Δ +2.65 pp  → FAIL (|Δ|≤0.3)
+Collar 0.25: Silero 15.82%  earshot 18.68%  Δ +2.86 pp  → FAIL
+RTF: Silero 0.102  earshot 0.099  (nearly tied; not 40×)
+Verdict: regression — keep optional only; do not switch default
+Vendor RTF claim 0.0003: not measured as pure VAD microbench (pipeline RTF only)
+Artifact: benchmarks/results/vad-parity-earshot-silero.json
 ```
 
 ## Dependency hygiene
