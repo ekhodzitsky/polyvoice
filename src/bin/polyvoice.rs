@@ -497,17 +497,14 @@ fn cmd_models_info(name: String) -> Result<()> {
     let registry = ModelRegistry::default()?;
     let manifest = registry.manifest();
     // Accept direct model ids and stage-scoped aliases (e.g. embedder/latest).
-    let resolved = manifest
-        .model(&name)
-        .map(|_| name.as_str())
-        .or_else(|| {
-            for stage in ["segmenter", "embedder", "vad"] {
-                if let Some(id) = manifest.resolve_model_ref(stage, &name) {
-                    return Some(id);
-                }
+    let resolved = manifest.model(&name).map(|_| name.as_str()).or_else(|| {
+        for stage in ["segmenter", "embedder", "vad"] {
+            if let Some(id) = manifest.resolve_model_ref(stage, &name) {
+                return Some(id);
             }
-            None
-        });
+        }
+        None
+    });
     let Some(model_id) = resolved else {
         anyhow::bail!("model '{name}' not found in manifest");
     };

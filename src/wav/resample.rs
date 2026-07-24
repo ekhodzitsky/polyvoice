@@ -4,7 +4,7 @@
 
 use super::WavError;
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{FixedSync, Fft, Resampler};
+use rubato::{Fft, FixedSync, Resampler};
 
 /// Resample mono f32 PCM from `from_hz` to `to_hz`.
 ///

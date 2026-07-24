@@ -131,10 +131,7 @@ fn test_load_audio_resamples_common_rates() {
 #[test]
 fn test_load_audio_flac_and_mp3_fixtures() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/audio-io");
-    let fixtures = [
-        ("tone_440_44k1.flac", 0.25),
-        ("tone_440_48k.mp3", 0.25),
-    ];
+    let fixtures = [("tone_440_44k1.flac", 0.25), ("tone_440_48k.mp3", 0.25)];
     for (name, expected_secs) in fixtures {
         let path = root.join(name);
         assert!(path.is_file(), "missing fixture {}", path.display());
