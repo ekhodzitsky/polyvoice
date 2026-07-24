@@ -138,6 +138,15 @@ pub mod silero_vad;
 #[cfg(feature = "onnx")]
 pub use silero_vad::SileroVad;
 
+/// Optional pure-Rust earshot VAD. Opt-in via `--features vad-earshot`.
+/// Silero remains the production default; see `benchmarks/results/earshot-vad-notes.md`.
+#[cfg(feature = "vad-earshot")]
+pub mod earshot_vad;
+#[cfg(feature = "vad-earshot")]
+pub use earshot_vad::{
+    ADAPTER_TYPE as EARSHOT_ADAPTER_TYPE, EarshotVad, FRAME_SIZE as EARSHOT_FRAME_SIZE,
+};
+
 #[cfg(feature = "onnx")]
 pub mod onnx;
 #[cfg(feature = "onnx")]

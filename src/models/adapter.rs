@@ -134,6 +134,11 @@ impl AdapterRegistry {
         // VAD
         reg.register_builtin(AdapterStage::Vad, "silero");
         reg.register_builtin(AdapterStage::Vad, "energy");
+        // Optional pure-Rust earshot VAD (feature-gated). Name marker only —
+        // concrete construction lives in `crate::earshot_vad`. Never the
+        // default: aliases still resolve to silero.
+        #[cfg(feature = "vad-earshot")]
+        reg.register_builtin(AdapterStage::Vad, "earshot");
 
         // Version aliases → pinned implementations (Deepgram-style latest|v1).
         let _ = reg.register_alias(AdapterStage::Segmentation, "latest", "powerset-v1");
@@ -428,5 +433,19 @@ mod tests {
         let builtin = handle.downcast_ref::<BuiltinAdapter>().expect("marker");
         assert_eq!(builtin.id, "sortformer-v2");
         assert_eq!(builtin.stage, AdapterStage::Diarizer);
+    }
+
+    #[cfg(feature = "vad-earshot")]
+    #[test]
+    fn earshot_builtin_registered_when_feature_on_default_stays_silero() {
+        let reg = AdapterRegistry::with_builtins();
+        assert!(reg.contains(AdapterStage::Vad, "earshot"));
+        // Aliases must still pin silero — earshot is opt-in only.
+        assert_eq!(reg.resolve(AdapterStage::Vad, "latest").unwrap(), "silero");
+        assert_eq!(reg.resolve(AdapterStage::Vad, "v1").unwrap(), "silero");
+        let handle = reg.create(AdapterStage::Vad, "earshot").unwrap();
+        let builtin = handle.downcast_ref::<BuiltinAdapter>().expect("marker");
+        assert_eq!(builtin.id, "earshot");
+        assert_eq!(builtin.stage, AdapterStage::Vad);
     }
 }
