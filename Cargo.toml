@@ -14,10 +14,10 @@ edition = "2024"
 # MSRV tracks ort-enabled (real) builds: ort 2.0.0-rc.11+ needs Rust 1.88.
 # Pure non-ort library features may compile on older toolchains, but CI pins 1.88.
 rust-version = "1.88.0"
-description = "Speaker diarization for Rust — who spoke when. ONNX-powered: Silero VAD, WeSpeaker embeddings, Pyannote segmentation, K-means/AHC clustering, overlap detection."
+description = "Speaker diarization for Rust — who spoke when. ONNX path optional: default features are empty (ort-free BYO-embedder core); enable onnx for Silero VAD, WeSpeaker embeddings, and Pyannote segmentation."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
-keywords = ["diarization", "speaker", "onnx", "audio", "streaming"]
+keywords = ["diarization", "speaker", "clustering", "onnx", "streaming"]
 categories = ["multimedia::audio", "science"]
 # Allowlist: ship only what a consumer needs to build/use the crate.
 # Everything else — per-module COAD docs (MODULE_CONTRACT/README/TODO), docs/,
@@ -54,8 +54,10 @@ pre-release-replacements = [
     { file = "tests/cli_smoke_test.rs", search = "polyvoice [0-9]+\\.[0-9]+\\.[0-9]+", replace = "polyvoice {{version}}" },
 ]
 
-# docs.rs builds with default features (default = []), which would hide the
-# entire ONNX / pipeline_v2 API. Document the v1.0 surface explicitly.
+# default = [] is intentional: the published default graph is the ort-free
+# library core (BYO embedder + EnergyVad + Pipeline / StreamingPipeline).
+# docs.rs still documents the full ONNX / pipeline_v2 surface explicitly so
+# API pages are not empty of the production path.
 # TODO: drop the ort RC pin once ort 2.0.0 stable lands.
 [package.metadata.docs.rs]
 features = ["onnx", "segmentation", "embedder", "clusterer", "resegmentation", "download", "spectral"]
