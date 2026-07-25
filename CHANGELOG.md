@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Embedder stack collapse (in-tree).** `FbankOnnxExtractor` is a first-class
+  [`Embedder`](src/ecapa/mod.rs) (no longer soft-deprecated, no longer goes
+  through `EmbeddingExtractor`). ONNX adapters (`ResNet34Adapter`, CAM++,
+  ERes2NetV2) call `Embedder::embed` on the shared engine. Soft-deprecate
+  `SpeakerCluster` (not on offline/streaming production paths) and
+  `pipeline_v2::hybrid::HybridPipeline` (prefer `Pipeline` +
+  `embed_window_secs`). `OnnxEmbeddingExtractor` remains deprecated and unused
+  by production adapters.
 - **Surface alignment after the 0.11 v2+VBx default.** Module contracts /
   READMEs (`pipeline_v2`, `pipeline`, `bin`, `clusterer`, `cluster`), crate
   docs, `docs/API.md`, migration notes, and new

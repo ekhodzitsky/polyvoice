@@ -1,7 +1,11 @@
-//! Speaker clustering with online incremental centroid updates.
+//! Online incremental speaker centroids ([`SpeakerCluster`]).
 //!
-//! Assign incoming embeddings to existing speakers or create new ones in a
-//! single pass. See [`SpeakerCluster`] and [`ClusterConfig`].
+//! **Not used by production paths:** offline clustering is
+//! [`crate::clusterer::Clusterer`]; streaming uses
+//! [`crate::streaming::cache::ArrivalOrderSpeakerCache`]. Prefer those for new
+//! code. This module remains available for experiments and the fuzz target.
+
+#![allow(deprecated)] // this module owns the soft-deprecated SpeakerCluster API
 
 use crate::types::{ClusterConfig, SpeakerId, SpeakerIdRemap};
 use crate::utils::{cosine_similarity, l2_normalize};
@@ -22,6 +26,13 @@ struct Centroid {
 /// Maintains a set of speaker centroids and assigns incoming embeddings to the
 /// nearest centroid if the cosine similarity exceeds the configured threshold.
 /// Otherwise creates a new speaker identity.
+///
+/// Prefer [`crate::streaming::StreamingPipeline`] (AOSC cache) for online
+/// diarization and [`crate::clusterer::Clusterer`] for offline batch clustering.
+#[deprecated(
+    since = "0.12.0",
+    note = "not on the production offline or streaming path; use clusterer::Clusterer (offline) or streaming::StreamingPipeline / ArrivalOrderSpeakerCache (online)"
+)]
 pub struct SpeakerCluster {
     centroids: Vec<Centroid>,
     config: ClusterConfig,

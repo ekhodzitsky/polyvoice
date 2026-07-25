@@ -10,7 +10,7 @@ purpose: >
   a public library utility; production offline clustering uses clusterer, and
   production streaming uses streaming::ArrivalOrderSpeakerCache — SpeakerCluster
   is not on those default paths.
-status: stable
+status: deprecated
 owners:
   - polyvoice-core
 workcell:

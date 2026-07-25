@@ -1,5 +1,12 @@
 //! Hybrid pipeline: PowersetSegmenter as a VAD → sliding-window embeddings → AHC.
 //!
+//! **Research / ablation only** — not the CLI, FFI, Python, or MCP path.
+//! Prefer [`crate::pipeline_v2::Pipeline`] with optional
+//! `PipelineConfig::embed_window_secs` for dense embeddings under production
+//! overlap masking and resegmentation.
+
+#![allow(deprecated)] // this module owns the soft-deprecated HybridPipeline API
+//!
 //! PowersetSegmenter is used only for speech-region detection (it handles overlap
 //! better than SileroVAD), but its `local_speaker_idx` labels are ignored.
 //! Speaker identity is resolved globally by clustering ResNet34 embeddings,
@@ -14,6 +21,14 @@ use crate::types::{DiarizationResult, SampleRate, Segment, SpeakerId, SpeakerTur
 use crate::utils::merge_segments;
 use crate::window::WindowIter;
 
+/// Ablation orchestrator: powerset-as-VAD + dense windows + [`Clusterer`].
+///
+/// Prefer [`super::Pipeline`] with `embed_window_secs` for production-shaped
+/// dense embedding under full overlap handling.
+#[deprecated(
+    since = "0.12.0",
+    note = "research/ablation only; use pipeline_v2::Pipeline with PipelineConfig::embed_window_secs"
+)]
 pub struct HybridPipeline {
     segmenter: Box<dyn Segmenter>,
     embedder: Box<dyn Embedder>,

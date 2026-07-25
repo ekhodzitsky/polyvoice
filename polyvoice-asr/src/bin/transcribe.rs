@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API (FbankOnnxExtractor); matches the core CLI/bench.
 //! polyvoice-transcribe — who-said-what CLI: diarize -> one ASR pass -> join.
 //!
 //! Lives in polyvoice-asr (not the core `polyvoice` CLI) because the core crate

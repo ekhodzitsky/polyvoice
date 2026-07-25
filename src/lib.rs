@@ -156,7 +156,7 @@ pub use earshot_vad::{
 #[cfg(feature = "onnx")]
 pub mod onnx;
 #[cfg(feature = "onnx")]
-#[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
+#[allow(deprecated)] // soft-deprecated; no production callers
 pub use onnx::OnnxEmbeddingExtractor;
 
 #[cfg(feature = "onnx")]
@@ -168,6 +168,7 @@ pub mod ecapa;
 pub mod sortformer;
 
 // Public re-exports for ergonomic use.
+#[allow(deprecated)] // soft-deprecated online utility; see cluster module docs
 pub use cluster::SpeakerCluster;
 pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
 // DummyExtractor is the supported test/mock embedder (also bridges to Embedder).
@@ -187,5 +188,4 @@ pub use types::{
 pub use window::{WindowBuffer, WindowIter};
 
 #[cfg(feature = "onnx")]
-#[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
 pub use ecapa::FbankOnnxExtractor;

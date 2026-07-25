@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! polyvoice-bench — DER on a {audio,rttm} dataset directory.
 //!
 //! Default pipeline matches the shipped CLI (**v2 + VBx** since 0.11). Pass
