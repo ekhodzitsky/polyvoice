@@ -844,18 +844,16 @@ mod tests {
     #[cfg(feature = "download")]
     #[test]
     fn from_registry_loads_fixture_cache() {
-        use crate::models::{ModelRegistry, VBX_PLDA_MODEL_IDS, default_manifest};
+        use crate::models::{ModelRegistry, VBX_PLDA_ARTIFACTS};
         use tempfile::TempDir;
 
         let tmp = TempDir::new().unwrap();
         let fixture_dir =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
-        let manifest = default_manifest();
-        for id in VBX_PLDA_MODEL_IDS {
-            let entry = manifest.model(id).expect(id);
+        for art in VBX_PLDA_ARTIFACTS {
             std::fs::copy(
-                fixture_dir.join(&entry.filename),
-                tmp.path().join(&entry.filename),
+                fixture_dir.join(art.filename),
+                tmp.path().join(art.filename),
             )
             .unwrap();
         }
