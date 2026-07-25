@@ -211,19 +211,16 @@ fn mean_confidence(sum: f32, count: u32) -> Option<f32> {
 /// Checkout waits until an item is available; [`Drop`] returns it. Pool
 /// checkout is not a contention-hot path in this crate, so a small mutex pool
 /// is preferred over a dedicated lock-free queue crate.
-#[cfg(any(feature = "onnx", feature = "embedder"))]
 pub(crate) struct ObjectPool<T> {
     items: std::sync::Mutex<Vec<T>>,
 }
 
 /// RAII guard: the pooled item is returned on drop.
-#[cfg(any(feature = "onnx", feature = "embedder"))]
 pub(crate) struct PooledGuard<'a, T> {
     item: Option<T>,
     pool: &'a ObjectPool<T>,
 }
 
-#[cfg(any(feature = "onnx", feature = "embedder"))]
 impl<T> ObjectPool<T> {
     pub(crate) fn new(items: Vec<T>) -> Self {
         Self {
@@ -251,7 +248,6 @@ impl<T> ObjectPool<T> {
     }
 }
 
-#[cfg(any(feature = "onnx", feature = "embedder"))]
 impl<T> std::ops::Deref for PooledGuard<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
@@ -263,7 +259,6 @@ impl<T> std::ops::Deref for PooledGuard<'_, T> {
     }
 }
 
-#[cfg(any(feature = "onnx", feature = "embedder"))]
 impl<T> std::ops::DerefMut for PooledGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         match self.item.as_mut() {
@@ -273,7 +268,6 @@ impl<T> std::ops::DerefMut for PooledGuard<'_, T> {
     }
 }
 
-#[cfg(any(feature = "onnx", feature = "embedder"))]
 impl<T> Drop for PooledGuard<'_, T> {
     fn drop(&mut self) {
         if let Some(item) = self.item.take() {
