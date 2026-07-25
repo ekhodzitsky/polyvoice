@@ -120,6 +120,9 @@ impl SpectralGraph {
         Some(Self { n, eig_pairs, u })
     }
 
+    /// Used by `NmeScClusterer` (`clusterer` + `spectral`); unused when only
+    /// `spectral` is enabled (free `spectral_cluster` path).
+    #[cfg_attr(not(feature = "clusterer"), allow(dead_code))]
     pub(crate) fn n(&self) -> usize {
         self.n
     }
@@ -148,6 +151,8 @@ impl SpectralGraph {
     }
 
     /// Same embedding as [`Self::embedding_f64`] in `f32` for `kmeans_pp`.
+    /// Used by `NmeScClusterer`; see [`Self::n`].
+    #[cfg_attr(not(feature = "clusterer"), allow(dead_code))]
     pub(crate) fn embedding_f32(&self, k: usize) -> Vec<Vec<f32>> {
         self.embedding_f64(k)
             .into_iter()
