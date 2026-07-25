@@ -223,7 +223,6 @@ mod tests {
     use super::*;
     use crate::Embedder;
     use std::io::Cursor;
-    use std::sync::Mutex;
 
     #[test]
     fn pipeline_new_with_defaults() {
@@ -299,18 +298,7 @@ mod tests {
 
     /// Deterministic two-prototype embedder: high zero-crossing rate → speaker A,
     /// low ZCR → speaker B. Orthogonal unit vectors so AHC must yield ≥2 clusters.
-    struct TwoSpeakerEmbedder {
-        /// Call count — unused, held for Send+Sync realism (shared encoder pattern).
-        _calls: Mutex<usize>,
-    }
-
-    impl TwoSpeakerEmbedder {
-        fn new() -> Self {
-            Self {
-                _calls: Mutex::new(0),
-            }
-        }
-    }
+    struct TwoSpeakerEmbedder;
 
     impl Embedder for TwoSpeakerEmbedder {
         fn dim(&self) -> usize {
@@ -318,9 +306,6 @@ mod tests {
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-            if let Ok(mut c) = self._calls.lock() {
-                *c += 1;
-            }
             let mut zcr = 0usize;
             for w in audio.windows(2) {
                 if w[0].signum() != w[1].signum() {
@@ -363,7 +348,7 @@ mod tests {
         config.cluster.min_cluster_secs = 0.0;
 
         let pipeline = Pipeline::new(config, VadConfig::default());
-        let embedder = TwoSpeakerEmbedder::new();
+        let embedder = TwoSpeakerEmbedder;
         let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
         let result = pipeline.run(&samples, &embedder, &mut vad).unwrap();
 
