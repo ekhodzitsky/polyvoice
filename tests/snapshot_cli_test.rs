@@ -15,7 +15,13 @@ fn polyvoice() -> Command {
 fn snapshot_help_top_level() {
     let output = polyvoice().arg("--help").output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).replace("polyvoice.exe", "polyvoice");
-    insta::assert_snapshot!(stdout);
+    // Help text for the input path depends on the optional `audio-io` feature
+    // (multi-format decode). Matrix CI jobs use `cli` only; release-check and
+    // ubuntu all-features enable `audio-io` — keep a snap per variant.
+    #[cfg(feature = "audio-io")]
+    insta::assert_snapshot!("help_top_level_audio_io", stdout);
+    #[cfg(not(feature = "audio-io"))]
+    insta::assert_snapshot!("help_top_level", stdout);
 }
 
 #[test]
