@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.11.0] - 2026-07-25
 
+### Fixed
+
+- **Sortformer load path works under `--all-features` / tract backend.**
+  `from_path` now builds a `RuntimeSession` (same as other stages) and reads
+  ONNX geometry metadata via `read_model_metadata_props`, instead of calling
+  ort-only `custom_metadata_props` on the session type.
+- **Clippy 1.96 clean under `-D warnings`**: collapsible-if / needless-range-loop
+  / unwrap-in-tests hygiene so `scripts/release-check.sh` can pass.
+
 ### Changed
 
 - **CLI default pipeline is now v2 + VBx** after a hard full-split DER gate

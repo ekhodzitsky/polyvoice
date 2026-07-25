@@ -65,6 +65,7 @@ pub fn label_flip_rate(first_emitted: &[SpeakerId], final_labels: &[SpeakerId]) 
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

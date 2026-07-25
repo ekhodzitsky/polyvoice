@@ -52,27 +52,28 @@ pub struct SortformerDiarizer<R: InferenceRuntime> {
     elapsed_samples: usize,
 }
 
-impl SortformerDiarizer<crate::onnx::OrtSession> {
+impl SortformerDiarizer<crate::onnx::RuntimeSession> {
     /// Load from an ONNX model path with default config.
     pub fn from_path(model_path: impl AsRef<Path>) -> Result<Self, SortformerError> {
         Self::from_path_with_config(model_path, SortformerConfig::default())
     }
 
     /// Load from path with explicit config (validates max_speakers first).
+    ///
+    /// Uses [`crate::onnx::build_session_with_ep`] so the backend follows the
+    /// global ort/tract selection. Geometry overrides come from ONNX custom
+    /// metadata via [`crate::onnx::read_model_metadata_props`] (ort-backed
+    /// metadata read; works even when the long-lived session is tract).
     pub fn from_path_with_config(
         model_path: impl AsRef<Path>,
         mut config: SortformerConfig,
     ) -> Result<Self, SortformerError> {
         config.validate()?;
-        let session = crate::onnx::build_session_with_ep(
-            model_path.as_ref(),
-            crate::onnx::ExecutionProvider::Cpu,
-            None,
-        )
-        .map_err(|e| SortformerError::Load(e.to_string()))?;
+        let path = model_path.as_ref();
 
-        // Override geometry from ONNX metadata when present.
-        if let Ok(props) = session.custom_metadata_props() {
+        // Override geometry from ONNX metadata when present (independent of
+        // which InferenceRuntime backs the long-lived session).
+        if let Ok(props) = crate::onnx::read_model_metadata_props(path) {
             if let Some(v) = props.get("chunk_len").and_then(|s| s.parse().ok()) {
                 config.chunk_len = v;
             }
@@ -86,6 +87,10 @@ impl SortformerDiarizer<crate::onnx::OrtSession> {
                 config.right_context = v;
             }
         }
+
+        let session =
+            crate::onnx::build_session_with_ep(path, crate::onnx::ExecutionProvider::Cpu, None)
+                .map_err(|e| SortformerError::Load(e.to_string()))?;
 
         Ok(Self::from_runtime(session, config))
     }
@@ -430,8 +435,8 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
                 let old_n = self.n_sil_frames as f32;
                 self.n_sil_frames += 1;
                 let new_n = self.n_sil_frames as f32;
-                for i in 0..EMB_DIM {
-                    self.mean_sil_emb[i] = (self.mean_sil_emb[i] * old_n + emb[i]) / new_n;
+                for (mean, &e) in self.mean_sil_emb.iter_mut().zip(emb.iter()) {
+                    *mean = (*mean * old_n + e) / new_n;
                 }
             }
         }
@@ -495,11 +500,7 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
     ) -> (Vec<f32>, Vec<f32>) {
         let mut new_embs = vec![0.0f32; out_len * EMB_DIM];
         let mut new_preds = vec![0.0f32; out_len * MAX_SPEAKERS];
-        let cache_preds = self
-            .spkcache_preds
-            .as_ref()
-            .map(|v| v.as_slice())
-            .unwrap_or(&[]);
+        let cache_preds = self.spkcache_preds.as_deref().unwrap_or(&[]);
 
         for (i, (&idx, &is_dis)) in indices.iter().zip(disabled.iter()).enumerate() {
             if i >= out_len {
@@ -798,6 +799,7 @@ fn get_topk_indices(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::onnx::{InferenceError, InferenceTensor, NamedTensor, TensorData};
