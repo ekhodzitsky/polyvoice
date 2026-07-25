@@ -23,10 +23,11 @@ CI enforces that `ort` never appears in the normal dependency graph for
 
 | Item | Module / path | Notes |
 |------|---------------|-------|
-| Offline pipeline | `Pipeline`, `PipelineError` | Takes BYO `EmbeddingExtractor` + `VoiceActivityDetector` |
-| Streaming pipeline | `streaming::StreamingPipeline`, `LatencyPreset` | Same BYO extractor + VAD pattern |
+| Offline pipeline | `Pipeline`, `PipelineError` | Takes BYO `Embedder` + `VoiceActivityDetector` |
+| Streaming pipeline | `streaming::StreamingPipeline`, `LatencyPreset` | Same BYO `Embedder` + VAD pattern |
 | Energy VAD | `EnergyVad`, `VadConfig`, `VoiceActivityDetector`, `segment_speech` | Pure-Rust energy VAD |
-| Embedding trait (legacy) | `EmbeddingExtractor`, `DummyExtractor`, `EmbeddingError` | Implement for BYO embedders |
+| Embedding (supported) | `Embedder`, `EmbedderError`, `DummyExtractor`, `EmbedderPool` | Implement `Embedder` for BYO encoders |
+| Embedding (legacy bridge) | `EmbeddingExtractor`, `EmbeddingError` | Soft-deprecated; auto-bridges to `Embedder` |
 | Config / result types | `DiarizationConfig`, `ClusterConfig`, `SpeakerTurn`, `DiarizationResult`, `Segment`, `SampleRate`, … | `types` |
 | AHC / k-means math | `ahc`, `kmeans`, `cluster::SpeakerCluster` | Pure-Rust clustering primitives |
 | DER helpers | `compute_der`, `compute_wder`, … | Evaluation |
@@ -46,7 +47,7 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | `vbx` | VBx / PLDA clustering (requires `clusterer`) | Pure-Rust ndarray; PLDA weights supplied by caller |
 | `spectral` | `spectral` + `NmeScClusterer` (with `clusterer`) | Pulls `faer`, not `ort` |
 | `segmentation` | `PowersetDecoder`, `Aggregator`, `Segmenter` trait, … | Decoder / aggregator without ONNX segmenter |
-| `embedder` | `Embedder`, `EmbedderPool`, `apply_overlap_mask`, … | Trait + pool; ONNX adapters need `onnx` |
+| `embedder` | (mostly empty flag) | ONNX adapters (`CamPlusPlus`, ResNet34, …) still need `onnx` + `embedder`; the `Embedder` **trait** itself is always-on |
 | `resegmentation` | `OverlapResegmenter`, `compute_centroids`, … | Post-clustering resegmentation |
 | `attribution` | `who_said_what`, `attribute_words`, … | Word → speaker join (no models) |
 | `vad-earshot` | `EarshotVad` | Optional pure-Rust VAD (`earshot` crate) |
@@ -70,16 +71,17 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 A production BYO-embedder consumer typically:
 
 1. Depends on `polyvoice` with `default-features = false` (optionally `clusterer` / `vbx`).
-2. Implements `EmbeddingExtractor` (or later `Embedder`) with an in-tree / other-runtime model (e.g. Candle WeSpeaker).
-3. Uses `EnergyVad` (or its own VAD) with legacy `Pipeline` offline and `StreamingPipeline` online.
+2. Implements **`Embedder`** with an in-tree / other-runtime model (e.g. Candle WeSpeaker).
+   Legacy `EmbeddingExtractor` still works via an automatic bridge.
+3. Uses `EnergyVad` (or its own VAD) with `Pipeline` offline and `StreamingPipeline` online.
 4. Does **not** enable `onnx`, so no `ort` native library is linked.
 
 ```rust,ignore
 use polyvoice::{
-    DummyExtractor, EnergyVad, Pipeline, DiarizationConfig, VadConfig,
+    DummyExtractor, Embedder, EnergyVad, Pipeline, DiarizationConfig, VadConfig,
 };
 
-// Replace DummyExtractor with your EmbeddingExtractor impl.
+// Replace DummyExtractor with your Embedder impl.
 let extractor = DummyExtractor::new(256);
 let mut vad = EnergyVad::new(-40.0, 16_000, 512);
 let result = Pipeline::new(DiarizationConfig::default(), VadConfig::default())
