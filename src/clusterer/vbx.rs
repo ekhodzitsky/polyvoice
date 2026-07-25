@@ -502,12 +502,11 @@ impl VbxClusterer {
         registry: &crate::models::ModelRegistry,
         max_speakers: usize,
     ) -> Result<Self, ClustererError> {
-        let dir =
-            registry
-                .ensure_vbx_plda_dir()
-                .map_err(|e| ClustererError::AlgorithmFailed {
-                    detail: format!("ensure VBx PLDA via model registry: {e}"),
-                })?;
+        let dir = registry
+            .ensure_vbx_plda_dir()
+            .map_err(|e| ClustererError::AlgorithmFailed {
+                detail: format!("ensure VBx PLDA via model registry: {e}"),
+            })?;
         Self::from_dir(&dir, max_speakers)
     }
 
