@@ -4,8 +4,9 @@
 //! `polyvoice meeting.wav` diarizes a file (implicit `diarize`); subcommands
 //! `models` / `download-models` / `completions` are still available. Default
 //! pipeline (since 0.11): **v2 + VBx** (powerset segmentation, ResNet34
-//! embeddings, VB-HMM + PLDA clustering). Requires PLDA weights via
-//! `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR` (or pass `--clusterer ahc`).
+//! embeddings, VB-HMM + PLDA clustering). PLDA weights come from
+//! `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or are auto-downloaded via the
+//! model registry when neither is set (or pass `--clusterer ahc`).
 //! Use `--legacy` for the pre-0.11 Silero + AHC path.
 //!
 //! Audio input: without the `audio-io` build feature, only mono 16 kHz WAV is
@@ -91,12 +92,14 @@ struct DiarizeArgs {
     v2: bool,
     /// Clusterer for the default (v2) path: `vbx` (PLDA + VB-HMM, automatic
     /// speaker count — the accuracy gate default) or `ahc` (fixed-threshold
-    /// cosine AHC). `vbx` needs PLDA via `--vbx-plda-dir` or
-    /// `POLYVOICE_VBX_PLDA_DIR`. Ignored with `--legacy`.
+    /// cosine AHC). `vbx` loads PLDA from `--vbx-plda-dir` /
+    /// `POLYVOICE_VBX_PLDA_DIR`, or auto-downloads via the model registry.
+    /// Ignored with `--legacy`.
     #[arg(long, default_value = "vbx")]
     clusterer: String,
     /// Directory with the precomputed VBx PLDA params (overrides
-    /// `POLYVOICE_VBX_PLDA_DIR`). Used when `--clusterer vbx` (the default).
+    /// `POLYVOICE_VBX_PLDA_DIR` and the registry auto-download). Used when
+    /// `--clusterer vbx` (the default).
     #[arg(long)]
     vbx_plda_dir: Option<PathBuf>,
     /// v2 dense embedding window in seconds (e.g. `1.5`): split segments into
@@ -448,7 +451,7 @@ fn run_v2_pipeline(
         .build()
         .with_context(|| {
             if matches!(clusterer_kind, ClustererKind::Vbx) {
-                "build pipeline v2 (clusterer=vbx): set --vbx-plda-dir or POLYVOICE_VBX_PLDA_DIR to the PLDA weights directory, or pass --clusterer ahc / --legacy".to_string()
+                "build pipeline v2 (clusterer=vbx): set --vbx-plda-dir or POLYVOICE_VBX_PLDA_DIR, ensure network access for registry PLDA download, or pass --clusterer ahc / --legacy".to_string()
             } else {
                 "build pipeline v2".to_string()
             }

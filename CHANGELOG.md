@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Embedder`. `DummyExtractor` is undeprecated as the in-tree test/mock
   embedder. Semver: additive / deprecation-policy only; `EmbeddingExtractor`
   is not removed.
+- **VBx PLDA model-registry wiring.** Six `[models.vbx_plda_*]` entries in
+  `manifest.toml` (SHA-256 verified, CC-BY-4.0; minisign signatures deferred
+  until a release engineer signs them — same optional-model pattern as
+  `sortformer_v2`). `ModelRegistry::ensure_vbx_plda_dir` +
+  `VbxClusterer::from_registry` pull the weights into the user cache; the v2
+  pipeline builder / CLI use the registry when neither `--vbx-plda-dir` nor
+  `POLYVOICE_VBX_PLDA_DIR` is set. Hosted from the commit-pinned
+  `fixtures/vbx-plda/` tree on GitHub.
 
 ### Changed
 
