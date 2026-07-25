@@ -67,6 +67,7 @@ pub fn register_with(registry: &mut AdapterRegistry) -> Result<(), AdapterError>
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

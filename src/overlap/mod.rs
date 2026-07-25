@@ -29,11 +29,11 @@ pub fn detect_overlaps(segments: &[Segment]) -> Vec<OverlapRegion> {
     // to avoid phantom overlaps.
     let mut events: Vec<(f64, bool, SpeakerId)> = Vec::new(); // (time, is_start, speaker)
     for seg in segments {
-        if let Some(spk) = seg.speaker {
-            if seg.time.start < seg.time.end {
-                events.push((seg.time.start, true, spk));
-                events.push((seg.time.end, false, spk));
-            }
+        if let Some(spk) = seg.speaker
+            && seg.time.start < seg.time.end
+        {
+            events.push((seg.time.start, true, spk));
+            events.push((seg.time.end, false, spk));
         }
     }
 

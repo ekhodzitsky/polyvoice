@@ -154,14 +154,13 @@ impl ArrivalOrderSpeakerCache {
         );
 
         // Reorder so the preferred speaker is treated as the best when still above threshold.
-        if let Some(pref) = preferred {
-            if let Some((idx, _)) = candidates
+        if let Some(pref) = preferred
+            && let Some((idx, _)) = candidates
                 .iter()
                 .enumerate()
                 .find(|(_, (id, _))| *id == pref)
-            {
-                candidates.swap(0, idx);
-            }
+        {
+            candidates.swap(0, idx);
         }
 
         let best = candidates
@@ -187,17 +186,17 @@ impl ArrivalOrderSpeakerCache {
             (_, b) => b,
         };
 
-        if let Some((id, sim)) = chosen {
-            if sim >= self.match_threshold || self.entries.len() >= self.cap {
-                // Match (or overflow force-merge when at cap).
-                let overflow = sim < self.match_threshold && self.entries.len() >= self.cap;
-                let result = self.update_entry(id, embedding, sim, now);
-                self.current_speaker = Some(result.speaker);
-                return AssignResult {
-                    overflow_merged: overflow,
-                    ..result
-                };
-            }
+        if let Some((id, sim)) = chosen
+            && (sim >= self.match_threshold || self.entries.len() >= self.cap)
+        {
+            // Match (or overflow force-merge when at cap).
+            let overflow = sim < self.match_threshold && self.entries.len() >= self.cap;
+            let result = self.update_entry(id, embedding, sim, now);
+            self.current_speaker = Some(result.speaker);
+            return AssignResult {
+                overflow_merged: overflow,
+                ..result
+            };
         }
 
         // No adequate match and room remains → new arrival-order speaker.
