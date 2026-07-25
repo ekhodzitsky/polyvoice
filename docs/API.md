@@ -192,6 +192,17 @@ cargo build --features ffi
 
 See `include/polyvoice.h` and `examples/ffi_usage.c` for usage.
 
+## Library mode (no ONNX)
+
+`default = []` is intentional. With no features (or pure-Rust features such as
+`clusterer` / `vbx` only), polyvoice never depends on `ort`. Use this path when
+you bring your own embedder and want Energy VAD + `Pipeline` /
+`StreamingPipeline` without a native ONNX Runtime dylib.
+
+Inventory of always-on vs feature-gated pure-Rust vs `onnx`-gated APIs:
+**[docs/library-mode.md](library-mode.md)**. CI job `ort-free-core` enforces the
+ort-free graph on every PR.
+
 ## WebAssembly
 
 The pure-Rust algorithmic core compiles for `wasm32-unknown-unknown` when the
