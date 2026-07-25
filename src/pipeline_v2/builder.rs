@@ -248,16 +248,16 @@ impl PipelineBuilder {
                     #[cfg(feature = "vbx")]
                     ClustererKind::Vbx => {
                         let max = self.config.max_speakers as usize;
+                        // Resolve order: explicit dir → env → registry download.
+                        // `pipeline_v2` always has `download`, so registry is available.
                         let mut vbx = match &self.config.vbx_plda_dir {
                             Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(dir, max),
-                            // Explicit env wins when set; otherwise auto-download
-                            // the six PLDA `.npy` files through the model registry.
                             None if std::env::var_os("POLYVOICE_VBX_PLDA_DIR").is_some() => {
                                 crate::clusterer::vbx::VbxClusterer::from_env(max)
                             }
-                            None => {
-                                crate::clusterer::vbx::VbxClusterer::from_registry(&registry, max)
-                            }
+                            None => crate::clusterer::vbx::VbxClusterer::from_registry(
+                                &registry, max,
+                            ),
                         }
                         .map_err(|e| ConfigError::UnknownModel {
                             model_id: format!("vbx ({e})"),
