@@ -1,0 +1,9 @@
+# local run noise — keep aggregates + verdict in git
+shards/
+shard-v2-vox-*.json
+shard-v2-vox-*.log
+*.log
+nohup.out
+fast-nohup.out
+postprocess-watch.log
+postprocess.log

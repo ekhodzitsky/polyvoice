@@ -1,0 +1,683 @@
+{
+  "schema": "polyvoice-bench-v0.10",
+  "crate_version": "0.10.0",
+  "git_sha": "143d47fb46a4201c8d93a5721824ddeb17d5e988",
+  "host_arch": "aarch64",
+  "host_os": "macos",
+  "command_line": "./target/release/polyvoice-bench data/ami-test --pipeline v2 --clusterer vbx --profile balanced --collar 0.25 --execution-provider coreml --output benchmarks/results/full-der-2026-07-25/v2-vbx-ami-test-16.json",
+  "dataset_name": "ami-test",
+  "profile": "balanced",
+  "files_processed": 16,
+  "files_skipped": 0,
+  "der_collar_macro": 16.857050819219964,
+  "der_no_collar_macro": 24.122221472668485,
+  "der_collar_micro": 17.656242918361496,
+  "der_no_collar_micro": 25.167141222006308,
+  "collar_secs": 0.25,
+  "averaging_policy": "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
+  "resolved_execution_provider": "CoreMl",
+  "host_cpus": 10,
+  "stage_totals": {
+    "segmentation_secs": 1868.9226767050002,
+    "embedding_secs": 1785.550934583,
+    "clustering_secs": 0.5999960430000001,
+    "resegmentation_secs": 0.000269457
+  },
+  "miss": 7.689692504705216,
+  "false_alarm": 1.700702915781134,
+  "confusion": 7.466655398733617,
+  "rt_factor_avg": 8.92559569721329,
+  "speaker_count": {
+    "exact": 3,
+    "plus_minus_1": 3,
+    "off_by_2_or_more": 10
+  },
+  "model_hashes": [
+    {
+      "model_id": "powerset_fp32",
+      "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
+    },
+    {
+      "model_id": "wespeaker_resnet34",
+      "sha256": "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
+    }
+  ],
+  "per_file": [
+    {
+      "filename": "EN2002a.Mix-Headset",
+      "der_collar": 24.76213583820038,
+      "der_no_collar": 33.19124897288414,
+      "miss_rate": 13.35043297920891,
+      "false_alarm_rate": 1.1143654356077017,
+      "confusion_rate": 10.297337423383766,
+      "der_single_speaker": 6.8872353221014455,
+      "der_overlap": 55.780140694394916,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.5470608015162168
+        },
+        {
+          "speaker": 1,
+          "recall": 0.6577997527812114
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9029704195079711
+        },
+        {
+          "speaker": 3,
+          "recall": 0.8298505769939607
+        }
+      ],
+      "rt_factor": 4.488925922987649,
+      "ref_speakers": 4,
+      "hyp_speakers": 9,
+      "num_turns": 810,
+      "audio_duration_secs": 2142.709375,
+      "runtime_secs": 477.332308833,
+      "stage_timings": {
+        "segmentation_secs": 192.317332708,
+        "embedding_secs": 284.759772417,
+        "clustering_secs": 0.25129975,
+        "resegmentation_secs": 0.000045459
+      }
+    },
+    {
+      "filename": "EN2002b.Mix-Headset",
+      "der_collar": 23.477016961573966,
+      "der_no_collar": 30.53722515108654,
+      "miss_rate": 12.342416619100973,
+      "false_alarm_rate": 1.484049637443714,
+      "confusion_rate": 9.650550705029278,
+      "der_single_speaker": 8.434452632043419,
+      "der_overlap": 50.08096455118325,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.8748840965513116
+        },
+        {
+          "speaker": 1,
+          "recall": 0.8593616850229118
+        },
+        {
+          "speaker": 2,
+          "recall": 0.7182082606166376
+        },
+        {
+          "speaker": 3,
+          "recall": 0.46262685402029663
+        }
+      ],
+      "rt_factor": 5.772326921516404,
+      "ref_speakers": 4,
+      "hyp_speakers": 11,
+      "num_turns": 611,
+      "audio_duration_secs": 1786.848,
+      "runtime_secs": 309.554192667,
+      "stage_timings": {
+        "segmentation_secs": 142.633329833,
+        "embedding_secs": 166.862023292,
+        "clustering_secs": 0.056517375,
+        "resegmentation_secs": 0.000036416
+      }
+    },
+    {
+      "filename": "EN2002c.Mix-Headset",
+      "der_collar": 18.921258671385477,
+      "der_no_collar": 23.01708545718172,
+      "miss_rate": 13.725482718248141,
+      "false_alarm_rate": 0.38861536231994603,
+      "confusion_rate": 4.8071605908173884,
+      "der_single_speaker": 5.659079649112582,
+      "der_overlap": 44.021930985791194,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.8292682926829268
+        },
+        {
+          "speaker": 1,
+          "recall": 0.745951392720904
+        },
+        {
+          "speaker": 2,
+          "recall": 0.8673140737848917
+        }
+      ],
+      "rt_factor": 3.9516827772722034,
+      "ref_speakers": 3,
+      "hyp_speakers": 4,
+      "num_turns": 939,
+      "audio_duration_secs": 2972.256,
+      "runtime_secs": 752.149443041,
+      "stage_timings": {
+        "segmentation_secs": 533.982422166,
+        "embedding_secs": 218.060220667,
+        "clustering_secs": 0.104647792,
+        "resegmentation_secs": 0.000037
+      }
+    },
+    {
+      "filename": "EN2002d.Mix-Headset",
+      "der_collar": 31.01148358659088,
+      "der_no_collar": 37.30220987045587,
+      "miss_rate": 15.803376532990269,
+      "false_alarm_rate": 1.684048465164345,
+      "confusion_rate": 13.524058588436272,
+      "der_single_speaker": 16.36700496495327,
+      "der_overlap": 50.97884985142458,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.021421231523199746
+        },
+        {
+          "speaker": 1,
+          "recall": 0.8871885977308516
+        },
+        {
+          "speaker": 2,
+          "recall": 0.7276035322777101
+        },
+        {
+          "speaker": 3,
+          "recall": 0.8497537948154479
+        }
+      ],
+      "rt_factor": 9.467089217589736,
+      "ref_speakers": 4,
+      "hyp_speakers": 8,
+      "num_turns": 831,
+      "audio_duration_secs": 2209.8986875,
+      "runtime_secs": 233.429582917,
+      "stage_timings": {
+        "segmentation_secs": 125.732758167,
+        "embedding_secs": 107.660022667,
+        "clustering_secs": 0.035143959,
+        "resegmentation_secs": 0.00001975
+      }
+    },
+    {
+      "filename": "ES2004a.Mix-Headset",
+      "der_collar": 13.876947674857082,
+      "der_no_collar": 22.675759051794124,
+      "miss_rate": 10.220673635307783,
+      "false_alarm_rate": 1.0679216254129147,
+      "confusion_rate": 2.5883524141363865,
+      "der_single_speaker": 6.325285031590629,
+      "der_overlap": 54.34490696336083,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.7612747190211979
+        },
+        {
+          "speaker": 1,
+          "recall": 0.9384743227522021
+        },
+        {
+          "speaker": 2,
+          "recall": 0.8759148006553795
+        },
+        {
+          "speaker": 3,
+          "recall": 0.75250620803826
+        }
+      ],
+      "rt_factor": 11.17994591023288,
+      "ref_speakers": 4,
+      "hyp_speakers": 4,
+      "num_turns": 274,
+      "audio_duration_secs": 1049.3546875,
+      "runtime_secs": 93.860444042,
+      "stage_timings": {
+        "segmentation_secs": 49.505081292,
+        "embedding_secs": 44.350575833,
+        "clustering_secs": 0.004422791,
+        "resegmentation_secs": 7.792e-6
+      }
+    },
+    {
+      "filename": "ES2004b.Mix-Headset",
+      "der_collar": 8.426330169281469,
+      "der_no_collar": 16.270304869587793,
+      "miss_rate": 3.9889586795482073,
+      "false_alarm_rate": 1.7750612624285271,
+      "confusion_rate": 2.6623102273047348,
+      "der_single_speaker": 4.514933440405225,
+      "der_overlap": 48.93793985924504,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.944852301590063
+        },
+        {
+          "speaker": 1,
+          "recall": 0.9130670413488559
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9241025641025641
+        },
+        {
+          "speaker": 3,
+          "recall": 0.9464200008726384
+        }
+      ],
+      "rt_factor": 11.493851425848588,
+      "ref_speakers": 4,
+      "hyp_speakers": 7,
+      "num_turns": 522,
+      "audio_duration_secs": 2345.493375,
+      "runtime_secs": 204.065050791,
+      "stage_timings": {
+        "segmentation_secs": 89.527061166,
+        "embedding_secs": 114.519536833,
+        "clustering_secs": 0.017631917,
+        "resegmentation_secs": 0.000014458
+      }
+    },
+    {
+      "filename": "ES2004c.Mix-Headset",
+      "der_collar": 27.06835294317007,
+      "der_no_collar": 32.82797691156559,
+      "miss_rate": 4.312092952320701,
+      "false_alarm_rate": 2.4492055333065967,
+      "confusion_rate": 20.307054457542772,
+      "der_single_speaker": 23.95557174986493,
+      "der_overlap": 54.81269947925416,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9333963793569305
+        },
+        {
+          "speaker": 1,
+          "recall": 0.0028701531668276527
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9359690885254951
+        },
+        {
+          "speaker": 3,
+          "recall": 0.9608331849741855
+        }
+      ],
+      "rt_factor": 11.533566008990519,
+      "ref_speakers": 4,
+      "hyp_speakers": 4,
+      "num_turns": 502,
+      "audio_duration_secs": 2334.368,
+      "runtime_secs": 202.3977665,
+      "stage_timings": {
+        "segmentation_secs": 91.662337666,
+        "embedding_secs": 110.718694542,
+        "clustering_secs": 0.016000083,
+        "resegmentation_secs": 0.000017333
+      }
+    },
+    {
+      "filename": "ES2004d.Mix-Headset",
+      "der_collar": 35.34085579496234,
+      "der_no_collar": 42.56478451646321,
+      "miss_rate": 6.69917510414655,
+      "false_alarm_rate": 2.449857919276078,
+      "confusion_rate": 26.191822771539712,
+      "der_single_speaker": 31.906024076611878,
+      "der_overlap": 52.21602456003806,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.0036612915790293684
+        },
+        {
+          "speaker": 1,
+          "recall": 0.7402748037116346
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9252249894300267
+        },
+        {
+          "speaker": 3,
+          "recall": 0.9409429824561404
+        }
+      ],
+      "rt_factor": 13.564156401661666,
+      "ref_speakers": 4,
+      "hyp_speakers": 8,
+      "num_turns": 625,
+      "audio_duration_secs": 2222.2906875,
+      "runtime_secs": 163.835525166,
+      "stage_timings": {
+        "segmentation_secs": 75.668252333,
+        "embedding_secs": 88.145313833,
+        "clustering_secs": 0.020991709,
+        "resegmentation_secs": 0.000013084
+      }
+    },
+    {
+      "filename": "IS1009a.Mix-Headset",
+      "der_collar": 13.57504873294347,
+      "der_no_collar": 22.2164778194247,
+      "miss_rate": 5.7368421052631575,
+      "false_alarm_rate": 2.6062378167641325,
+      "confusion_rate": 5.23196881091618,
+      "der_single_speaker": 8.635091204623443,
+      "der_overlap": 43.23243860651056,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9477930267062314
+        },
+        {
+          "speaker": 1,
+          "recall": 0.8870728083209509
+        },
+        {
+          "speaker": 2,
+          "recall": 0.5761557177615572
+        },
+        {
+          "speaker": 3,
+          "recall": 0.7773561037318153
+        }
+      ],
+      "rt_factor": 13.443869083148494,
+      "ref_speakers": 4,
+      "hyp_speakers": 6,
+      "num_turns": 217,
+      "audio_duration_secs": 838.8333125,
+      "runtime_secs": 62.395230667,
+      "stage_timings": {
+        "segmentation_secs": 31.811674875,
+        "embedding_secs": 30.580230459,
+        "clustering_secs": 0.003065625,
+        "resegmentation_secs": 7.958e-6
+      }
+    },
+    {
+      "filename": "IS1009b.Mix-Headset",
+      "der_collar": 7.1233741634044705,
+      "der_no_collar": 15.859308439577946,
+      "miss_rate": 3.75173633034474,
+      "false_alarm_rate": 0.5871953529486046,
+      "confusion_rate": 2.784442480111125,
+      "der_single_speaker": 3.2669019445021106,
+      "der_overlap": 47.30353280461427,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.923466516601013
+        },
+        {
+          "speaker": 1,
+          "recall": 0.8897579232743936
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9844104070499371
+        },
+        {
+          "speaker": 3,
+          "recall": 0.9330445896052257
+        }
+      ],
+      "rt_factor": 11.970182486988824,
+      "ref_speakers": 4,
+      "hyp_speakers": 7,
+      "num_turns": 422,
+      "audio_duration_secs": 2052.3333125,
+      "runtime_secs": 171.453803209,
+      "stage_timings": {
+        "segmentation_secs": 75.993560417,
+        "embedding_secs": 95.448284166,
+        "clustering_secs": 0.011410833,
+        "resegmentation_secs": 0.000011041
+      }
+    },
+    {
+      "filename": "IS1009c.Mix-Headset",
+      "der_collar": 5.505529167559263,
+      "der_no_collar": 12.635417783975115,
+      "miss_rate": 2.631248476431785,
+      "false_alarm_rate": 1.1065722115931538,
+      "confusion_rate": 1.7677084795343239,
+      "der_single_speaker": 3.6316959153958153,
+      "der_overlap": 48.31046487814868,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9586530975419865
+        },
+        {
+          "speaker": 1,
+          "recall": 0.9835908468609427
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9100948015418273
+        },
+        {
+          "speaker": 3,
+          "recall": 0.9345620852102747
+        }
+      ],
+      "rt_factor": 12.22868939686451,
+      "ref_speakers": 4,
+      "hyp_speakers": 5,
+      "num_turns": 322,
+      "audio_duration_secs": 1820.8333125,
+      "runtime_secs": 148.898484,
+      "stage_timings": {
+        "segmentation_secs": 66.097311416,
+        "embedding_secs": 82.791907125,
+        "clustering_secs": 0.008862,
+        "resegmentation_secs": 9.125e-6
+      }
+    },
+    {
+      "filename": "IS1009d.Mix-Headset",
+      "der_collar": 10.18064535899243,
+      "der_no_collar": 20.80743734656448,
+      "miss_rate": 4.63564489933503,
+      "false_alarm_rate": 1.9251984187785371,
+      "confusion_rate": 3.6198020408788647,
+      "der_single_speaker": 5.964395437902445,
+      "der_overlap": 49.458514539097806,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9762215607429456
+        },
+        {
+          "speaker": 1,
+          "recall": 0.9284072707013024
+        },
+        {
+          "speaker": 2,
+          "recall": 0.7218076988299135
+        },
+        {
+          "speaker": 3,
+          "recall": 0.8913108326941106
+        }
+      ],
+      "rt_factor": 12.824451822847738,
+      "ref_speakers": 4,
+      "hyp_speakers": 6,
+      "num_turns": 551,
+      "audio_duration_secs": 1944.5,
+      "runtime_secs": 151.624414584,
+      "stage_timings": {
+        "segmentation_secs": 65.82008325,
+        "embedding_secs": 85.785907042,
+        "clustering_secs": 0.01766975,
+        "resegmentation_secs": 0.000013334
+      }
+    },
+    {
+      "filename": "TS3003a.Mix-Headset",
+      "der_collar": 11.613281021256661,
+      "der_no_collar": 17.557073398875584,
+      "miss_rate": 8.768519060724952,
+      "false_alarm_rate": 1.3983720794050478,
+      "confusion_rate": 1.4463898811266616,
+      "der_single_speaker": 10.305633649866671,
+      "der_overlap": 54.824561403508774,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9215542814574382
+        },
+        {
+          "speaker": 1,
+          "recall": 0.44166666666666665
+        },
+        {
+          "speaker": 2,
+          "recall": 0.8133802816901409
+        },
+        {
+          "speaker": 3,
+          "recall": 0.6416083916083916
+        }
+      ],
+      "rt_factor": 13.863739853393467,
+      "ref_speakers": 4,
+      "hyp_speakers": 7,
+      "num_turns": 254,
+      "audio_duration_secs": 1505.642625,
+      "runtime_secs": 108.602919625,
+      "stage_timings": {
+        "segmentation_secs": 55.578451875,
+        "embedding_secs": 53.019129916,
+        "clustering_secs": 0.004974959,
+        "resegmentation_secs": 6.291e-6
+      }
+    },
+    {
+      "filename": "TS3003b.Mix-Headset",
+      "der_collar": 6.332346966104241,
+      "der_no_collar": 12.668368887790681,
+      "miss_rate": 2.4920470059508646,
+      "false_alarm_rate": 3.1798911729931345,
+      "confusion_rate": 0.6604087871602422,
+      "der_single_speaker": 5.402206619859578,
+      "der_overlap": 45.66016398077466,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9648684128274051
+        },
+        {
+          "speaker": 1,
+          "recall": 0.9867590517507248
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9419741767896708
+        },
+        {
+          "speaker": 3,
+          "recall": 0.9709465135816298
+        }
+      ],
+      "rt_factor": 12.126275102053016,
+      "ref_speakers": 4,
+      "hyp_speakers": 6,
+      "num_turns": 334,
+      "audio_duration_secs": 2210.304,
+      "runtime_secs": 182.273944917,
+      "stage_timings": {
+        "segmentation_secs": 81.151277458,
+        "embedding_secs": 101.111643792,
+        "clustering_secs": 0.010527167,
+        "resegmentation_secs": 7.75e-6
+      }
+    },
+    {
+      "filename": "TS3003c.Mix-Headset",
+      "der_collar": 9.011972352505554,
+      "der_no_collar": 14.569193907600722,
+      "miss_rate": 5.5017279684028635,
+      "false_alarm_rate": 2.1056529252036533,
+      "confusion_rate": 1.4045914588990374,
+      "der_single_speaker": 6.895860154880282,
+      "der_overlap": 52.804927031731154,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9358113151216599
+        },
+        {
+          "speaker": 1,
+          "recall": 0.9197503690084677
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9270644031736182
+        },
+        {
+          "speaker": 3,
+          "recall": 0.9483064963908939
+        }
+      ],
+      "rt_factor": 13.233581598971517,
+      "ref_speakers": 4,
+      "hyp_speakers": 4,
+      "num_turns": 389,
+      "audio_duration_secs": 2570.0,
+      "runtime_secs": 194.20290575,
+      "stage_timings": {
+        "segmentation_secs": 94.087583583,
+        "embedding_secs": 100.104156708,
+        "clustering_secs": 0.010673833,
+        "resegmentation_secs": 8.333e-6
+      }
+    },
+    {
+      "filename": "TS3003d.Mix-Headset",
+      "der_collar": 23.486233704731713,
+      "der_no_collar": 31.255671177867445,
+      "miss_rate": 9.074705007958537,
+      "false_alarm_rate": 1.889001433852063,
+      "confusion_rate": 12.522527262921113,
+      "der_single_speaker": 20.8336683306899,
+      "der_overlap": 47.32934761185204,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9029920662215528
+        },
+        {
+          "speaker": 1,
+          "recall": 0.8872161719695352
+        },
+        {
+          "speaker": 2,
+          "recall": 0.0
+        },
+        {
+          "speaker": 3,
+          "recall": 0.8130044843049328
+        }
+      ],
+      "rt_factor": 13.155786919789323,
+      "ref_speakers": 4,
+      "hyp_speakers": 3,
+      "num_turns": 680,
+      "audio_duration_secs": 2618.2,
+      "runtime_secs": 199.015081041,
+      "stage_timings": {
+        "segmentation_secs": 97.3541585,
+        "embedding_secs": 101.633515291,
+        "clustering_secs": 0.0261565,
+        "resegmentation_secs": 0.000014333
+      }
+    }
+  ]
+}
