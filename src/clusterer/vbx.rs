@@ -491,6 +491,25 @@ impl VbxClusterer {
         Self::from_dir(std::path::Path::new(&dir), max_speakers)
     }
 
+    /// Ensure the six PLDA `.npy` files via the model registry (SHA-256 verified
+    /// download into the registry cache) and construct from that directory.
+    ///
+    /// Used by the pipeline builder when neither `--vbx-plda-dir` nor
+    /// `POLYVOICE_VBX_PLDA_DIR` is set. Signatures are optional for these
+    /// entries until a release engineer signs them.
+    #[cfg(feature = "download")]
+    pub fn from_registry(
+        registry: &crate::models::ModelRegistry,
+        max_speakers: usize,
+    ) -> Result<Self, ClustererError> {
+        let dir = registry
+            .ensure_vbx_plda_dir()
+            .map_err(|e| ClustererError::AlgorithmFailed {
+                detail: format!("ensure VBx PLDA via model registry: {e}"),
+            })?;
+        Self::from_dir(&dir, max_speakers)
+    }
+
     /// When embeddings come from dense non-contiguous windows, force GMM-VBx
     /// (HMM self-loop assumption is invalid). Explicit env override still wins
     /// if `POLYVOICE_VBX_LOOP_PROB` is set.
@@ -817,5 +836,29 @@ mod tests {
         assert_eq!(labels_gmm[1], labels_gmm[3]);
         assert_eq!(labels_gmm[1], labels_gmm[5]);
         assert_ne!(labels_gmm[0], labels_gmm[1]);
+    }
+
+    /// Offline: seed the registry cache from the checked-in fixtures and load
+    /// via [`VbxClusterer::from_registry`] (no network).
+    #[cfg(feature = "download")]
+    #[test]
+    fn from_registry_loads_fixture_cache() {
+        use crate::models::{ModelRegistry, VBX_PLDA_ARTIFACTS};
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let fixture_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
+        for art in VBX_PLDA_ARTIFACTS {
+            std::fs::copy(
+                fixture_dir.join(art.filename),
+                tmp.path().join(art.filename),
+            )
+            .unwrap();
+        }
+        let registry = ModelRegistry::with_cache_dir(tmp.path()).unwrap();
+        let clusterer = VbxClusterer::from_registry(&registry, 8)
+            .expect("from_registry must load fixture-seeded cache");
+        assert_eq!(clusterer.max_clusters(), 8);
     }
 }

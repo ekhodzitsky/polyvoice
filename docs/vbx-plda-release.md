@@ -28,6 +28,23 @@ Six precomputed PLDA `.npy` files (the `PldaModel::from_dir` set), ~265 KB total
 License: **CC-BY-4.0**, attribution to pyannote (see `NOTICE`). Matched to the
 `wespeaker_resnet34` embedder polyvoice already ships.
 
+Manifest model ids (not profile-resolved):
+
+| model id | filename |
+|----------|----------|
+| `vbx_plda_transform` | `plda_transform.npy` |
+| `vbx_plda_phi_computed` | `plda_phi_computed.npy` |
+| `vbx_plda_mean1` | `plda_mean1.npy` |
+| `vbx_plda_mean2` | `plda_mean2.npy` |
+| `vbx_plda_lda` | `plda_lda.npy` |
+| `vbx_plda_mu` | `plda_mu.npy` |
+
+Host URLs point at the commit-pinned fixtures under
+`https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/`.
+Integrity is **SHA-256 only** until minisign signatures are added (same optional
+model pattern as `sortformer_v2` / `eres2netv2`). Profile resolution never
+pulls these entries, so release builds do not require signatures for them.
+
 ## Rebuilding the weights (reproducible)
 
 ```sh
@@ -41,13 +58,27 @@ done
 python3 scripts/build-vbx-plda.py --in-dir data/vbx-plda-raw --out-dir data/vbx-plda
 ```
 
-## Using it today (advanced users / CI)
+## Using it
+
+Default CLI path (`--clusterer vbx`) resolves PLDA in this order:
+
+1. `--vbx-plda-dir` if set
+2. `POLYVOICE_VBX_PLDA_DIR` if set
+3. Model registry auto-download (`ModelRegistry::ensure_vbx_plda_dir` →
+   `VbxClusterer::from_registry`) into the user cache
 
 ```sh
-cargo run --features cli,vbx --bin polyvoice -- diarize meeting.wav \
-  --v2 --clusterer vbx --vbx-plda-dir data/vbx-plda
-# or: POLYVOICE_VBX_PLDA_DIR=data/vbx-plda ... --v2 --clusterer vbx
+# Zero setup (downloads ~265 KB once into the models cache):
+cargo run --features cli --bin polyvoice -- diarize meeting.wav
+
+# Explicit local dir (CI / offline):
+cargo run --features cli --bin polyvoice -- diarize meeting.wav \
+  --vbx-plda-dir fixtures/vbx-plda
+# or: POLYVOICE_VBX_PLDA_DIR=fixtures/vbx-plda ...
 ```
+
+Checked-in fixtures under `fixtures/vbx-plda/` keep the release gate and DER
+regression tests offline-capable without hitting the network.
 
 Hyperparameters default to the dev-calibrated optimum (fa=0.3, loop_prob=0.9,
 ahc_threshold=0.5, emb_scale=4.88); override with `POLYVOICE_VBX_{FA,FB,LOOP_PROB,
@@ -55,17 +86,16 @@ AHC_THRESHOLD,EMB_SCALE}`.
 
 ## Remaining release steps (need the release signing key)
 
-The code resolves the PLDA dir from `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`.
-To make `--clusterer vbx` work with zero setup (registry auto-download), a
-release engineer must:
+Registry wiring and SHA-256 integrity are in place. A release engineer should
+still:
 
-1. **Host** the six `.npy` at a stable URL (e.g. a GitHub release asset or our
-   HF repo).
-2. **Sign** each with the minisign release secret (same flow as the ONNX models).
-3. **Add `[models.vbx_plda_*]` entries** to `src/models/manifest.toml` (url +
-   sha256 above + size + signature).
-4. **Wire registry resolution**: a `VbxClusterer::from_registry` that `ensure()`s
-   the six entries into the cache dir and calls `from_dir` on it, used by the CLI
-   when neither `--vbx-plda-dir` nor the env var is set.
+1. **Optionally re-host** the six `.npy` on a GitHub Release asset or HF repo
+   (the commit-pinned raw.githubusercontent.com host is stable via the SHA-256
+   gate; a release asset is nicer for bandwidth/CDN).
+2. **Sign** each file with the minisign release secret (same flow as the ONNX
+   models) and fill the `signature = '''...'''` fields on the six
+   `[models.vbx_plda_*]` entries in `src/models/manifest.toml`.
+3. **Do not** add PLDA ids to `[profiles.*]` — they stay ad-hoc `ensure()` /
+   `from_registry` only so missing signatures never fail profile resolution.
 
-Until then VBx ships as an opt-in that requires a local PLDA dir.
+Until signatures land, VBx keeps working with SHA-256 verification alone.
