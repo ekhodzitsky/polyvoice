@@ -19,17 +19,15 @@ use std::path::Path;
 
 mod factory;
 mod ort_session;
+#[cfg(all(test, feature = "backend-tract"))]
+mod parity;
 mod runtime;
 #[cfg(feature = "backend-tract")]
 mod tract_session;
-#[cfg(all(test, feature = "backend-tract"))]
-mod parity;
 
 pub use factory::{InferenceBackend, RuntimeSession};
 pub use ort_session::OrtSession;
-pub use runtime::{
-    InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData,
-};
+pub use runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
 #[cfg(feature = "backend-tract")]
 pub use tract_session::TractSession;
 

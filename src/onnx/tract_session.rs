@@ -6,9 +6,7 @@
 //! Gated behind the `backend-tract` cargo feature. tract-onnx declares MSRV 1.91
 //! (higher than this crate's declared 1.88) — enable only on a newer toolchain.
 
-use super::runtime::{
-    InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData,
-};
+use super::runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
 use super::validate_onnx_header;
 use std::path::Path;
 use std::sync::Arc;
@@ -43,10 +41,7 @@ impl TractSession {
     ///
     /// `intra_threads` is accepted for API parity with the ort builder and is
     /// currently ignored (tract's default executor is used).
-    pub fn from_path(
-        model_path: &Path,
-        _intra_threads: Option<usize>,
-    ) -> anyhow::Result<Self> {
+    pub fn from_path(model_path: &Path, _intra_threads: Option<usize>) -> anyhow::Result<Self> {
         validate_onnx_header(model_path)?;
         let model = load_runnable(model_path)?;
 
@@ -71,20 +66,16 @@ fn load_runnable(model_path: &Path) -> anyhow::Result<Arc<TypedRunnableModel>> {
 
     match try_optimize_runnable(base.clone()) {
         Ok(m) => return Ok(m),
-        Err(direct_err) => {
-            match try_optimize_with_symbols(base) {
-                Ok(m) => Ok(m),
-                Err(sym_err) => Err(anyhow::anyhow!(
-                    "tract load failed (direct: {direct_err}; with-symbols: {sym_err})"
-                )),
-            }
-        }
+        Err(direct_err) => match try_optimize_with_symbols(base) {
+            Ok(m) => Ok(m),
+            Err(sym_err) => Err(anyhow::anyhow!(
+                "tract load failed (direct: {direct_err}; with-symbols: {sym_err})"
+            )),
+        },
     }
 }
 
-fn try_optimize_runnable(
-    model: InferenceModel,
-) -> anyhow::Result<Arc<TypedRunnableModel>> {
+fn try_optimize_runnable(model: InferenceModel) -> anyhow::Result<Arc<TypedRunnableModel>> {
     // into_runnable() returns Arc in tract 0.23.
     model
         .into_optimized()
@@ -93,9 +84,7 @@ fn try_optimize_runnable(
         .map_err(|e| anyhow::anyhow!("into_runnable: {e}"))
 }
 
-fn try_optimize_with_symbols(
-    mut model: InferenceModel,
-) -> anyhow::Result<Arc<TypedRunnableModel>> {
+fn try_optimize_with_symbols(mut model: InferenceModel) -> anyhow::Result<Arc<TypedRunnableModel>> {
     for i in 0..model.inputs.len() {
         let fact = model
             .input_fact(i)
@@ -130,10 +119,7 @@ impl InferenceRuntime for TractSession {
         &self.input_names
     }
 
-    fn run(
-        &mut self,
-        inputs: &[NamedTensor<'_>],
-    ) -> Result<Vec<InferenceTensor>, InferenceError> {
+    fn run(&mut self, inputs: &[NamedTensor<'_>]) -> Result<Vec<InferenceTensor>, InferenceError> {
         let n = self.model.model().inputs.len();
         let mut ordered: Vec<Option<&InferenceTensor>> = vec![None; n];
         for nt in inputs {
@@ -226,15 +212,15 @@ fn from_tract_tvalue(tv: TValue, index: usize) -> Result<InferenceTensor, Infere
     let shape: Vec<usize> = tensor.shape().to_vec();
     match tensor.datum_type() {
         DatumType::F32 => {
-            let view = tensor.to_plain_array_view::<f32>().map_err(|e| {
-                InferenceError::Run(format!("output {index} f32 view: {e}"))
-            })?;
+            let view = tensor
+                .to_plain_array_view::<f32>()
+                .map_err(|e| InferenceError::Run(format!("output {index} f32 view: {e}")))?;
             Ok(InferenceTensor::f32(shape, view.iter().copied().collect()))
         }
         DatumType::I64 => {
-            let view = tensor.to_plain_array_view::<i64>().map_err(|e| {
-                InferenceError::Run(format!("output {index} i64 view: {e}"))
-            })?;
+            let view = tensor
+                .to_plain_array_view::<i64>()
+                .map_err(|e| InferenceError::Run(format!("output {index} i64 view: {e}")))?;
             Ok(InferenceTensor::i64(shape, view.iter().copied().collect()))
         }
         other => Err(InferenceError::Run(format!(
