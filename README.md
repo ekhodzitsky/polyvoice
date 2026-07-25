@@ -101,11 +101,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         clusterer: ClustererKind::Vbx, // or Ahc { threshold: 0.45 }
         ..PipelineConfig::default()
     };
-    // VBx needs PLDA weights: cfg.vbx_plda_dir = Some("data/vbx-plda".into());
-    // or POLYVOICE_VBX_PLDA_DIR in the environment.
+    // VBx PLDA: optional cfg.vbx_plda_dir / POLYVOICE_VBX_PLDA_DIR; otherwise
+    // the registry auto-downloads the six .npy files on first use.
     let pipeline = Pipeline::builder()
         .config(cfg)
-        .with_models_from(ModelRegistry::default()?) // models auto-download on first run
+        .with_models_from(ModelRegistry::default()?) // models (incl. PLDA) auto-download
         .build()?;
 
     // Pipeline-ready mono 16 kHz (with feature `audio-io`, also mp3/flac/… + resample).
@@ -122,10 +122,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```bash
 polyvoice download-models --profile balanced
-# Default path: pipeline v2 + VBx (needs PLDA)
-export POLYVOICE_VBX_PLDA_DIR=/path/to/vbx-plda   # see docs/vbx-plda-release.md
+# Default path: pipeline v2 + VBx (PLDA auto-downloads via the model registry;
+# optional override: --vbx-plda-dir / POLYVOICE_VBX_PLDA_DIR — see docs/vbx-plda-release.md)
 polyvoice diarize meeting.wav --output meeting.rttm
-# Without PLDA: --clusterer ahc   |   old path: --legacy
+# Cosine AHC instead of VBx: --clusterer ahc   |   old path: --legacy
 # With a build that includes `audio-io`:
 # polyvoice diarize meeting.mp3 --output meeting.rttm
 ```

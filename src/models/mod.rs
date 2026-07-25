@@ -21,6 +21,70 @@ use std::path::{Path, PathBuf};
 /// The default manifest shipped with the crate. Embedded at compile time.
 pub const DEFAULT_MANIFEST_TOML: &str = include_str!("manifest.toml");
 
+/// One VBx PLDA artifact: manifest id, on-disk filename, sha256, byte size.
+///
+/// Source of truth for ids + integrity checks (must match `manifest.toml` and
+/// `fixtures/vbx-plda/`). Not profile-resolved — only pulled when the `vbx`
+/// clusterer is selected without a local PLDA dir. SHA-256 only until minisign
+/// signatures land (same optional-model pattern as `sortformer_v2`).
+#[derive(Clone, Copy, Debug)]
+pub struct VbxPldaArtifact {
+    pub id: &'static str,
+    pub filename: &'static str,
+    pub sha256: &'static str,
+    pub size: u64,
+}
+
+/// The six precomputed VBx PLDA `.npy` files, in `PldaModel::from_dir` order.
+pub const VBX_PLDA_ARTIFACTS: &[VbxPldaArtifact] = &[
+    VbxPldaArtifact {
+        id: "vbx_plda_transform",
+        filename: "plda_transform.npy",
+        sha256: "90261469714415743f4b8a86ee6b89466db858bde3c5944367cccfb7abd34f14",
+        size: 131_200,
+    },
+    VbxPldaArtifact {
+        id: "vbx_plda_phi_computed",
+        filename: "plda_phi_computed.npy",
+        sha256: "6ef7cf2f5a23a45b66f440f9a996a4cf5c047b369829af695d50ef18aa0a35e3",
+        size: 1_152,
+    },
+    VbxPldaArtifact {
+        id: "vbx_plda_mean1",
+        filename: "plda_mean1.npy",
+        sha256: "e424c0c352182aa8e0f555dec1f3b30e29a20b9ed6b25d339f112af92e51e36f",
+        size: 2_176,
+    },
+    VbxPldaArtifact {
+        id: "vbx_plda_mean2",
+        filename: "plda_mean2.npy",
+        sha256: "6f6fb708a2037197b5b84ffeaa8f140cb878088fbecd6ab042ad26a7691bd2cf",
+        size: 640,
+    },
+    VbxPldaArtifact {
+        id: "vbx_plda_lda",
+        filename: "plda_lda.npy",
+        sha256: "e20c9b012bebd1aabda5a38a127e63a43cf35debdc502715fc143e2fb6bc3c4b",
+        size: 131_200,
+    },
+    VbxPldaArtifact {
+        id: "vbx_plda_mu",
+        filename: "plda_mu.npy",
+        sha256: "d286d48acf99bbc1ed1502fed0a3e361ae5626ce1870c8be9f7397c5e47886c6",
+        size: 1_152,
+    },
+];
+
+/// Manifest model ids only (same order as [`VBX_PLDA_ARTIFACTS`]).
+pub const VBX_PLDA_MODEL_IDS: &[&str] = &[
+    VBX_PLDA_ARTIFACTS[0].id,
+    VBX_PLDA_ARTIFACTS[1].id,
+    VBX_PLDA_ARTIFACTS[2].id,
+    VBX_PLDA_ARTIFACTS[3].id,
+    VBX_PLDA_ARTIFACTS[4].id,
+    VBX_PLDA_ARTIFACTS[5].id,
+];
+
 /// { true }
 /// pub fn default_manifest() -> Manifest
 /// { true }
@@ -205,6 +269,20 @@ impl ModelRegistry {
         Ok(dest)
     }
 
+    /// Ensure all six VBx PLDA `.npy` files are present in the cache (SHA-256
+    /// verified, optionally minisign-verified when signatures land). Returns the
+    /// directory that holds them — pass it to
+    /// [`crate::clusterer::vbx::VbxClusterer::from_dir`].
+    ///
+    /// Files land next to other cached models under [`Self::cache_dir`]; their
+    /// filenames match the `PldaModel::from_dir` set (`plda_transform.npy`, …).
+    pub fn ensure_vbx_plda_dir(&self) -> Result<PathBuf, RegistryError> {
+        for id in VBX_PLDA_MODEL_IDS {
+            self.ensure(id)?;
+        }
+        Ok(self.cache_dir.clone())
+    }
+
     /// { !model_id.is_empty() }
     /// `pub fn ensure_in_cache_only(&self, model_id: &str) -> Result<PathBuf, RegistryError>`
     /// { ret.as_ref().map_or(true, |p| p.exists()) }
@@ -337,6 +415,7 @@ pub(crate) mod tests_helpers {
 mod tests {
     use super::*;
     use crate::types::Profile;
+    use std::path::Path;
     use tempfile::TempDir;
 
     #[test]
@@ -551,6 +630,72 @@ mod tests {
                 prof.embedder, "sortformer_v2",
                 "profile {pid} must not pull sortformer as embedder"
             );
+        }
+    }
+
+    #[test]
+    fn optional_vbx_plda_entries_present_but_not_in_profiles() {
+        let m = default_manifest();
+        assert_eq!(VBX_PLDA_MODEL_IDS.len(), VBX_PLDA_ARTIFACTS.len());
+        for (art, listed_id) in VBX_PLDA_ARTIFACTS.iter().zip(VBX_PLDA_MODEL_IDS.iter()) {
+            assert_eq!(art.id, *listed_id);
+            let entry = m
+                .model(art.id)
+                .unwrap_or_else(|| panic!("missing manifest entry {}", art.id));
+            assert_eq!(entry.sha256, art.sha256, "{} sha256 mismatch", art.id);
+            assert_eq!(entry.size, Some(art.size), "{} size mismatch", art.id);
+            assert_eq!(entry.filename, art.filename, "{} filename mismatch", art.id);
+            assert_eq!(entry.adapter_type.as_deref(), Some("vbx-plda"));
+            assert_eq!(entry.license.as_deref(), Some("CC-BY-4.0"));
+            // Optional path: no minisign until a human signs the release assets.
+            assert!(
+                entry.signature.is_none(),
+                "{} must stay unsigned until a release engineer signs it \
+                 (profile resolution never pulls these)",
+                art.id
+            );
+            assert!(
+                entry.url.starts_with("https://"),
+                "{} url must be https",
+                art.id
+            );
+            for (pid, prof) in &m.profiles {
+                assert_ne!(
+                    prof.segmenter.as_str(),
+                    art.id,
+                    "profile {pid} must not pull PLDA as segmenter"
+                );
+                assert_ne!(
+                    prof.embedder.as_str(),
+                    art.id,
+                    "profile {pid} must not pull PLDA as embedder"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ensure_vbx_plda_dir_uses_local_cache_without_network() {
+        // Pre-place the six fixture files under a temp cache; ensure must
+        // treat them as cache hits (hash match) and never touch the network.
+        let tmp = TempDir::new().unwrap();
+        let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
+        for art in VBX_PLDA_ARTIFACTS {
+            let src = fixture_dir.join(art.filename);
+            assert!(
+                src.is_file(),
+                "fixture missing: {} (run scripts/build-vbx-plda.py)",
+                src.display()
+            );
+            std::fs::copy(&src, tmp.path().join(art.filename)).unwrap();
+        }
+        let r = ModelRegistry::with_cache_dir(tmp.path()).unwrap();
+        let dir = r
+            .ensure_vbx_plda_dir()
+            .expect("cache-hit ensure must succeed offline");
+        assert_eq!(dir, tmp.path());
+        for art in VBX_PLDA_ARTIFACTS {
+            assert!(dir.join(art.filename).is_file());
         }
     }
 }

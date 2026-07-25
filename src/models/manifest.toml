@@ -224,3 +224,78 @@ adapter_type = "sortformer-v2"
 version  = "2.0"
 sample_rate = 16000
 num_speakers = 4
+
+# ---------------------------------------------------------------------------
+# VBx PLDA weights (six precomputed .npy files, ~265 KB total). NOT profile
+# defaults: resolved only when the `vbx` clusterer is selected and no local
+# `--vbx-plda-dir` / POLYVOICE_VBX_PLDA_DIR is set. Signature omitted until a
+# release engineer signs with the project minisign key — SHA-256 alone gates
+# integrity for this optional download path (same pattern as sortformer_v2 /
+# eres2netv2). Hosted from the commit that introduced the fixtures; pin keeps
+# the URL content-stable even if master moves.
+# ---------------------------------------------------------------------------
+[models.vbx_plda_transform]
+url      = "https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/plda_transform.npy"
+sha256   = "90261469714415743f4b8a86ee6b89466db858bde3c5944367cccfb7abd34f14"
+size     = 131200
+filename = "plda_transform.npy"
+license  = "CC-BY-4.0"
+license_url = "https://creativecommons.org/licenses/by/4.0/"
+provenance = "pyannote speaker-diarization-community-1 PLDA params, diagonalized offline via scripts/build-vbx-plda.py; fixtures/vbx-plda"
+adapter_type = "vbx-plda"
+version  = "1.0"
+
+[models.vbx_plda_phi_computed]
+url      = "https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/plda_phi_computed.npy"
+sha256   = "6ef7cf2f5a23a45b66f440f9a996a4cf5c047b369829af695d50ef18aa0a35e3"
+size     = 1152
+filename = "plda_phi_computed.npy"
+license  = "CC-BY-4.0"
+license_url = "https://creativecommons.org/licenses/by/4.0/"
+provenance = "pyannote speaker-diarization-community-1 PLDA params, diagonalized offline via scripts/build-vbx-plda.py; fixtures/vbx-plda"
+adapter_type = "vbx-plda"
+version  = "1.0"
+
+[models.vbx_plda_mean1]
+url      = "https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/plda_mean1.npy"
+sha256   = "e424c0c352182aa8e0f555dec1f3b30e29a20b9ed6b25d339f112af92e51e36f"
+size     = 2176
+filename = "plda_mean1.npy"
+license  = "CC-BY-4.0"
+license_url = "https://creativecommons.org/licenses/by/4.0/"
+provenance = "pyannote speaker-diarization-community-1 PLDA params, diagonalized offline via scripts/build-vbx-plda.py; fixtures/vbx-plda"
+adapter_type = "vbx-plda"
+version  = "1.0"
+
+[models.vbx_plda_mean2]
+url      = "https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/plda_mean2.npy"
+sha256   = "6f6fb708a2037197b5b84ffeaa8f140cb878088fbecd6ab042ad26a7691bd2cf"
+size     = 640
+filename = "plda_mean2.npy"
+license  = "CC-BY-4.0"
+license_url = "https://creativecommons.org/licenses/by/4.0/"
+provenance = "pyannote speaker-diarization-community-1 PLDA params, diagonalized offline via scripts/build-vbx-plda.py; fixtures/vbx-plda"
+adapter_type = "vbx-plda"
+version  = "1.0"
+
+[models.vbx_plda_lda]
+url      = "https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/plda_lda.npy"
+sha256   = "e20c9b012bebd1aabda5a38a127e63a43cf35debdc502715fc143e2fb6bc3c4b"
+size     = 131200
+filename = "plda_lda.npy"
+license  = "CC-BY-4.0"
+license_url = "https://creativecommons.org/licenses/by/4.0/"
+provenance = "pyannote speaker-diarization-community-1 PLDA params, diagonalized offline via scripts/build-vbx-plda.py; fixtures/vbx-plda"
+adapter_type = "vbx-plda"
+version  = "1.0"
+
+[models.vbx_plda_mu]
+url      = "https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/plda_mu.npy"
+sha256   = "d286d48acf99bbc1ed1502fed0a3e361ae5626ce1870c8be9f7397c5e47886c6"
+size     = 1152
+filename = "plda_mu.npy"
+license  = "CC-BY-4.0"
+license_url = "https://creativecommons.org/licenses/by/4.0/"
+provenance = "pyannote speaker-diarization-community-1 PLDA params, diagonalized offline via scripts/build-vbx-plda.py; fixtures/vbx-plda"
+adapter_type = "vbx-plda"
+version  = "1.0"
