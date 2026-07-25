@@ -84,11 +84,12 @@ impl Embedder for FbankOnnxExtractor {
             samples
         };
 
-        let fbank = self.fbank.extract(samples).map_err(|e| {
-            EmbedderError::InferenceFailed {
+        let fbank = self
+            .fbank
+            .extract(samples)
+            .map_err(|e| EmbedderError::InferenceFailed {
                 detail: e.to_string(),
-            }
-        })?;
+            })?;
 
         if fbank.is_empty() {
             return Err(EmbedderError::AudioTooShort {
@@ -104,20 +105,24 @@ impl Embedder for FbankOnnxExtractor {
         let flat: Vec<f32> = fbank.into_iter().flatten().collect();
 
         let input = InferenceTensor::f32(vec![1, n_frames, n_mels], flat);
-        let outputs = session.run_ordered(&[&input]).map_err(|e| {
-            EmbedderError::InferenceFailed {
-                detail: e.to_string(),
-            }
-        })?;
+        let outputs =
+            session
+                .run_ordered(&[&input])
+                .map_err(|e| EmbedderError::InferenceFailed {
+                    detail: e.to_string(),
+                })?;
 
-        let first = outputs.into_iter().next().ok_or_else(|| {
-            EmbedderError::InferenceFailed {
+        let first = outputs
+            .into_iter()
+            .next()
+            .ok_or_else(|| EmbedderError::InferenceFailed {
                 detail: "ONNX model produced no outputs".to_string(),
-            }
-        })?;
-        let data = first.into_f32().map_err(|e| EmbedderError::InferenceFailed {
-            detail: e.to_string(),
-        })?;
+            })?;
+        let data = first
+            .into_f32()
+            .map_err(|e| EmbedderError::InferenceFailed {
+                detail: e.to_string(),
+            })?;
 
         let data_len = data.len();
         if data_len != self.embedding_dim {

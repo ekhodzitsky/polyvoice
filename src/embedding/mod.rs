@@ -1,18 +1,19 @@
 #![allow(deprecated)] // EmbeddingExtractor / EmbeddingError remain soft-deprecated
 //! Speaker embedding extraction trait (legacy).
 //!
-//! Prefer [`crate::Embedder`] for new code — offline [`crate::Pipeline`] and
-//! online [`crate::streaming::StreamingPipeline`] accept `E: Embedder`.
-//! Types that still implement [`EmbeddingExtractor`] automatically satisfy
-//! [`Embedder`] via a blanket bridge in `polyvoice::embedder`.
+//! Prefer [`crate::embedder::Embedder`] for new code — offline
+//! [`crate::Pipeline`] and online [`crate::streaming::StreamingPipeline`]
+//! accept `E: Embedder`. Types that still implement [`EmbeddingExtractor`]
+//! automatically satisfy `Embedder` via a blanket bridge in
+//! `polyvoice::embedder`.
 //!
-//! [`DummyExtractor`] implements [`Embedder`] directly (the supported test mock).
+//! [`DummyExtractor`] implements `Embedder` directly (the supported test mock).
 
 use crate::types::DiarizationConfig;
 
 /// Error type for legacy embedding extraction failures.
 ///
-/// Prefer [`crate::EmbedderError`] with [`crate::Embedder`].
+/// Prefer [`crate::embedder::EmbedderError`] with [`crate::embedder::Embedder`].
 #[derive(thiserror::Error, Debug)]
 #[deprecated(
     since = "0.7.0",
@@ -29,7 +30,7 @@ pub enum EmbeddingError {
 
 /// Legacy trait for speaker embedding extractors.
 ///
-/// Prefer implementing [`crate::Embedder`] directly. Existing
+/// Prefer implementing [`crate::embedder::Embedder`] directly. Existing
 /// `EmbeddingExtractor` implementors continue to work with
 /// [`crate::Pipeline`] / [`crate::streaming::StreamingPipeline`] through an
 /// automatic bridge.
@@ -63,7 +64,7 @@ pub trait EmbeddingExtractor: Send + Sync {
 
 /// Deterministic pseudo-random unit-vector embedder for tests and benchmarks.
 ///
-/// Implements [`crate::Embedder`] directly — pass it to
+/// Implements [`crate::embedder::Embedder`] directly — pass it to
 /// [`crate::Pipeline`] / [`crate::streaming::StreamingPipeline`] without
 /// going through the legacy [`EmbeddingExtractor`] bridge.
 ///

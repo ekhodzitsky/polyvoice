@@ -13,7 +13,7 @@ pub struct SpeakerId(pub u32);
 ///
 /// When two speaker centroids are merged, all indices after the removed one shift
 /// left by one. This struct captures the old → new mapping so that callers can
-/// update any stored [`SpeakerId`]s (e.g. in [`Segment`]s or [`SpeakerTurn`]s).
+/// update any stored [`SpeakerId`]s (e.g. in segments or speaker turns).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpeakerIdRemap {
     /// Mapping from old SpeakerId to new SpeakerId.

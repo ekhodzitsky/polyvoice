@@ -40,7 +40,7 @@ Options:
       --legacy
           Use the pre-0.11 legacy pipeline (Silero VAD + sliding-window embeddings + AHC) instead of the default v2 + VBx path
       --clusterer <CLUSTERER>
-          Clusterer for the default (v2) path: `vbx` (PLDA + VB-HMM, automatic speaker count — the accuracy gate default) or `ahc` (fixed-threshold cosine AHC). `vbx` loads PLDA from `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or auto-downloads via the model registry. Ignored with `--legacy` [default: vbx]
+          Clusterer for the default (v2) path: `vbx` (PLDA + VB-HMM, automatic speaker count — the accuracy gate default), `ahc` (fixed-threshold cosine AHC), or `kmeans` (k-means++ with silhouette auto-k). `vbx` loads PLDA from `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or auto-downloads via the model registry. Ignored with `--legacy` [default: vbx]
       --vbx-plda-dir <VBX_PLDA_DIR>
           Directory with the precomputed VBx PLDA params (overrides `POLYVOICE_VBX_PLDA_DIR` and the registry auto-download). Used when `--clusterer vbx` (the default)
       --embed-window <EMBED_WINDOW>
@@ -55,4 +55,3 @@ Options:
           Print help
   -V, --version
           Print version
-

@@ -3,8 +3,8 @@
 //! Uses normalized graph Laplacian + k-means on eigenvectors.
 //! Auto-selects k via eigengap heuristic.
 //!
-//! Shared graph construction ([`SpectralGraph`]) is the single path used by
-//! [`spectral_cluster`] (BIC k-selection) and
+//! Shared graph construction (`SpectralGraph`, crate-private) is the single
+//! path used by [`spectral_cluster`] (BIC k-selection) and
 //! `crate::clusterer::NmeScClusterer` (pure eigengap k).
 
 use crate::utils::cosine_similarity;

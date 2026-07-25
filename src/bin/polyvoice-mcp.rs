@@ -311,7 +311,10 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
         profile,
         clusterer: clusterer_kind,
         max_speakers,
-        vbx_plda_dir: input.vbx_plda_dir.as_ref().map(|s| Path::new(s).to_path_buf()),
+        vbx_plda_dir: input
+            .vbx_plda_dir
+            .as_ref()
+            .map(|s| Path::new(s).to_path_buf()),
         ..PipelineConfig::default()
     };
     let pipeline = V2Pipeline::builder()

@@ -536,10 +536,10 @@ mod min_cluster_size_tests {
 
 /// NME-SC (Normalized Maximum Eigengap Spectral Clustering) clusterer.
 ///
-/// Thin adapter over [`crate::spectral::SpectralGraph`]: shared k-NN affinity
-/// and Laplacian spectrum, then eigengap-selected k and `kmeans_pp` on the
-/// spectral embedding. Differs from [`crate::spectral::spectral_cluster`] only
-/// in k-selection (pure eigengap here vs eigengap-seeded BIC there).
+/// Thin adapter over the shared spectral graph (k-NN affinity + Laplacian
+/// spectrum in `crate::spectral`), then eigengap-selected k and `kmeans_pp` on
+/// the spectral embedding. Differs from [`crate::spectral::spectral_cluster`]
+/// only in k-selection (pure eigengap here vs eigengap-seeded BIC there).
 #[cfg(feature = "spectral")]
 pub struct NmeScClusterer {
     max_clusters: usize,

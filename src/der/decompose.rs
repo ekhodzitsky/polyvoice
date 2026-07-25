@@ -27,10 +27,10 @@ pub struct SpeakerRecall {
 /// collapse. This split makes accuracy targets interpretable.
 #[derive(Debug, Clone)]
 pub struct DerDecomposition {
-    /// Headline overlap-inclusive DER (== [`compute_der`]).
+    /// Headline overlap-inclusive DER (== [`super::compute_der`]).
     pub total: DerResult,
     /// DER over single-speaker reference regions only
-    /// (== [`compute_der_single_speaker_regions`]).
+    /// (== [`super::compute_der_single_speaker_regions`]).
     pub single_speaker: DerResult,
     /// DER over overlap reference regions only (>= 2 concurrent reference speakers).
     pub overlap: DerResult,
@@ -43,7 +43,7 @@ pub struct DerDecomposition {
 /// { ret.total.der >= 0.0 && ret.total.der <= 1.0 }
 /// Compute the overlap-aware DER decomposition (total / single-speaker / overlap
 /// DER + per-speaker recall) in one call. Intended for bench artifacts and the
-/// long-form AMI gate; the headline path stays on [`compute_der`].
+/// long-form AMI gate; the headline path stays on [`super::compute_der`].
 pub fn compute_der_decomposition(
     reference: &[SpeakerTurn],
     hypothesis: &[SpeakerTurn],
@@ -58,7 +58,7 @@ pub fn compute_der_decomposition(
 }
 
 /// Per-reference-speaker recall over non-collar frames, using the same optimal
-/// hyp->ref mapping as [`compute_der`].
+/// hyp->ref mapping as [`super::compute_der`].
 fn compute_per_speaker_recall(
     reference: &[SpeakerTurn],
     hypothesis: &[SpeakerTurn],

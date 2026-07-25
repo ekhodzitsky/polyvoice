@@ -326,7 +326,11 @@ pub(crate) fn build_collar_mask(
     mask
 }
 
-pub(crate) fn build_speaker_frames(turns: &[SpeakerTurn], resolution: f64, n_frames: usize) -> Vec<Vec<u32>> {
+pub(crate) fn build_speaker_frames(
+    turns: &[SpeakerTurn],
+    resolution: f64,
+    n_frames: usize,
+) -> Vec<Vec<u32>> {
     let mut frames: Vec<Vec<u32>> = vec![Vec::new(); n_frames];
     for turn in turns {
         let start_frame = (turn.time.start / resolution) as usize;

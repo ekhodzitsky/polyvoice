@@ -2,7 +2,7 @@
 //!
 //! **Not used by production paths:** offline clustering is
 //! [`crate::clusterer::Clusterer`]; streaming uses
-//! [`crate::streaming::cache::ArrivalOrderSpeakerCache`]. Prefer those for new
+//! [`crate::streaming::ArrivalOrderSpeakerCache`]. Prefer those for new
 //! code. This module remains available for experiments and the fuzz target.
 
 #![allow(deprecated)] // this module owns the soft-deprecated SpeakerCluster API
