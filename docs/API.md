@@ -71,38 +71,78 @@ pub struct DiarizationResult {
 }
 ```
 
-## Legacy Pipeline
+## Library injection pipeline (`Pipeline` / `StreamingPipeline`)
 
-### `Pipeline::new(config, vad_config)`
-Stable entry point used by the CLI and Python bindings.
+### Bring-your-own embedder (`Embedder`)
+
+`Pipeline` and `StreamingPipeline` accept **`E: Embedder`** — the supported,
+non-deprecated library injection surface. No `onnx` feature is required; an
+external Candle/tract/custom encoder implements `Embedder` and pairs with
+`EnergyVad` (or another `VoiceActivityDetector`).
 
 ```rust
-use polyvoice::{Pipeline, DiarizationConfig, VadConfig, FbankOnnxExtractor, SileroVad};
-use std::path::Path;
+use polyvoice::{
+    DiarizationConfig, Embedder, EmbedderError, EnergyVad, Pipeline, VadConfig,
+};
 
-let ext = FbankOnnxExtractor::new(Path::new("models/wespeaker_resnet34.onnx"), 256, 4)?;
-let mut vad = SileroVad::new(Path::new("models/silero_vad.onnx"), 512)?;
-let result = Pipeline::new(DiarizationConfig::default(), VadConfig::default())
-    .run(&samples, &ext, &mut vad)?;
+struct MyEmbedder;
+
+impl Embedder for MyEmbedder {
+    fn dim(&self) -> usize { 256 }
+    fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        // Run your encoder; return an L2-normalized vector of length dim().
+        let _ = audio;
+        let mut v = vec![0.0f32; 256];
+        v[0] = 1.0;
+        Ok(v)
+    }
+}
+
+let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
+let mut vad = EnergyVad::new(-40.0, 16_000, 512);
+let result = pipeline.run(&samples, &MyEmbedder, &mut vad)?;
 ```
 
-### Embedding Extractors (Legacy)
+Shared encoders behind `Arc` are fine as long as `Embedder` is `Send + Sync`
+(the trait requires it). Legacy `EmbeddingExtractor` implementors still compile
+against these pipelines through an automatic bridge.
+
+### `Pipeline::new(config, vad_config)`
+Stable offline entry point. CLI/Python ONNX paths use `pipeline_v2` by default;
+library consumers keep this generic surface for BYO embedders.
+
+```rust
+use polyvoice::{Pipeline, DiarizationConfig, VadConfig, DummyExtractor, EnergyVad};
+
+let extractor = DummyExtractor::new(256);
+let mut vad = EnergyVad::new(-40.0, 16_000, 512);
+let result = Pipeline::new(DiarizationConfig::default(), VadConfig::default())
+    .run(&samples, &extractor, &mut vad)?;
+```
+
+With feature `onnx`, the same `Pipeline::run` accepts ONNX wrappers that
+implement the legacy extractor trait (bridged to `Embedder`), e.g.
+`FbankOnnxExtractor` / `OnnxEmbeddingExtractor`.
+
+### Embedders and test doubles
 
 #### `DummyExtractor`
-Deterministic pseudo-random extractor for testing and benchmarking.
+Deterministic pseudo-random unit vectors for tests and benchmarks. Implements
+the legacy extractor trait and therefore `Embedder` via the bridge.
 
 ```rust
 let extractor = DummyExtractor::new(256);
+assert_eq!(polyvoice::Embedder::dim(&extractor), 256);
 ```
 
 #### `OnnxEmbeddingExtractor` (feature `onnx`)
 Raw-audio ONNX model (WeSpeaker-style). Input shape: `[1, window_samples]`.
+Legacy; prefer `embedder::ResNet34Adapter` when using the v1.0 ONNX stack.
 
-#### `EcapaTdnnExtractor` (feature `onnx`)
-ECAPA-TDNN model with built-in log-mel filterbank preprocessing.
-Input shape: `[1, n_frames, n_mels]`.
+#### `FbankOnnxExtractor` (feature `onnx`)
+WeSpeaker-style fbank → ONNX embedder (e.g. ResNet34, 256-d).
 
-### Voice Activity Detection (Legacy)
+### Voice Activity Detection
 
 #### `EnergyVad`
 Simple energy-based VAD for tests and fallback scenarios.
