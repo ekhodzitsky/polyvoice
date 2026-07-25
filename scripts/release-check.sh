@@ -10,6 +10,15 @@ cd "$(dirname "$0")/.."
 # partial cache/download miss can never silently green-light a release.
 export POLYVOICE_REQUIRE_DATA=1
 
+# Default CLI path is v2 + VBx (0.11+). Point at the checked-in PLDA fixtures
+# unless the caller already set POLYVOICE_VBX_PLDA_DIR (e.g. local override).
+export POLYVOICE_VBX_PLDA_DIR="${POLYVOICE_VBX_PLDA_DIR:-$PWD/fixtures/vbx-plda}"
+if [ ! -f "${POLYVOICE_VBX_PLDA_DIR}/plda_transform.npy" ]; then
+  echo "FATAL: VBx PLDA fixtures missing at ${POLYVOICE_VBX_PLDA_DIR}" >&2
+  echo "Expected the checked-in set under fixtures/vbx-plda/ (see README there)." >&2
+  exit 1
+fi
+
 echo "=== 1. Format check ==="
 cargo fmt -- --check
 

@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release-gate hygiene for doc / deny / CLI snapshot**: fix broken private
   intra-doc links, allow Zlib (foldhash via tract), refresh the top-level
   `--help` insta snapshot for the v2+VBx default and audio-io wording.
+- **Checked-in VBx PLDA fixtures** under `fixtures/vbx-plda/` (~265 KB,
+  CC-BY-4.0) so the default CLI path and `scripts/release-check.sh` can run
+  without a separate PLDA download. CLI DER regression tests pass
+  `--vbx-plda-dir` from the env or these fixtures.
 
 ### Changed
 
