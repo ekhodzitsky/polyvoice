@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-25
+
+### Changed
+
+- Align with core **0.11.0**: optional `clusterer` / `vbx_plda_dir` on
+  `Pipeline.balanced()` / `.mobile()`; VBx when PLDA is configured (matches
+  the CLI default after the full DER gate). Feature `vbx` enabled in the
+  python crate's polyvoice dependency.
+
 ## [0.10.0] - 2026-07-13
 
 ### Added

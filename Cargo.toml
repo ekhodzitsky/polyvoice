@@ -9,7 +9,7 @@ resolver = "2"
 
 [package]
 name = "polyvoice"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 # MSRV tracks ort-enabled (real) builds: ort 2.0.0-rc.11+ needs Rust 1.88.
 # Pure non-ort library features may compile on older toolchains, but CI pins 1.88.
@@ -71,8 +71,9 @@ onnx = ["dep:ort"]
 ffi = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
 download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
-# CLI binary (polyvoice command).
-cli = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "dep:clap", "dep:clap_complete"]
+# CLI binary (polyvoice command). Includes VBx so the post-gate default path
+# (pipeline v2 + VBx) is available without an extra feature flag.
+cli = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "vbx", "dep:clap", "dep:clap_complete"]
 
 # Multi-format audio decode (symphonia) + resampling to 16 kHz (rubato) for the
 # CLI / loading layer. Opt-in only — keeps the default library surface free of
