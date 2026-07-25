@@ -1,11 +1,35 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
-//! High-level diarization pipeline.
+//! High-level offline diarization pipeline.
 //!
 //! Wires together VAD, embedding extraction, and AHC clustering into a
 //! single `run()` call that takes audio and returns `DiarizationResult`.
+//!
+//! # Bring-your-own embedder
+//!
+//! `Pipeline` is generic over [`crate::Embedder`]. Implement that trait on an
+//! external encoder (Candle, tract, custom) — no `onnx` feature required:
+//!
+//! ```rust
+//! use polyvoice::{
+//!     DiarizationConfig, Embedder, EmbedderError, EnergyVad, Pipeline, VadConfig,
+//! };
+//!
+//! struct FixedEmbedder;
+//!
+//! impl Embedder for FixedEmbedder {
+//!     fn dim(&self) -> usize { 4 }
+//!     fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+//!         Ok(vec![1.0, 0.0, 0.0, 0.0])
+//!     }
+//! }
+//!
+//! let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
+//! let mut vad = EnergyVad::new(-40.0, 16_000, 512);
+//! // Silence → no speech; exercise the type bounds only.
+//! let _ = pipeline.run(&vec![0.0f32; 16_000], &FixedEmbedder, &mut vad);
+//! ```
 
 use crate::ahc::agglomerative_cluster;
-use crate::embedding::EmbeddingExtractor;
+use crate::embedder::{Embedder, EmbedderError};
 use crate::types::{
     DiarizationConfig, DiarizationResult, Segment, SpeakerId, SpeakerTurn, TimeRange,
 };
@@ -18,7 +42,7 @@ pub enum PipelineError {
     #[error("VAD error: {0}")]
     Vad(#[from] VadError),
     #[error("embedding error: {0}")]
-    Embedding(#[from] crate::embedding::EmbeddingError),
+    Embedding(#[from] EmbedderError),
     #[error("WAV error: {0}")]
     Wav(#[from] wav::WavError),
     #[error("unsupported WAV sample rate: {actual}, expected: {expected}")]
@@ -43,13 +67,17 @@ impl Pipeline {
     }
 
     /// { true }
-    /// `pub fn run<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
+    /// `pub fn run<E: Embedder, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
     /// { ret.as_ref().map_or(true, |r| r.num_speakers <= r.segments.len()) }
     /// Run the full diarization pipeline on raw f32 samples.
     ///
+    /// `extractor` must implement [`Embedder`] (the supported BYO surface).
+    /// Legacy [`crate::embedding::EmbeddingExtractor`] types work through an
+    /// automatic bridge.
+    ///
     /// Returns [`PipelineError::AudioTooLong`] if the input exceeds
     /// `config.max_duration_secs` (default 1 hour).
-    pub fn run<E: EmbeddingExtractor, V: VoiceActivityDetector>(
+    pub fn run<E: Embedder, V: VoiceActivityDetector>(
         &self,
         samples: &[f32],
         extractor: &E,
@@ -80,7 +108,7 @@ impl Pipeline {
             if region.len() < window {
                 let mut padded = vec![0.0f32; window];
                 padded[..region.len()].copy_from_slice(region);
-                let emb = extractor.extract(&padded, &self.config)?;
+                let emb = extractor.embed(&padded)?;
                 embeddings.push(emb);
                 time_ranges.push(TimeRange {
                     start: start as f64 / sr,
@@ -91,7 +119,7 @@ impl Pipeline {
                     crate::window::WindowIter::new(region.len(), window, hop)
                 {
                     let chunk = &region[offset..offset_end];
-                    let emb = extractor.extract(chunk, &self.config)?;
+                    let emb = extractor.embed(chunk)?;
                     embeddings.push(emb);
                     time_ranges.push(TimeRange {
                         start: (start + offset) as f64 / sr,
@@ -164,14 +192,14 @@ impl Pipeline {
     }
 
     /// { true }
-    /// `pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
+    /// `pub fn run_from_wav<E: Embedder, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
     /// { ret.as_ref().map_or(true, |r| r.num_speakers <= r.segments.len()) }
     /// Run the pipeline from a WAV file path.
     ///
     /// Returns [`PipelineError::UnsupportedSampleRate`] if the WAV sample rate
     /// does not match [`crate::types::WindowConfig::sample_rate`] in
     /// [`DiarizationConfig::window`].
-    pub fn run_from_wav<E: EmbeddingExtractor, V: VoiceActivityDetector>(
+    pub fn run_from_wav<E: Embedder, V: VoiceActivityDetector>(
         &self,
         path: &Path,
         extractor: &E,
@@ -193,7 +221,9 @@ impl Pipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Embedder;
     use std::io::Cursor;
+    use std::sync::Mutex;
 
     #[test]
     fn pipeline_new_with_defaults() {
@@ -265,5 +295,83 @@ mod tests {
             "expected UnsupportedSampleRate error, got {:?}",
             result
         );
+    }
+
+    /// Deterministic two-prototype embedder: high zero-crossing rate → speaker A,
+    /// low ZCR → speaker B. Orthogonal unit vectors so AHC must yield ≥2 clusters.
+    struct TwoSpeakerEmbedder {
+        /// Call count — unused, held for Send+Sync realism (shared encoder pattern).
+        _calls: Mutex<usize>,
+    }
+
+    impl TwoSpeakerEmbedder {
+        fn new() -> Self {
+            Self {
+                _calls: Mutex::new(0),
+            }
+        }
+    }
+
+    impl Embedder for TwoSpeakerEmbedder {
+        fn dim(&self) -> usize {
+            4
+        }
+
+        fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            if let Ok(mut c) = self._calls.lock() {
+                *c += 1;
+            }
+            let mut zcr = 0usize;
+            for w in audio.windows(2) {
+                if w[0].signum() != w[1].signum() {
+                    zcr += 1;
+                }
+            }
+            let rate = zcr as f32 / audio.len().max(1) as f32;
+            // 300 Hz @ 16 kHz ≈ 0.0375 ZCR; 800 Hz ≈ 0.1 ZCR.
+            let mut v = if rate > 0.06 {
+                vec![1.0, 0.0, 0.0, 0.0]
+            } else {
+                vec![0.0, 1.0, 0.0, 0.0]
+            };
+            crate::utils::l2_normalize(&mut v);
+            Ok(v)
+        }
+    }
+
+    fn sine_wave(freq: f32, duration_secs: f32, sample_rate: u32) -> Vec<f32> {
+        let n = (duration_secs * sample_rate as f32) as usize;
+        (0..n)
+            .map(|i| {
+                let t = i as f32 / sample_rate as f32;
+                0.5 * (2.0 * std::f32::consts::PI * freq * t).sin()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn custom_embedder_two_speakers_without_onnx() {
+        let sr = 16_000u32;
+        let mut samples = sine_wave(300.0, 2.0, sr);
+        samples.extend(std::iter::repeat_n(0.0, sr as usize)); // 1 s silence
+        samples.extend(sine_wave(800.0, 2.0, sr));
+
+        let mut config = DiarizationConfig::default();
+        // Orthogonal prototypes must never merge.
+        config.cluster.threshold = 0.9;
+        config.cluster.min_cluster_size = 1;
+        config.cluster.min_cluster_secs = 0.0;
+
+        let pipeline = Pipeline::new(config, VadConfig::default());
+        let embedder = TwoSpeakerEmbedder::new();
+        let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
+        let result = pipeline.run(&samples, &embedder, &mut vad).unwrap();
+
+        assert!(
+            result.num_speakers >= 2,
+            "expected ≥2 speakers from deterministic two-prototype embedder, got {}",
+            result.num_speakers
+        );
+        assert!(!result.turns.is_empty());
     }
 }

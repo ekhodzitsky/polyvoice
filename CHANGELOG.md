@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Bring-your-own embedder is a supported, non-deprecated library API.**
+  Offline `Pipeline` and online `StreamingPipeline` are generic over
+  `E: Embedder` (always available; no `onnx` required). Implement
+  `polyvoice::Embedder` on an external encoder (Candle, tract, custom) and
+  pass it with `EnergyVad` — no `#[allow(deprecated)]`. Legacy
+  `EmbeddingExtractor` implementors still work via an automatic bridge to
+  `Embedder`. `DummyExtractor` is undeprecated as the in-tree test/mock
+  embedder. Semver: additive / deprecation-policy only; `EmbeddingExtractor`
+  is not removed.
+
 ### Changed
 
 - **Ort-free library path is first-class.** CI job `ort-free-core` hard-fails if
