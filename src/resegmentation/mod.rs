@@ -338,15 +338,15 @@ impl Resegmenter for OverlapResegmenter {
                             best = Some((c.speaker, s));
                         }
                     }
-                    if let Some((id, score)) = best {
-                        if score > self.threshold {
-                            out.push(SpeakerTurn {
-                                speaker: id,
-                                time: region.time,
-                                text: None,
-                                stable: true,
-                            });
-                        }
+                    if let Some((id, score)) = best
+                        && score > self.threshold
+                    {
+                        out.push(SpeakerTurn {
+                            speaker: id,
+                            time: region.time,
+                            text: None,
+                            stable: true,
+                        });
                     }
                 }
             }

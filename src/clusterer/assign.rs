@@ -180,8 +180,8 @@ pub fn build_cooccurrence(
     cooc
 }
 
-#[allow(clippy::unwrap_used)]
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -269,13 +269,13 @@ mod tests {
     ) -> HashMap<u8, SpeakerId> {
         let n = max_speakers;
         let mut cost = vec![vec![0.0_f32; n]; n];
-        for loc in 0..n {
-            for g in 0..n {
+        for (loc, row) in cost.iter_mut().enumerate() {
+            for (g, cell) in row.iter_mut().enumerate() {
                 let d = cooc
                     .get(&(loc as u8))
                     .and_then(|m| m.get(&(g as u32)).copied())
                     .unwrap_or(0.0);
-                cost[loc][g] = -(d as f32);
+                *cell = -(d as f32);
             }
         }
         let assignment = crate::hungarian::solve(&cost).unwrap();

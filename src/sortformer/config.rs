@@ -154,6 +154,7 @@ pub const ADAPTER_TYPE: &str = "sortformer-v2";
 pub const MODEL_ID: &str = "sortformer_v2";
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

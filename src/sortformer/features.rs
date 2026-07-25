@@ -170,14 +170,15 @@ fn create_mel_filterbank_slaney(n_fft: usize, n_mels: usize, sample_rate: usize)
             filterbank[i][k] = 0.0f64.max(lower.min(upper)) as f32;
         }
         let enorm = 2.0 / (mel_points[i + 2] - mel_points[i]);
-        for k in 0..freq_bins {
-            filterbank[i][k] *= enorm as f32;
+        for slot in &mut filterbank[i] {
+            *slot *= enorm as f32;
         }
     }
     filterbank
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

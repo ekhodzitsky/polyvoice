@@ -65,7 +65,7 @@ fn load_runnable(model_path: &Path) -> anyhow::Result<Arc<TypedRunnableModel>> {
         .map_err(|e| anyhow::anyhow!("tract model_for_path: {e}"))?;
 
     match try_optimize_runnable(base.clone()) {
-        Ok(m) => return Ok(m),
+        Ok(m) => Ok(m),
         Err(direct_err) => match try_optimize_with_symbols(base) {
             Ok(m) => Ok(m),
             Err(sym_err) => Err(anyhow::anyhow!(

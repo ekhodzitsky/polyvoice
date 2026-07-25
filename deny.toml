@@ -30,6 +30,8 @@ allow = [
     "ISC",
     "MPL-2.0",
     "CDLA-Permissive-2.0",
+    # foldhash (via hashbrown → tract) is Zlib — OSI / FSF Free.
+    "Zlib",
 ]
 confidence-threshold = 0.8
 
