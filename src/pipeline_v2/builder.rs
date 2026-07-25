@@ -255,9 +255,9 @@ impl PipelineBuilder {
                             None if std::env::var_os("POLYVOICE_VBX_PLDA_DIR").is_some() => {
                                 crate::clusterer::vbx::VbxClusterer::from_env(max)
                             }
-                            None => crate::clusterer::vbx::VbxClusterer::from_registry(
-                                &registry, max,
-                            ),
+                            None => {
+                                crate::clusterer::vbx::VbxClusterer::from_registry(&registry, max)
+                            }
                         }
                         .map_err(|e| ConfigError::UnknownModel {
                             model_id: format!("vbx ({e})"),
