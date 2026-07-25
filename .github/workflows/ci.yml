@@ -360,6 +360,27 @@ jobs:
       - run: cargo test --manifest-path polyvoice-asr-sherpa/Cargo.toml --locked
       - run: cargo clippy --manifest-path polyvoice-asr-sherpa/Cargo.toml --all-targets --locked -- -D warnings
 
+  # Hard gate: the intentional ort-free library path (default = []) must never
+  # pull `ort` into its normal dependency graph. Consumers (BYO embedder +
+  # EnergyVad + Pipeline / StreamingPipeline) rely on this for pure-Rust /
+  # no-native-dylib builds. Fail the PR if a feature regression reintroduces
+  # dep:ort. Also check + test the default-free lib surface.
+  ort-free-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: ort must not resolve under --no-default-features
+        run: bash scripts/check-ort-free.sh
+      - run: cargo check --no-default-features --lib --locked
+      - run: cargo test --no-default-features --lib --locked
+      - run: cargo clippy --no-default-features --all-targets --locked -- -D warnings
+      # Pure-Rust feature combo used by BYO-embedder consumers (clustering + VBx).
+      - run: cargo check --no-default-features --features clusterer,vbx --lib --locked
+
   wasm32-smoke:
     runs-on: ubuntu-latest
     steps:

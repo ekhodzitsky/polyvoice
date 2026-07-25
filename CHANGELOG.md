@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Ort-free library path is first-class.** CI job `ort-free-core` hard-fails if
+  `ort` appears in the `--no-default-features` normal dependency graph (or in
+  pure-Rust combos such as `clusterer,vbx`). Documented guaranteed surface in
+  [`docs/library-mode.md`](docs/library-mode.md); README has a short
+  “Library mode (no ONNX)” pointer for BYO-embedder consumers. No behavior
+  change to the ONNX / CLI production path; `default = []` was already empty.
+
 ## [0.11.0] - 2026-07-25
 
 ### Fixed
