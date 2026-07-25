@@ -16,9 +16,10 @@ Speaker_1: 14.1s - 28.7s
 Speaker_0: 31.2s - 45.0s
 ```
 
-Like-for-like (collar 0, overlap-scored) VoxConverse-test DER is **18.5%** vs
-pyannote 3.1's **11.3%** — a few DER points traded for a CPU-only, MIT,
-**ungated** engine that needs no Python — see [Benchmarks](docs/BENCHMARKS.md).
+Like-for-like (collar 0, overlap-scored) VoxConverse-test DER is **15.4%**
+(v2+VBx default) vs pyannote 3.1's **11.3%** — a few DER points traded for a
+CPU-only, MIT, **ungated** engine that needs no Python — see
+[Benchmarks](docs/BENCHMARKS.md).
 
 ## Install
 
@@ -64,7 +65,7 @@ pip install polyvoice
 ### From source
 
 ```bash
-# CLI (WAV 16 kHz mono input)
+# CLI (WAV 16 kHz mono input). Feature `cli` includes VBx (default clusterer).
 cargo install polyvoice --features cli
 
 # CLI + any-format audio (mp3/flac/ogg/m4a/aac, any sample rate → 16 kHz mono)
@@ -75,12 +76,19 @@ cargo install polyvoice --features "cli,audio-io"
 
 ```rust,no_run
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::Pipeline;
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
 use polyvoice::types::{Profile, SampleRate};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut cfg = PipelineConfig {
+        profile: Profile::Balanced,
+        clusterer: ClustererKind::Vbx, // or Ahc { threshold: 0.45 }
+        ..PipelineConfig::default()
+    };
+    // VBx needs PLDA weights: cfg.vbx_plda_dir = Some("data/vbx-plda".into());
+    // or POLYVOICE_VBX_PLDA_DIR in the environment.
     let pipeline = Pipeline::builder()
-        .profile(Profile::Balanced)                  // auto speaker count
+        .config(cfg)
         .with_models_from(ModelRegistry::default()?) // models auto-download on first run
         .build()?;
 
@@ -98,7 +106,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```bash
 polyvoice download-models --profile balanced
+# Default path: pipeline v2 + VBx (needs PLDA)
+export POLYVOICE_VBX_PLDA_DIR=/path/to/vbx-plda   # see docs/vbx-plda-release.md
 polyvoice diarize meeting.wav --output meeting.rttm
+# Without PLDA: --clusterer ahc   |   old path: --legacy
 # With a build that includes `audio-io`:
 # polyvoice diarize meeting.mp3 --output meeting.rttm
 ```
@@ -114,10 +125,10 @@ Python usage and the full API live on [docs.rs](https://docs.rs/polyvoice).
 - **CPU-first, ~30 MB, MIT.** No GPU, no Python runtime, no gated model access.
 
 It is **not** the accuracy leader — like-for-like (collar 0, overlap-scored)
-VoxConverse-test DER is **18.5%** versus **11.3%** for pyannote 3.1. It trades
-those DER points for deployability: a pure-Rust, CPU, MIT, **ungated** engine
-(pyannote's weights are gated behind an HF token) with four bindings and
-streaming.
+VoxConverse-test DER is **15.4%** (v2+VBx default) versus **11.3%** for
+pyannote 3.1. It trades those DER points for deployability: a pure-Rust, CPU,
+MIT, **ungated** engine (pyannote's weights are gated behind an HF token) with
+four bindings and streaming.
 
 ## How it works
 

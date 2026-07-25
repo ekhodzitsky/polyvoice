@@ -3,10 +3,10 @@
 //!
 //! `polyvoice meeting.wav` diarizes a file (implicit `diarize`); subcommands
 //! `models` / `download-models` / `completions` are still available. Default
-//! pipeline: legacy v0.5 (Silero VAD + sliding-window embeddings + AHC). Use
-//! `--v2` to opt into pipeline v2 (Powerset segmentation + overlap masking +
-//! resegmentation); v2 is not yet validated as default on long-form audio — see
-//! PRODUCTION-READINESS.md.
+//! pipeline (since 0.11): **v2 + VBx** (powerset segmentation, ResNet34
+//! embeddings, VB-HMM + PLDA clustering). Requires PLDA weights via
+//! `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR` (or pass `--clusterer ahc`).
+//! Use `--legacy` for the pre-0.11 Silero + AHC path.
 //!
 //! Audio input: without the `audio-io` build feature, only mono 16 kHz WAV is
 //! accepted. Rebuild with `--features "cli,audio-io"` to decode mp3/flac/ogg/
@@ -81,29 +81,35 @@ struct DiarizeArgs {
     /// human-readable output to stderr. Implies `--format json --quiet`.
     #[arg(long)]
     json: bool,
-    /// Use pipeline v2 (experimental; not recommended for long-form audio).
+    /// Use the pre-0.11 legacy pipeline (Silero VAD + sliding-window embeddings
+    /// + AHC) instead of the default v2 + VBx path.
     #[arg(long)]
+    legacy: bool,
+    /// Deprecated no-op: pipeline v2 is the default since 0.11. Kept so scripts
+    /// that still pass `--v2` keep working.
+    #[arg(long, hide = true)]
     v2: bool,
-    /// v2 clusterer: `ahc` (default cosine AHC) or `vbx` (PLDA + VB-HMM — best for
-    /// overlap-heavy / meeting audio; needs the `vbx` build feature and a PLDA dir
-    /// via `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`). Only affects `--v2`.
-    #[arg(long, default_value = "ahc")]
+    /// Clusterer for the default (v2) path: `vbx` (PLDA + VB-HMM, automatic
+    /// speaker count — the accuracy gate default) or `ahc` (fixed-threshold
+    /// cosine AHC). `vbx` needs PLDA via `--vbx-plda-dir` or
+    /// `POLYVOICE_VBX_PLDA_DIR`. Ignored with `--legacy`.
+    #[arg(long, default_value = "vbx")]
     clusterer: String,
     /// Directory with the precomputed VBx PLDA params (overrides
-    /// `POLYVOICE_VBX_PLDA_DIR`). Only used with `--v2 --clusterer vbx`.
+    /// `POLYVOICE_VBX_PLDA_DIR`). Used when `--clusterer vbx` (the default).
     #[arg(long)]
     vbx_plda_dir: Option<PathBuf>,
     /// v2 dense embedding window in seconds (e.g. `1.5`): split segments into
     /// overlapping sub-windows for more embeddings per speaker — lower confusion
     /// on clean audio at the cost of more embedder calls. Omit for one
-    /// embedding/segment. Only affects `--v2`.
+    /// embedding/segment. Ignored with `--legacy`.
     #[arg(long)]
     embed_window: Option<f32>,
     /// ONNX execution provider: `auto` (CoreML on Apple Silicon, XNNPACK on
     /// aarch64 Linux, else CPU), `cpu`, `coreml`, `nnapi`, `cuda`, `xnnpack`.
     /// Providers not compiled into this build log a warning and run on CPU.
-    /// Only affects `--v2`; the legacy default pipeline keeps its built-in
-    /// per-session defaults.
+    /// Applies to the default v2 path; legacy keeps its built-in per-session
+    /// defaults.
     #[arg(long, default_value = "auto")]
     execution_provider: String,
     /// Also emit a single-speaker (exclusive) timeline. In JSON this is the
@@ -183,7 +189,8 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         max_speakers,
         quiet,
         json,
-        v2,
+        legacy,
+        v2: _v2_deprecated,
         clusterer,
         vbx_plda_dir,
         embed_window,
@@ -191,6 +198,9 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         exclusive,
         latency_preset,
     } = args;
+    // v2 is the default; --legacy opts into the pre-0.11 Silero+AHC path.
+    // `--v2` remains accepted (hidden) for script compatibility.
+    let use_legacy = legacy;
 
     let wav = wav.ok_or_else(|| {
         anyhow::anyhow!(
@@ -236,7 +246,17 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         ),
     };
 
-    let mut result = if v2 {
+    let mut result = if use_legacy {
+        run_legacy_pipeline(
+            &wav,
+            profile,
+            &registry,
+            threshold,
+            max_clusters,
+            latency,
+            quiet,
+        )?
+    } else {
         run_v2_pipeline(
             &wav,
             profile,
@@ -248,16 +268,6 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
             // user did not pass an explicit --embed-window.
             embed_window.or_else(|| latency.map(|p| p.params().window_secs)),
             &execution_provider,
-            quiet,
-        )?
-    } else {
-        run_legacy_pipeline(
-            &wav,
-            profile,
-            &registry,
-            threshold,
-            max_clusters,
-            latency,
             quiet,
         )?
     };
@@ -436,7 +446,13 @@ fn run_v2_pipeline(
         .config(config)
         .with_models_from(registry.clone())
         .build()
-        .context("build pipeline v2")?;
+        .with_context(|| {
+            if matches!(clusterer_kind, ClustererKind::Vbx) {
+                "build pipeline v2 (clusterer=vbx): set --vbx-plda-dir or POLYVOICE_VBX_PLDA_DIR to the PLDA weights directory, or pass --clusterer ahc / --legacy".to_string()
+            } else {
+                "build pipeline v2".to_string()
+            }
+        })?;
 
     if !quiet {
         eprintln!("Reading {}...", wav.display());

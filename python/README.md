@@ -46,7 +46,7 @@ for turn in result["turns"]:
 
 | Pipeline | VoxConverse-test DER (collar 0, overlap-scored) | Model size |
 |----------|-------------------------------------------------|------------|
-| default (shipped) | **18.5%** | ~30 MB |
+| default (v2+VBx) | **15.4%** | ~30 MB |
 
 Full protocol, collar/averaging disclosure, and competitor numbers:
 [docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/master/docs/BENCHMARKS.md).
