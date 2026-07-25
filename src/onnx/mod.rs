@@ -192,9 +192,7 @@ pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
 /// can reuse sessions (checkout waits; Drop returns).
 /// Raw-waveform pooled ONNX embedder (no fbank). **Unused** by production
 /// adapters — prefer [`crate::ecapa::FbankOnnxExtractor`] or
-/// [`crate::embedder::ResNet34Adapter`]. Kept only for module-path API
-/// compatibility (no longer re-exported at the crate root).
-#[doc(hidden)]
+/// [`crate::embedder::ResNet34Adapter`].
 #[deprecated(
     since = "0.7.0",
     note = "unused by production paths; use embedder::ResNet34Adapter / ecapa::FbankOnnxExtractor (Embedder)"

@@ -21,6 +21,8 @@ use crate::segmentation::decoder::{FrameLabel, PowersetClass, PowersetDecoder};
 use crate::segmentation::{RawSegment, SegmentationError};
 use crate::types::TimeRange;
 
+/// One window's segmentation output.
+#[derive(Debug, Clone)]
 pub struct WindowOutput {
     pub start_time: f32,
     pub end_time: f32,

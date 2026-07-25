@@ -160,8 +160,9 @@ pub use earshot_vad::{
 
 #[cfg(feature = "onnx")]
 pub mod onnx;
-// OnnxEmbeddingExtractor is soft-deprecated and unused by production adapters;
-// access only via `polyvoice::onnx::OnnxEmbeddingExtractor` (feature `onnx`).
+#[cfg(feature = "onnx")]
+#[allow(deprecated)] // soft-deprecated; unused by production adapters
+pub use onnx::OnnxEmbeddingExtractor;
 
 #[cfg(feature = "onnx")]
 pub mod ecapa;

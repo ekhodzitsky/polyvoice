@@ -29,9 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`ClustererKind::KMeans`** on pipeline v2 (CLI/bench/MCP: `--clusterer kmeans`
-  / `clusterer=kmeans`). Crate-root re-exports `KMeansClusterer` and
-  `VbxClusterer` (with `clusterer` / `vbx` features).
+- Crate-root re-exports for `KMeansClusterer` and `VbxClusterer` (features
+  `clusterer` / `vbx`) so Custom-profile injectors do not need deep paths.
 
 ### Changed
 
@@ -40,8 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `der::{frame,decompose,wder}`) with the same public re-exports.
   Segmentation binarization lives in `segmentation::binarize` (was part of
   the large aggregator monofile). `DummyExtractor` implements `Embedder`
-  directly; crate-root re-export of `OnnxEmbeddingExtractor` removed (still
-  at `polyvoice::onnx::…`, `#[doc(hidden)]` + deprecated).
+  directly. `OnnxEmbeddingExtractor` remains soft-deprecated at the crate root.
 - **Shared spectral graph.** `spectral::SpectralGraph` owns k-NN affinity →
   Laplacian → eigenspectrum for both `spectral_cluster` (BIC k) and
   `NmeScClusterer` (pure eigengap k). `AhcClusterer::with_threshold(0, t)` is

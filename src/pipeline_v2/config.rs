@@ -73,8 +73,6 @@ pub enum ClustererKind {
     /// VBx (Variational Bayes HMM + PLDA) with automatic speaker-count selection.
     /// Requires the `vbx` feature; the PLDA params are resolved at construction.
     Vbx,
-    /// K-means++ with silhouette auto-`k` (upper-bounded by `max_speakers`).
-    KMeans,
 }
 
 // Canonical home moved to `crate::onnx` (the module that owns session
