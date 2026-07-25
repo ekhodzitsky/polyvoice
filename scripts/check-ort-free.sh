@@ -17,6 +17,8 @@ ort_in_graph() {
   # Redirect stderr: when clean, cargo prints "package ID specification `ort`
   # did not match any packages" and exits non-zero. We only care whether any
   # package lines land on stdout.
+  # Portable grep (CI images may not have ripgrep). Any stdout line means
+  # cargo resolved an `ort` package into the normal graph.
   if cargo tree -e normal -i ort "$@" 2>/dev/null | grep -q .; then
     return 0
   fi
