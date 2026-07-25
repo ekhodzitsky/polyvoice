@@ -105,6 +105,7 @@ struct StreamingReport {
     rows: Vec<StreamingPresetRow>,
 }
 
+#[cfg(feature = "vad-earshot")]
 #[derive(Serialize)]
 struct VadArm {
     name: String,
@@ -115,6 +116,7 @@ struct VadArm {
     files: usize,
 }
 
+#[cfg(feature = "vad-earshot")]
 #[derive(Serialize)]
 struct VadParityReport {
     schema: String,
@@ -339,6 +341,7 @@ fn run_streaming(
     Ok(())
 }
 
+#[cfg(feature = "vad-earshot")]
 fn run_legacy_arm_silero(
     name: &str,
     wavs: &[PathBuf],
@@ -478,55 +481,59 @@ fn run_legacy_arm_earshot(
 }
 
 fn run_vad_parity(dataset: PathBuf, max_files: usize, output: Option<PathBuf>) -> Result<()> {
-    let registry = ModelRegistry::default()?;
-    let emb_path = registry.ensure("wespeaker_resnet34")?;
-    let vad_path = registry.ensure("silero_vad")?;
-    let wavs = list_wavs(&dataset, max_files)?;
-    let rttm_dir = dataset.join("rttm");
-
-    eprintln!("Silero arm…");
-    let silero =
-        run_legacy_arm_silero("silero", &wavs, &rttm_dir, &emb_path, &vad_path, 512)?;
-    eprintln!(
-        "silero DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
-        silero.macro_der_collar_0, silero.macro_der_collar_025, silero.mean_rtf
-    );
-
-    eprintln!("Earshot arm…");
-    #[cfg(feature = "vad-earshot")]
-    let earshot = run_legacy_arm_earshot("earshot", &wavs, &rttm_dir, &emb_path)?;
     #[cfg(not(feature = "vad-earshot"))]
-    anyhow::bail!("rebuild with --features vad-earshot");
-
-    eprintln!(
-        "earshot DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
-        earshot.macro_der_collar_0, earshot.macro_der_collar_025, earshot.mean_rtf
-    );
-
-    let d0 = earshot.macro_der_collar_0 - silero.macro_der_collar_0;
-    let d25 = earshot.macro_der_collar_025 - silero.macro_der_collar_025;
-    let gate = 0.3_f64;
-    let report = VadParityReport {
-        schema: "polyvoice-vad-parity-v1".into(),
-        hardware: hardware(),
-        max_files,
-        dataset: dataset.display().to_string(),
-        silero,
-        earshot,
-        delta_der_collar_0_pp: d0,
-        delta_der_collar_025_pp: d25,
-        parity_gate_abs_pp: gate,
-        parity_pass_collar_0: d0.abs() <= gate,
-        parity_pass_collar_025: d25.abs() <= gate,
-    };
-    let json = serde_json::to_string_pretty(&report)?;
-    if let Some(path) = output {
-        std::fs::write(&path, &json)?;
-        eprintln!("wrote {}", path.display());
-    } else {
-        println!("{json}");
+    {
+        let _ = (dataset, max_files, output);
+        anyhow::bail!("rebuild with --features vad-earshot");
     }
-    Ok(())
+    #[cfg(feature = "vad-earshot")]
+    {
+        let registry = ModelRegistry::default()?;
+        let emb_path = registry.ensure("wespeaker_resnet34")?;
+        let vad_path = registry.ensure("silero_vad")?;
+        let wavs = list_wavs(&dataset, max_files)?;
+        let rttm_dir = dataset.join("rttm");
+
+        eprintln!("Silero arm…");
+        let silero =
+            run_legacy_arm_silero("silero", &wavs, &rttm_dir, &emb_path, &vad_path, 512)?;
+        eprintln!(
+            "silero DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
+            silero.macro_der_collar_0, silero.macro_der_collar_025, silero.mean_rtf
+        );
+
+        eprintln!("Earshot arm…");
+        let earshot = run_legacy_arm_earshot("earshot", &wavs, &rttm_dir, &emb_path)?;
+        eprintln!(
+            "earshot DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
+            earshot.macro_der_collar_0, earshot.macro_der_collar_025, earshot.mean_rtf
+        );
+
+        let d0 = earshot.macro_der_collar_0 - silero.macro_der_collar_0;
+        let d25 = earshot.macro_der_collar_025 - silero.macro_der_collar_025;
+        let gate = 0.3_f64;
+        let report = VadParityReport {
+            schema: "polyvoice-vad-parity-v1".into(),
+            hardware: hardware(),
+            max_files,
+            dataset: dataset.display().to_string(),
+            silero,
+            earshot,
+            delta_der_collar_0_pp: d0,
+            delta_der_collar_025_pp: d25,
+            parity_gate_abs_pp: gate,
+            parity_pass_collar_0: d0.abs() <= gate,
+            parity_pass_collar_025: d25.abs() <= gate,
+        };
+        let json = serde_json::to_string_pretty(&report)?;
+        if let Some(path) = output {
+            std::fs::write(&path, &json)?;
+            eprintln!("wrote {}", path.display());
+        } else {
+            println!("{json}");
+        }
+        Ok(())
+    }
 }
 
 fn cosine(a: &[f32], b: &[f32]) -> f32 {
