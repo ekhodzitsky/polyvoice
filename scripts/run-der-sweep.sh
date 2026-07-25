@@ -51,7 +51,9 @@ run_split() {
   fi
   echo "=== sweep: $label ==="
   # --collar 0.25 ⇒ report carries BOTH der_collar_* (0.25 s) and der_no_collar_*.
-  "$BENCH" "$dir" --profile balanced --collar 0.25 "${uem_args[@]}" --output "$report"
+  # Explicit v2+VBx matches CLI default and tests/der_baseline.json command_line.
+  "$BENCH" "$dir" --profile balanced --pipeline v2 --clusterer vbx \
+    --collar 0.25 "${uem_args[@]}" --output "$report"
   echo "[$label] report → $report"
   if command -v jq >/dev/null 2>&1; then
     jq -r '"  collar0.25  macro=\(.der_collar_macro)%  micro=\(.der_collar_micro)%\n  no-collar   macro=\(.der_no_collar_macro)%  micro=\(.der_no_collar_micro)%\n  files=\(.files_processed)  models=\([.model_hashes[].model_id] | join(\",\"))"' "$report"

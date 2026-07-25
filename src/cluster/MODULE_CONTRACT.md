@@ -5,9 +5,11 @@ module: src/cluster
 level: subsystem
 layer: algorithm
 purpose: >
-  Owns speaker clustering data structures and algorithms: SpeakerCluster,
-  centroid computation, label remapping, and cosine-similarity-based grouping.
-  Does NOT own the Clusterer trait (that lives in clusterer.rs).
+  Owns the online incremental SpeakerCluster (centroid assign/merge by cosine
+  threshold) and related remapping helpers used with SpeakerIdRemap. This is
+  a public library utility; production offline clustering uses clusterer, and
+  production streaming uses streaming::ArrivalOrderSpeakerCache — SpeakerCluster
+  is not on those default paths.
 status: stable
 owners:
   - polyvoice-core
@@ -35,28 +37,31 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Cluster of speaker embeddings with centroid and assigned segments.
+      Online incremental speaker clusterer: assign embeddings to centroids or
+      create new speakers; optional merge. Re-exported at crate root.
     proof:
       kind: unit-test
       target: src/cluster::mod::tests
       command: cargo test --lib cluster
 dependencies:
-  internal: []
+  internal:
+    - module: types
+      scope: data-shape
+      reason: ClusterConfig, SpeakerId, SpeakerIdRemap.
+    - module: utils
+      scope: utility
+      reason: cosine_similarity, l2_normalize.
   external: []
-
 consumers:
-  - path: src/streaming/mod.rs
+  - path: src/lib.rs
     uses:
       - SpeakerCluster
-  - path: src/ahc/mod.rs
+  - path: fuzz/fuzz_targets/fuzz_cluster_assign.rs
     uses:
       - SpeakerCluster
-  - path: src/pipeline/mod.rs
+  - path: src/types/mod.rs
     uses:
-      - SpeakerCluster
-  - path: tests/clusterer_test.rs
-    uses:
-      - SpeakerCluster
+      - SpeakerIdRemap docs reference SpeakerCluster::merge
 invariants:
   - id: centroid-normalized
     rule: Cluster centroids are L2-normalized after updates.
@@ -74,12 +79,14 @@ agent_policy:
   allowed_mutations:
     - Adding new clustering metrics.
     - Refactoring internal data layout.
+    - Soft-deprecating public surface if streaming reuses a single online backend.
   forbidden_mutations:
     - Removing SpeakerCluster without migration lease.
   escalation:
-    - Changes to public fields of SpeakerCluster.
+    - Changes to public methods of SpeakerCluster.
 ---
 
 # src/cluster
 
-Speaker clustering data structures and algorithms.
+Online `SpeakerCluster` (incremental centroids). Not used by offline
+`pipeline_v2` or the default streaming AOSC cache.

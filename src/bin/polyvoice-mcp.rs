@@ -1,12 +1,13 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! polyvoice-mcp — MCP (Model Context Protocol) stdio server: the agent front door.
 //!
 //! Exposes `polyvoice.diarize` (+ `transcribe`/`diarize_and_transcribe` stubbed
 //! until the opt-in `polyvoice-asr` crate exists, and `capabilities`) over stdio.
-//! Tools project the canonical `DiarizationResult` v1. **stdout is reserved for
-//! JSON-RPC** — nothing else is ever printed to it (no `println!`, no tracing
-//! subscriber installed, pipeline runs quietly), so the protocol stream stays
-//! clean. Errors carry the polyvoice FFI numeric codes as `{code, message}`.
+//! Diarization uses the same production path as the CLI (**pipeline v2 + VBx**
+//! by default). Tools project the canonical `DiarizationResult` v1. **stdout is
+//! reserved for JSON-RPC** — nothing else is ever printed to it (no `println!`,
+//! no tracing subscriber installed, pipeline runs quietly), so the protocol
+//! stream stays clean. Errors carry the polyvoice FFI numeric codes as
+//! `{code, message}`.
 
 use anyhow::Result;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -17,11 +18,9 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::Pipeline as LegacyPipeline;
-use polyvoice::types::{ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate};
-use polyvoice::vad::VadConfig;
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig};
+use polyvoice::types::{DiarizationResult, Profile, SampleRate};
 use polyvoice::wav::read_wav;
-use polyvoice::{FbankOnnxExtractor, SileroVad};
 
 // Numeric error codes mirror include/polyvoice.h (do not invent new ones).
 const ERR_INVALID_ARG: i32 = 1;
@@ -49,12 +48,20 @@ struct DiarizeInput {
     /// Model profile: "balanced" (default) or "mobile".
     #[serde(default)]
     profile: Option<String>,
-    /// Clustering cosine-similarity threshold (default 0.45).
+    /// Clusterer: "vbx" (default, PLDA + VB-HMM, matches CLI) or "ahc"
+    /// (fixed-threshold cosine AHC).
+    #[serde(default)]
+    clusterer: Option<String>,
+    /// AHC cosine-similarity threshold when clusterer is "ahc" (default 0.45).
+    /// Ignored for "vbx".
     #[serde(default)]
     threshold: Option<f32>,
     /// Cap the number of speakers (clustering ceiling).
     #[serde(default)]
     max_speakers: Option<usize>,
+    /// Optional directory with VBx PLDA `.npy` params (overrides env/registry).
+    #[serde(default)]
+    vbx_plda_dir: Option<String>,
     /// Response detail: "concise" (per-speaker rollup only, default) or
     /// "detailed" (also the full ordered turns).
     #[serde(default)]
@@ -205,9 +212,10 @@ impl ServerHandler for PolyvoiceMcp {
         let mut info = ServerInfo::default();
         info.capabilities = ServerCapabilities::builder().enable_tools().build();
         info.instructions = Some(
-            "polyvoice speaker diarization. Call polyvoice.diarize with a WAV path to get \
-             who-spoke-when; polyvoice.capabilities to discover features. Transcription tools \
-             require the optional polyvoice-asr crate."
+            "polyvoice speaker diarization (pipeline v2 + VBx by default, same as the CLI). \
+             Call polyvoice.diarize with a WAV path to get who-spoke-when; \
+             polyvoice.capabilities to discover features. Pass clusterer=ahc for fixed-threshold \
+             AHC. Transcription tools require the optional polyvoice-asr crate."
                 .to_owned(),
         );
         info
@@ -254,8 +262,9 @@ fn project(result: &DiarizationResult, detailed: bool) -> DiarizeOutput {
     }
 }
 
-/// Run the legacy diarization pipeline quietly (no stdout/stderr chatter), mapping
-/// failures to FFI-coded MCP errors.
+/// Run the production (pipeline v2) diarization path quietly, mapping failures
+/// to FFI-coded MCP errors. Defaults match the CLI: VBx clusterer + registry
+/// PLDA auto-download when `vbx_plda_dir` is unset.
 fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
     let path = Path::new(&input.path);
     if !path.is_file() {
@@ -274,42 +283,60 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
             ));
         }
     };
+    let clusterer_kind = match input.clusterer.as_deref().unwrap_or("vbx") {
+        "vbx" => ClustererKind::Vbx,
+        "ahc" => ClustererKind::Ahc {
+            threshold: input.threshold.unwrap_or(0.45),
+        },
+        other => {
+            return Err(err(
+                ERR_INVALID_ARG,
+                format!("invalid clusterer: {other} (expected vbx|ahc)"),
+            ));
+        }
+    };
+    let max_speakers = input
+        .max_speakers
+        .map(|n| u8::try_from(n).unwrap_or(u8::MAX))
+        .unwrap_or_else(|| PipelineConfig::default().max_speakers);
 
     let registry = ModelRegistry::default().map_err(|e| err(ERR_REGISTRY, e.to_string()))?;
-    let models = registry
+    // Ensure profile models exist before build (clearer error mapping).
+    let _models = registry
         .ensure_for_profile(profile)
         .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
-    let extractor = FbankOnnxExtractor::new(
-        &models.embedder_path,
-        profile.embedding_dim(),
-        1,
-        polyvoice::onnx::ExecutionProvider::Cpu,
-    )
-    .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
-    let vad_path = registry
-        .ensure("silero_vad")
-        .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
-    let mut vad = SileroVad::new(&vad_path, 512).map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
 
-    let mut cluster = ClusterConfig {
-        threshold: input.threshold.unwrap_or(0.45),
-        ..Default::default()
+    let config = PipelineConfig {
+        profile,
+        clusterer: clusterer_kind,
+        max_speakers,
+        vbx_plda_dir: input.vbx_plda_dir.as_ref().map(|s| Path::new(s).to_path_buf()),
+        ..PipelineConfig::default()
     };
-    if let Some(n) = input.max_speakers {
-        cluster.max_speakers = n;
-    }
-    let config = DiarizationConfig {
-        cluster,
-        ..DiarizationConfig::default()
-    };
-    let pipeline = LegacyPipeline::new(config, VadConfig::default());
+    let pipeline = V2Pipeline::builder()
+        .config(config)
+        .with_models_from(registry)
+        .build()
+        .map_err(|e| {
+            if matches!(clusterer_kind, ClustererKind::Vbx) {
+                err(
+                    ERR_MODEL_LOAD,
+                    format!(
+                        "build pipeline v2 (clusterer=vbx): {e}; set vbx_plda_dir / \
+                         POLYVOICE_VBX_PLDA_DIR, allow registry PLDA download, or pass clusterer=ahc"
+                    ),
+                )
+            } else {
+                err(ERR_MODEL_LOAD, e.to_string())
+            }
+        })?;
 
     let (samples, sr_hz) = read_wav(path).map_err(|e| err(ERR_INVALID_ARG, e.to_string()))?;
-    SampleRate::new(sr_hz)
+    let sr = SampleRate::new(sr_hz)
         .ok_or_else(|| err(ERR_INVALID_ARG, format!("invalid sample rate {sr_hz} Hz")))?;
 
     pipeline
-        .run(&samples, &extractor, &mut vad)
+        .run(&samples, sr)
         .map_err(|e| err(ERR_INFERENCE, e.to_string()))
 }
 

@@ -5,12 +5,14 @@
 `polyvoice` is a speaker diarization library for Rust. It answers the question
 **"who spoke when?"** given a stream or file of audio samples.
 
-The crate exposes two pipeline layers:
+The crate exposes two intentional pipeline layers (see
+[PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md)):
 
 | Layer | Entry point | Status | Best for |
 |-------|-------------|--------|----------|
-| **Legacy** (`polyvoice::Pipeline`) | `Pipeline::new(DiarizationConfig, VadConfig)` | Stable, used by CLI & Python | General use, proven DER |
-| **v2 / Hybrid** (`polyvoice::pipeline_v2`) | `HybridPipeline::new(...)` or `PipelineBuilder` | Stable (v0.6.5) | Long-form multi-speaker audio, overlap detection |
+| **BYO / ort-free** (`polyvoice::Pipeline`) | `Pipeline::new(DiarizationConfig, VadConfig)` + inject `Embedder` | Stable library surface; CLI `--legacy` | No ONNX; custom embedders; streaming sibling |
+| **ONNX production** (`polyvoice::pipeline_v2::Pipeline`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/Python/MCP default since 0.11** (v2 + VBx) | Shipped accuracy path |
+| **Hybrid** (`pipeline_v2::hybrid`) | `HybridPipeline::new(...)` | Research/ablation only | Dense-window experiments |
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -153,18 +155,19 @@ let segments = segment_speech(&mut vad, &samples, &config, &vad_config)?;
 ```
 
 #### `SileroVad` (feature `onnx`)
-ONNX-based VAD used by the legacy pipeline and CLI.
+ONNX-based VAD used by the CLI `--legacy` path and BYO pipelines when ONNX is
+enabled. Production v2 path segments with powerset (no separate Silero stage).
 
-## Pipeline v2 & Hybrid (API-only, v0.6.3)
+## Pipeline v2 (production ONNX) & Hybrid (ablation)
 
-> **Note**: These APIs are available in Rust, FFI, Python, and CLI. All
-> interfaces use Pipeline v2 as of v0.6.5.
+> **Since 0.11:** CLI, FFI, Python, and MCP default to `pipeline_v2` with the
+> **VBx** clusterer. Escape hatches: CLI `--legacy` / `--clusterer ahc`.
 
 ### `HybridPipeline`
 
-Combines `PowersetSegmenter` (used purely as a VAD for speech+overlap detection)
-with legacy-style sliding-window ResNet34 embeddings and K-means auto-k clustering.
-Overcomes the 3-speaker hard limit of the Powerset model on long-form audio.
+Research sibling: `PowersetSegmenter` as speech-region detector only, then
+dense sliding-window embeddings + a `Clusterer`. Prefer main
+`pipeline_v2::Pipeline` with optional `embed_window_secs` for production.
 
 ```rust
 use polyvoice::pipeline_v2::hybrid::HybridPipeline;
@@ -192,19 +195,23 @@ Key parameters:
 - `max_gap_secs`: 0.5 — merge same-speaker gaps.
 - `min_speech_secs`: 0.25 — filter short segments.
 
-### `PipelineBuilder` (v2)
+### `PipelineBuilder` (v2 — production)
 
 Profile-based builder for the full v2 pipeline (segmenter → embedder → clusterer → resegmenter):
 
 ```rust
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::Pipeline;
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
 use polyvoice::types::{Profile, SampleRate};
 
-let registry = ModelRegistry::default()?;
+let mut cfg = PipelineConfig {
+    profile: Profile::Balanced,
+    clusterer: ClustererKind::Vbx,
+    ..PipelineConfig::default()
+};
 let pipeline = Pipeline::builder()
-    .profile(Profile::Balanced)
-    .with_models_from(registry)
+    .config(cfg)
+    .with_models_from(ModelRegistry::default()?)
     .build()?;
 let sr = SampleRate::new(16000).unwrap();
 let result = pipeline.run(&samples, sr)?;

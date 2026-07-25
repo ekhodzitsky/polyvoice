@@ -29,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Surface alignment after the 0.11 v2+VBx default.** Module contracts /
+  READMEs (`pipeline_v2`, `pipeline`, `bin`, `clusterer`, `cluster`), crate
+  docs, `docs/API.md`, migration notes, and new
+  [`docs/PIPELINE-ARCHITECTURE.md`](docs/PIPELINE-ARCHITECTURE.md) describe
+  production ONNX vs BYO correctly. **`polyvoice-mcp`** now runs pipeline v2
+  (default clusterer `vbx`; optional `clusterer=ahc`); feature `mcp` enables
+  `vbx`. **`polyvoice-bench`** defaults to `--pipeline v2 --clusterer vbx`
+  (pass `--pipeline legacy` for the pre-0.11 path). DER sweep/baseline scripts
+  pass those flags explicitly.
 - **Ort-free library path is first-class.** CI job `ort-free-core` hard-fails if
   `ort` appears in the `--no-default-features` normal dependency graph (or in
   pure-Rust combos such as `clusterer,vbx`). Documented guaranteed surface in
