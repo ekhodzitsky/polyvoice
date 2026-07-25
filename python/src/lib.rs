@@ -268,7 +268,7 @@ impl Pipeline {
             .build()
             .map_err(|e| {
                 pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "pipeline build: {e} (for VBx set vbx_plda_dir= or POLYVOICE_VBX_PLDA_DIR, or clusterer='ahc')"
+                    "pipeline build: {e} (for VBx set vbx_plda_dir= / POLYVOICE_VBX_PLDA_DIR, allow registry PLDA download, or clusterer='ahc')"
                 ))
             })?;
 
