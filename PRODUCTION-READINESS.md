@@ -167,7 +167,7 @@ roughly ~7 pp no-collar on VoxConverse (see benchmarks).
 |------|------------|----------------|
 | **Legacy (default)** | CLI without `--v2`; validated Python/FFI defaults for production claims | Ship path; DER gates and README claims |
 | **Pipeline v2** | CLI `--v2` | Experimental; powerset segmentation + denser embeddings |
-| **v2 + VBx** | `--v2` + VBx clusterer / PLDA dir | Best experimental accuracy path on several meeting subsets; PLDA weights shipping story separate |
+| **v2 + VBx** | default CLI path (hidden `--v2` no-op); PLDA dir/env/registry | Production accuracy path after full-split DER gate; PLDA minisign still deferred |
 
 **Gap:** Dual pipelines tax docs, gates, and bindings. 1.0 should not ship with
 two first-class defaults. Flip to a **single** default only after v2 (or its
