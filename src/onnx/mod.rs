@@ -3,10 +3,10 @@
 //!
 //! # Runtime boundary
 //!
-//! All `ort::` imports live in [`ort_session`]. The optional tract backend
-//! lives in [`tract_session`] (feature `backend-tract`). Neural stages outside
-//! this module must depend only on [`InferenceRuntime`] / [`RuntimeSession`]
-//! and must **not** import `ort::` or `tract_onnx` directly.
+//! All `ort::` imports live in the private `ort_session` module. The optional
+//! tract backend lives in private `tract_session` (feature `backend-tract`).
+//! Neural stages outside this module must depend only on [`InferenceRuntime`] /
+//! [`RuntimeSession`] and must **not** import `ort::` or `tract_onnx` directly.
 //!
 //! Default backend is always ort. Select tract with env
 //! `POLYVOICE_INFERENCE_BACKEND=tract` (requires `backend-tract`) or
@@ -188,8 +188,8 @@ pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
 
 /// A pooled ONNX session for speaker embedding extraction.
 ///
-/// Wraps [`RuntimeSession`] in a blocking [`crate::utils::ObjectPool`]
-/// so concurrent extractors can reuse sessions (checkout waits; Drop returns).
+/// Wraps [`RuntimeSession`] in a blocking object pool so concurrent extractors
+/// can reuse sessions (checkout waits; Drop returns).
 #[deprecated(
     since = "0.7.0",
     note = "use the v1.0 Embedder trait in polyvoice::embedder"

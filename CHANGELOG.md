@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ort-only `custom_metadata_props` on the session type.
 - **Clippy 1.96 clean under `-D warnings`**: collapsible-if / needless-range-loop
   / unwrap-in-tests hygiene so `scripts/release-check.sh` can pass.
+- **Release-gate hygiene for doc / deny / CLI snapshot**: fix broken private
+  intra-doc links, allow Zlib (foldhash via tract), refresh the top-level
+  `--help` insta snapshot for the v2+VBx default and audio-io wording.
 
 ### Changed
 
