@@ -28,16 +28,18 @@
 //! to a trait-based v1.0 architecture. This is deliberate (shared math, a
 //! compile-time feature guard), not accidental duplication:
 //!
-//! - **v1.0 trait-based (current architecture):** `embedder` (the migration
-//!   target trait), `clusterer`, `segmentation`, `resegmentation`,
+//! - **v1.0 trait-based (current architecture):** `embedder` (`Embedder` — the
+//!   supported BYO injection trait for offline `Pipeline` and online
+//!   `StreamingPipeline`), `clusterer`, `segmentation`, `resegmentation`,
 //!   `silero_vad`, and `pipeline_v2` (experimental — see its README).
-//! - **Legacy:** `embedding`, `ecapa`, `onnx` are `#[deprecated]` — migrate
-//!   to the `embedder` trait. `cluster` and `vad` are the legacy
-//!   clustering/VAD surfaces.
+//! - **Legacy:** `EmbeddingExtractor` in `embedding` is soft-deprecated (still
+//!   bridged to `Embedder`); `ecapa` / `onnx` ONNX wrappers remain available.
+//!   `cluster` and `vad` are the legacy clustering/VAD surfaces.
 //! - **Pipeline status:** `pipeline_v2` (+ VBx clusterer when PLDA is available)
 //!   is the **CLI default since 0.11** after a full VoxConverse-test / AMI-test
-//!   DER gate (see `docs/BENCHMARKS.md`). The legacy `pipeline` remains available
-//!   via CLI `--legacy`.
+//!   DER gate (see `docs/BENCHMARKS.md`). The library injection surface is
+//!   still `Pipeline` + `StreamingPipeline` with a custom `Embedder` (no `onnx`
+//!   required). CLI `--legacy` selects the offline legacy pipeline.
 //! - **Shared math, reused by both families:** `ahc`, `kmeans`, `spectral`,
 //!   `features`, `der`, `utils`.
 
@@ -83,10 +85,10 @@ pub use segmentation::{
 #[cfg(all(feature = "onnx", feature = "segmentation"))]
 pub use segmentation::{PowersetConfig, PowersetSegmenter};
 
-#[cfg(feature = "embedder")]
+/// Bring-your-own speaker embedder trait (always available; pure Rust core).
+/// ONNX-backed adapters still require `features = ["onnx", "embedder"]`.
 pub mod embedder;
 
-#[cfg(feature = "embedder")]
 pub use embedder::{Embedder, EmbedderError, EmbedderPool, apply_overlap_mask};
 
 #[cfg(all(feature = "onnx", feature = "embedder"))]
@@ -170,7 +172,9 @@ pub mod sortformer;
 // Public re-exports for ergonomic use.
 pub use cluster::SpeakerCluster;
 pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
-#[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
+// DummyExtractor is the supported test/mock embedder (also bridges to Embedder).
+// EmbeddingExtractor / EmbeddingError remain soft-deprecated at the definition site.
+#[allow(deprecated)]
 pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};

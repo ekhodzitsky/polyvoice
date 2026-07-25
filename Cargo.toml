@@ -103,10 +103,10 @@ spectral = ["dep:faer"]
 # wasm32-clean. The ONNX-backed `PowersetSegmenter` additionally requires `onnx`.
 segmentation = []
 
-# v1.0 Embedder trait + CAM++/ResNet34 adapters + EmbedderPool + overlap masking.
-# The pure-Rust algorithmic core (trait, overlap mask, pool with mock backend)
-# compiles to wasm32-clean. The ONNX-backed `CamPlusPlusExtractor` and
-# `ResNet34Adapter` additionally require `onnx`.
+# ONNX-backed Embedder adapters (CAM++/ResNet34/ERes2NetV2) + docs.rs grouping.
+# The pure-Rust Embedder trait, EmbedderPool, and overlap mask are always
+# compiled (feature-free library BYO path). Enabling this feature alone adds
+# nothing without `onnx`; with `onnx` it exports CamPlusPlusExtractor etc.
 embedder = []
 
 # v1.0 Clusterer trait + NME-SC + AHC adapters.
