@@ -96,8 +96,8 @@ pub fn apply_overlap_mask(
 /// `CamPlusPlusExtractor`, `ResNet34Adapter`, or any user-provided embedder.
 /// All embedders in a pool must share the same output dimension.
 ///
-/// Backed by a blocking [`crate::utils::ObjectPool`] (`Mutex<Vec<E>>`): checkout
-/// waits until an embedder is free; Drop returns it.
+/// Backed by a blocking object pool (`Mutex<Vec<E>>`): checkout waits until an
+/// embedder is free; Drop returns it.
 pub struct EmbedderPool<E: Embedder> {
     pool: crate::utils::ObjectPool<E>,
     dim: usize,

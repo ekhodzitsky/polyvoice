@@ -30,7 +30,8 @@
 //!
 //! Between chunk calls the adapter keeps FIFO and speaker-cache tensors and
 //! feeds them back as named ONNX inputs (parakeet-rs / NeMo pattern). Call
-//! [`SortformerDiarizer::reset`] between independent recordings.
+//! [`SortformerDiarizer::reset`](crate::sortformer::SortformerDiarizer::reset)
+//! between independent recordings.
 
 mod config;
 mod diarizer;
