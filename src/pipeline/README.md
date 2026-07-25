@@ -18,8 +18,9 @@ Always-on **bring-your-own** offline diarization pipeline.
 samples ──▶ VAD (segment_speech) ──▶ WindowIter embed ──▶ AHC ──▶ merge ──▶ turns
 ```
 
-Does **not** use `Segmenter` / `Clusterer` / `Resegmenter` traits; calls
-`ahc::agglomerative_cluster` directly. No overlap resegmentation.
+Uses `AhcClusterer` (feature `clusterer`) with unlimited max clusters; falls
+back to free `ahc::agglomerative_cluster` without that feature. Does **not**
+use `Segmenter` / `Resegmenter`. No overlap resegmentation.
 
 ## Verification
 

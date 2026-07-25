@@ -2,6 +2,10 @@
 //!
 //! Uses normalized graph Laplacian + k-means on eigenvectors.
 //! Auto-selects k via eigengap heuristic.
+//!
+//! Shared graph construction ([`SpectralGraph`]) is the single path used by
+//! [`spectral_cluster`] (BIC k-selection) and
+//! `crate::clusterer::NmeScClusterer` (pure eigengap k).
 
 use crate::utils::cosine_similarity;
 use faer::Side;
@@ -39,6 +43,119 @@ pub(crate) fn select_k_by_normalized_eigengap(eig_asc: &[f64], max_k: usize) -> 
     best_k
 }
 
+/// k-NN cosine affinity → normalized Laplacian → sorted eigenspectrum.
+///
+/// Shared by [`spectral_cluster`] and `NmeScClusterer` so graph construction
+/// cannot silently diverge.
+pub(crate) struct SpectralGraph {
+    n: usize,
+    /// Eigenvalues ascending with original eigenvector column index.
+    eig_pairs: Vec<(f64, usize)>,
+    /// Eigenvector matrix `U` from the self-adjoint decomposition (`u[(row, col)]`).
+    u: Mat<f64>,
+}
+
+impl SpectralGraph {
+    /// Build the graph from L2-ish embeddings. Returns `None` if the Laplacian
+    /// eigendecomposition fails (caller should fall back to a single cluster).
+    pub(crate) fn from_embeddings(embeddings: &[Vec<f32>]) -> Option<Self> {
+        let n = embeddings.len();
+        if n == 0 {
+            return None;
+        }
+        if n == 1 {
+            // Degenerate: one point — trivial spectrum not needed by callers
+            // that special-case n < 2, but keep constructible.
+            let mut u = Mat::zeros(1, 1);
+            u[(0, 0)] = 1.0;
+            return Some(Self {
+                n: 1,
+                eig_pairs: vec![(0.0, 0)],
+                u,
+            });
+        }
+
+        let k_nn = (n / 10).clamp(2, 10);
+        let mut aff = vec![0.0f64; n * n];
+        for i in 0..n {
+            aff[i * n + i] = 1.0;
+            let mut neighbors: Vec<(f64, usize)> = Vec::with_capacity(n);
+            for j in 0..n {
+                if i != j {
+                    let sim = cosine_similarity(&embeddings[i], &embeddings[j]) as f64;
+                    neighbors.push((sim, j));
+                }
+            }
+            neighbors.sort_by(|a, b| b.0.total_cmp(&a.0));
+            for &(sim, j) in neighbors.iter().take(k_nn) {
+                if sim > 0.0 {
+                    aff[i * n + j] = sim;
+                    aff[j * n + i] = sim;
+                }
+            }
+        }
+
+        let deg: Vec<f64> = (0..n).map(|i| aff[i * n..i * n + n].iter().sum()).collect();
+
+        // Normalized Laplacian: L = I - D^{-1/2} A D^{-1/2}
+        let mut lap = Mat::zeros(n, n);
+        for i in 0..n {
+            for j in 0..n {
+                let val = if i == j {
+                    1.0 - aff[i * n + j] / deg[i].max(1e-10)
+                } else {
+                    -aff[i * n + j] / (deg[i].sqrt() * deg[j].sqrt()).max(1e-10)
+                };
+                lap[(i, j)] = val;
+            }
+        }
+
+        let eig = lap.self_adjoint_eigen(Side::Lower).ok()?;
+        let s = eig.S();
+        let u = eig.U().cloned();
+
+        let mut eig_pairs: Vec<(f64, usize)> = (0..n).map(|i| (s[i], i)).collect();
+        eig_pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+        Some(Self { n, eig_pairs, u })
+    }
+
+    pub(crate) fn n(&self) -> usize {
+        self.n
+    }
+
+    pub(crate) fn eig_asc(&self) -> Vec<f64> {
+        self.eig_pairs.iter().map(|p| p.0).collect()
+    }
+
+    /// Row-normalized spectral embedding using the first `k` eigenvectors
+    /// (smallest eigenvalues), as `f64` features for BIC k-means.
+    pub(crate) fn embedding_f64(&self, k: usize) -> Vec<Vec<f64>> {
+        let k = k.min(self.n).max(1);
+        let mut features = vec![vec![0.0f64; k]; self.n];
+        for (i, feat) in features.iter_mut().enumerate() {
+            for (col, &(_, idx)) in self.eig_pairs.iter().take(k).enumerate() {
+                feat[col] = self.u[(i, idx)];
+            }
+            let norm: f64 = feat.iter().map(|v| v * v).sum::<f64>().sqrt();
+            if norm > 1e-10 {
+                for v in feat.iter_mut() {
+                    *v /= norm;
+                }
+            }
+        }
+        features
+    }
+
+    /// Same embedding as [`Self::embedding_f64`] in `f32` for `kmeans_pp`.
+    pub(crate) fn embedding_f32(&self, k: usize) -> Vec<Vec<f32>> {
+        self.embedding_f64(k)
+            .into_iter()
+            .map(|row| row.into_iter().map(|v| v as f32).collect())
+            .collect()
+    }
+}
+
 /// { true }
 /// `pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize>`
 /// { ret.len() == embeddings.len() }
@@ -52,86 +169,23 @@ pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {
         return vec![0];
     }
 
-    // Build k-NN affinity matrix using cosine similarity.
-    let k_nn = (n / 10).clamp(2, 10);
-    let mut aff = vec![0.0f64; n * n];
-    for i in 0..n {
-        aff[i * n + i] = 1.0;
-        let mut neighbors: Vec<(f64, usize)> = Vec::with_capacity(n);
-        for j in 0..n {
-            if i != j {
-                let sim = cosine_similarity(&embeddings[i], &embeddings[j]) as f64;
-                neighbors.push((sim, j));
-            }
-        }
-        neighbors.sort_by(|a, b| b.0.total_cmp(&a.0));
-        for &(sim, j) in neighbors.iter().take(k_nn) {
-            if sim > 0.0 {
-                aff[i * n + j] = sim;
-                aff[j * n + i] = sim;
-            }
-        }
-    }
-
-    // Degree matrix D.
-    let deg: Vec<f64> = (0..n).map(|i| aff[i * n..i * n + n].iter().sum()).collect();
-
-    // Normalized Laplacian: L = I - D^{-1/2} A D^{-1/2}
-    let mut lap = Mat::zeros(n, n);
-    for i in 0..n {
-        for j in 0..n {
-            let val = if i == j {
-                1.0 - aff[i * n + j] / deg[i].max(1e-10)
-            } else {
-                -aff[i * n + j] / (deg[i].sqrt() * deg[j].sqrt()).max(1e-10)
-            };
-            lap[(i, j)] = val;
-        }
-    }
-
-    // Eigendecomposition of symmetric matrix.
-    // Compute all eigenvalues/eigenvectors (n is small for diarization, usually < 500).
-    let eig = match lap.self_adjoint_eigen(Side::Lower) {
-        Ok(e) => e,
-        Err(_) => return vec![0; n],
+    let Some(graph) = SpectralGraph::from_embeddings(embeddings) else {
+        return vec![0; n];
     };
-    let s = eig.S();
-    let u = eig.U();
-
-    // Sort eigenvalues ascending and get indices.
-    let mut eig_pairs: Vec<(f64, usize)> = (0..n).map(|i| (s[i], i)).collect();
-    eig_pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
 
     // Determine k via eigengap heuristic, then validate with BIC on spectral features.
     let max_k = max_k.min(n).min(20);
     // NME-SC normalized-maximum eigengap (Park et al. 2020) — shared with
     // NmeScClusterer so both spectral paths agree. Here it only SEEDS the
     // BIC search below, which makes the final k decision.
-    let eig_asc: Vec<f64> = eig_pairs.iter().map(|p| p.0).collect();
-    let eigengap_k = select_k_by_normalized_eigengap(&eig_asc, max_k);
+    let eigengap_k = select_k_by_normalized_eigengap(&graph.eig_asc(), max_k);
 
     // Extract spectral features for a range of k values and pick best via BIC.
     let mut best_k = eigengap_k.max(2).min(max_k);
     let mut best_bic = f64::INFINITY;
 
     for k in 2..=max_k.min(10) {
-        let dim = k;
-        let mut features = vec![vec![0.0f64; dim]; n];
-        for (i, feat) in features.iter_mut().enumerate() {
-            for (col, &(_, idx)) in eig_pairs.iter().take(dim).enumerate() {
-                feat[col] = u[(i, idx)];
-            }
-        }
-        // Normalize rows.
-        for feat in features.iter_mut() {
-            let norm: f64 = feat.iter().map(|v| v * v).sum::<f64>().sqrt();
-            if norm > 1e-10 {
-                for v in feat.iter_mut() {
-                    *v /= norm;
-                }
-            }
-        }
-
+        let features = graph.embedding_f64(k);
         let labels = kmeans_on_features(&features, k, 20);
         // A singleton cluster has no definable variance — the spherical
         // Gaussian behind this BIC is degenerate there, and on row-normalized
@@ -152,21 +206,7 @@ pub fn spectral_cluster(embeddings: &[Vec<f32>], max_k: usize) -> Vec<usize> {
         }
     }
 
-    // Final run with best_k.
-    let mut features = vec![vec![0.0f64; best_k]; n];
-    for (i, feat) in features.iter_mut().enumerate() {
-        for (col, &(_, idx)) in eig_pairs.iter().take(best_k).enumerate() {
-            feat[col] = u[(i, idx)];
-        }
-    }
-    for feat in features.iter_mut() {
-        let norm: f64 = feat.iter().map(|v| v * v).sum::<f64>().sqrt();
-        if norm > 1e-10 {
-            for v in feat.iter_mut() {
-                *v /= norm;
-            }
-        }
-    }
+    let features = graph.embedding_f64(best_k);
     kmeans_on_features(&features, best_k, 20)
 }
 

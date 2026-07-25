@@ -123,9 +123,13 @@ impl AhcClusterer {
     }
 
     /// Create with a fixed merge threshold (legacy behaviour).
+    ///
+    /// `max_clusters == 0` means **no ceiling** — same as
+    /// [`crate::ahc::agglomerative_cluster`]. Non-zero values hard-cap the
+    /// active cluster count (see `agglomerative_cluster_max_clusters`).
     pub fn with_threshold(max_clusters: usize, threshold: f32) -> Self {
         Self {
-            max_clusters: max_clusters.max(1),
+            max_clusters,
             threshold: Some(threshold),
         }
     }
@@ -532,12 +536,10 @@ mod min_cluster_size_tests {
 
 /// NME-SC (Normalized Maximum Eigengap Spectral Clustering) clusterer.
 ///
-/// Builds a k-NN cosine-affinity graph, computes the normalized Laplacian,
-/// selects k via the normalized maximum eigengap heuristic, then runs
-/// k-means++ on the spectral embedding.  This is the canonical NME-SC
-/// procedure from Park et al. (2022) and differs from
-/// `crate::spectral::spectral_cluster` in that it does **not** apply a
-/// BIC override — the eigengap alone drives k selection.
+/// Thin adapter over [`crate::spectral::SpectralGraph`]: shared k-NN affinity
+/// and Laplacian spectrum, then eigengap-selected k and `kmeans_pp` on the
+/// spectral embedding. Differs from [`crate::spectral::spectral_cluster`] only
+/// in k-selection (pure eigengap here vs eigengap-seeded BIC there).
 #[cfg(feature = "spectral")]
 pub struct NmeScClusterer {
     max_clusters: usize,
@@ -565,10 +567,6 @@ impl Default for NmeScClusterer {
 #[cfg(feature = "spectral")]
 impl Clusterer for NmeScClusterer {
     fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
-        use crate::utils::cosine_similarity;
-        use faer::Side;
-        use faer::prelude::*;
-
         let n = embeddings.len();
         if n == 0 {
             return Err(ClustererError::TooFewEmbeddings { actual: 0, min: 1 });
@@ -583,76 +581,17 @@ impl Clusterer for NmeScClusterer {
             return AhcClusterer::new(self.max_clusters).cluster(embeddings);
         }
 
-        // Build k-NN cosine affinity matrix.
-        let k_nn = (n / 10).clamp(2, 10);
-        let mut aff = vec![0.0f64; n * n];
-        for i in 0..n {
-            aff[i * n + i] = 1.0;
-            let mut neighbors: Vec<(f64, usize)> = (0..n)
-                .filter(|&j| j != i)
-                .map(|j| (cosine_similarity(&embeddings[i], &embeddings[j]) as f64, j))
-                .collect();
-            neighbors.sort_by(|a, b| b.0.total_cmp(&a.0));
-            for &(sim, j) in neighbors.iter().take(k_nn) {
-                if sim > 0.0 {
-                    aff[i * n + j] = sim;
-                    aff[j * n + i] = sim;
-                }
-            }
-        }
-
-        // Degree vector.
-        let deg: Vec<f64> = (0..n).map(|i| aff[i * n..i * n + n].iter().sum()).collect();
-
-        // Normalized Laplacian L = I - D^{-1/2} A D^{-1/2}.
-        let mut lap = Mat::zeros(n, n);
-        for i in 0..n {
-            for j in 0..n {
-                let val = if i == j {
-                    1.0 - aff[i * n + j] / deg[i].max(1e-10)
-                } else {
-                    -aff[i * n + j] / (deg[i].sqrt() * deg[j].sqrt()).max(1e-10)
-                };
-                lap[(i, j)] = val;
-            }
-        }
-
-        // Eigendecomposition.
-        let eig = match lap.self_adjoint_eigen(Side::Lower) {
-            Ok(e) => e,
-            Err(_) => return Ok(vec![0; n]),
+        // Shared k-NN affinity → Laplacian → eigenspectrum with spectral_cluster.
+        let Some(graph) = crate::spectral::SpectralGraph::from_embeddings(embeddings) else {
+            return Ok(vec![0; n]);
         };
-        let s = eig.S();
-        let u = eig.U();
 
-        // Sort eigenvalues ascending.
-        let mut eig_pairs: Vec<(f64, usize)> = (0..n).map(|i| (s[i], i)).collect();
-        eig_pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // Normalized Maximum Eigengap (Park et al. 2020) drives k directly —
+        // unlike spectral_cluster, there is no BIC override.
+        let max_k = self.max_clusters.min(graph.n()).min(20);
+        let k = crate::spectral::select_k_by_normalized_eigengap(&graph.eig_asc(), max_k).max(1);
 
-        // Normalized Maximum Eigengap (Park et al. 2020) — single shared
-        // implementation so this path and spectral_cluster cannot diverge.
-        let max_k = self.max_clusters.min(n).min(20);
-        let eig_asc: Vec<f64> = eig_pairs.iter().map(|p| p.0).collect();
-        let k = crate::spectral::select_k_by_normalized_eigengap(&eig_asc, max_k).max(1);
-
-        // Extract spectral embedding (top-k eigenvectors, row-normalised).
-        let mut spectral: Vec<Vec<f32>> = vec![vec![0.0f32; k]; n];
-        for i in 0..n {
-            let mut norm_sq = 0.0f64;
-            for (col, &(_, idx)) in eig_pairs.iter().take(k).enumerate() {
-                let v = u[(i, idx)];
-                spectral[i][col] = v as f32;
-                norm_sq += v * v;
-            }
-            let norm = norm_sq.sqrt();
-            if norm > 1e-10 {
-                for v in spectral[i].iter_mut() {
-                    *v /= norm as f32;
-                }
-            }
-        }
-
-        // Final clustering with detected k.
+        let spectral = graph.embedding_f32(k);
         let labels = crate::kmeans::kmeans_pp(&spectral, k, 50);
         Ok(labels)
     }

@@ -68,7 +68,10 @@ dependencies:
       reason: Embedder trait for BYO speaker vectors.
     - module: ahc
       scope: algorithm
-      reason: Agglomerative clustering for speaker grouping (not Clusterer trait).
+      reason: Prune helpers and free AHC fallback when clusterer feature is off.
+    - module: clusterer
+      scope: algorithm
+      reason: AhcClusterer (when feature clusterer) for speaker grouping.
     - module: wav
       scope: io
       reason: WAV file reading for pipeline input.
