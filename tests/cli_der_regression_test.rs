@@ -107,10 +107,22 @@ fn run_cli_diarize(
         wav_path.to_str().expect("wav path is valid utf-8"),
         "--profile",
         "balanced",
+        // Default path is v2 + VBx (0.11+). `--v2` stays accepted for scripts.
         "--v2",
         "--output",
         output_path.to_str().expect("output path is valid utf-8"),
     ]);
+    // Prefer env (release-check exports it); else the checked-in fixtures so
+    // local `cargo test -- --ignored` exercises the real default clusterer.
+    let fixture_plda = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
+    if let Ok(dir) = std::env::var("POLYVOICE_VBX_PLDA_DIR") {
+        cmd.args(["--vbx-plda-dir", &dir]);
+    } else if fixture_plda.join("plda_transform.npy").is_file() {
+        cmd.args([
+            "--vbx-plda-dir",
+            fixture_plda.to_str().expect("utf-8 path"),
+        ]);
+    }
 
     let output = cmd.output().expect("spawn cargo run");
     if !output.status.success() {
