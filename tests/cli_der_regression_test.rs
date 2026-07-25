@@ -118,10 +118,7 @@ fn run_cli_diarize(
     if let Ok(dir) = std::env::var("POLYVOICE_VBX_PLDA_DIR") {
         cmd.args(["--vbx-plda-dir", &dir]);
     } else if fixture_plda.join("plda_transform.npy").is_file() {
-        cmd.args([
-            "--vbx-plda-dir",
-            fixture_plda.to_str().expect("utf-8 path"),
-        ]);
+        cmd.args(["--vbx-plda-dir", fixture_plda.to_str().expect("utf-8 path")]);
     }
 
     let output = cmd.output().expect("spawn cargo run");
