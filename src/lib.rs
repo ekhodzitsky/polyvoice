@@ -96,10 +96,15 @@ pub use embedder::{CamPlusPlusExtractor, ResNet34Adapter};
 pub mod clusterer;
 
 #[cfg(feature = "clusterer")]
-pub use clusterer::{AhcClusterer, Clusterer, ClustererError, MinClusterSizeClusterer};
+pub use clusterer::{
+    AhcClusterer, Clusterer, ClustererError, KMeansClusterer, MinClusterSizeClusterer,
+};
 
 #[cfg(all(feature = "clusterer", feature = "spectral"))]
 pub use clusterer::NmeScClusterer;
+
+#[cfg(all(feature = "clusterer", feature = "vbx"))]
+pub use clusterer::vbx::VbxClusterer;
 
 #[cfg(feature = "resegmentation")]
 pub mod resegmentation;

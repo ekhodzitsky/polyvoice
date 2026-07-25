@@ -48,8 +48,8 @@ struct DiarizeInput {
     /// Model profile: "balanced" (default) or "mobile".
     #[serde(default)]
     profile: Option<String>,
-    /// Clusterer: "vbx" (default, PLDA + VB-HMM, matches CLI) or "ahc"
-    /// (fixed-threshold cosine AHC).
+    /// Clusterer: "vbx" (default, PLDA + VB-HMM, matches CLI), "ahc"
+    /// (fixed-threshold cosine AHC), or "kmeans" (silhouette auto-k).
     #[serde(default)]
     clusterer: Option<String>,
     /// AHC cosine-similarity threshold when clusterer is "ahc" (default 0.45).
@@ -288,10 +288,11 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
         "ahc" => ClustererKind::Ahc {
             threshold: input.threshold.unwrap_or(0.45),
         },
+        "kmeans" => ClustererKind::KMeans,
         other => {
             return Err(err(
                 ERR_INVALID_ARG,
-                format!("invalid clusterer: {other} (expected vbx|ahc)"),
+                format!("invalid clusterer: {other} (expected vbx|ahc|kmeans)"),
             ));
         }
     };

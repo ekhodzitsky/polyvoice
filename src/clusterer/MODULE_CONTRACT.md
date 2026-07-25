@@ -74,8 +74,8 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      K-means++ / auto-k clusterer. Used by hybrid ablation and docs; not yet
-      a ClustererKind builder variant on pipeline_v2.
+      K-means++ / auto-k clusterer. Selectable via pipeline_v2
+      ClustererKind::KMeans and crate-root re-export.
     proof:
       kind: unit-test
       target: src/clusterer::mod::tests

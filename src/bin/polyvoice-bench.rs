@@ -51,8 +51,9 @@ struct Args {
     #[arg(long)]
     min_cluster_size: Option<usize>,
     /// v2 clusterer: `vbx` (Variational Bayes HMM + PLDA with automatic speaker
-    /// count — matches CLI default; PLDA from env/dir/registry) or `ahc`
-    /// (fixed-threshold AHC). Ignored with `--pipeline legacy`.
+    /// count — matches CLI default; PLDA from env/dir/registry), `ahc`
+    /// (fixed-threshold AHC), or `kmeans` (silhouette auto-k). Ignored with
+    /// `--pipeline legacy`.
     #[arg(long, default_value = "vbx")]
     clusterer: String,
     /// Min cluster duration in seconds (length-invariant pruning). When > 0 it
@@ -336,7 +337,10 @@ fn main() -> Result<()> {
                     threshold: args.threshold,
                 },
                 "vbx" => ClustererKind::Vbx,
-                other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
+                "kmeans" => ClustererKind::KMeans,
+                other => anyhow::bail!(
+                    "unknown --clusterer '{other}' (expected 'ahc', 'vbx', or 'kmeans')"
+                ),
             };
             let binarization = if args.binarize_onset.is_some()
                 || args.binarize_offset.is_some()

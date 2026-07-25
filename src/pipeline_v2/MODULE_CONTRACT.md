@@ -77,9 +77,10 @@ surface:
     kind: enum
     visibility: public
     contract: >
-      Selects the clustering backend (Ahc { threshold } | NmeSc | Vbx).
+      Selects the clustering backend (Ahc { threshold } | NmeSc | Vbx | KMeans).
       NmeSc falls back to AHC when the `spectral` feature is absent. VBx
       requires the `vbx` feature and PLDA params (dir, env, or registry).
+      KMeans uses silhouette auto-k up to max_speakers.
     proof:
       kind: unit-test
       target: src/pipeline_v2::config::tests

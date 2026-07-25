@@ -275,6 +275,9 @@ impl PipelineBuilder {
                             model_id: "vbx (requires the `vbx` feature)".to_owned(),
                         });
                     }
+                    ClustererKind::KMeans => Box::new(crate::clusterer::KMeansClusterer::new(
+                        self.config.max_speakers as usize,
+                    )),
                 };
                 // Activate min_cluster_size pruning (this config field was
                 // previously dead — never read by any clusterer). Dissolves

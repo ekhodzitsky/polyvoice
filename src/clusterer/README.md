@@ -8,7 +8,7 @@ Offline **`Clusterer`** trait and adapter implementations used by
 - `Clusterer` / `ClustererError`
 - `AhcClusterer`
 - `MinClusterSizeClusterer`
-- `KMeansClusterer` (module path; not a `ClustererKind` builder variant yet)
+- `KMeansClusterer` (also `ClustererKind::KMeans` on pipeline_v2)
 - `NmeScClusterer` (feature `spectral`)
 - `VbxClusterer` / `PldaModel` (feature `vbx`)
 - `assign::*` — local→global co-occurrence mapping

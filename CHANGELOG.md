@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `POLYVOICE_VBX_PLDA_DIR` is set. Hosted from the commit-pinned
   `fixtures/vbx-plda/` tree on GitHub.
 
+### Added
+
+- **`ClustererKind::KMeans`** on pipeline v2 (CLI/bench/MCP: `--clusterer kmeans`
+  / `clusterer=kmeans`). Crate-root re-exports `KMeansClusterer` and
+  `VbxClusterer` (with `clusterer` / `vbx` features).
+
 ### Changed
 
 - **Embedder stack collapse (in-tree).** `FbankOnnxExtractor` is a first-class

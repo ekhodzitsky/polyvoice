@@ -90,10 +90,10 @@ struct DiarizeArgs {
     #[arg(long, hide = true)]
     v2: bool,
     /// Clusterer for the default (v2) path: `vbx` (PLDA + VB-HMM, automatic
-    /// speaker count — the accuracy gate default) or `ahc` (fixed-threshold
-    /// cosine AHC). `vbx` loads PLDA from `--vbx-plda-dir` /
-    /// `POLYVOICE_VBX_PLDA_DIR`, or auto-downloads via the model registry.
-    /// Ignored with `--legacy`.
+    /// speaker count — the accuracy gate default), `ahc` (fixed-threshold
+    /// cosine AHC), or `kmeans` (k-means++ with silhouette auto-k). `vbx`
+    /// loads PLDA from `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or
+    /// auto-downloads via the model registry. Ignored with `--legacy`.
     #[arg(long, default_value = "vbx")]
     clusterer: String,
     /// Directory with the precomputed VBx PLDA params (overrides
@@ -423,7 +423,10 @@ fn run_v2_pipeline(
     let clusterer_kind = match clusterer {
         "ahc" => ClustererKind::Ahc { threshold },
         "vbx" => ClustererKind::Vbx,
-        other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
+        "kmeans" => ClustererKind::KMeans,
+        other => {
+            anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc', 'vbx', or 'kmeans')")
+        }
     };
     let ep = match execution_provider {
         "auto" => polyvoice::onnx::ExecutionProvider::auto(),
