@@ -258,10 +258,10 @@ fn der_core(
         // Count correctly matched pairs
         let mut n_correct = 0u64;
         for h in hyp_spk {
-            if let Some(&mapped_ref) = mapping.get(h) {
-                if ref_spk.contains(&mapped_ref) {
-                    n_correct += 1;
-                }
+            if let Some(&mapped_ref) = mapping.get(h)
+                && ref_spk.contains(&mapped_ref)
+            {
+                n_correct += 1;
             }
         }
         n_correct = n_correct.min(n_ref);
@@ -406,10 +406,10 @@ fn optimal_speaker_mapping(
     for (row, &col) in assignment.iter().enumerate() {
         // Map only real (non-padding) speakers that actually co-occur — the
         // solver may pair leftover rows/cols through zero-cost padding cells.
-        if let (Some(&h), Some(&r)) = (hyp_ids.get(row), ref_ids.get(col)) {
-            if cooccurrence.get(&(h, r)).copied().unwrap_or(0) > 0 {
-                mapping.insert(h, r);
-            }
+        if let (Some(&h), Some(&r)) = (hyp_ids.get(row), ref_ids.get(col))
+            && cooccurrence.get(&(h, r)).copied().unwrap_or(0) > 0
+        {
+            mapping.insert(h, r);
         }
     }
 
@@ -573,10 +573,10 @@ fn compute_per_speaker_recall(
         }
         for &r in &ref_frames[i] {
             *ref_count.entry(r).or_insert(0) += 1;
-            if let Some(&h) = ref_to_hyp.get(&r) {
-                if hyp_frames[i].contains(&h) {
-                    *recalled.entry(r).or_insert(0) += 1;
-                }
+            if let Some(&h) = ref_to_hyp.get(&r)
+                && hyp_frames[i].contains(&h)
+            {
+                *recalled.entry(r).or_insert(0) += 1;
             }
         }
     }

@@ -12,6 +12,7 @@ expression: "format!(\"{turns:#?}\")"
             end: 1.0,
         },
         text: None,
+        stable: true,
     },
     SpeakerTurn {
         speaker: SpeakerId(
@@ -22,5 +23,6 @@ expression: "format!(\"{turns:#?}\")"
             end: 3.5,
         },
         text: None,
+        stable: true,
     },
 ]

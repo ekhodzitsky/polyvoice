@@ -320,9 +320,9 @@ fn run_streaming(
             total_audio_secs: audio_secs,
             total_wall_secs: wall_secs,
         });
+        let preset = rows.last().map(|r| r.preset.as_str()).unwrap_or("unknown");
         eprintln!(
-            "[{}] files={n_ok} RTF={rtf:.4} DER0={c0:.2}% DER0.25={c025:.2}% lat={input_lat:.3}s",
-            rows.last().unwrap().preset
+            "[{preset}] files={n_ok} RTF={rtf:.4} DER0={c0:.2}% DER0.25={c025:.2}% lat={input_lat:.3}s"
         );
     }
 
