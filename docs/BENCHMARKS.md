@@ -17,11 +17,11 @@ collar.
 
 ## At a glance
 
-| | polyvoice (legacy) | pyannote 3.1 | WhisperX | NeMo Sortformer |
+| | polyvoice (v2+VBx, default) | pyannote 3.1 | WhisperX | NeMo Sortformer |
 |--|--|--|--|--|
-| **VoxConverse-test DER** | 18.5 % ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
-| **Model size** | **~30 MB** | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
-| **Runtime** | **CPU, ~10× realtime** | CPU/GPU (PyTorch) | GPU recommended | GPU |
+| **VoxConverse-test DER** | **15.4 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
+| **Model size** | **~30 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
+| **Runtime** | **CPU / CoreML, ~8–10× realtime** | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
 | **Dependencies** | **pure Rust, no Python** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
@@ -29,7 +29,7 @@ collar.
 
 ¹ VoxConverse-test, **no forgiveness collar (collar 0), overlap scored** — the
 strict protocol pyannote 3.1 reports against, so these two are collar-matched.
-polyvoice trails the accuracy leader by ~7 DER points and trades that for
+polyvoice trails the accuracy leader by ~4 DER points and trades that for
 deployability: a pure-Rust, CPU, MIT, **ungated** engine with four bindings and
 streaming. It is **not** the accuracy leader.
 
@@ -52,13 +52,15 @@ pyannote we use polyvoice's **no-collar** number.
 | speakrs (Rust + ONNX, Apache-2.0) | 11.1 | — | — | — | 0 | speakrs README ⁸ |
 | VBx (offline baseline) | 11.1 | 4.6 | 3.1 | 3.4 | 0 | diart paper ³ |
 | 3D-Speaker toolkit | 11.75 | — | — | — | unstated | repo ⁴ |
-| **polyvoice (legacy, shipped)** | **18.54** | 4.49 | 3.19 | 4.99 | 0 | this repo ⁵ |
+| **polyvoice (v2+VBx, default)** | **15.37** | 2.29 | 1.86 | 6.97 | 0 | this repo ⁵ |
 | diart (online, 5 s latency) | 16.8 | 4.9 | 3.8 | 8.2 | 0 | diart paper ³ |
+| polyvoice (legacy, `--legacy`) | 18.54 | 4.49 | 3.19 | 4.99 | 0 | this repo ⁵ |
 | diart (online, 1 s latency) | 20.1 | 3.3 | 5.1 | 11.7 | 0 | diart paper ³ |
 
-For reference, polyvoice (legacy) at the **0.25 s collar** is **12.91 %** (macro
-12.66; miss 4.49 / FA 3.19 / conf 4.99) — but no collar-0.25 pyannote number is
-published, so do not compare that figure across systems.
+For reference, polyvoice (v2+VBx) at the **0.25 s collar** is **11.12 %** micro
+(macro 11.50; miss 2.29 / FA 1.86 / conf 6.97). Legacy at collar 0.25 is
+**12.91 %** micro. No collar-0.25 pyannote number is published, so do not
+compare that figure across systems.
 
 ## Accuracy — AMI test (16 meetings, Mix-Headset)
 
@@ -74,10 +76,12 @@ dominates, and speaker mis-counting drives confusion.
 | 3D-Speaker toolkit | 21.76 | — | — | — | SDM | repo ⁴ |
 | pyannote 3.1 (SDM) | 22.4 | 11.2 | 3.8 | 7.5 | array1-ch1 | model card ² |
 | VBx (offline baseline) | 24.1 | 17.2 | 3.1 | 3.8 | — | diart paper ³ |
+| **polyvoice (v2+VBx, default)** | **25.17** | 7.69 | 1.70 | 7.47 | Mix-Headset | this repo ⁵ |
 | diart (online, 5 s) | 27.5 | 10.0 | 5.0 | 12.4 | headset | diart paper ³ |
-| **polyvoice (legacy, shipped)** | **32.87** | — | — | — | Mix-Headset | this repo ⁵ |
+| polyvoice (legacy, `--legacy`) | 32.87 | 17.09 | 2.44 | 5.21 | Mix-Headset | this repo ⁵ |
 
-polyvoice (legacy) at the 0.25 s collar: **25.20 %** (macro 24.75).
+polyvoice (v2+VBx) at the 0.25 s collar: **17.66 %** micro (macro 16.86).
+Legacy at collar 0.25: **25.20 %** micro (macro 24.75).
 
 ## polyvoice speaker-count & error decomposition
 
@@ -85,39 +89,44 @@ A low DER can hide bad speaker counting; we report it explicitly.
 
 | Split | DER (collar 0) | miss | FA | conf | spk exact | spk ±1 | spk off-by-2+ |
 |---|---|---|---|---|---|---|---|
-| VoxConverse-test (232) | 18.54 % | 4.49 | 3.19 | 4.99 | 57 | 46 | 129 |
-| AMI-test (16) | 32.87 % | — | — | — | 1 | 0 | 15 |
+| VoxConverse-test (232, v2+VBx) | 15.37 % | 2.29 | 1.86 | 6.97 | 87 | 65 | 80 |
+| AMI-test (16, v2+VBx) | 25.17 % | 7.69 | 1.70 | 7.47 | 3 | 3 | 10 |
+| VoxConverse-test (232, legacy) | 18.54 % | 4.49 | 3.19 | 4.99 | 57 | 46 | 129 |
+| AMI-test (16, legacy) | 32.87 % | 17.09 | 2.44 | 5.21 | 1 | 0 | 15 |
 
-The dominant error mode is **over-/mis-counting speakers** (confusion + the
-off-by-2+ tail), especially on long meetings — the honest weak spot versus
-pyannote's end-to-end segmentation. Reducing it is the active accuracy work
-(pipeline v2 + the VBx clusterer below).
+The dominant residual error is still **speaker mis-counting** (confusion + the
+off-by-2+ tail), especially on long meetings — better than legacy but still the
+honest weak spot versus pyannote's end-to-end segmentation.
 
-## Experimental pipelines: v2 and VBx
+## Default pipeline: v2 + VBx (since 0.11)
 
-polyvoice ships **legacy** as the default; pipeline **v2** (powerset segmentation
-→ ResNet34 → clustering, CLI `--v2`) and the opt-in **VBx** clusterer (VB-HMM +
-PLDA, automatic speaker count; `vbx` feature) are experimental. The numbers below
-are **macro DER on deterministic 60-file seed-42 subsets** of VoxConverse (full
-16-meeting AMI), each with a 95 % bootstrap CI — gigastt-style slices, run sharded
-across cores. Legacy rows are the **full** splits (from `der_baseline.json`), so
-legacy-vs-v2 comparisons are indicative, not strictly matched.
+As of **0.11**, the CLI default is **pipeline v2 + VBx** after a hard full-split
+gate (2026-07-25): no-collar micro DER ≤ legacy on **both** VoxConverse-test
+(232) and AMI-test (16). Artifacts:
+[`benchmarks/results/full-der-2026-07-25/`](../benchmarks/results/full-der-2026-07-25/)
+(`VERDICT.md`).
 
-**No-collar macro DER % (95 % CI):**
+| Path | CLI | Vox no-collar micro | AMI no-collar micro |
+|---|---|---:|---:|
+| **v2 + VBx (default)** | `polyvoice file.wav` (+ PLDA) | **15.37** | **25.17** |
+| legacy | `polyvoice --legacy file.wav` | 18.54 | 32.87 |
+| v2 + AHC | `polyvoice --clusterer ahc file.wav` | (subset; see archive) | (subset) |
+
+VBx needs PLDA weights: `--vbx-plda-dir <dir>` or `POLYVOICE_VBX_PLDA_DIR`
+(see [`docs/vbx-plda-release.md`](vbx-plda-release.md)). Without PLDA use
+`--clusterer ahc` or `--legacy`.
+
+Earlier **subset** bootstrap numbers (60-file Vox / full AMI, pre-gate) are
+retained below for history only — prefer the full-split rows above.
+
+**No-collar macro DER % (95 % CI) — historical subsets:**
 
 | Pipeline | VoxConverse-test | VoxConverse-dev | AMI |
 |---|---|---|---|
-| legacy (shipped, full split) | **18.54** | — | **32.87** |
+| legacy (full split) | 18.54 | — | 32.87 |
 | v2 + AHC (subset) | 20.4 [16.4–24.9] | 13.2 [10.5–16.1] | 35.8 [29.8–41.9] |
-| v2 + VBx (subset) | **17.0** [13.5–20.8] | 13.6 [10.6–16.9] | 37.0 [31.0–43.1] |
-
-**VoxConverse-test decomposition & speaker count (collar 0):**
-
-| Pipeline | DER | miss | FA | conf | spk exact | spk off-by-2+ |
-|---|---|---|---|---|---|---|
-| legacy (232 files) | 18.54 | 4.49 | 3.19 | 4.99 | 57/232 | 129/232 |
-| v2 + AHC (60) | 20.37 | 3.15 | 1.11 | **11.73** | 9/60 | 43/60 |
-| v2 + VBx (60) | 16.99 | 3.13 | 1.12 | **8.35** | 10/60 | 44/60 |
+| v2 + VBx (subset) | 17.0 [13.5–20.8] | 13.6 [10.6–16.9] | 37.0 [31.0–43.1] |
+| **v2 + VBx (full split, default)** | **15.83 macro / 15.37 micro** | — | **24.12 macro / 25.17 micro** |
 
 **Honest reading:**
 
@@ -212,7 +221,7 @@ python benchmark.py --dataset voxconverse_test --runners all
 - ² pyannote 3.1 (VoxConverse, AMI, DIHARD; protocol; MIT; gated): https://huggingface.co/pyannote/speaker-diarization-3.1 — footprint: [segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) 5.91 MB + [wespeaker-resnet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM) 26.6 MB
 - ³ diart (Coria et al., ASRU 2021; collar 0, overlap scored): https://arxiv.org/abs/2109.06483
 - ⁴ 3D-Speaker toolkit (VoxConverse 11.75, AMI_SDM 21.76; collar unstated): https://github.com/modelscope/3D-Speaker
-- ⁵ polyvoice: [`tests/der_baseline.json`](../tests/der_baseline.json) (schema `polyvoice-der-baseline-v2`), shipped FP32 (Silero VAD + WeSpeaker ResNet34 + AHC, threshold 0.45, singleton prune), reproduced by `benchmarks/der.py`
+- ⁵ polyvoice: [`tests/der_baseline.json`](../tests/der_baseline.json) (schema `polyvoice-der-baseline-v2`) and full-split gate [`benchmarks/results/full-der-2026-07-25/`](../benchmarks/results/full-der-2026-07-25/). Default (0.11+): pipeline v2 + VBx + WeSpeaker ResNet34; legacy numbers via `--legacy`
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
 - ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands
 - ⁸ speakrs (pure Rust + ONNX, Apache-2.0 code; VoxConverse-test 11.1 % at collar 0, CoreML): https://github.com/avencera/speakrs (retrieved 2026-07-13)

@@ -28,10 +28,10 @@
 //! - **Legacy:** `embedding`, `ecapa`, `onnx` are `#[deprecated]` — migrate
 //!   to the `embedder` trait. `cluster` and `vad` are the legacy
 //!   clustering/VAD surfaces.
-//! - **Pipeline status (note the inversion):** the legacy `pipeline` is the
-//!   *validated default* for the CLI and Python bindings; `pipeline_v2` is
-//!   *experimental* (opt-in via `--v2`), reverted from default after the 0.6.1
-//!   long-form DER regression.
+//! - **Pipeline status:** `pipeline_v2` (+ VBx clusterer when PLDA is available)
+//!   is the **CLI default since 0.11** after a full VoxConverse-test / AMI-test
+//!   DER gate (see `docs/BENCHMARKS.md`). The legacy `pipeline` remains available
+//!   via CLI `--legacy`.
 //! - **Shared math, reused by both families:** `ahc`, `kmeans`, `spectral`,
 //!   `features`, `der`, `utils`.
 
