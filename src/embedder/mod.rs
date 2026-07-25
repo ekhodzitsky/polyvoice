@@ -1,17 +1,37 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
+#![allow(deprecated)] // bridges legacy EmbeddingExtractor → Embedder
 //! v1.0 `Embedder` trait + concrete extractors (CAM++, ResNet34) + pool +
 //! overlap-mask helper.
 //!
-//! Added in v0.6 (M2).
+//! `Embedder` is the supported bring-your-own embedder contract for offline
+//! [`crate::Pipeline`] and online [`crate::streaming::StreamingPipeline`].
+//! The pure-Rust trait, pool, and overlap mask are always available (no
+//! `onnx` required). ONNX-backed adapters still need `features = ["onnx", "embedder"]`.
+//!
+//! Legacy [`crate::embedding::EmbeddingExtractor`] implementors automatically
+//! satisfy [`Embedder`] via a blanket bridge.
 
 /// Speaker embedding extractor — turns a slice of 16 kHz mono audio into a
 /// fixed-dimension embedding vector. Implementations are expected to L2-normalize
 /// their output so cosine similarity is a meaningful metric downstream.
 ///
-/// In v1.0 (M2) the polyvoice crate introduces `Embedder` as the canonical
-/// trait. The legacy `EmbeddingExtractor` trait and its implementations
-/// (`FbankOnnxExtractor`, `OnnxEmbeddingExtractor`, `DummyExtractor`) remain
-/// available unchanged — M6 will deprecate them.
+/// This is the **supported library injection API** for [`crate::Pipeline`] and
+/// [`crate::streaming::StreamingPipeline`]. Implement it on an external
+/// encoder (Candle, tract, custom) without enabling `onnx`:
+///
+/// ```rust
+/// use polyvoice::{Embedder, EmbedderError};
+///
+/// struct ConstantEmbedder { dim: usize }
+///
+/// impl Embedder for ConstantEmbedder {
+///     fn dim(&self) -> usize { self.dim }
+///     fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+///         let mut v = vec![0.0f32; self.dim];
+///         if let Some(first) = v.first_mut() { *first = 1.0; }
+///         Ok(v)
+///     }
+/// }
+/// ```
 pub trait Embedder: Send + Sync {
     /// Output dimension of this embedder. Constant per instance.
     fn dim(&self) -> usize;
@@ -50,6 +70,28 @@ pub enum EmbedderError {
 
     #[error("legacy adapter error: {0}")]
     Legacy(String),
+}
+
+/// Bridge: any legacy [`crate::embedding::EmbeddingExtractor`] is an [`Embedder`].
+///
+/// Pipeline-owned [`crate::types::DiarizationConfig`] is not part of the
+/// `Embedder` surface; the bridge supplies `DiarizationConfig::default()`.
+/// In-tree legacy extractors ignore that config (window length is enforced by
+/// the caller / model). External extractors that read config fields should
+/// implement [`Embedder`] directly.
+impl<T> Embedder for T
+where
+    T: crate::embedding::EmbeddingExtractor + ?Sized,
+{
+    fn dim(&self) -> usize {
+        self.embedding_dim()
+    }
+
+    fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        let config = crate::types::DiarizationConfig::default();
+        self.extract(audio, &config)
+            .map_err(|e| EmbedderError::Legacy(e.to_string()))
+    }
 }
 
 /// { true }
@@ -161,7 +203,9 @@ impl<E: Embedder> EmbedderPool<E> {
 /// Parallel batch embedding using `std::thread::scope`.
 /// Spawns up to `available_parallelism` threads, each processing a chunk
 /// of the input via `embedder.embed()`.
-#[cfg(feature = "onnx")]
+///
+/// Only referenced by ONNX-backed adapters (`ResNet34`, CAM++, ERes2NetV2).
+#[cfg(all(feature = "onnx", feature = "embedder"))]
 fn parallel_embed_batch<E: Embedder>(
     embedder: &E,
     audios: &[&[f32]],

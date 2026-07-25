@@ -1,17 +1,22 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
-//! Speaker embedding extraction trait.
+#![allow(deprecated)] // EmbeddingExtractor / EmbeddingError remain soft-deprecated
+//! Speaker embedding extraction trait (legacy).
 //!
-//! Use this module to turn audio windows into fixed-dimension speaker vectors
-//! for clustering. See [`EmbeddingExtractor`] for the trait and
-//! [`DummyExtractor`] for a test-time stand-in.
+//! Prefer [`crate::Embedder`] for new code — offline [`crate::Pipeline`] and
+//! online [`crate::streaming::StreamingPipeline`] accept `E: Embedder`.
+//! Types that still implement [`EmbeddingExtractor`] automatically satisfy
+//! [`crate::Embedder`] via a blanket bridge in `polyvoice::embedder`.
+//!
+//! [`DummyExtractor`] is the supported in-memory stand-in for tests.
 
 use crate::types::DiarizationConfig;
 
-/// Error type for embedding extraction failures.
+/// Error type for legacy embedding extraction failures.
+///
+/// Prefer [`crate::EmbedderError`] with [`crate::Embedder`].
 #[derive(thiserror::Error, Debug)]
 #[deprecated(
     since = "0.7.0",
-    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+    note = "use polyvoice::EmbedderError with the Embedder trait"
 )]
 pub enum EmbeddingError {
     #[error("model not loaded: {0}")]
@@ -22,22 +27,25 @@ pub enum EmbeddingError {
     InvalidInput { expected: usize, got: usize },
 }
 
-/// Trait for speaker embedding extractors.
+/// Legacy trait for speaker embedding extractors.
 ///
-/// Implementors are expected to be thread-safe (either internally synchronized
-/// or cheaply clonable), so that they can be shared across concurrent diarizers.
+/// Prefer implementing [`crate::Embedder`] directly. Existing
+/// `EmbeddingExtractor` implementors continue to work with
+/// [`crate::Pipeline`] / [`crate::streaming::StreamingPipeline`] through an
+/// automatic bridge (no `#[allow(deprecated)]` needed on the call site when
+/// you migrate to `Embedder`).
 ///
 /// ```rust
-/// use polyvoice::{EmbeddingExtractor, DummyExtractor, DiarizationConfig};
+/// use polyvoice::{DummyExtractor, Embedder, DiarizationConfig};
 /// let extractor = DummyExtractor::new(256);
-/// let config = DiarizationConfig::default();
-/// let samples = vec![0.0f32; config.window_samples()];
-/// let emb = extractor.extract(&samples, &config).unwrap();
+/// let samples = vec![0.0f32; DiarizationConfig::default().window_samples()];
+/// // Prefer Embedder::embed — DummyExtractor bridges from EmbeddingExtractor.
+/// let emb = extractor.embed(&samples).unwrap();
 /// assert_eq!(emb.len(), 256);
 /// ```
 #[deprecated(
     since = "0.7.0",
-    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+    note = "implement polyvoice::Embedder instead; EmbeddingExtractor still works via an automatic bridge"
 )]
 pub trait EmbeddingExtractor: Send + Sync {
     /// Extract an embedding from raw 16 kHz (or `config.sample_rate`) mono f32 samples.
@@ -55,12 +63,18 @@ pub trait EmbeddingExtractor: Send + Sync {
     fn embedding_dim(&self) -> usize;
 }
 
-/// A no-op extractor that returns random-ish unit vectors.
-/// Useful for tests and benchmarks where the real model is not available.
-#[deprecated(
-    since = "0.7.0",
-    note = "use the v1.0 Embedder trait in polyvoice::embedder"
-)]
+/// Deterministic pseudo-random unit-vector embedder for tests and benchmarks.
+///
+/// Implements the legacy [`EmbeddingExtractor`] trait and therefore also
+/// [`crate::Embedder`] via the crate bridge — pass it to
+/// [`crate::Pipeline`] / [`crate::streaming::StreamingPipeline`] without
+/// `#[allow(deprecated)]`.
+///
+/// ```rust
+/// use polyvoice::{DummyExtractor, Embedder};
+/// let extractor = DummyExtractor::new(256);
+/// assert_eq!(extractor.dim(), 256);
+/// ```
 pub struct DummyExtractor {
     dim: usize,
     seed: std::sync::atomic::AtomicU64,
@@ -75,9 +89,9 @@ impl DummyExtractor {
     /// Useful for tests and benchmarks where a real ONNX model is not available.
     ///
     /// ```rust
-    /// use polyvoice::{DummyExtractor, EmbeddingExtractor};
+    /// use polyvoice::{DummyExtractor, Embedder};
     /// let extractor = DummyExtractor::new(256);
-    /// assert_eq!(extractor.embedding_dim(), 256);
+    /// assert_eq!(extractor.dim(), 256);
     /// ```
     pub fn new(dim: usize) -> Self {
         Self {
