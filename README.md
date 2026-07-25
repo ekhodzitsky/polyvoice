@@ -53,8 +53,24 @@ docker run --rm -v "$(pwd):/work" ghcr.io/ekhodzitsky/polyvoice:latest diarize /
 ### Rust library
 
 ```bash
+# Full ONNX path (Silero VAD, WeSpeaker embeddings, model download)
 cargo add polyvoice --features "onnx,download"
 ```
+
+#### Library mode (no ONNX)
+
+For BYO-embedder consumers (your own speaker embeddings + pure-Rust VAD /
+clustering), disable default features so `ort` is never linked:
+
+```bash
+cargo add polyvoice --no-default-features
+# optional pure-Rust extras: --features clusterer,vbx
+```
+
+You get `Pipeline`, `StreamingPipeline`, `EnergyVad`, the `EmbeddingExtractor`
+trait (implement it with Candle, candle-onnx, or any other backend), and pure
+clustering math — no ONNX Runtime dylib. Surface inventory and the CI gate that
+keeps this path ort-free: [docs/library-mode.md](docs/library-mode.md).
 
 ### Python
 
@@ -145,6 +161,7 @@ guard so quiet or single-voice audio does not hallucinate clusters.
 
 ## Documentation
 
+- [Library mode (no ONNX)](docs/library-mode.md) — ort-free surface for BYO embedders
 - [Benchmarks](docs/BENCHMARKS.md) — collar-disclosed DER numbers and provenance
 - [Production readiness](PRODUCTION-READINESS.md) — deployment guidance (GO / NO-GO)
 - [Migrating from 0.5](docs/MIGRATING-FROM-0.5.md) · [Glossary](docs/GLOSSARY.md)

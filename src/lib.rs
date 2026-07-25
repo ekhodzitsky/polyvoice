@@ -6,15 +6,21 @@
 //! # polyvoice
 //!
 //! Speaker diarization library for Rust — online (streaming) and offline
-//! (file-based), ONNX-powered, and ecosystem-agnostic.
+//! (file-based), ecosystem-agnostic. The ONNX path is opt-in (`features =
+//! ["onnx", …]`); default features are empty so BYO-embedder consumers can
+//! use `Pipeline` / `StreamingPipeline` / `EnergyVad` without linking `ort`.
 //!
 //! Designed to be embedded into any Rust application that needs to answer
 //! the question **"who spoke when?"**.
 //!
 //! ## Quick start
 //!
-//! Build a diarization pipeline using `Pipeline` and `ModelRegistry`.
-//! See the `pipeline` module for details.
+//! **ONNX path:** build a diarization pipeline using `Pipeline` / `pipeline_v2`
+//! and `ModelRegistry` (features `onnx`, `download`, …).
+//!
+//! **Library mode (no ONNX):** `default-features = false`, implement
+//! [`EmbeddingExtractor`], pair with [`EnergyVad`] — see the crate README and
+//! `docs/library-mode.md`.
 //!
 //! ## Module organization
 //!
