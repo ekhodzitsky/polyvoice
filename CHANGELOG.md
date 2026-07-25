@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-25
+
+### Changed
+
+- **CLI default pipeline is now v2 + VBx** after a hard full-split DER gate
+  (VoxConverse-test 232 + AMI-test 16): no-collar micro DER is **15.37%** /
+  **25.17%**, both ≤ the legacy baseline (18.54% / 32.87%). Artifacts under
+  `benchmarks/results/full-der-2026-07-25/` (`VERDICT.md`). Opt out with
+  `--legacy` or `--clusterer ahc`. Hidden `--v2` remains accepted for scripts.
+- **`cli` feature includes `vbx`**. Default clusterer is `vbx` (needs PLDA via
+  `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`).
+- **Python** `Pipeline.balanced()` / `.mobile()` accept optional `clusterer`
+  and `vbx_plda_dir`; prefer VBx when PLDA is configured.
+- **`tests/der_baseline.json`** full-split rows are the v2+VBx gate numbers;
+  legacy retained as `*_legacy`. Docs (`BENCHMARKS.md`, README,
+  `PRODUCTION-READINESS.md`) updated.
+
 ### Added
 
 - **Opt-in `audio-io` feature** for the loading layer: decode mp3/flac/ogg/m4a/aac
@@ -18,8 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or rates. Default `cargo tree` does not pull rubato/symphonia.
   Build the CLI with `--features "cli,audio-io"`. Opus is not supported (no
   native libopus).
+- Full DER gate harness helpers under
+  `benchmarks/results/full-der-2026-07-25/` (`run_fast.sh`,
+  `merge_shard_reports.py`, `write_verdict.sh`).
 
-### Changed
+### Changed (also in this line)
 
 - **MSRV is now Rust 1.88.0** (was 1.85.0). The declared version was wrong for
   any ort-enabled build: `ort` 2.0.0-rc.11+ requires 1.88. CI's MSRV job pins

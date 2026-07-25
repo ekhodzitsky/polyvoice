@@ -1,6 +1,6 @@
 [package]
 name = "polyvoice-python"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 publish = false
 
@@ -9,6 +9,6 @@ name = "_polyvoice"
 crate-type = ["cdylib"]
 
 [dependencies]
-polyvoice = { path = "..", features = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"] }
+polyvoice = { path = "..", features = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "vbx"] }
 pyo3 = { version = "0.28", features = ["extension-module"] }
 serde_json = "1"

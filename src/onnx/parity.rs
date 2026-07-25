@@ -12,9 +12,9 @@
 #![cfg(all(test, feature = "backend-tract"))]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use super::ExecutionProvider;
 use super::factory::{InferenceBackend, RuntimeSession};
 use super::runtime::{InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
-use super::ExecutionProvider;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -34,11 +34,7 @@ impl Tol {
 
 fn model_path(name: &str) -> Option<PathBuf> {
     let p = Path::new("models").join(name);
-    if p.is_file() {
-        Some(p)
-    } else {
-        None
-    }
+    if p.is_file() { Some(p) } else { None }
 }
 
 fn try_open(path: &Path, backend: InferenceBackend) -> Result<RuntimeSession, String> {
@@ -49,7 +45,13 @@ fn try_open(path: &Path, backend: InferenceBackend) -> Result<RuntimeSession, St
 }
 
 fn max_abs_rel(a: &[f32], b: &[f32]) -> (f32, f32) {
-    assert_eq!(a.len(), b.len(), "length mismatch {} vs {}", a.len(), b.len());
+    assert_eq!(
+        a.len(),
+        b.len(),
+        "length mismatch {} vs {}",
+        a.len(),
+        b.len()
+    );
     let mut max_abs = 0.0f32;
     let mut max_rel = 0.0f32;
     for (&x, &y) in a.iter().zip(b.iter()) {

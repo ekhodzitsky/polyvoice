@@ -4,11 +4,9 @@
 //! the `backend-tract` feature is enabled and selected via
 //! [`InferenceBackend`] / env `POLYVOICE_INFERENCE_BACKEND=tract`.
 
-use super::ort_session::OrtSession;
-use super::runtime::{
-    InferenceError, InferenceRuntime, InferenceTensor, NamedTensor,
-};
 use super::ExecutionProvider;
+use super::ort_session::OrtSession;
+use super::runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor};
 use std::cell::Cell;
 use std::path::Path;
 
@@ -70,9 +68,7 @@ impl InferenceBackend {
                         }
                     }
                     other => {
-                        tracing::warn!(
-                            "unknown POLYVOICE_INFERENCE_BACKEND={other:?}; using ort"
-                        );
+                        tracing::warn!("unknown POLYVOICE_INFERENCE_BACKEND={other:?}; using ort");
                         Self::Ort
                     }
                 }
@@ -150,10 +146,7 @@ impl InferenceRuntime for RuntimeSession {
         }
     }
 
-    fn run(
-        &mut self,
-        inputs: &[NamedTensor<'_>],
-    ) -> Result<Vec<InferenceTensor>, InferenceError> {
+    fn run(&mut self, inputs: &[NamedTensor<'_>]) -> Result<Vec<InferenceTensor>, InferenceError> {
         match self {
             Self::Ort(s) => s.run(inputs),
             #[cfg(feature = "backend-tract")]
