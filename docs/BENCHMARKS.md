@@ -112,9 +112,10 @@ gate (2026-07-25): no-collar micro DER ≤ legacy on **both** VoxConverse-test
 | legacy | `polyvoice --legacy file.wav` | 18.54 | 32.87 |
 | v2 + AHC | `polyvoice --clusterer ahc file.wav` | (subset; see archive) | (subset) |
 
-VBx needs PLDA weights: `--vbx-plda-dir <dir>` or `POLYVOICE_VBX_PLDA_DIR`
-(see [`docs/vbx-plda-release.md`](vbx-plda-release.md)). Without PLDA use
-`--clusterer ahc` or `--legacy`.
+VBx PLDA weights auto-download via the model registry; optional override
+`--vbx-plda-dir <dir>` / `POLYVOICE_VBX_PLDA_DIR` (see
+[`docs/vbx-plda-release.md`](vbx-plda-release.md)). Use `--clusterer ahc` or
+`--legacy` for non-VBx paths.
 
 Earlier **subset** bootstrap numbers (60-file Vox / full AMI, pre-gate) are
 retained below for history only — prefer the full-split rows above.

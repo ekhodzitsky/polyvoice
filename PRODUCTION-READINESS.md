@@ -21,9 +21,10 @@ services, because:
 1. **Pre-1.0 API** — no backward-compatibility commitment until `1.0.0`.
 2. **`ort` is still a release candidate** (`2.0.0-rc.12`) and remains the only
    production inference backend.
-3. **VBx PLDA is operator-supplied** — default clustering needs
-   `POLYVOICE_VBX_PLDA_DIR` / `--vbx-plda-dir` (or `--clusterer ahc` /
-   `--legacy`); PLDA is not yet a signed registry auto-download.
+3. **VBx PLDA signatures deferred** — default clustering auto-downloads the
+   six PLDA `.npy` files via the model registry with SHA-256 verification;
+   minisign signatures are still pending a release-key sign step (optional
+   override: `POLYVOICE_VBX_PLDA_DIR` / `--vbx-plda-dir`).
 4. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
    CALLHOME / DIHARD (and similar) not gated for release.
 
