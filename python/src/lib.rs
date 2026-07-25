@@ -5,8 +5,11 @@
 //! pyo3 bindings for the polyvoice Pipeline v2.
 
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::{Pipeline as RustPipeline, PipelineError};
+use polyvoice::pipeline_v2::{
+    ClustererKind, Pipeline as RustPipeline, PipelineConfig, PipelineError,
+};
 use polyvoice::types::{DiarizationResult as RustDiarizationResult, Profile, SampleRate};
+use std::path::PathBuf;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -150,17 +153,31 @@ pub struct Pipeline {
 #[pymethods]
 impl Pipeline {
     /// Build a Mobile-profile Pipeline.
+    ///
+    /// `clusterer` is `"vbx"` (default when PLDA is available via `vbx_plda_dir`
+    /// or `POLYVOICE_VBX_PLDA_DIR`) or `"ahc"`. Without PLDA, pass `clusterer="ahc"`.
     #[staticmethod]
-    #[pyo3(signature = (models_cache=None))]
-    fn mobile(models_cache: Option<&str>) -> PyResult<Self> {
-        Self::build_profile(Profile::Mobile, models_cache)
+    #[pyo3(signature = (models_cache=None, clusterer=None, vbx_plda_dir=None))]
+    fn mobile(
+        models_cache: Option<&str>,
+        clusterer: Option<&str>,
+        vbx_plda_dir: Option<&str>,
+    ) -> PyResult<Self> {
+        Self::build_profile(Profile::Mobile, models_cache, clusterer, vbx_plda_dir)
     }
 
     /// Build a Balanced-profile Pipeline.
+    ///
+    /// Same kwargs as [`Pipeline::mobile`]. Defaults to VBx when PLDA is
+    /// configured, else AHC.
     #[staticmethod]
-    #[pyo3(signature = (models_cache=None))]
-    fn balanced(models_cache: Option<&str>) -> PyResult<Self> {
-        Self::build_profile(Profile::Balanced, models_cache)
+    #[pyo3(signature = (models_cache=None, clusterer=None, vbx_plda_dir=None))]
+    fn balanced(
+        models_cache: Option<&str>,
+        clusterer: Option<&str>,
+        vbx_plda_dir: Option<&str>,
+    ) -> PyResult<Self> {
+        Self::build_profile(Profile::Balanced, models_cache, clusterer, vbx_plda_dir)
     }
 
     /// Run diarization on an iterable of f32 samples.
@@ -205,19 +222,54 @@ impl Pipeline {
 }
 
 impl Pipeline {
-    fn build_profile(profile: Profile, models_cache: Option<&str>) -> PyResult<Self> {
+    fn build_profile(
+        profile: Profile,
+        models_cache: Option<&str>,
+        clusterer: Option<&str>,
+        vbx_plda_dir: Option<&str>,
+    ) -> PyResult<Self> {
         let registry = match models_cache {
             Some(path) => ModelRegistry::with_cache_dir(path),
             None => ModelRegistry::default(),
         }
         .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("model registry: {e}")))?;
 
+        let plda_dir = vbx_plda_dir
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("POLYVOICE_VBX_PLDA_DIR").map(PathBuf::from));
+        let want_vbx = match clusterer {
+            Some("vbx") => true,
+            Some("ahc") => false,
+            Some(other) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "unknown clusterer '{other}' (expected 'vbx' or 'ahc')"
+                )));
+            }
+            // Prefer VBx when PLDA is available (matches the CLI 0.11 default).
+            None => plda_dir.is_some(),
+        };
+
+        let mut cfg = PipelineConfig {
+            profile,
+            ..PipelineConfig::default()
+        };
+        if want_vbx {
+            cfg.clusterer = ClustererKind::Vbx;
+            cfg.vbx_plda_dir = plda_dir;
+        } else {
+            cfg.clusterer = ClustererKind::Ahc {
+                threshold: 0.45,
+            };
+        }
+
         let pipeline = RustPipeline::builder()
-            .profile(profile)
+            .config(cfg)
             .with_models_from(registry)
             .build()
             .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!("pipeline build: {e}"))
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "pipeline build: {e} (for VBx set vbx_plda_dir= or POLYVOICE_VBX_PLDA_DIR, or clusterer='ahc')"
+                ))
             })?;
 
         Ok(Self { pipeline })

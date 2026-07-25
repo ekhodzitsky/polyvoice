@@ -1,27 +1,29 @@
 # Production Readiness Assessment
 
-> **Version:** 0.10.x | **Date:** 2026-07-24 | **Scope:** Rust library + Python bindings + FFI + CLI
+> **Version:** 0.11.x | **Date:** 2026-07-25 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
-> **Last updated:** 2026-07-24 — refreshed for the 0.10.x line. Canonical accuracy
-> numbers live in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md); this file is the
-> deployment GO / NO-GO judgment, not a second leaderboard.
+> **Last updated:** 2026-07-25 — default pipeline flipped to v2+VBx after the
+> full-split DER gate. Canonical accuracy numbers live in
+> [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md); this file is the deployment
+> GO / NO-GO judgment, not a second leaderboard.
 
 ## Executive Summary
 
 **Status: NOT GO for public unattended production. OK for controlled internal use.**
 
-As of **0.10.x**, polyvoice is a hardened pre-1.0 engine: model signing is
+As of **0.11.x**, polyvoice is a hardened pre-1.0 engine: model signing is
 enforced on release builds, the ONNX Runtime native binary is hash-pinned and
-documented, CI covers the main desktop targets, and DER gates exist for the
-legacy default path. It is still **not** ready for multi-tenant public APIs or
-unattended production services, because:
+documented, CI covers the main desktop targets, and a **full VoxConverse-test +
+AMI-test DER gate** promotes **pipeline v2 + VBx** as the CLI default. It is
+still **not** ready for multi-tenant public APIs or unattended production
+services, because:
 
 1. **Pre-1.0 API** — no backward-compatibility commitment until `1.0.0`.
 2. **`ort` is still a release candidate** (`2.0.0-rc.12`) and remains the only
    production inference backend.
-3. **Dual pipeline** — the CLI/Python default is still the validated **legacy**
-   path; **pipeline v2** is experimental (`--v2`) and not the single shipped
-   default.
+3. **VBx PLDA is operator-supplied** — default clustering needs
+   `POLYVOICE_VBX_PLDA_DIR` / `--vbx-plda-dir` (or `--clusterer ahc` /
+   `--legacy`); PLDA is not yet a signed registry auto-download.
 4. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
    CALLHOME / DIHARD (and similar) not gated for release.
 
@@ -35,23 +37,21 @@ proof.
 
 ---
 
-## Current surface (0.10.x truth)
+## Current surface (0.11.x truth)
 
 | Area | State |
 |------|--------|
-| Crate version | `0.10.0` (0.10.x line) |
-| CLI / Python default | **Legacy** pipeline (Silero VAD → embeddings → AHC) |
-| Experimental path | **Pipeline v2** via `--v2` (powerset → ResNet34 → AHC/VBx) |
-| Clustering upgrades | cVBx-style knobs landed (short-embedding filter, GMM-VBx option, ASC stop API, gap-fill defaults); **full multi-corpus DER re-measurement still thin** |
+| Crate version | `0.11.0` (0.11.x line) |
+| CLI default | **v2 + VBx** (powerset → ResNet34 → VB-HMM/PLDA); `--legacy` / `--clusterer ahc` opt out |
+| Python default | Pipeline v2; VBx when PLDA env/arg is set, else AHC |
+| Full-split DER (no-collar micro) | Vox **15.37%**, AMI **25.17%** (≤ legacy; gate PASS 2026-07-25) |
 | Inference | `InferenceRuntime` trait exists; **only `OrtSession` (ort) is a production impl** |
 | Models | Bundled models minisign-signed; release builds refuse unsigned profile-resolved models |
 | Native ORT binary | Hash-pinned via ort-sys `dist.txt`; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
 
-Honest dual-pipeline reading: legacy is the robust default on full VoxConverse
-and AMI splits. Pipeline v2 + VBx is competitive on conversational subsets and
-the main accuracy workstream, but is **not** the validated default and must not
-be marketed as “the” production path until it becomes the single default under
-a DER gate.
+Honest reading: v2+VBx is the **measured default** on full VoxConverse-test and
+AMI-test. Legacy remains a supported escape hatch. Public production still
+needs multi-corpus gates, a stable ort, and frictionless PLDA distribution.
 
 ---
 
@@ -61,12 +61,12 @@ a DER gate.
 
 | Item | Status | Risk |
 |------|--------|------|
-| Semantic version | `0.10.0` | Pre-1.0 — API may change between `0.x` minors |
+| Semantic version | `0.11.0` | Pre-1.0 — API may change between `0.x` minors |
 | `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
-| CHANGELOG | Maintained | 0.10.0 documented source-breaking enum/struct additions |
+| CHANGELOG | Maintained | 0.11.0 documents CLI default flip to v2+VBx |
 
 **Gap:** No commitment to backward compatibility until `1.0.0`. Consumers should
-pin a `0.10.x` (or tighter) and read the CHANGELOG before upgrading.
+pin a `0.11.x` (or tighter) and read the CHANGELOG before upgrading.
 
 **Remediation:** Freeze the public API, publish a semver policy, then ship
 `1.0.0`.

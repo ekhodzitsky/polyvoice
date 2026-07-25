@@ -1,0 +1,75 @@
+{
+  "schema": "polyvoice-bench-v0.10",
+  "crate_version": "0.10.0",
+  "git_sha": "143d47fb46a4201c8d93a5721824ddeb17d5e988",
+  "host_arch": "aarch64",
+  "host_os": "macos",
+  "command_line": "./target/release/polyvoice-bench data/voxconverse-test --pipeline legacy --profile balanced --collar 0.25 --min-cluster-size 2 --max-files 1 --execution-provider cpu --output benchmarks/results/full-der-2026-07-25/smoke-legacy.json",
+  "dataset_name": "voxconverse-test",
+  "profile": "balanced",
+  "files_processed": 1,
+  "files_skipped": 0,
+  "der_collar_macro": 7.233328246604609,
+  "der_no_collar_macro": 13.253336928677362,
+  "der_collar_micro": 7.233328246604609,
+  "der_no_collar_micro": 13.253336928677362,
+  "collar_secs": 0.25,
+  "averaging_policy": "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
+  "resolved_execution_provider": "Cpu",
+  "host_cpus": 10,
+  "miss": 3.807416450480696,
+  "false_alarm": 3.4259117961239127,
+  "confusion": 0.0,
+  "rt_factor_avg": 8.824951858539492,
+  "speaker_count": {
+    "exact": 1,
+    "plus_minus_1": 0,
+    "off_by_2_or_more": 0
+  },
+  "model_hashes": [
+    {
+      "model_id": "silero_vad",
+      "sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
+    },
+    {
+      "model_id": "wespeaker_resnet34",
+      "sha256": "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
+    }
+  ],
+  "per_file": [
+    {
+      "filename": "aepyx",
+      "der_collar": 7.233328246604609,
+      "der_no_collar": 13.253336928677362,
+      "miss_rate": 3.807416450480696,
+      "false_alarm_rate": 3.4259117961239127,
+      "confusion_rate": 0.0,
+      "der_single_speaker": 5.813953488372093,
+      "der_overlap": 45.9051724137931,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9943666780471151
+        },
+        {
+          "speaker": 1,
+          "recall": 0.951300498063088
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9280701754385965
+        },
+        {
+          "speaker": 3,
+          "recall": 0.9132016632016632
+        }
+      ],
+      "rt_factor": 8.824951858539492,
+      "ref_speakers": 4,
+      "hyp_speakers": 4,
+      "num_turns": 32,
+      "audio_duration_secs": 169.152,
+      "runtime_secs": 19.16747
+    }
+  ]
+}
