@@ -1,9 +1,11 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! Real-time streaming diarization pipeline.
 //!
 //! Processes audio incrementally chunk-by-chunk with bounded latency.
 //! Unlike the offline [`Pipeline`](crate::pipeline::Pipeline), `StreamingPipeline`
 //! emits [`SpeakerTurn`]s as soon as each embedding window is processed.
+//!
+//! Generic over [`crate::Embedder`] — bring-your-own encoders work without the
+//! `onnx` feature (see module example).
 //!
 //! # Latency
 //!
@@ -45,10 +47,11 @@
 //! # Example
 //! ```rust,no_run
 //! use polyvoice::streaming::{LatencyPreset, StreamingPipeline};
-//! use polyvoice::{EnergyVad, DummyExtractor, DiarizationConfig, VadConfig};
+//! use polyvoice::{DummyExtractor, EnergyVad, VadConfig};
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let vad = EnergyVad::new(-40.0, 16000, 512);
+//!     // DummyExtractor implements Embedder via the legacy bridge.
 //!     let extractor = DummyExtractor::new(256);
 //!     let mut pipeline = StreamingPipeline::with_latency_preset(
 //!         vad,
@@ -71,7 +74,7 @@ pub use latency::{LatencyPreset, StreamingParams};
 pub use stability::{label_flip_rate, prefer_current_speaker};
 
 use crate::VadConfig;
-use crate::embedding::{EmbeddingError, EmbeddingExtractor};
+use crate::embedder::{Embedder, EmbedderError};
 use crate::types::{DiarizationConfig, SpeakerTurn, TimeRange};
 use crate::vad::{VadError, VadEvent, VadStateMachine, VoiceActivityDetector};
 use crate::window::WindowBuffer;
@@ -82,19 +85,18 @@ pub enum StreamingError {
     #[error("VAD error: {0}")]
     Vad(#[from] VadError),
     #[error("embedding error: {0}")]
-    Embedding(#[from] EmbeddingError),
+    Embedding(#[from] EmbedderError),
 }
 
 /// Stateful streaming diarization pipeline.
 ///
-/// Generic over a [`VoiceActivityDetector`] `V` and an [`EmbeddingExtractor`] `E`.
+/// Generic over a [`VoiceActivityDetector`] `V` and an [`Embedder`] `E`.
 /// Speaker assignment uses an AOSC-style [`ArrivalOrderSpeakerCache`] (bounded,
 /// arrival-order IDs, provisional→stable labels, prefer-current hysteresis).
 pub struct StreamingPipeline<V, E> {
     vad: V,
     extractor: E,
     cache: ArrivalOrderSpeakerCache,
-    config: DiarizationConfig,
     params: StreamingParams,
     preset: Option<LatencyPreset>,
     frame_size: usize,
@@ -113,7 +115,7 @@ pub struct StreamingPipeline<V, E> {
 impl<V, E> StreamingPipeline<V, E>
 where
     V: VoiceActivityDetector,
-    E: EmbeddingExtractor,
+    E: Embedder,
 {
     /// Create a new streaming pipeline with explicit diarization + VAD config.
     ///
@@ -211,7 +213,6 @@ where
             vad,
             extractor,
             cache,
-            config,
             params,
             preset,
             frame_size,
@@ -362,7 +363,7 @@ where
         let sr_f = self.sample_rate as f64;
 
         while let Some((start, chunk)) = self.window_buffer.try_pop() {
-            let embedding = self.extractor.extract(&chunk, &self.config)?;
+            let embedding = self.extractor.embed(&chunk)?;
             let assigned = self.cache.assign(&embedding);
             debug_assert!(self.cache.len() <= self.cache.cap());
             let end = start + chunk.len();
@@ -388,7 +389,7 @@ where
         let sr_f = self.sample_rate as f64;
 
         if let Some((start, padded)) = self.window_buffer.flush() {
-            let embedding = self.extractor.extract(&padded, &self.config)?;
+            let embedding = self.extractor.embed(&padded)?;
             let assigned = self.cache.assign(&embedding);
             debug_assert!(self.cache.len() <= self.cache.cap());
             let end = seg_end_sample.min(start + padded.len());
