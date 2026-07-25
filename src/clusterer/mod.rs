@@ -35,7 +35,7 @@ pub trait Clusterer: Send + Sync {
     fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError>;
 
     /// Cluster with per-embedding durations (seconds). Defaults to ignoring
-    /// durations and calling [`cluster`]. Backends that filter short embeddings
+    /// durations and calling [`Self::cluster`]. Backends that filter short embeddings
     /// (cVBx short-segment exclusion) override this so unreliable short windows
     /// are kept out of AHC/VB and reassigned afterward.
     ///

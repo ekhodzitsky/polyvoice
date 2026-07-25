@@ -9,7 +9,7 @@ Usage: polyvoice [OPTIONS] [WAV]
        polyvoice <COMMAND>
 
 Commands:
-  diarize          Run diarization on a WAV file (same as the bare `polyvoice <wav>` form)
+  diarize          Run diarization on an audio file (same as the bare `polyvoice <file>` form)
   download-models  Download Mobile/Balanced ONNX models
   models           Inspect models registry
   completions      Generate shell completions to stdout
@@ -17,7 +17,7 @@ Commands:
   help             Print this message or the help of the given subcommand(s)
 
 Arguments:
-  [WAV]  WAV file to diarize. `polyvoice meeting.wav` diarizes it directly
+  [WAV]  Audio file to diarize (mp3/flac/ogg/m4a/aac/wav at any sample rate; decoded and resampled to 16 kHz mono)
 
 Options:
       --profile <PROFILE>
@@ -38,18 +38,20 @@ Options:
           Suppress progress/info on stderr
       --json
           Machine mode: emit only the structured JSON result on stdout; route all human-readable output to stderr. Implies `--format json --quiet`
-      --v2
-          Use pipeline v2 (experimental; not recommended for long-form audio)
+      --legacy
+          Use the pre-0.11 legacy pipeline (Silero VAD + sliding-window embeddings + AHC) instead of the default v2 + VBx path
       --clusterer <CLUSTERER>
-          v2 clusterer: `ahc` (default cosine AHC) or `vbx` (PLDA + VB-HMM — best for overlap-heavy / meeting audio; needs the `vbx` build feature and a PLDA dir via `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`). Only affects `--v2` [default: ahc]
+          Clusterer for the default (v2) path: `vbx` (PLDA + VB-HMM, automatic speaker count — the accuracy gate default) or `ahc` (fixed-threshold cosine AHC). `vbx` needs PLDA via `--vbx-plda-dir` or `POLYVOICE_VBX_PLDA_DIR`. Ignored with `--legacy` [default: vbx]
       --vbx-plda-dir <VBX_PLDA_DIR>
-          Directory with the precomputed VBx PLDA params (overrides `POLYVOICE_VBX_PLDA_DIR`). Only used with `--v2 --clusterer vbx`
+          Directory with the precomputed VBx PLDA params (overrides `POLYVOICE_VBX_PLDA_DIR`). Used when `--clusterer vbx` (the default)
       --embed-window <EMBED_WINDOW>
-          v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Only affects `--v2`
+          v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Ignored with `--legacy`
       --execution-provider <EXECUTION_PROVIDER>
-          ONNX execution provider: `auto` (CoreML on Apple Silicon, XNNPACK on aarch64 Linux, else CPU), `cpu`, `coreml`, `nnapi`, `cuda`, `xnnpack`. Providers not compiled into this build log a warning and run on CPU. Only affects `--v2`; the legacy default pipeline keeps its built-in per-session defaults [default: auto]
+          ONNX execution provider: `auto` (CoreML on Apple Silicon, XNNPACK on aarch64 Linux, else CPU), `cpu`, `coreml`, `nnapi`, `cuda`, `xnnpack`. Providers not compiled into this build log a warning and run on CPU. Applies to the default v2 path; legacy keeps its built-in per-session defaults [default: auto]
       --exclusive
           Also emit a single-speaker (exclusive) timeline. In JSON this is the additive `exclusive_turns` field beside the overlap-aware `turns`. For RTTM/SRT/VTT/TXT the exclusive timeline is written instead (ASR- reconciliation surface — concurrent speakers are collapsed per frame)
+      --latency-preset <PRESET>
+          Streaming-aligned window geometry preset: `realtime` | `balanced` | `accurate`. Sets embedding window/hop (and max speakers ceiling) to match `polyvoice::streaming::LatencyPreset`. Default leaves config unchanged (balanced geometry is already the DiarizationConfig default)
   -h, --help
           Print help
   -V, --version

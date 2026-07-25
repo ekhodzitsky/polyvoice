@@ -125,8 +125,7 @@ impl std::error::Error for InferenceError {}
 /// (Silero LSTM) pass state as ordinary named I/O tensors — there is no
 /// separate "stateful run" API.
 ///
-/// Implementors must be [`Send`] so sessions can live in
-/// [`crate::utils::ObjectPool`].
+/// Implementors must be [`Send`] so sessions can live in a shared object pool.
 pub trait InferenceRuntime: Send {
     /// Model input names in declaration order.
     fn input_names(&self) -> &[String];
@@ -153,6 +152,7 @@ pub trait InferenceRuntime: Send {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
