@@ -23,7 +23,10 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
-#[command(name = "polyvoice-measure", about = "Parity / latency measurement harness")]
+#[command(
+    name = "polyvoice-measure",
+    about = "Parity / latency measurement harness"
+)]
 struct Args {
     #[command(subcommand)]
     cmd: Cmd,
@@ -362,12 +365,8 @@ fn run_legacy_arm_silero(
         }
         let (samples, sr_hz) = read_wav(wav)?;
         let ref_t = load_ref_turns(rttm_dir, stem)?;
-        let extractor = FbankOnnxExtractor::new(
-            emb_path,
-            256,
-            1,
-            polyvoice::onnx::ExecutionProvider::Cpu,
-        )?;
+        let extractor =
+            FbankOnnxExtractor::new(emb_path, 256, 1, polyvoice::onnx::ExecutionProvider::Cpu)?;
         let mut vad = SileroVad::new(vad_path, frame_size)?;
         let vad_config = VadConfig {
             frame_size,
@@ -431,12 +430,8 @@ fn run_legacy_arm_earshot(
         }
         let (samples, sr_hz) = read_wav(wav)?;
         let ref_t = load_ref_turns(rttm_dir, stem)?;
-        let extractor = FbankOnnxExtractor::new(
-            emb_path,
-            256,
-            1,
-            polyvoice::onnx::ExecutionProvider::Cpu,
-        )?;
+        let extractor =
+            FbankOnnxExtractor::new(emb_path, 256, 1, polyvoice::onnx::ExecutionProvider::Cpu)?;
         let mut vad = polyvoice::EarshotVad::new();
         let vad_config = VadConfig {
             frame_size,
@@ -495,8 +490,7 @@ fn run_vad_parity(dataset: PathBuf, max_files: usize, output: Option<PathBuf>) -
         let rttm_dir = dataset.join("rttm");
 
         eprintln!("Silero arm…");
-        let silero =
-            run_legacy_arm_silero("silero", &wavs, &rttm_dir, &emb_path, &vad_path, 512)?;
+        let silero = run_legacy_arm_silero("silero", &wavs, &rttm_dir, &emb_path, &vad_path, 512)?;
         eprintln!(
             "silero DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
             silero.macro_der_collar_0, silero.macro_der_collar_025, silero.mean_rtf
@@ -626,7 +620,11 @@ type MemPair = (bool, Vec<f32>, Vec<f32>);
 /// Build short-segment verification pairs from VoxConverse-style RTTMs when
 /// VoxCeleb audio is not present. Same-speaker positives from one speaker's
 /// segments; negatives from different speakers (same file when possible).
-fn pairs_from_rttm_dataset(dataset: &Path, max_files: usize, max_pairs: usize) -> Result<Vec<MemPair>> {
+fn pairs_from_rttm_dataset(
+    dataset: &Path,
+    max_files: usize,
+    max_pairs: usize,
+) -> Result<Vec<MemPair>> {
     let wavs = list_wavs(dataset, max_files)?;
     let rttm_dir = dataset.join("rttm");
     let mut out: Vec<MemPair> = Vec::new();
@@ -662,10 +660,7 @@ fn pairs_from_rttm_dataset(dataset: &Path, max_files: usize, max_pairs: usize) -
             if slice.len() < (0.6 * sr as f32) as usize {
                 continue;
             }
-            spk_slices
-                .entry(s.speaker.clone())
-                .or_default()
-                .push(slice);
+            spk_slices.entry(s.speaker.clone()).or_default().push(slice);
         }
 
         let speakers: Vec<String> = spk_slices.keys().cloned().collect();
@@ -720,7 +715,7 @@ fn run_embedder_short(
     der_max_files: usize,
     output: Option<PathBuf>,
 ) -> Result<()> {
-    use polyvoice::embedder::{Embedder, ERes2NetV2Extractor, ResNet34Adapter};
+    use polyvoice::embedder::{ERes2NetV2Extractor, Embedder, ResNet34Adapter};
 
     let registry = ModelRegistry::default()?;
     let durs: Vec<f32> = durations
@@ -783,16 +778,10 @@ fn run_embedder_short(
         .ensure("eres2netv2")
         .context("download eres2netv2 (optional model; needs network once)")?;
 
-    let default_emb = ResNet34Adapter::new(
-        &default_path,
-        2,
-        polyvoice::onnx::ExecutionProvider::Cpu,
-    )?;
-    let eres_emb = ERes2NetV2Extractor::new(
-        &eres_path,
-        2,
-        polyvoice::onnx::ExecutionProvider::Cpu,
-    )?;
+    let default_emb =
+        ResNet34Adapter::new(&default_path, 2, polyvoice::onnx::ExecutionProvider::Cpu)?;
+    let eres_emb =
+        ERes2NetV2Extractor::new(&eres_path, 2, polyvoice::onnx::ExecutionProvider::Cpu)?;
 
     fn score_arm(emb: &dyn Embedder, pairs: &[MemPair], durs: &[f32]) -> Result<Vec<EerBucket>> {
         let mut out = Vec::new();
@@ -815,10 +804,7 @@ fn run_embedder_short(
                 scores.push((cosine(&ea, &eb), *same));
             }
             let eer = eer_from_scores(scores.clone());
-            eprintln!(
-                "  duration={dur:.1}s pairs={} EER={eer:.2}%",
-                scores.len()
-            );
+            eprintln!("  duration={dur:.1}s pairs={} EER={eer:.2}%", scores.len());
             out.push(EerBucket {
                 duration_secs: dur,
                 pairs: scores.len(),
