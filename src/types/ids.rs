@@ -1,4 +1,6 @@
 //! Speaker identity and remapping tables.
+#![allow(deprecated)] // doc-links to soft-deprecated SpeakerCluster
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
