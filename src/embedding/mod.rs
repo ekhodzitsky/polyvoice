@@ -4,9 +4,9 @@
 //! Prefer [`crate::Embedder`] for new code — offline [`crate::Pipeline`] and
 //! online [`crate::streaming::StreamingPipeline`] accept `E: Embedder`.
 //! Types that still implement [`EmbeddingExtractor`] automatically satisfy
-//! [`crate::Embedder`] via a blanket bridge in `polyvoice::embedder`.
+//! [`Embedder`] via a blanket bridge in `polyvoice::embedder`.
 //!
-//! [`DummyExtractor`] is the supported in-memory stand-in for tests.
+//! [`DummyExtractor`] implements [`Embedder`] directly (the supported test mock).
 
 use crate::types::DiarizationConfig;
 
@@ -32,14 +32,12 @@ pub enum EmbeddingError {
 /// Prefer implementing [`crate::Embedder`] directly. Existing
 /// `EmbeddingExtractor` implementors continue to work with
 /// [`crate::Pipeline`] / [`crate::streaming::StreamingPipeline`] through an
-/// automatic bridge (no `#[allow(deprecated)]` needed on the call site when
-/// you migrate to `Embedder`).
+/// automatic bridge.
 ///
 /// ```rust
 /// use polyvoice::{DummyExtractor, Embedder, DiarizationConfig};
 /// let extractor = DummyExtractor::new(256);
 /// let samples = vec![0.0f32; DiarizationConfig::default().window_samples()];
-/// // Prefer Embedder::embed — DummyExtractor bridges from EmbeddingExtractor.
 /// let emb = extractor.embed(&samples).unwrap();
 /// assert_eq!(emb.len(), 256);
 /// ```
@@ -65,10 +63,9 @@ pub trait EmbeddingExtractor: Send + Sync {
 
 /// Deterministic pseudo-random unit-vector embedder for tests and benchmarks.
 ///
-/// Implements the legacy [`EmbeddingExtractor`] trait and therefore also
-/// [`crate::Embedder`] via the crate bridge — pass it to
+/// Implements [`crate::Embedder`] directly — pass it to
 /// [`crate::Pipeline`] / [`crate::streaming::StreamingPipeline`] without
-/// `#[allow(deprecated)]`.
+/// going through the legacy [`EmbeddingExtractor`] bridge.
 ///
 /// ```rust
 /// use polyvoice::{DummyExtractor, Embedder};
@@ -99,15 +96,8 @@ impl DummyExtractor {
             seed: std::sync::atomic::AtomicU64::new(1),
         }
     }
-}
 
-impl EmbeddingExtractor for DummyExtractor {
-    fn extract(
-        &self,
-        samples: &[f32],
-        _config: &DiarizationConfig,
-    ) -> Result<Vec<f32>, EmbeddingError> {
-        let _ = samples; // unused
+    fn next_unit_vector(&self) -> Vec<f32> {
         let mut seed = self.seed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut vec = vec![0.0f32; self.dim];
         for v in &mut vec {
@@ -116,10 +106,16 @@ impl EmbeddingExtractor for DummyExtractor {
             *v = ((seed % 1000) as f32 / 1000.0) - 0.5;
         }
         crate::utils::l2_normalize(&mut vec);
-        Ok(vec)
+        vec
+    }
+}
+
+impl crate::Embedder for DummyExtractor {
+    fn dim(&self) -> usize {
+        self.dim
     }
 
-    fn embedding_dim(&self) -> usize {
-        self.dim
+    fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, crate::EmbedderError> {
+        Ok(self.next_unit_vector())
     }
 }

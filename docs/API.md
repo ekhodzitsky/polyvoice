@@ -124,25 +124,23 @@ let result = Pipeline::new(DiarizationConfig::default(), VadConfig::default())
 
 With feature `onnx`, the same `Pipeline::run` accepts ONNX wrappers that
 implement the legacy extractor trait (bridged to `Embedder`), e.g.
-`FbankOnnxExtractor` / `OnnxEmbeddingExtractor`.
+`FbankOnnxExtractor` (or architecture adapters).
 
 ### Embedders and test doubles
 
 #### `DummyExtractor`
 Deterministic pseudo-random unit vectors for tests and benchmarks. Implements
-the legacy extractor trait and therefore `Embedder` via the bridge.
+`Embedder` directly.
 
 ```rust
 let extractor = DummyExtractor::new(256);
 assert_eq!(polyvoice::Embedder::dim(&extractor), 256);
 ```
 
-#### `OnnxEmbeddingExtractor` (feature `onnx`)
-Raw-audio ONNX model (WeSpeaker-style). Input shape: `[1, window_samples]`.
-Legacy; prefer `embedder::ResNet34Adapter` when using the v1.0 ONNX stack.
-
 #### `FbankOnnxExtractor` (feature `onnx`)
-WeSpeaker-style fbank → ONNX embedder (e.g. ResNet34, 256-d).
+WeSpeaker-style fbank → ONNX embedder (`Embedder`; e.g. ResNet34 256-d). Prefer
+architecture adapters (`ResNet34Adapter`, `CamPlusPlusExtractor`) when the
+model family is fixed.
 
 ### Voice Activity Detection
 

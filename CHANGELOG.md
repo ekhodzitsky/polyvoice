@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Module navigability.** `types` and `der` are split into submodules
+  (`types::{ids,profile,measures,result,confidence,config}`,
+  `der::{frame,decompose,wder}`) with the same public re-exports.
+  `DummyExtractor` implements `Embedder` directly; crate-root re-export of
+  `OnnxEmbeddingExtractor` removed (still at `polyvoice::onnx::…`,
+  `#[doc(hidden)]` + deprecated).
 - **Shared spectral graph.** `spectral::SpectralGraph` owns k-NN affinity →
   Laplacian → eigenspectrum for both `spectral_cluster` (BIC k) and
   `NmeScClusterer` (pure eigengap k). `AhcClusterer::with_threshold(0, t)` is
