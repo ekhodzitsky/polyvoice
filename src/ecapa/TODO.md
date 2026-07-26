@@ -1,15 +1,5 @@
-# TODO — src/ecapa
+# src/ecapa — TODO
 
-## Current
-
-- [ ] Maintain backward compatibility until M6.
-
-## Next
-
-## Known Gaps
-
-- No standalone tests in this module (covered by embedder_test.rs).
-
-## Deferred
-
-- [ ] Remove in M6 cleanup cycle.
+- [x] Implement `Embedder` directly (drop in-tree `EmbeddingExtractor` path).
+- [ ] Optional rename module to `fbank_onnx` (migration lease; re-export alias).
+- [ ] Standalone model-load smoke test under `onnx` with a fixture ONNX.

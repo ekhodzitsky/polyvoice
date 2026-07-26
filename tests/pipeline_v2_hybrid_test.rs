@@ -1,3 +1,4 @@
+#![allow(deprecated)] // HybridPipeline is soft-deprecated research surface
 #![allow(clippy::unwrap_used)]
 //! Hybrid pipeline integration test.
 //!

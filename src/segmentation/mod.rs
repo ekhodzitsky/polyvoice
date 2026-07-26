@@ -3,14 +3,14 @@
 //! Added in v0.6 (M1).
 
 mod aggregator;
+mod binarize;
 mod decoder;
 
 #[cfg(all(feature = "onnx", feature = "segmentation"))]
 mod powerset;
 
-pub use aggregator::{
-    AggregationConfig, Aggregator, BinarizationConfig, WindowOutput, binarize_frames,
-};
+pub use aggregator::{AggregationConfig, Aggregator, WindowOutput};
+pub use binarize::{BinarizationConfig, binarize_frames};
 pub use decoder::{FrameLabel, PowersetClass, PowersetDecoder};
 
 #[cfg(all(feature = "onnx", feature = "segmentation"))]

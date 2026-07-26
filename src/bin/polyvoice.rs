@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! polyvoice — speaker diarization CLI.
 //!
 //! `polyvoice meeting.wav` diarizes a file (implicit `diarize`); subcommands

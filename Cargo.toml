@@ -157,6 +157,7 @@ profile-all = ["profile-mobile", "profile-balanced"]
 # tool can run. `ort` is the SAME crate dependency as the core (polyvoice-mcp is a
 # bin in this crate, not a separate crate), so the ONNX Runtime version matches
 # automatically — no dual-runtime risk.
+# Agent MCP server: same production stack as `cli` (pipeline v2 + VBx default).
 mcp = [
     "onnx",
     "download",
@@ -164,6 +165,7 @@ mcp = [
     "embedder",
     "clusterer",
     "resegmentation",
+    "vbx",
     "dep:rmcp",
     "dep:schemars",
     "dep:tokio",

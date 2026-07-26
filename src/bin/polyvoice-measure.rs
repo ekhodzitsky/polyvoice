@@ -5,8 +5,6 @@
 //!   --dataset data/voxconverse-test --max-files 30 --output benchmarks/results/streaming-latency-measured.json
 //! ```
 
-#![allow(deprecated)]
-
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use polyvoice::der::compute_der;

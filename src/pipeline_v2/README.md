@@ -1,58 +1,77 @@
 # src/pipeline_v2
 
-The **experimental** M6a v1.0 trait-based diarization pipeline.
+The **production ONNX** trait-based diarization pipeline (CLI / FFI / Python /
+MCP default since **0.11**).
 
-> ⚠️ **Not the validated default.** `pipeline_v2` (and its `hybrid` path) was
-> reverted from the CLI default after the **0.6.1 incident** — it degraded DER
-> on long-form audio. The legacy [`pipeline`](../pipeline/) module is the
-> validated default for the CLI and Python bindings. Opt in via `--v2`.
+> **Default path:** powerset segmentation → ResNet34 embeddings → **VBx**
+> (VB-HMM + PLDA) clustering → overlap resegmentation. Proven on full
+> VoxConverse-test + AMI-test (see `docs/BENCHMARKS.md` and
+> `benchmarks/results/full-der-2026-07-25/`). Opt out on the CLI with
+> `--legacy` (Silero + AHC) or `--clusterer ahc`.
+>
+> Ort-free / bring-your-own embedder consumers use the always-on
+> [`pipeline`](../pipeline/) module + `StreamingPipeline` — not this module.
 
 ## What it is
 
-A clean, trait-composed replacement for the legacy pipeline:
+A trait-composed production pipeline:
 
 ```
 samples ──▶ Segmenter ──▶ Embedder ──▶ Clusterer ──▶ Resegmenter ──▶ turns
-            (Powerset)    (ResNet34)   (AHC/NME-SC)  (overlap)
+            (Powerset)    (ResNet34)   (AHC/NME-SC/  (overlap)
+                                        VBx)
 ```
 
 Each stage is a trait object, so backends are swappable. The `PipelineBuilder`
 wires them from a `Profile` (Mobile/Balanced, via `ModelRegistry`) or from
 caller-supplied `Custom` components.
 
-## How it differs from the legacy `pipeline`
+## How it differs from the BYO `pipeline`
 
-| | legacy `pipeline` | `pipeline_v2` |
-|--|-------------------|---------------|
-| VAD / segmentation | Silero VAD | Powerset segmentation (overlap-aware) |
-| Wiring | concrete types | `Segmenter`/`Embedder`/`Clusterer`/`Resegmenter` traits |
-| Overlap | detect-only | overlap masking + resegmentation |
-| Status | **validated default** | **experimental (opt-in)** |
+| | BYO `pipeline` (crate root) | `pipeline_v2` |
+|--|----------------------------|---------------|
+| Role | Ort-free library / CLI `--legacy` | ONNX production default |
+| VAD / segmentation | Injected `VoiceActivityDetector` | Powerset `Segmenter` (overlap-aware) |
+| Wiring | concrete generics at `run` | `Segmenter`/`Embedder`/`Clusterer`/`Resegmenter` traits |
+| Overlap | none | overlap masking + resegmentation |
+| Features | none required | onnx + download + segmentation + embedder + clusterer + resegmentation |
 
-## Usage (opt-in)
+## Usage
 
 ```rust,no_run
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::Pipeline;
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
 use polyvoice::types::{Profile, SampleRate};
 
-let registry = ModelRegistry::default()?;
+let mut cfg = PipelineConfig {
+    profile: Profile::Balanced,
+    clusterer: ClustererKind::Vbx, // or Ahc { threshold: 0.45 }
+    ..PipelineConfig::default()
+};
 let pipeline = Pipeline::builder()
-    .profile(Profile::Balanced)
-    .with_models_from(registry)
+    .config(cfg)
+    .with_models_from(ModelRegistry::default()?)
     .build()?;
 let (samples, sr_hz) = polyvoice::wav::read_wav("meeting.wav")?;
 let result = pipeline.run(&samples, SampleRate::new(sr_hz).ok_or("bad sr")?)?;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-CLI: `polyvoice diarize meeting.wav --v2`.
+CLI: `polyvoice meeting.wav` (v2 + VBx). Escape hatches: `--legacy`,
+`--clusterer ahc`. Hidden `--v2` is a no-op kept for old scripts.
+
+## Hybrid sibling
+
+`pipeline_v2::hybrid::HybridPipeline` is a **research/ablation** path
+(powerset-as-VAD + dense sliding windows + Clusterer). It is not wired to
+CLI/FFI/Python. Prefer main `Pipeline` with optional `embed_window_secs` for
+dense embeddings under production overlap handling.
 
 ## Feature gate
 
 The module `compile_error!`s unless **all** of `onnx + download + segmentation +
 embedder + clusterer + resegmentation` are enabled — half-wired combos cannot
-ship.
+ship. The `cli` feature also enables `vbx` for the default clusterer.
 
 ## Safety guards in `run`
 
@@ -64,8 +83,8 @@ ship.
 
 ## Known gaps
 
-`ExecutionProvider::{Nnapi, XnnPack}` are accepted but **not wired** into `ort`
-yet (only CoreML is) — they fall back to CPU. See [TODO.md](TODO.md).
+Some `ExecutionProvider` variants fall back to CPU when not compiled in.
+See [TODO.md](TODO.md).
 
 ## Verification
 

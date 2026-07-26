@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! Pipeline v2 debug test — compares legacy pipeline vs v1.0 components on real audio.
 //!
 //! Requires ONNX models in `models/`:
@@ -17,7 +16,6 @@
     feature = "spectral",
 ))]
 
-use polyvoice::EmbeddingExtractor;
 use polyvoice::clusterer::{AhcClusterer, Clusterer, NmeScClusterer};
 use polyvoice::der::compute_der;
 use polyvoice::embedder::{CamPlusPlusExtractor, Embedder, ResNet34Adapter};
@@ -87,12 +85,10 @@ fn compare_embeddings_on_segments(
     samples: &[f32],
     segments: &[polyvoice::segmentation::RawSegment],
 ) {
-    use polyvoice::types::DiarizationConfig;
-
     let primary_segments: Vec<_> = segments.iter().filter(|s| !s.is_overlap).cloned().collect();
     let sr = 16000_f64;
 
-    // Legacy ResNet34
+    // ResNet34 via FbankOnnxExtractor (Embedder)
     let legacy_ext = polyvoice::FbankOnnxExtractor::new(
         Path::new("models/wespeaker_resnet34.onnx"),
         256,
@@ -100,7 +96,6 @@ fn compare_embeddings_on_segments(
         polyvoice::onnx::ExecutionProvider::Cpu,
     )
     .expect("legacy load");
-    let config = DiarizationConfig::default();
     let mut legacy_embs: Vec<Vec<f32>> = Vec::new();
     for seg in &primary_segments {
         let start_idx = (seg.time.start * sr) as usize;
@@ -109,7 +104,7 @@ fn compare_embeddings_on_segments(
             continue;
         }
         let chunk = &samples[start_idx..end_idx];
-        match legacy_ext.extract(chunk, &config) {
+        match legacy_ext.embed(chunk) {
             Ok(emb) => legacy_embs.push(emb),
             Err(e) => println!("legacy embed error: {}", e),
         }
