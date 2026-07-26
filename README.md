@@ -162,6 +162,7 @@ guard so quiet or single-voice audio does not hallucinate clusters.
 ## Documentation
 
 - [Library mode (no ONNX)](docs/library-mode.md) — ort-free surface for BYO embedders
+- [Pipeline architecture](docs/PIPELINE-ARCHITECTURE.md) — BYO vs production ONNX paths
 - [Benchmarks](docs/BENCHMARKS.md) — collar-disclosed DER numbers and provenance
 - [Production readiness](PRODUCTION-READINESS.md) — deployment guidance (GO / NO-GO)
 - [Migrating from 0.5](docs/MIGRATING-FROM-0.5.md) · [Glossary](docs/GLOSSARY.md)

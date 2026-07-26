@@ -1,4 +1,4 @@
-#![allow(deprecated)] // bridges legacy EmbeddingExtractor → Embedder
+#![allow(deprecated)] // blanket bridge keeps EmbeddingExtractor → Embedder working
 //! v1.0 `Embedder` trait + concrete extractors (CAM++, ResNet34) + pool +
 //! overlap-mask helper.
 //!
@@ -7,8 +7,11 @@
 //! The pure-Rust trait, pool, and overlap mask are always available (no
 //! `onnx` required). ONNX-backed adapters still need `features = ["onnx", "embedder"]`.
 //!
-//! Legacy [`crate::embedding::EmbeddingExtractor`] implementors automatically
-//! satisfy [`Embedder`] via a blanket bridge.
+//! Shared fbank+ONNX engine: [`crate::ecapa::FbankOnnxExtractor`] (implements
+//! [`Embedder`] directly). Architecture adapters wrap it without the legacy
+//! `EmbeddingExtractor` path. External types that still implement
+//! [`crate::embedding::EmbeddingExtractor`] automatically satisfy [`Embedder`]
+//! via a blanket bridge.
 
 /// Speaker embedding extractor — turns a slice of 16 kHz mono audio into a
 /// fixed-dimension embedding vector. Implementations are expected to L2-normalize
@@ -250,14 +253,9 @@ fn parallel_embed_batch<E: Embedder>(
 mod onnx_adapters {
     use super::*;
     use crate::ecapa::FbankOnnxExtractor;
-    use crate::embedding::EmbeddingExtractor;
     use std::path::Path;
 
-    /// New-trait adapter for the existing `FbankOnnxExtractor` (WeSpeaker ResNet34, 256-d).
-    ///
-    /// The legacy `FbankOnnxExtractor` already implements the v0.5.x
-    /// `EmbeddingExtractor`; this adapter exposes the same model through the
-    /// v1.0 `Embedder` trait. M6 will fold this into a unified type.
+    /// WeSpeaker ResNet34 embedder (256-d) via the shared fbank+ONNX engine.
     pub struct ResNet34Adapter {
         inner: FbankOnnxExtractor,
         dim: usize,
@@ -290,10 +288,7 @@ mod onnx_adapters {
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-            let config = crate::types::DiarizationConfig::default();
-            self.inner
-                .extract(audio, &config)
-                .map_err(|e| EmbedderError::Legacy(format!("{e}")))
+            self.inner.embed(audio)
         }
 
         fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {
@@ -304,7 +299,6 @@ mod onnx_adapters {
     /// CAM++ embedder (Channel-Attentive Multi-scale Pooling). Dim is supplied
     /// explicitly because WeSpeaker ships several CAM++ variants:
     /// `voxceleb_CAM++.onnx` is 512-d; smaller variants exist at 192-d.
-    /// Targets the Mobile profile of v1.0; M5 may swap to INT8 + smaller dim.
     /// Uses the same 80-bin log-mel fbank pipeline as ResNet34.
     pub struct CamPlusPlusExtractor {
         inner: FbankOnnxExtractor,
@@ -342,10 +336,7 @@ mod onnx_adapters {
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-            let config = crate::types::DiarizationConfig::default();
-            self.inner
-                .extract(audio, &config)
-                .map_err(|e| EmbedderError::Legacy(format!("{e}")))
+            self.inner.embed(audio)
         }
 
         fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {
@@ -398,10 +389,7 @@ mod onnx_adapters {
         }
 
         fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-            let config = crate::types::DiarizationConfig::default();
-            self.inner
-                .extract(audio, &config)
-                .map_err(|e| EmbedderError::Legacy(format!("{e}")))
+            self.inner.embed(audio)
         }
 
         fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {

@@ -1,4 +1,5 @@
 #![no_main]
+#![allow(deprecated)] // exercises soft-deprecated SpeakerCluster surface
 
 use libfuzzer_sys::fuzz_target;
 use polyvoice::{ClusterConfig, SpeakerCluster};

@@ -27,8 +27,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `POLYVOICE_VBX_PLDA_DIR` is set. Hosted from the commit-pinned
   `fixtures/vbx-plda/` tree on GitHub.
 
+### Added
+
+- Crate-root re-exports for `KMeansClusterer` and `VbxClusterer` (features
+  `clusterer` / `vbx`) so Custom-profile injectors do not need deep paths.
+
 ### Changed
 
+- **Module navigability.** `types` and `der` are split into submodules
+  (`types::{ids,profile,measures,result,confidence,config}`,
+  `der::{frame,decompose,wder}`) with the same public re-exports.
+  Segmentation binarization lives in `segmentation::binarize` (was part of
+  the large aggregator monofile). `DummyExtractor` implements `Embedder`
+  directly. `OnnxEmbeddingExtractor` remains soft-deprecated at the crate root.
+- **Shared spectral graph.** `spectral::SpectralGraph` owns k-NN affinity →
+  Laplacian → eigenspectrum for both `spectral_cluster` (BIC k) and
+  `NmeScClusterer` (pure eigengap k). `AhcClusterer::with_threshold(0, t)` is
+  unlimited ceiling (matches free AHC); the BYO `pipeline` routes through
+  `AhcClusterer` when the `clusterer` feature is on.
+- **Embedder stack collapse (in-tree).** `FbankOnnxExtractor` is a first-class
+  [`Embedder`](src/ecapa/mod.rs) (no longer soft-deprecated, no longer goes
+  through `EmbeddingExtractor`). ONNX adapters (`ResNet34Adapter`, CAM++,
+  ERes2NetV2) call `Embedder::embed` on the shared engine. Soft-deprecate
+  `SpeakerCluster` (not on offline/streaming production paths) and
+  `pipeline_v2::hybrid::HybridPipeline` (prefer `Pipeline` +
+  `embed_window_secs`). `OnnxEmbeddingExtractor` remains deprecated and unused
+  by production adapters.
+- **Surface alignment after the 0.11 v2+VBx default.** Module contracts /
+  READMEs (`pipeline_v2`, `pipeline`, `bin`, `clusterer`, `cluster`), crate
+  docs, `docs/API.md`, migration notes, and new
+  [`docs/PIPELINE-ARCHITECTURE.md`](docs/PIPELINE-ARCHITECTURE.md) describe
+  production ONNX vs BYO correctly. **`polyvoice-mcp`** now runs pipeline v2
+  (default clusterer `vbx`; optional `clusterer=ahc`); feature `mcp` enables
+  `vbx`. **`polyvoice-bench`** defaults to `--pipeline v2 --clusterer vbx`
+  (pass `--pipeline legacy` for the pre-0.11 path). DER sweep/baseline scripts
+  pass those flags explicitly.
 - **Ort-free library path is first-class.** CI job `ort-free-core` hard-fails if
   `ort` appears in the `--no-default-features` normal dependency graph (or in
   pure-Rust combos such as `clusterer,vbx`). Documented guaranteed surface in

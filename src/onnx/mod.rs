@@ -190,9 +190,12 @@ pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
 ///
 /// Wraps [`RuntimeSession`] in a blocking object pool so concurrent extractors
 /// can reuse sessions (checkout waits; Drop returns).
+/// Raw-waveform pooled ONNX embedder (no fbank). **Unused** by production
+/// adapters — prefer [`crate::ecapa::FbankOnnxExtractor`] or
+/// [`crate::embedder::ResNet34Adapter`].
 #[deprecated(
     since = "0.7.0",
-    note = "use the v1.0 Embedder trait in polyvoice::embedder"
+    note = "unused by production paths; use embedder::ResNet34Adapter / ecapa::FbankOnnxExtractor (Embedder)"
 )]
 pub struct OnnxEmbeddingExtractor {
     pool: crate::utils::ObjectPool<RuntimeSession>,

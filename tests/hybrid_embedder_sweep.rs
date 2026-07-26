@@ -1,3 +1,4 @@
+#![allow(deprecated)] // HybridPipeline is soft-deprecated research surface
 #![allow(clippy::unwrap_used)]
 //! Compare ResNet34 vs CAM++ embedders on aorju via Hybrid pipeline.
 //!

@@ -1,5 +1,9 @@
 # PIPELINE.md — Development Process for polyvoice
 
+> **Not the diarization pipeline architecture.** For who-calls-whom, BYO vs
+> production ONNX, and CLI/FFI/Python defaults, see
+> [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md).
+
 ## 1. Specification
 
 Before writing code, define:

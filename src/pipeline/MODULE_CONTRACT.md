@@ -5,10 +5,11 @@ module: src/pipeline
 level: subsystem
 layer: orchestration
 purpose: >
-  Owns the offline diarization pipeline orchestration: segment → embed →
-  cluster → resegment → merge → emit DiarizationResult. Does NOT own the
-  individual algorithm implementations (those live in segmentation, embedder,
-  clusterer, resegmentation, vad).
+  Owns the always-on offline BYO diarization pipeline: VAD speech regions ->
+  sliding-window Embedder -> free AHC clustering -> merge -> DiarizationResult.
+  This is the ort-free library surface and the CLI --legacy escape hatch.
+  Production ONNX (CLI/FFI/Python/MCP default since 0.11) lives in pipeline_v2.
+  Does NOT own algorithm implementations (vad, embedder, ahc, wav).
 status: stable
 owners:
   - polyvoice-core
@@ -36,8 +37,9 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Offline diarization pipeline. Holds config and VAD config.
-      run() orchestrates the full diarization flow.
+      Offline BYO diarization pipeline. Holds DiarizationConfig and VadConfig.
+      run(samples, embedder, vad) orchestrates VAD -> window embed -> AHC ->
+      merge. Re-exported at crate root as polyvoice::Pipeline.
     proof:
       kind: unit-test
       target: src/pipeline::mod::tests::pipeline_new_with_defaults
@@ -47,7 +49,8 @@ surface:
     visibility: public
     contract: >
       Error type for pipeline failures (VAD, embedding, clustering, WAV I/O,
-      and sample-rate mismatch).
+      sample-rate mismatch, no speech, audio too long). Distinct from
+      pipeline_v2::PipelineError.
     proof:
       kind: integration-test
       target: tests/e2e_smoke_test.rs
@@ -59,19 +62,28 @@ dependencies:
       reason: DiarizationConfig, DiarizationResult, SpeakerTurn input/output shapes.
     - module: vad
       scope: trait
-      reason: VoiceActivityDriver trait for speech segmentation.
+      reason: VoiceActivityDetector trait for speech segmentation.
+    - module: embedder
+      scope: trait
+      reason: Embedder trait for BYO speaker vectors.
     - module: ahc
       scope: algorithm
-      reason: Agglomerative clustering for speaker grouping.
+      reason: Prune helpers and free AHC fallback when clusterer feature is off.
+    - module: clusterer
+      scope: algorithm
+      reason: AhcClusterer (when feature clusterer) for speaker grouping.
     - module: wav
       scope: io
       reason: WAV file reading for pipeline input.
   external: []
 consumers:
-  - path: src/ffi/mod.rs
+  - path: src/bin/polyvoice.rs
     uses:
       - Pipeline
       - PipelineError
+  - path: src/bin/polyvoice-bench.rs
+    uses:
+      - Pipeline
   - path: tests/e2e_smoke_test.rs
     uses:
       - Pipeline
@@ -79,6 +91,9 @@ consumers:
     uses:
       - Pipeline
   - path: tests/der_ami_baseline_test.rs
+    uses:
+      - Pipeline
+  - path: docs/library-mode.md
     uses:
       - Pipeline
 invariants:
@@ -118,10 +133,10 @@ agent_policy:
   allowed_mutations:
     - Refactoring internal orchestration order.
     - Adding logging or telemetry.
-    - Adding new pipeline stages behind existing config.
+    - Wiring Clusterer trait instead of free AHC (DER-gated).
   forbidden_mutations:
-    - Removing Pipeline::run() or changing its signature without updating FFI
-      and all integration tests.
+    - Removing Pipeline::run() or changing its signature without updating
+      library-mode docs and integration tests.
     - Changing the output DiarizationResult shape without consumer updates.
   escalation:
     - Adding new pipeline stages that change output semantics.
@@ -130,4 +145,5 @@ agent_policy:
 
 # src/pipeline
 
-Offline diarization pipeline orchestration.
+Always-on offline BYO diarization pipeline (crate-root `polyvoice::Pipeline`).
+Production ONNX default is [`pipeline_v2`](../pipeline_v2/).

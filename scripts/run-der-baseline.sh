@@ -12,7 +12,8 @@ DATASET="${1:-${ROOT_DIR}/data/voxconverse-test}"
 
 cd "$ROOT_DIR"
 cargo run --release --features cli --bin polyvoice-bench -- \
-    "$DATASET" --profile balanced --output /tmp/m6b-bench-report.json
+    "$DATASET" --profile balanced --pipeline v2 --clusterer vbx \
+    --output /tmp/m6b-bench-report.json
 
 echo ""
 echo "Update tests/der_baseline.json with the numbers from /tmp/m6b-bench-report.json"

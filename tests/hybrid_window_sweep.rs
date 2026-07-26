@@ -1,3 +1,4 @@
+#![allow(deprecated)] // HybridPipeline is soft-deprecated research surface
 #![allow(clippy::unwrap_used)]
 //! Hybrid pipeline window/hop sweep on aorju.
 //!

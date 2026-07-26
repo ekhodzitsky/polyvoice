@@ -5,8 +5,9 @@ module: src/bin
 level: subsystem
 layer: cli
 purpose: >
-  CLI binaries: polyvoice (main diarization toolkit) and polyvoice-bench
-  (DER benchmark runner). Thin wrappers over the library; no business logic.
+  CLI and agent-facing binaries: polyvoice (main diarization toolkit),
+  polyvoice-bench (DER harness), polyvoice-measure, and polyvoice-mcp (MCP
+  stdio server). Thin wrappers over the library; no business logic.
 status: stable
 owners:
   - polyvoice-cli
@@ -17,8 +18,8 @@ workcell:
   owns_paths:
     - src/bin/
   context_budget:
-    max_files: 6
-    max_source_lines: 700
+    max_files: 8
+    max_source_lines: 3200
     max_contract_lines: 180
     max_readme_lines: 120
     max_todo_lines: 80
@@ -34,31 +35,53 @@ surface:
     kind: binary
     visibility: public
     contract: >
-      Speaker diarization CLI. Commands: diarize, download-models, models.
-      Uses legacy v0.5 pipeline (SileroVad -> FbankOnnxExtractor -> AHC).
+      Speaker diarization CLI. Default path since 0.11 is pipeline v2 + VBx
+      (powerset -> ResNet34 -> VB-HMM/PLDA). Escape hatches: --legacy
+      (Silero + AHC), --clusterer ahc. Commands: implicit diarize, download-models,
+      models, completions, schema.
     proof:
       kind: smoke
-      target: tests/e2e_smoke_test.rs
-      command: cargo test --test e2e_smoke_test
+      target: tests/cli_smoke_test.rs
+      command: cargo test --test cli_smoke_test --features cli
   - name: polyvoice-bench
     kind: binary
     visibility: public
     contract: >
-      DER benchmark on {audio,rttm} dataset directories.
-      Computes DER with configurable collar and produces JSON report.
+      DER benchmark on {audio,rttm} dataset directories. Default pipeline is v2
+      (matches shipped CLI); --pipeline legacy remains for comparison. Emits
+      JSON reports (schema polyvoice-bench-v0.10).
     proof:
       kind: smoke
-      target: tests/e2e_smoke_test.rs
-      command: cargo test --test e2e_smoke_test
+      target: tests/cli_smoke_test.rs
+      command: cargo test --test cli_smoke_test --features cli
+  - name: polyvoice-mcp
+    kind: binary
+    visibility: public
+    contract: >
+      MCP stdio server exposing polyvoice.diarize (and ASR stubs). Uses the
+      same production path as CLI (pipeline_v2, default clusterer vbx).
+    proof:
+      kind: unit-test
+      target: src/bin/polyvoice-mcp.rs tests
+      command: cargo test --bin polyvoice-mcp --features mcp
 dependencies:
-  internal: []
+  internal:
+    - module: pipeline_v2
+      scope: orchestration
+      reason: Production ONNX default for polyvoice / mcp / bench defaults.
+    - module: pipeline
+      scope: orchestration
+      reason: --legacy and --pipeline legacy escape hatch.
+    - module: models
+      scope: infrastructure
+      reason: ModelRegistry downloads and profile resolution.
   external: []
 consumers:
   - path: .
     uses:
       - polyvoice
       - polyvoice-bench
-      - polyvoice_internal
+      - polyvoice-mcp
 invariants:
   - id: thin-wrapper
     rule: CLI binaries contain no business logic; all algorithms live in lib modules.
@@ -66,12 +89,14 @@ invariants:
       kind: static-check
       target: src/bin/
       command: grep -r "impl\|fn main" src/bin/ | wc -l
-  - id: legacy-pipeline
-    rule: polyvoice uses the v0.5 legacy pipeline, not the experimental M6b pipeline.
+  - id: production-default-v2
+    rule: >
+      polyvoice and polyvoice-mcp default to pipeline_v2 (not the legacy
+      Silero+AHC path). polyvoice-bench defaults to --pipeline v2.
     proof:
       kind: static-check
       target: src/bin/polyvoice.rs
-      command: grep -c "FbankOnnxExtractor\|SileroVad" src/bin/polyvoice.rs
+      command: rg -n "default_value = \"vbx\"|pipeline_v2" src/bin/polyvoice.rs src/bin/polyvoice-mcp.rs src/bin/polyvoice-bench.rs
   - id: bench-layout
     rule: polyvoice-bench expects dataset layout audio/*.wav + rttm/*.rttm.
     proof:
@@ -80,21 +105,24 @@ invariants:
       command: grep -c "audio_dir\|rttm_dir" src/bin/polyvoice-bench.rs
 verification:
   pre_change:
-    - cargo build --bin polyvoice
-    - cargo build --bin polyvoice-bench
-    - cargo test --test e2e_smoke_test
+    - cargo build --bin polyvoice --features cli
+    - cargo build --bin polyvoice-bench --features cli
+    - cargo test --test cli_smoke_test --features cli
   full:
-    - cargo build --bin polyvoice
-    - cargo build --bin polyvoice-bench
-    - cargo test --test e2e_smoke_test
+    - cargo build --bin polyvoice --features cli
+    - cargo build --bin polyvoice-bench --features cli
+    - cargo build --bin polyvoice-mcp --features mcp
+    - cargo test --test cli_smoke_test --features cli
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:
     - Adding new CLI flags or subcommands.
     - Documentation improvements.
+    - Aligning binary defaults with the library production path.
   forbidden_mutations:
     - Adding business logic or algorithms.
-    - Changing default pipeline without migration lease.
+    - Changing the production default pipeline without a migration lease and
+      DER evidence.
   escalation:
     - Any change to CLI argument structure breaking existing scripts.
 risks:

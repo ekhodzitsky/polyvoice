@@ -1,31 +1,29 @@
 # src/pipeline_v2 — TODO
 
-Open items to graduate `pipeline_v2` from **experimental** to the validated
-default (i.e. reverse the 0.6.1 revert). Each must land with DER evidence from
-the enforced DER harness before flipping the default.
+Graduation to CLI/Python/FFI default landed in **0.11** (v2 + VBx, full-split
+DER gate). Items below are post-graduation hardening — not blockers for the
+default path.
 
-## Blockers for default (graduation gate)
+## Accuracy / scoring
 
-- [ ] **Long-form DER parity with the legacy pipeline.** The 0.6.1 regression
-      was on long-form audio (AMI-scale). Prove v2 ≤ legacy DER on VoxConverse
-      (no-collar) AND AMI before changing the CLI/Python default.
-- [ ] **Fix automatic speaker-count.** Suspected bottleneck — wire the corrected
-      auto-k / single-speaker guard into the clusterer path.
-- [ ] **Modern scoring.** Pluggable scoring backend + PLDA + AS-norm to replace
-      raw cosine.
-- [ ] **VBx/HMM-style resegmentation** upgrading the centroid-nearest pass.
+- [ ] **Modern scoring beyond VBx.** Pluggable scoring backend + AS-norm domain
+      profiles on top of PLDA (see roadmap AS-norm work).
+- [ ] **VBx/HMM-style resegmentation** upgrading the centroid-nearest pass for
+      overlap regions.
+- [ ] **Calibrated binarization** of segmentation posteriors before clustering
+      (flags exist on CLI/bench; flip defaults only with DER evidence).
 
-## Known gaps (correctness / feature)
+## Correctness / feature
 
-- [ ] **Execution providers:** `ExecutionProvider::Nnapi` and `XnnPack` are
-      config enums with NO `ort` wiring — they silently fall back to CPU. Wire
-      them (and a CUDA option) and thread `config.execution_provider` through the
-      builder into every ONNX session.
-- [ ] **Calibrated binarization** of segmentation posteriors before clustering.
+- [ ] **Execution providers:** ensure every `ExecutionProvider` variant that is
+      advertised is wired into `ort` (or clearly documents silent CPU fallback)
+      and is threaded through the builder into every ONNX session.
+- [ ] Revisit `MIN_EMBED_SECS` (0.20s) under VBx + dense `embed_window_secs` —
+      confirm the floor is still correct, not a legacy heuristic.
 
 ## Hygiene
 
-- [ ] Once v2 is the default, revisit MIN_EMBED_SECS (0.20s) — confirm it is the
-      right floor under the new embedder/scoring path, not a legacy heuristic.
-- [ ] Keep this contract's `status: experimental` until the graduation gate
-      above is green; flipping to `stable` requires a migration lease.
+- [ ] Fold or soft-deprecate `HybridPipeline` once dense windows + powerset
+      speech regions are fully covered by main `Pipeline` knobs + docs.
+- [ ] Optional: split pure orchestration from ONNX builder adapters so
+      `Profile::Custom` mock tests do not need the full feature soup.
