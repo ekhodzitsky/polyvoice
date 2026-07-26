@@ -58,7 +58,7 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | Surface | Notes |
 |---------|-------|
 | `SileroVad` | ONNX Silero VAD |
-| `OnnxEmbeddingExtractor`, `FbankOnnxExtractor` | Legacy ONNX extractors |
+| `FbankOnnxExtractor` | ONNX fbank embedder (`Embedder`; feature `onnx`) |
 | `CamPlusPlusExtractor`, `ResNet34Adapter` | Need `onnx` + `embedder` |
 | `PowersetSegmenter` | Need `onnx` + `segmentation` |
 | `pipeline_v2` | Full stack: `onnx` + `download` + `segmentation` + `embedder` + `clusterer` + `resegmentation` |

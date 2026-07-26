@@ -2,13 +2,13 @@
 schema_version: 1
 kind: module_contract
 module: src/ecapa
-level: subsystem
+level: leaf
 layer: algorithm
 purpose: >
-  Owns the ECAPA-TDNN ONNX embedding extractor (legacy, superseded by
-  embedder.rs CamPlusPlusExtractor). Kept for backward compatibility.
-  Does NOT own feature extraction (features.rs) or model registry.
-status: deprecated
+  Owns the shared fbank + ONNX speaker embedding engine (FbankOnnxExtractor)
+  used by WeSpeaker / CAM++ / ERes2Net adapters and the CLI --legacy path.
+  Implements Embedder directly. Module name is historical (not ECAPA-only).
+status: stable
 owners:
   - polyvoice-core
 workcell:
@@ -18,11 +18,11 @@ workcell:
   owns_paths:
     - src/ecapa/
   context_budget:
-    max_files: 12
-    max_source_lines: 1500
-    max_contract_lines: 180
-    max_readme_lines: 120
-    max_todo_lines: 80
+    max_files: 6
+    max_source_lines: 400
+    max_contract_lines: 120
+    max_readme_lines: 80
+    max_todo_lines: 40
 authority:
   write_policy: single_active_write_lease
   orchestrator: polyvoice-core
@@ -30,66 +30,64 @@ authority:
   migration_lease_required:
     - cross-workcell write
     - public surface migration
+    - renaming the module away from ecapa
 surface:
   - name: FbankOnnxExtractor
     kind: struct
     visibility: public
     contract: >
-      Legacy ONNX-backed extractor combining FBank + ECAPA-TDNN.
-      Re-exported at crate root for backward compatibility.
+      Pooled fbank→ONNX Embedder. Input 16 kHz mono; output L2-normalized
+      embedding of configured dim. Prefer architecture adapters in embedder
+      when the model family is fixed.
     proof:
-      kind: smoke
-      target: tests/e2e_smoke_test.rs
-      command: cargo test --test e2e_smoke_test --features cli
+      kind: unit-test
+      target: src/ecapa::tests
+      command: cargo test --lib ecapa --features onnx
 dependencies:
   internal:
-    - module: embedding
+    - module: embedder
       scope: trait
-      reason: EmbeddingExtractor trait implementation.
+      reason: Implements Embedder / EmbedderError.
     - module: features
-      scope: utility
-      reason: FbankExtractor, apply_cmvn.
-    - module: types
-      scope: data-shape
-      reason: DiarizationConfig.
-    - module: utils
-      scope: utility
-      reason: l2_normalize.
+      scope: algorithm
+      reason: FbankExtractor + CMVN.
     - module: onnx
-      scope: inference
-      reason: InferenceRuntime / OrtSession / build_session_with_ep (no direct ort::).
+      scope: infrastructure
+      reason: RuntimeSession pool and InferenceRuntime.
   external: []
 consumers:
-  - path: src/lib.rs
+  - path: src/embedder/mod.rs
     uses:
       - FbankOnnxExtractor
-  - path: tests/embedder_test.rs
+  - path: src/bin/polyvoice.rs
+    uses:
+      - FbankOnnxExtractor
+  - path: src/bin/polyvoice-bench.rs
     uses:
       - FbankOnnxExtractor
 invariants:
-  - id: output-normalized
-    rule: Extractor outputs L2-normalized embeddings.
+  - id: implements-embedder
+    rule: FbankOnnxExtractor implements Embedder (not EmbeddingExtractor).
     proof:
-      kind: unit-test
-      target: tests/embedder_test.rs
-      command: cargo test --test embedder_test --features onnx,embedder,download -- --ignored
+      kind: compile-time
+      target: src/ecapa/mod.rs
+      command: cargo check --features onnx --lib
 verification:
   pre_change:
-    - cargo check --all-features
+    - cargo test --lib ecapa --features onnx
   full:
-    - cargo test --test embedder_test --features onnx
+    - cargo test --lib ecapa --features onnx
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:
-    - Documentation updates.
-    - Bug fixes only.
+    - Performance tweaks to pooling / fbank path.
+    - Renaming module with migration lease.
   forbidden_mutations:
-    - Adding new features to this module (use embedder.rs instead).
     - Removing FbankOnnxExtractor without deprecation cycle.
   escalation:
-    - Any removal of this module.
+    - Changing ONNX I/O layout assumptions.
 ---
 
 # src/ecapa
 
-Legacy ECAPA-TDNN ONNX embedding extractor (deprecated; use embedder.rs).
+Shared fbank + ONNX embedder engine (`FbankOnnxExtractor` implements `Embedder`).

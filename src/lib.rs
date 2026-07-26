@@ -15,33 +15,31 @@
 //!
 //! ## Quick start
 //!
-//! **ONNX path:** build a diarization pipeline using `Pipeline` / `pipeline_v2`
-//! and `ModelRegistry` (features `onnx`, `download`, …).
+//! **ONNX production path:** `pipeline_v2::Pipeline` + `ModelRegistry`
+//! (features `onnx`, `download`, `segmentation`, `embedder`, `clusterer`,
+//! `resegmentation`; CLI also enables `vbx`). This is what CLI / FFI / Python /
+//! MCP run by default since **0.11** (v2 + VBx).
 //!
 //! **Library mode (no ONNX):** `default-features = false`, implement
-//! [`EmbeddingExtractor`], pair with [`EnergyVad`] — see the crate README and
+//! [`Embedder`], pair with [`EnergyVad`] and the crate-root [`Pipeline`] /
+//! [`streaming::StreamingPipeline`] — see the crate README and
 //! `docs/library-mode.md`.
 //!
 //! ## Module organization
 //!
-//! polyvoice carries two parallel module families from an in-progress migration
-//! to a trait-based v1.0 architecture. This is deliberate (shared math, a
-//! compile-time feature guard), not accidental duplication:
+//! Two intentional pipeline families share math and types:
 //!
-//! - **v1.0 trait-based (current architecture):** `embedder` (`Embedder` — the
-//!   supported BYO injection trait for offline `Pipeline` and online
-//!   `StreamingPipeline`), `clusterer`, `segmentation`, `resegmentation`,
-//!   `silero_vad`, and `pipeline_v2` (experimental — see its README).
-//! - **Legacy:** `EmbeddingExtractor` in `embedding` is soft-deprecated (still
-//!   bridged to `Embedder`); `ecapa` / `onnx` ONNX wrappers remain available.
-//!   `cluster` and `vad` are the legacy clustering/VAD surfaces.
-//! - **Pipeline status:** `pipeline_v2` (+ VBx clusterer when PLDA is available)
-//!   is the **CLI default since 0.11** after a full VoxConverse-test / AMI-test
-//!   DER gate (see `docs/BENCHMARKS.md`). The library injection surface is
-//!   still `Pipeline` + `StreamingPipeline` with a custom `Embedder` (no `onnx`
-//!   required). CLI `--legacy` selects the offline legacy pipeline.
-//! - **Shared math, reused by both families:** `ahc`, `kmeans`, `spectral`,
-//!   `features`, `der`, `utils`.
+//! - **ONNX production (`pipeline_v2`):** trait-wired Segmenter → Embedder →
+//!   Clusterer → Resegmenter. CLI/FFI/Python/MCP default since 0.11 (VBx when
+//!   PLDA is available). See `docs/PIPELINE-ARCHITECTURE.md`.
+//! - **BYO / ort-free (crate-root `Pipeline` + `StreamingPipeline`):** inject
+//!   [`Embedder`] + [`VoiceActivityDetector`]. CLI `--legacy` uses this offline
+//!   path with Silero + AHC. Soft-deprecated [`embedding::EmbeddingExtractor`]
+//!   still bridges to [`Embedder`].
+//! - **Shared math:** `ahc`, `kmeans`, `spectral`, `features`, `der`, `utils`.
+//! - **Online centroids:** production streaming uses
+//!   `streaming::ArrivalOrderSpeakerCache`; `cluster::SpeakerCluster` remains a
+//!   public utility (not the default streaming backend).
 
 pub mod ahc;
 pub mod asr;
@@ -98,10 +96,15 @@ pub use embedder::{CamPlusPlusExtractor, ResNet34Adapter};
 pub mod clusterer;
 
 #[cfg(feature = "clusterer")]
-pub use clusterer::{AhcClusterer, Clusterer, ClustererError, MinClusterSizeClusterer};
+pub use clusterer::{
+    AhcClusterer, Clusterer, ClustererError, KMeansClusterer, MinClusterSizeClusterer,
+};
 
 #[cfg(all(feature = "clusterer", feature = "spectral"))]
 pub use clusterer::NmeScClusterer;
+
+#[cfg(all(feature = "clusterer", feature = "vbx"))]
+pub use clusterer::vbx::VbxClusterer;
 
 #[cfg(feature = "resegmentation")]
 pub mod resegmentation;
@@ -158,7 +161,7 @@ pub use earshot_vad::{
 #[cfg(feature = "onnx")]
 pub mod onnx;
 #[cfg(feature = "onnx")]
-#[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
+#[allow(deprecated)] // soft-deprecated; unused by production adapters
 pub use onnx::OnnxEmbeddingExtractor;
 
 #[cfg(feature = "onnx")]
@@ -170,6 +173,7 @@ pub mod ecapa;
 pub mod sortformer;
 
 // Public re-exports for ergonomic use.
+#[allow(deprecated)] // soft-deprecated online utility; see cluster module docs
 pub use cluster::SpeakerCluster;
 pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
 // DummyExtractor is the supported test/mock embedder (also bridges to Embedder).
@@ -189,5 +193,4 @@ pub use types::{
 pub use window::{WindowBuffer, WindowIter};
 
 #[cfg(feature = "onnx")]
-#[allow(deprecated)] // re-export of legacy API; consumers still warned at use site
 pub use ecapa::FbankOnnxExtractor;

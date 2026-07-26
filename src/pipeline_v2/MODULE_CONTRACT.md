@@ -5,13 +5,15 @@ module: src/pipeline_v2
 level: subsystem
 layer: orchestration
 purpose: >
-  Owns the M6a v1.0 trait-based diarization pipeline (Powerset segmentation ->
-  ResNet34 embedder -> clusterer -> overlap resegmentation) and its builder.
-  This is the EXPERIMENTAL modern path: it was reverted from the CLI default
-  after the 0.6.1 long-form DER regression. The validated default remains the
-  legacy `pipeline` module. Does NOT own the component implementations
-  (segmentation, embedder, clusterer, resegmentation) — it only wires them.
-status: experimental
+  Owns the trait-based production ONNX diarization pipeline (Powerset
+  segmentation -> ResNet34 embedder -> clusterer -> overlap resegmentation)
+  and its builder. Since 0.11 this is the CLI / FFI / Python default
+  (v2 + VBx after a full VoxConverse-test + AMI-test DER gate). The ort-free
+  BYO surface remains the separate always-on `pipeline` module. Does NOT own
+  the component implementations (segmentation, embedder, clusterer,
+  resegmentation) — it only wires them. The sibling `hybrid` path is
+  research/ablation only and is not wired to CLI/FFI/Python.
+status: stable
 owners:
   - polyvoice-core
 workcell:
@@ -33,17 +35,18 @@ authority:
   migration_lease_required:
     - cross-workcell write
     - public surface migration
-    - graduating v2 to the CLI/Python default
+    - changing the CLI/Python/FFI default path away from this module
 surface:
   - name: Pipeline
     kind: struct
     visibility: public
     contract: >
-      The wired v1.0 pipeline. `run(&samples, sr) -> Result<DiarizationResult,
-      PipelineError>` rejects a sample rate mismatching the config, skips
-      segments below MIN_EMBED_SECS (0.20s) and non-finite embeddings, clusters
-      primary segments, optionally resegments overlaps, then merges and returns
-      turns sorted by start time. `builder()` returns a PipelineBuilder.
+      The wired production ONNX pipeline. `run(&samples, sr) ->
+      Result<DiarizationResult, PipelineError>` rejects a sample rate
+      mismatching the config, skips segments below MIN_EMBED_SECS (0.20s) and
+      non-finite embeddings, clusters primary segments, optionally resegments
+      overlaps, then merges and returns turns sorted by start time.
+      `builder()` returns a PipelineBuilder.
     proof:
       kind: unit-test
       target: src/pipeline_v2::mod::tests
@@ -63,8 +66,9 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Pipeline configuration: profile, clusterer kind, execution provider,
-      sample rate, speech/gap thresholds, embedder pool size, overlap toggle.
+      Pipeline configuration: profile, clusterer kind (AHC / NME-SC / VBx),
+      execution provider, sample rate, speech/gap thresholds, embedder pool
+      size, overlap toggle, optional dense embed window and binarization.
     proof:
       kind: unit-test
       target: src/pipeline_v2::config::tests
@@ -73,8 +77,10 @@ surface:
     kind: enum
     visibility: public
     contract: >
-      Selects the clustering backend (Ahc { threshold } | NmeSc). NmeSc falls
-      back to AHC when the `spectral` feature is absent.
+      Selects the clustering backend (Ahc { threshold } | NmeSc | Vbx).
+      NmeSc falls back to AHC when the `spectral` feature is absent. VBx
+      requires the `vbx` feature and PLDA params (dir, env, or registry).
+      KMeansClusterer remains available for Custom profile injection.
     proof:
       kind: unit-test
       target: src/pipeline_v2::config::tests
@@ -83,9 +89,9 @@ surface:
     kind: enum
     visibility: public
     contract: >
-      Requested ONNX execution provider (Cpu | CoreMl | Nnapi | XnnPack).
-      KNOWN GAP: only CoreML is wired into ort today; Nnapi/XnnPack are accepted
-      but fall back to CPU (see TODO.md).
+      Requested ONNX execution provider (Cpu | CoreMl | Nnapi | XnnPack | Cuda).
+      KNOWN GAP: providers not compiled into the build log a warning and fall
+      back to CPU (see TODO.md).
     proof:
       kind: unit-test
       target: src/pipeline_v2::config::tests
@@ -109,6 +115,17 @@ surface:
     proof:
       kind: unit-test
       target: src/pipeline_v2::builder::tests
+      command: cargo nextest run --lib pipeline_v2 --features "onnx,download,segmentation,embedder,clusterer,resegmentation"
+  - name: HybridPipeline
+    kind: struct
+    visibility: public
+    contract: >
+      Research/ablation sibling: powerset used only as speech-region detector,
+      then dense sliding-window embeddings + Clusterer. Not the CLI/FFI/Python
+      default; prefer main Pipeline with optional embed_window_secs.
+    proof:
+      kind: unit-test
+      target: src/pipeline_v2::hybrid::tests
       command: cargo nextest run --lib pipeline_v2 --features "onnx,download,segmentation,embedder,clusterer,resegmentation"
 dependencies:
   internal:
@@ -141,9 +158,24 @@ consumers:
       - PipelineBuilder
       - PipelineConfig
       - ClustererKind
-  - path: .
+  - path: src/bin/polyvoice-bench.rs
     uses:
-      - polyvoice_internal
+      - Pipeline
+      - PipelineConfig
+      - ClustererKind
+  - path: src/bin/polyvoice-mcp.rs
+    uses:
+      - Pipeline
+      - PipelineConfig
+      - ClustererKind
+  - path: src/ffi/mod.rs
+    uses:
+      - Pipeline
+  - path: python/src/lib.rs
+    uses:
+      - Pipeline
+      - PipelineConfig
+      - ClustererKind
 invariants:
   - id: feature-completeness-gate
     rule: >
@@ -154,16 +186,16 @@ invariants:
       kind: compile-time
       target: src/pipeline_v2::mod (compile_error!)
       command: cargo hack check --feature-powerset --depth 2 --lib
-  - id: experimental-not-default
+  - id: production-default-surface
     rule: >
-      pipeline_v2 is NOT the validated default. It was reverted from the CLI
-      default after the 0.6.1 long-form DER regression; the legacy `pipeline`
-      module is the validated default and `--v2` is opt-in / not recommended for
-      long-form audio. Graduating v2 to default requires a migration lease.
+      pipeline_v2 is the validated ONNX production default for CLI (since 0.11,
+      v2 + VBx), FFI, Python, and MCP. The always-on `pipeline` module remains
+      the ort-free BYO / `--legacy` escape hatch. Changing the default path
+      requires a migration lease and DER regression evidence.
     proof:
       kind: doc-invariant
-      target: src/bin/polyvoice.rs (--v2 help text) + CHANGELOG.md (0.6.1 incident)
-      command: grep -n "not recommended for long-form" src/bin/polyvoice.rs
+      target: src/bin/polyvoice.rs (module docs) + CHANGELOG.md (0.11.0)
+      command: rg -n "v2 \\+ VBx|CLI default" src/bin/polyvoice.rs CHANGELOG.md
   - id: sample-rate-guard
     rule: run() returns UnsupportedSampleRate when sr != config.sample_rate.
     proof:
@@ -193,23 +225,24 @@ verification:
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:
-    - Wiring additional execution providers (NNAPI/XNNPACK) into the pipeline.
+    - Wiring additional execution providers (NNAPI/XNNPACK/CUDA) into the pipeline.
     - Adding scoring/resegmentation stages behind the existing trait seams.
     - Improving the builder validation messages.
+    - Deprecating or folding HybridPipeline into main Pipeline config knobs.
   forbidden_mutations:
-    - Making pipeline_v2 the CLI/Python default without a migration lease and
-      proven long-form DER parity (the 0.6.1 incident must not repeat).
+    - Changing the CLI/FFI/Python default away from this module without a
+      migration lease and proven DER evidence on VoxConverse-test + AMI-test.
     - Removing the compile_error! feature-completeness gate.
     - Changing Pipeline::run's public signature without updating consumers.
   escalation:
-    - Graduating v2 to default (requires DER regression evidence).
+    - Changing the production default path (requires DER regression evidence).
     - Any change to PipelineConfig/ClustererKind/ExecutionProvider public shape.
     - Changes to the MIN_EMBED_SECS / NaN-guard behavior.
 ---
 
 # src/pipeline_v2
 
-Experimental M6a v1.0 trait-based diarization pipeline + builder. See
-[README.md](README.md) for the architecture and opt-in instructions and
-[TODO.md](TODO.md) for the graduate-to-default work. **Not the validated
-default** — the legacy `pipeline` module is.
+Production ONNX diarization pipeline + builder (CLI/FFI/Python/MCP default since
+0.11). See [README.md](README.md) for architecture and [TODO.md](TODO.md) for
+remaining hardening work. Ort-free BYO consumers use the separate
+[`pipeline`](../pipeline/) module.

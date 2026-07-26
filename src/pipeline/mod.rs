@@ -28,7 +28,6 @@
 //! let _ = pipeline.run(&vec![0.0f32; 16_000], &FixedEmbedder, &mut vad);
 //! ```
 
-use crate::ahc::agglomerative_cluster;
 use crate::embedder::{Embedder, EmbedderError};
 use crate::types::{
     DiarizationConfig, DiarizationResult, Segment, SpeakerId, SpeakerTurn, TimeRange,
@@ -133,7 +132,29 @@ impl Pipeline {
             return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
         }
 
-        let labels = agglomerative_cluster(&embeddings, self.config.cluster.threshold);
+        // Same free-AHC semantics as before: fixed threshold, no cluster
+        // ceiling (`max_clusters = 0`). Routed through `AhcClusterer` so the
+        // BYO path shares the Clusterer surface with pipeline_v2.
+        let labels = {
+            #[cfg(feature = "clusterer")]
+            {
+                use crate::clusterer::{AhcClusterer, Clusterer};
+                match AhcClusterer::with_threshold(0, self.config.cluster.threshold)
+                    .cluster(&embeddings)
+                {
+                    Ok(l) => l,
+                    // Dim mismatch / empty already filtered; fall back to free AHC.
+                    Err(_) => crate::ahc::agglomerative_cluster(
+                        &embeddings,
+                        self.config.cluster.threshold,
+                    ),
+                }
+            }
+            #[cfg(not(feature = "clusterer"))]
+            {
+                crate::ahc::agglomerative_cluster(&embeddings, self.config.cluster.threshold)
+            }
+        };
         // Dissolve spurious tiny clusters into the nearest large speaker — the
         // over-clustering fix. Duration pruning (length-invariant) takes
         // precedence when configured; otherwise the member-count rule applies.

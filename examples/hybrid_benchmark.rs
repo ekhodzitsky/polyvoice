@@ -1,3 +1,4 @@
+#![allow(deprecated)] // HybridPipeline is soft-deprecated research surface
 //! Standalone benchmark for Hybrid pipeline with checkpointing.
 //!
 //! Run with:

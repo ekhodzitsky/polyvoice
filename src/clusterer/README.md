@@ -1,35 +1,29 @@
 # src/clusterer
 
-## Purpose
-
-Clusterer trait and adapter implementations: AhcClusterer and NmeScClusterer.
-Provides a unified interface over agglomerative and spectral clustering
-backends.
+Offline **`Clusterer`** trait and adapter implementations used by
+`pipeline_v2` (and hybrid ablation).
 
 ## Surfaces
 
-- `Clusterer` trait
-- `ClustererError`
+- `Clusterer` / `ClustererError`
 - `AhcClusterer`
-- `NmeScClusterer` (requires `spectral` feature)
+- `MinClusterSizeClusterer`
+- `KMeansClusterer` (also `ClustererKind::KMeans` on pipeline_v2)
+- `NmeScClusterer` (feature `spectral`)
+- `VbxClusterer` / `PldaModel` (feature `vbx`)
+- `assign::*` — local→global co-occurrence mapping
+- `short_filter::*` — short-embedding partition / reassignment
 
-## Dependencies
+## Not this module
 
-- `ahc` — agglomerative clustering algorithm
-- `spectral` — spectral clustering backend (for NmeScClusterer)
-
-## Invariants
-
-- Output labels are contiguous integers starting from 0.
+- Free math: `ahc`, `kmeans`, `spectral`
+- Online centroids: `cluster::SpeakerCluster` (orphaned relative to pipelines;
+  streaming uses `ArrivalOrderSpeakerCache`)
 
 ## Verification
 
 ```bash
-cargo test --lib clusterer
-cargo test --lib clusterer --features spectral
-cargo test --test clusterer_test --features spectral
+cargo test --lib clusterer --features clusterer
+cargo test --lib clusterer --features "clusterer,spectral"
+cargo test --lib clusterer --features vbx
 ```
-
-## Notes
-
-- NmeScClusterer requires the `spectral` feature (pulls faer for SVD).

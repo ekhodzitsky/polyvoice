@@ -1,31 +1,19 @@
 # src/ecapa
 
-## Purpose
+Shared **fbank + ONNX** speaker embedding engine.
 
-Legacy ECAPA-TDNN ONNX embedding extractor. Superseded by `embedder.rs`.
-Kept for backward compatibility until M6 cleanup.
+Despite the historical name, this is not ECAPA-only: WeSpeaker ResNet34,
+CAM++, and ERes2NetV2 all use [`FbankOnnxExtractor`].
 
-## Surfaces
+## Surface
 
-- `FbankOnnxExtractor` — legacy ONNX-backed extractor
+- `FbankOnnxExtractor` — implements [`Embedder`](crate::Embedder) directly
 
-## Dependencies
-
-- `embedding` — EmbeddingExtractor trait
-- `features` — FbankExtractor, apply_cmvn
-- `types` — DiarizationConfig
-- `utils` — l2_normalize
-
-## Invariants
-
-- Outputs L2-normalized embeddings.
+Prefer architecture-specific adapters in `src/embedder` when the model family
+is known (`ResNet34Adapter`, `CamPlusPlusExtractor`, `ERes2NetV2Extractor`).
 
 ## Verification
 
 ```bash
-cargo test --test embedder_test --features onnx
+cargo test --lib ecapa --features onnx
 ```
-
-## Notes
-
-- Deprecated: use `CamPlusPlusExtractor` or `ResNet34Adapter` from `embedder.rs`.

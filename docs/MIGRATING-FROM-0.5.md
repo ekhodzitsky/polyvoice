@@ -1,14 +1,16 @@
 # Migrating from polyvoice 0.5 to 1.0
 
 `polyvoice 0.6.0` introduces the v1.0 architecture: a single
-`Pipeline::builder()` API, profile-based model selection, and INT8-quantized
-ONNX bundles. This is intentionally a breaking change.
+`pipeline_v2::Pipeline::builder()` API, profile-based model selection, and
+INT8-quantized ONNX bundles. This is intentionally a breaking change.
 
-> **Status as of v0.6.3**: The new `Pipeline::builder()` and `HybridPipeline`
-> APIs are available in Rust but are **API-only**. The CLI (`polyvoice diarize`)
-> and Python bindings continue to use the proven legacy pipeline (Silero VAD +
-> ResNet34 + K-means) for stability. M6b will migrate CLI/FFI/Python to the new
-> pipeline once long-form DER is fully hardened.
+> **Current status (0.11+):** CLI, FFI, Python, and MCP default to
+> **`pipeline_v2` + VBx**. The always-on crate-root `Pipeline` remains the
+> ort-free / BYO library surface and the CLI `--legacy` escape hatch.
+> Architecture map: [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md).
+>
+> The sections below retain historical 0.6.x narrative for context; prefer the
+> status box above and the README for what ships today.
 
 ## Rust API
 
@@ -73,20 +75,19 @@ result = p.run(samples, sample_rate=16000)
 print(result["num_speakers"], len(result["turns"]))
 ```
 
-> Python bindings still use the legacy pipeline in v0.6.3.
+> **Update (0.11):** Python bindings use pipeline v2 (VBx when PLDA is set).
 
 ## CLI
 
-| Before                                                     | After (v0.6.3)                                       |
-|------------------------------------------------------------|------------------------------------------------------|
-| `polyvoice diarize meeting.wav --threshold 0.4`            | `polyvoice diarize meeting.wav --profile balanced`   |
-| `polyvoice diarize meeting.wav --vad-threshold 0.5`        | `polyvoice diarize meeting.wav --profile balanced`   |
-| `polyvoice download-models --dir ./models`                 | `polyvoice download-models --profile balanced`       |
+| Before                                                     | After (0.11+)                                              |
+|------------------------------------------------------------|------------------------------------------------------------|
+| `polyvoice diarize meeting.wav --threshold 0.4`            | `polyvoice meeting.wav` (v2 + VBx default)                 |
+| legacy Silero + AHC                                        | `polyvoice meeting.wav --legacy` or `--clusterer ahc`      |
+| `polyvoice download-models --dir ./models`                 | `polyvoice download-models --profile balanced`             |
 
-> The CLI continues to run the legacy pipeline. `--profile mobile|balanced`
-> resolves model paths; the actual diarization uses `SileroVad` +
-> `FbankOnnxExtractor` + AHC. Hybrid pipeline CLI integration is planned for
-> M6b.
+> **Update (0.11):** CLI default is pipeline v2 + VBx after a full-split DER
+> gate. PLDA auto-downloads via the model registry when neither
+> `--vbx-plda-dir` nor `POLYVOICE_VBX_PLDA_DIR` is set.
 
 ## C FFI
 
@@ -97,16 +98,16 @@ for the new contract.
 
 ## Removed types and replacements
 
-| Removed                       | Replacement                              |
+| Removed / renamed             | Replacement / note                       |
 |-------------------------------|------------------------------------------|
-| `Pipeline::new(cfg, vad_cfg)` | `Pipeline::builder()` (API-only)         |
-| `DiarizationConfig`           | `pipeline::PipelineConfig`               |
-| `VadConfig`, `EnergyVad`,    `VoiceActivityDetector` | absorbed by `Segmenter` |
-| `OfflineDiarizer`             | `Pipeline::run`                          |
-| `DummyExtractor`              | (test-only, no public API)               |
-| `OnnxEmbeddingExtractor`      | `embedder::ResNet34Adapter`              |
-| `EcapaTdnnExtractor`, `EcapaMelOnnxExtractor`, `RawAudioOnnxExtractor` | (deleted; use `embedder::CamPlusPlusExtractor` or `ResNet34Adapter`) |
-| `ClusteringBackend`           | `pipeline::ClustererKind`                |
+| `OfflineDiarizer`             | `pipeline_v2::Pipeline::run` (ONNX) or crate-root `Pipeline` (BYO) |
+| ONNX profile builder          | `pipeline_v2::Pipeline::builder()` + `PipelineConfig` |
+| `DiarizationConfig`           | Still the BYO/`--legacy` config; ONNX uses `pipeline_v2::PipelineConfig` |
+| `VadConfig` / `EnergyVad`     | Still public for BYO/streaming; ONNX v2 uses `Segmenter` |
+| `DummyExtractor`              | Still public test/mock embedder (implements `Embedder`) |
+| `OnnxEmbeddingExtractor`      | Soft-deprecated; prefer `embedder::ResNet34Adapter` |
+| `EcapaTdnnExtractor`, `EcapaMelOnnxExtractor`, `RawAudioOnnxExtractor` | use `embedder::CamPlusPlusExtractor` or `ResNet34Adapter` |
+| `ClusteringBackend`           | `pipeline_v2::ClustererKind`             |
 | `compute_fbank` (public)      | private; use `FbankExtractor::extract`   |
 
 ## OnlineDiarizer is deprecated

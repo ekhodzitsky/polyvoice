@@ -1,33 +1,30 @@
 # src/pipeline
 
-## Purpose
+Always-on **bring-your-own** offline diarization pipeline.
 
-Offline diarization pipeline orchestration: segment → embed → cluster →
-resegment → merge → emit DiarizationResult.
+> Re-exported at crate root as `polyvoice::Pipeline` / `PipelineError`.
+> This is the ort-free library surface and the CLI `--legacy` path.
+> Production ONNX (CLI/FFI/Python/MCP default) is
+> [`pipeline_v2`](../pipeline_v2/).
 
 ## Surfaces
 
-- `Pipeline`
+- `Pipeline` — generic over `Embedder` + `VoiceActivityDetector` at `run`
 - `PipelineError`
 
-## Dependencies
+## Flow
 
-- `types` — DiarizationConfig, DiarizationResult
-- `vad` — VoiceActivityDetector
-- `ahc` — agglomerative clustering
-- `wav` — audio input
+```
+samples ──▶ VAD (segment_speech) ──▶ WindowIter embed ──▶ AHC ──▶ merge ──▶ turns
+```
 
-## Invariants
-
-- Pipeline output turns are monotonically ordered and non-overlapping
-  (before overlap detection).
+Uses `AhcClusterer` (feature `clusterer`) with unlimited max clusters; falls
+back to free `ahc::agglomerative_cluster` without that feature. Does **not**
+use `Segmenter` / `Resegmenter`. No overlap resegmentation.
 
 ## Verification
 
 ```bash
+cargo test --lib pipeline
 cargo test --test e2e_smoke_test --features onnx,download
 ```
-
-## Notes
-
-- Pipeline does not own individual algorithms; it orchestrates them.

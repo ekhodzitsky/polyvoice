@@ -1,5 +1,8 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
-//! polyvoice-bench — DER on a {audio,rttm} dataset directory using the legacy v0.5 Pipeline.
+//! polyvoice-bench — DER on a {audio,rttm} dataset directory.
+//!
+//! Default pipeline matches the shipped CLI (**v2 + VBx** since 0.11). Pass
+//! `--pipeline legacy` for the pre-0.11 Silero + AHC path, or `--clusterer ahc`
+//! to keep v2 segmentation with fixed-threshold AHC.
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -38,19 +41,19 @@ struct Args {
     max_files: Option<usize>,
     #[arg(long, default_value = "0.45")]
     threshold: f32,
-    /// Which pipeline to benchmark: `legacy` (Silero VAD + sliding-window
-    /// embeddings + AHC, the shipped default) or `v2` (powerset segmentation +
-    /// overlap-add + masked embeddings + centroid-AHC + min_cluster_size).
-    #[arg(long, default_value = "legacy")]
+    /// Which pipeline to benchmark: `v2` (powerset segmentation + embeddings +
+    /// clusterer + overlap resegmentation — the shipped CLI default) or
+    /// `legacy` (Silero VAD + sliding-window embeddings + AHC).
+    #[arg(long, default_value = "v2")]
     pipeline: String,
     /// Min cluster size (members): clusters smaller than this are dissolved into
     /// the nearest large speaker. Applies to both pipelines.
     #[arg(long)]
     min_cluster_size: Option<usize>,
-    /// v2 clusterer: `ahc` (fixed-threshold AHC, default) or `vbx` (Variational
-    /// Bayes HMM + PLDA with automatic speaker count; requires a `vbx` build and
-    /// `POLYVOICE_VBX_PLDA_DIR`).
-    #[arg(long, default_value = "ahc")]
+    /// v2 clusterer: `vbx` (Variational Bayes HMM + PLDA with automatic speaker
+    /// count — matches CLI default; PLDA from env/dir/registry) or `ahc`
+    /// (fixed-threshold AHC). Ignored with `--pipeline legacy`.
+    #[arg(long, default_value = "vbx")]
     clusterer: String,
     /// Min cluster duration in seconds (length-invariant pruning). When > 0 it
     /// takes precedence over --min-cluster-size on the legacy pipeline.

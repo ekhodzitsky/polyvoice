@@ -1,3 +1,4 @@
+#![allow(deprecated)] // HybridPipeline is soft-deprecated research surface
 #![allow(clippy::unwrap_used)]
 //! Hybrid pipeline diagnostics: print embeddings stats and similarity matrix
 //! to understand over-clustering on long-form audio.
