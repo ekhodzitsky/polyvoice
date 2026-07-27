@@ -50,6 +50,13 @@ pub enum PipelineError {
     NoSpeech,
     #[error("audio too long: {actual_secs:.1}s > max {max_secs:.1}s")]
     AudioTooLong { actual_secs: f32, max_secs: f32 },
+    /// Pluggable [`crate::clusterer::Clusterer`] failure (`run_with_clusterer`).
+    ///
+    /// Always present so match arms do not depend on feature flags; only
+    /// produced when the `clusterer` feature is enabled and a clusterer is
+    /// injected.
+    #[error("clustering failed: {detail}")]
+    Clustering { detail: String },
 }
 
 impl PipelineError {
@@ -87,6 +94,10 @@ impl Pipeline {
     /// Legacy [`crate::embedding::EmbeddingExtractor`] types work through an
     /// automatic bridge.
     ///
+    /// Clustering defaults to free AHC (cosine threshold from
+    /// [`DiarizationConfig::cluster`]). For a pluggable backend (VBx from a
+    /// local PLDA directory, NME-SC, …) use [`Self::run_with_clusterer`].
+    ///
     /// Returns [`PipelineError::AudioTooLong`] if the input exceeds
     /// `config.max_duration_secs` (default 1 hour).
     pub fn run<E: Embedder, V: VoiceActivityDetector>(
@@ -95,6 +106,119 @@ impl Pipeline {
         extractor: &E,
         vad: &mut V,
     ) -> Result<DiarizationResult, PipelineError> {
+        let (embeddings, time_ranges) = self.embed_windows(samples, extractor, vad)?;
+        if embeddings.is_empty() {
+            return Ok(self.empty_result(samples.len()));
+        }
+
+        // Same free-AHC semantics as before: fixed threshold, no cluster
+        // ceiling (`max_clusters = 0`). Routed through `AhcClusterer` so the
+        // BYO path shares the Clusterer surface with pipeline_v2.
+        let labels = {
+            #[cfg(feature = "clusterer")]
+            {
+                use crate::clusterer::{AhcClusterer, Clusterer};
+                match AhcClusterer::with_threshold(0, self.config.cluster.threshold)
+                    .cluster(&embeddings)
+                {
+                    Ok(l) => l,
+                    // Dim mismatch / empty already filtered; fall back to free AHC.
+                    Err(_) => crate::ahc::agglomerative_cluster(
+                        &embeddings,
+                        self.config.cluster.threshold,
+                    ),
+                }
+            }
+            #[cfg(not(feature = "clusterer"))]
+            {
+                crate::ahc::agglomerative_cluster(&embeddings, self.config.cluster.threshold)
+            }
+        };
+        self.assemble_result(samples.len(), embeddings, time_ranges, labels)
+    }
+
+    /// Run offline diarization with an injected [`crate::clusterer::Clusterer`].
+    ///
+    /// Use this for BYO accuracy paths that stay ort-free, for example VBx with
+    /// PLDA weights loaded from disk:
+    ///
+    /// ```rust,ignore
+    /// use polyvoice::{
+    ///     EnergyVad, Pipeline, VadConfig, DiarizationConfig,
+    ///     clusterer::vbx::VbxClusterer,
+    /// };
+    ///
+    /// let vbx = VbxClusterer::from_dir(std::path::Path::new("plda/"), 20)?;
+    /// let result = pipeline.run_with_clusterer(&samples, &embedder, &mut vad, &vbx)?;
+    /// ```
+    ///
+    /// Requires features `clusterer` (and `vbx` when using [`VbxClusterer`]).
+    /// Embeddings still come from the caller's [`Embedder`] (typically
+    /// L2-normalized); VBx restores scale via its configured `emb_scale`.
+    ///
+    /// Durations for each embedding window are passed to
+    /// [`Clusterer::cluster_with_durations`] so short-segment filtering works.
+    #[cfg(feature = "clusterer")]
+    pub fn run_with_clusterer<E, V, C>(
+        &self,
+        samples: &[f32],
+        extractor: &E,
+        vad: &mut V,
+        clusterer: &C,
+    ) -> Result<DiarizationResult, PipelineError>
+    where
+        E: Embedder,
+        V: VoiceActivityDetector,
+        C: crate::clusterer::Clusterer + ?Sized,
+    {
+        let (embeddings, time_ranges) = self.embed_windows(samples, extractor, vad)?;
+        if embeddings.is_empty() {
+            return Ok(self.empty_result(samples.len()));
+        }
+
+        let durations: Vec<f64> = time_ranges.iter().map(|t| t.duration()).collect();
+        let labels = clusterer
+            .cluster_with_durations(&embeddings, &durations)
+            .map_err(|e| PipelineError::Clustering {
+                detail: e.to_string(),
+            })?;
+        self.assemble_result(samples.len(), embeddings, time_ranges, labels)
+    }
+
+    /// Convenience: [`Self::run_with_clusterer`] with
+    /// [`crate::clusterer::vbx::VbxClusterer::from_dir`].
+    ///
+    /// `plda_dir` must contain the six precomputed `plda_*.npy` files (see
+    /// `fixtures/vbx-plda/`). No network and no `download` feature.
+    #[cfg(feature = "vbx")]
+    pub fn run_with_vbx_from_dir<E, V>(
+        &self,
+        samples: &[f32],
+        extractor: &E,
+        vad: &mut V,
+        plda_dir: &Path,
+        max_speakers: usize,
+    ) -> Result<DiarizationResult, PipelineError>
+    where
+        E: Embedder,
+        V: VoiceActivityDetector,
+    {
+        let vbx =
+            crate::clusterer::vbx::VbxClusterer::from_dir(plda_dir, max_speakers).map_err(|e| {
+                PipelineError::Clustering {
+                    detail: e.to_string(),
+                }
+            })?;
+        self.run_with_clusterer(samples, extractor, vad, &vbx)
+    }
+
+    /// VAD → sliding windows → embeddings (and matching time ranges).
+    fn embed_windows<E: Embedder, V: VoiceActivityDetector>(
+        &self,
+        samples: &[f32],
+        extractor: &E,
+        vad: &mut V,
+    ) -> Result<(Vec<Vec<f32>>, Vec<TimeRange>), PipelineError> {
         let actual_secs = samples.len() as f32 / self.config.window.sample_rate.get() as f32;
         if actual_secs > self.config.max_duration_secs {
             return Err(PipelineError::AudioTooLong {
@@ -103,9 +227,8 @@ impl Pipeline {
             });
         }
         let speech_regions = segment_speech(vad, samples, &self.config, &self.vad_config)?;
-
         if speech_regions.is_empty() {
-            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
+            return Ok((Vec::new(), Vec::new()));
         }
 
         let sr = self.config.window.sample_rate.get() as f64;
@@ -140,34 +263,23 @@ impl Pipeline {
                 }
             }
         }
+        Ok((embeddings, time_ranges))
+    }
 
-        if embeddings.is_empty() {
-            return Ok(DiarizationResult::new(Vec::new(), Vec::new(), 0));
-        }
+    fn empty_result(&self, n_samples: usize) -> DiarizationResult {
+        let sr_hz = self.config.window.sample_rate.get();
+        DiarizationResult::new(Vec::new(), Vec::new(), 0)
+            .with_audio(n_samples as f64 / sr_hz as f64, sr_hz)
+    }
 
-        // Same free-AHC semantics as before: fixed threshold, no cluster
-        // ceiling (`max_clusters = 0`). Routed through `AhcClusterer` so the
-        // BYO path shares the Clusterer surface with pipeline_v2.
-        let labels = {
-            #[cfg(feature = "clusterer")]
-            {
-                use crate::clusterer::{AhcClusterer, Clusterer};
-                match AhcClusterer::with_threshold(0, self.config.cluster.threshold)
-                    .cluster(&embeddings)
-                {
-                    Ok(l) => l,
-                    // Dim mismatch / empty already filtered; fall back to free AHC.
-                    Err(_) => crate::ahc::agglomerative_cluster(
-                        &embeddings,
-                        self.config.cluster.threshold,
-                    ),
-                }
-            }
-            #[cfg(not(feature = "clusterer"))]
-            {
-                crate::ahc::agglomerative_cluster(&embeddings, self.config.cluster.threshold)
-            }
-        };
+    /// Labels → prune → segments/turns.
+    fn assemble_result(
+        &self,
+        n_samples: usize,
+        embeddings: Vec<Vec<f32>>,
+        time_ranges: Vec<TimeRange>,
+        labels: Vec<usize>,
+    ) -> Result<DiarizationResult, PipelineError> {
         // Dissolve spurious tiny clusters into the nearest large speaker — the
         // over-clustering fix. Duration pruning (length-invariant) takes
         // precedence when configured; otherwise the member-count rule applies.
@@ -222,7 +334,7 @@ impl Pipeline {
 
         let sr_hz = self.config.window.sample_rate.get();
         Ok(DiarizationResult::new(segments, turns, num_speakers)
-            .with_audio(samples.len() as f64 / sr_hz as f64, sr_hz))
+            .with_audio(n_samples as f64 / sr_hz as f64, sr_hz))
     }
 
     /// { true }
@@ -392,5 +504,90 @@ mod tests {
             result.num_speakers
         );
         assert!(!result.turns.is_empty());
+    }
+
+    #[cfg(feature = "clusterer")]
+    #[test]
+    fn run_with_clusterer_ahc_matches_run_shape() {
+        use crate::clusterer::{AhcClusterer, Clusterer};
+
+        let sr = 16_000u32;
+        let mut samples = sine_wave(300.0, 2.0, sr);
+        samples.extend(std::iter::repeat_n(0.0, sr as usize));
+        samples.extend(sine_wave(800.0, 2.0, sr));
+
+        let mut config = DiarizationConfig::default();
+        config.cluster.threshold = 0.9;
+        config.cluster.min_cluster_size = 1;
+        config.cluster.min_cluster_secs = 0.0;
+
+        let pipeline = Pipeline::new(config, VadConfig::default());
+        let embedder = TwoSpeakerEmbedder;
+        let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
+        let ahc = AhcClusterer::with_threshold(0, config.cluster.threshold);
+        let result = pipeline
+            .run_with_clusterer(&samples, &embedder, &mut vad, &ahc)
+            .expect("run_with_clusterer");
+        assert!(result.num_speakers >= 2);
+        assert!(!result.turns.is_empty());
+        // Trait object path also compiles.
+        let boxed: Box<dyn Clusterer> = Box::new(AhcClusterer::with_threshold(0, 0.9));
+        let mut vad2 = crate::vad::EnergyVad::new(-40.0, sr, 512);
+        let _ = pipeline
+            .run_with_clusterer(&samples, &embedder, &mut vad2, boxed.as_ref())
+            .expect("dyn Clusterer");
+    }
+
+    #[cfg(feature = "vbx")]
+    #[test]
+    fn run_with_vbx_from_dir_loads_fixtures() {
+        let plda = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
+        assert!(
+            plda.join("plda_transform.npy").is_file(),
+            "checked-in PLDA fixtures required"
+        );
+
+        let sr = 16_000u32;
+        // Enough speech for VBx min_embedding_secs (default ~1.6s) after windows.
+        let mut samples = sine_wave(300.0, 3.0, sr);
+        samples.extend(std::iter::repeat_n(0.0, (sr / 2) as usize));
+        samples.extend(sine_wave(800.0, 3.0, sr));
+
+        let mut config = DiarizationConfig::default();
+        config.cluster.min_cluster_size = 1;
+        config.cluster.min_cluster_secs = 0.0;
+        config.window.window_secs = 1.5;
+        config.window.hop_secs = 0.75;
+
+        let pipeline = Pipeline::new(config, VadConfig::default());
+        // 256-d matches WeSpeaker / PLDA fixture dimensionality.
+        let embedder = crate::embedding::DummyExtractor::new(256);
+        let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
+        let result = pipeline
+            .run_with_vbx_from_dir(&samples, &embedder, &mut vad, &plda, 8)
+            .expect("VBx from fixtures must run offline");
+        // Dummy embeddings are weak; only require a successful offline run.
+        assert!(result.num_speakers >= 1 || result.turns.is_empty());
+    }
+
+    #[cfg(feature = "vbx")]
+    #[test]
+    fn run_with_vbx_missing_dir_errors() {
+        let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
+        let embedder = crate::embedding::DummyExtractor::new(256);
+        let mut vad = crate::vad::EnergyVad::new(-40.0, 16_000, 512);
+        let err = pipeline
+            .run_with_vbx_from_dir(
+                &[0.1f32; 16_000],
+                &embedder,
+                &mut vad,
+                std::path::Path::new("/no/such/plda"),
+                8,
+            )
+            .expect_err("missing PLDA dir");
+        assert!(
+            matches!(err, PipelineError::Clustering { .. }),
+            "got {err:?}"
+        );
     }
 }

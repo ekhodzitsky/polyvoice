@@ -377,9 +377,13 @@ jobs:
         run: bash scripts/check-ort-free.sh
       - run: cargo check --no-default-features --lib --locked
       - run: cargo test --no-default-features --lib --locked
+      - run: cargo test --no-default-features --test byo_embedder_library --locked
       - run: cargo clippy --no-default-features --all-targets --locked -- -D warnings
       # Pure-Rust feature combo used by BYO-embedder consumers (clustering + VBx).
       - run: cargo check --no-default-features --features clusterer,vbx --lib --locked
+      - run: cargo test --no-default-features --features clusterer,vbx --lib --locked
+      - run: cargo test --no-default-features --features clusterer,vbx --test library_vbx_from_dir --locked
+      - run: cargo clippy --no-default-features --features clusterer,vbx --all-targets --locked -- -D warnings
 
   wasm32-smoke:
     runs-on: ubuntu-latest
