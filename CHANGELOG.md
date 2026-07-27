@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-27
+
+Crate version bump: additive enum variants on `EmbedderError` /
+`EmbeddingError` are a breaking change for exhaustive matches
+(`cargo-semver-checks` / Rust semver). On 0.x this is a minor release that
+allows that surface growth; both enums are now `#[non_exhaustive]`.
+
 ### Changed
 
 - **`thiserror` 1 → 2** on the polyvoice crate dependency. Ort-free / library
   consumers no longer pull `thiserror` 1 solely for diarization; aligns with
   product stacks already on thiserror 2 (optional features that transitively
   pin thiserror 1, e.g. via `faer`, are unchanged).
+- **`EmbedderError` and legacy `EmbeddingError` are `#[non_exhaustive]`.**
 
 ### Added
 

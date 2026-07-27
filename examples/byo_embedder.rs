@@ -104,11 +104,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- Offline ---
     let mut vad = EnergyVad::new(-40.0, sr, vad_config.frame_size);
-    let result = Pipeline::new(config, vad_config).run(
-        &samples,
-        &OrthogonalEmbedder::new(256),
-        &mut vad,
-    )?;
+    let result =
+        Pipeline::new(config, vad_config).run(&samples, &OrthogonalEmbedder::new(256), &mut vad)?;
     println!(
         "offline: {} speakers, {} turns",
         result.num_speakers,

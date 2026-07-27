@@ -14,6 +14,7 @@ use crate::types::DiarizationConfig;
 /// Error type for legacy embedding extraction failures.
 ///
 /// Prefer [`crate::embedder::EmbedderError`] with [`crate::embedder::Embedder`].
+#[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
 #[deprecated(
     since = "0.7.0",
@@ -41,6 +42,8 @@ impl EmbeddingError {
         match self {
             Self::ResourceExhausted(_) => true,
             Self::InferenceFailed(msg) => msg.contains("pool exhausted"),
+            // Same-crate match stays exhaustive; external consumers get
+            // #[non_exhaustive] and must handle unknown variants.
             Self::ModelNotLoaded(_) | Self::InvalidInput { .. } => false,
         }
     }
