@@ -14,11 +14,12 @@
 use polyvoice::{
     ClusterConfig, DiarizationConfig, Embedder, EmbedderError, EnergyVad, Pipeline, VadConfig,
     streaming::{LatencyPreset, StreamingPipeline},
+    types::WindowConfig,
 };
 
-/// Mock embedder: odd-energy windows → speaker A axis, even → speaker B.
+/// Mock embedder: alternate unit axes so cosine clustering yields two speakers.
 ///
-/// Vectors are L2 unit so cosine AHC can separate two clusters without a model.
+/// Vectors are L2 unit (`[1,0,…]` / `[0,1,…]`) without a real model.
 struct OrthogonalEmbedder {
     dim: usize,
     call: std::sync::atomic::AtomicUsize,
@@ -26,6 +27,7 @@ struct OrthogonalEmbedder {
 
 impl OrthogonalEmbedder {
     fn new(dim: usize) -> Self {
+        assert!(dim >= 2, "need ≥2 dims for two orthogonal axes");
         Self {
             dim,
             call: std::sync::atomic::AtomicUsize::new(0),
@@ -47,31 +49,28 @@ impl Embedder for OrthogonalEmbedder {
         }
         let n = self.call.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut v = vec![0.0f32; self.dim];
-        // Alternate axes so AHC finds two speakers on synthetic two-tone audio.
-        if n % 2 == 0 {
+        if n.is_multiple_of(2) {
             v[0] = 1.0;
-        } else if self.dim > 1 {
-            v[1] = 1.0;
         } else {
-            v[0] = -1.0;
+            v[1] = 1.0;
         }
         Ok(v)
     }
 }
 
-/// Build ~4 s of alternating loud / quieter frames so Energy VAD keeps speech.
-fn synthetic_two_speaker_pcm(sr: u32) -> Vec<f32> {
-    let n = (sr as usize) * 4;
+/// ~4 s of speech-level energy so Energy VAD keeps frames (not silence).
+fn synthetic_speech_pcm(sr: u32, secs: u32) -> Vec<f32> {
+    let n = (sr as usize) * (secs as usize);
     let mut samples = Vec::with_capacity(n);
     for i in 0..n {
-        // Two amplitude bands: still above a −40 dB energy floor after framing.
-        let band = if (i / (sr as usize / 2)) % 2 == 0 {
+        let t = i as f32 / sr as f32;
+        // Mild amplitude / pitch change every half-second — still above −40 dB.
+        let band = if (i / (sr as usize / 2)).is_multiple_of(2) {
             0.3
         } else {
             0.25
         };
-        let t = i as f32 / sr as f32;
-        let f = if (i / (sr as usize)) % 2 == 0 {
+        let f = if (i / sr as usize).is_multiple_of(2) {
             220.0
         } else {
             440.0
@@ -81,26 +80,35 @@ fn synthetic_two_speaker_pcm(sr: u32) -> Vec<f32> {
     samples
 }
 
+fn short_window_config() -> DiarizationConfig {
+    // Short windows so the mock alternates embeddings often enough for 2 clusters.
+    DiarizationConfig {
+        cluster: ClusterConfig {
+            threshold: 0.45,
+            ..ClusterConfig::default()
+        },
+        window: WindowConfig {
+            window_secs: 0.5,
+            hop_secs: 0.25,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sr = 16_000u32;
-    let samples = synthetic_two_speaker_pcm(sr);
-    let extractor = OrthogonalEmbedder::new(256);
-
-    let mut config = DiarizationConfig::default();
-    config.cluster = ClusterConfig {
-        threshold: 0.45,
-        ..ClusterConfig::default()
-    };
-    // Shorter windows so the mock alternates embeddings more often.
-    config.window.window_secs = 0.5;
-    config.window.hop_secs = 0.25;
-
+    let samples = synthetic_speech_pcm(sr, 4);
+    let config = short_window_config();
     let vad_config = VadConfig::default();
-    let mut vad = EnergyVad::new(-40.0, sr, vad_config.frame_size);
 
     // --- Offline ---
-    let offline = Pipeline::new(config.clone(), vad_config.clone());
-    let result = offline.run(&samples, &extractor, &mut vad)?;
+    let mut vad = EnergyVad::new(-40.0, sr, vad_config.frame_size);
+    let result = Pipeline::new(config, vad_config).run(
+        &samples,
+        &OrthogonalEmbedder::new(256),
+        &mut vad,
+    )?;
     println!(
         "offline: {} speakers, {} turns",
         result.num_speakers,
@@ -113,19 +121,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // --- Streaming (same Embedder; LatencyPreset::Realtime for live STT) ---
-    let stream_vad = EnergyVad::new(-40.0, sr, vad_config.frame_size);
+    // --- Streaming (LatencyPreset::Realtime for live STT) ---
     let mut stream = StreamingPipeline::with_latency_preset(
-        stream_vad,
+        EnergyVad::new(-40.0, sr, vad_config.frame_size),
         OrthogonalEmbedder::new(256),
         LatencyPreset::Realtime,
         vad_config,
     )?;
     const CHUNK: usize = 1600; // 100 ms @ 16 kHz
     for chunk in samples.chunks(CHUNK) {
-        let _ = stream.feed(chunk)?;
+        stream.feed(chunk)?;
     }
-    let _ = stream.flush()?;
+    stream.flush()?;
     println!(
         "streaming: {} speakers, {} turns (preset={:?})",
         stream.num_speakers(),
@@ -139,8 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // Product STT stacks map turns → word speaker labels after ASR.
-    // Prefer midpoint coverage; streaming tails often use last-turn fallback
-    // (see docs/library-mode.md).
+    // After ASR, map word midpoints onto turns (offline: leave uncovered unset;
+    // streaming: last-turn fallback). See docs/library-mode.md.
     Ok(())
 }
