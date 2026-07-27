@@ -118,6 +118,13 @@ pub use resegmentation::{
 #[cfg(all(feature = "resegmentation", feature = "segmentation"))]
 pub use resegmentation::extract_overlap_time_ranges;
 
+/// Midpoint word→speaker labeling for STT stacks (always-on, no models).
+pub mod labeling;
+pub use labeling::{
+    UncoveredPolicy, assign_speakers_by_midpoint, label_words, midpoint, speaker_at,
+    speaker_at_stable,
+};
+
 #[cfg(feature = "attribution")]
 pub mod attribution;
 #[cfg(feature = "attribution")]
