@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **BYO offline clustering injection.** `Pipeline::run_with_clusterer` (feature
+  `clusterer`) accepts any `Clusterer`. `Pipeline::run_with_vbx_from_dir`
+  (feature `vbx`) loads PLDA from a local directory with no network/`download`.
+  `PipelineError::Clustering` reports clusterer failures. Integration test
+  `library_vbx_from_dir` + expanded `ort-free-core` CI / `docs/library-mode.md`
+  surface contract.
+
 ## [0.12.0] - 2026-07-27
 
 Crate version bump: additive enum variants on `EmbedderError` /
