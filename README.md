@@ -67,10 +67,11 @@ cargo add polyvoice --no-default-features
 # optional pure-Rust extras: --features clusterer,vbx
 ```
 
-You get `Pipeline`, `StreamingPipeline`, `EnergyVad`, the `EmbeddingExtractor`
-trait (implement it with Candle, candle-onnx, or any other backend), and pure
-clustering math — no ONNX Runtime dylib. Surface inventory and the CI gate that
-keeps this path ort-free: [docs/library-mode.md](docs/library-mode.md).
+You get `Pipeline`, `StreamingPipeline`, `EnergyVad`, the `Embedder` trait
+(implement it with Candle, tract, or any other backend), and pure clustering
+math — no ONNX Runtime dylib. Runnable mock: `cargo run --no-default-features
+--example byo_embedder`. Surface inventory and the CI gate that keeps this path
+ort-free: [docs/library-mode.md](docs/library-mode.md).
 
 ### Python
 
