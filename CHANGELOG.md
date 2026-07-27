@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Library-mode BYO example and integration tests.** `examples/byo_embedder.rs`
+  and `tests/byo_embedder_library.rs` run with `--no-default-features` (no
+  network, no ONNX): custom `Embedder` + `EnergyVad` + offline `Pipeline` and
+  streaming `LatencyPreset::Realtime`. `docs/library-mode.md` documents the
+  product STT consumer pattern (word midpoint labeling, stable turns, latency
+  presets). README library-mode blurb points at the example.
 - **Always-on midpoint word→speaker labeling** (`polyvoice::labeling`).
   Pure interval coverage for STT stacks: `speaker_at`, `speaker_at_stable`,
   `assign_speakers_by_midpoint`, `label_words`, and `UncoveredPolicy`
