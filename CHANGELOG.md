@@ -7,8 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-27
+
+Crate version bump: additive enum variants on `EmbedderError` /
+`EmbeddingError` are a breaking change for exhaustive matches
+(`cargo-semver-checks` / Rust semver). On 0.x this is a minor release that
+allows that surface growth; both enums are now `#[non_exhaustive]`.
+
+### Changed
+
+- **`thiserror` 1 → 2** on the polyvoice crate dependency. Ort-free / library
+  consumers no longer pull `thiserror` 1 solely for diarization; aligns with
+  product stacks already on thiserror 2 (optional features that transitively
+  pin thiserror 1, e.g. via `faer`, are unchanged).
+- **`EmbedderError` and legacy `EmbeddingError` are `#[non_exhaustive]`.**
+
 ### Added
 
+- **Library-mode BYO example and integration tests.** `examples/byo_embedder.rs`
+  and `tests/byo_embedder_library.rs` run with `--no-default-features` (no
+  network, no ONNX): custom `Embedder` + `EnergyVad` + offline `Pipeline` and
+  streaming `LatencyPreset::Realtime`. `docs/library-mode.md` documents the
+  product STT consumer pattern (word midpoint labeling, stable turns, latency
+  presets). README library-mode blurb points at the example.
+- **Always-on midpoint word→speaker labeling** (`polyvoice::labeling`).
+  Pure interval coverage for STT stacks: `speaker_at`, `speaker_at_stable`,
+  `assign_speakers_by_midpoint`, `label_words`, and `UncoveredPolicy`
+  (`None` for offline files, `LastTurn` for streaming tails). No `attribution`
+  feature and no ASR trait required. Richer max-overlap join stays behind
+  `attribution`. Also adds `TimeRange::midpoint` and
+  `TimeRange::contains_instant` used by the helpers.
+- **Typed resource-exhaustion errors for embedders.**
+  `EmbedderError::ResourceExhausted` (and legacy
+  `EmbeddingError::ResourceExhausted`) so serving layers classify pool /
+  back-pressure failures without substring-matching messages.
+  `EmbedderError::is_resource_exhausted`, `PipelineError::is_resource_exhausted`,
+  and `StreamingError::is_resource_exhausted` also recognize transitional
+  `"pool exhausted"` strings in `InferenceFailed` / `Legacy`. The legacy
+  `EmbeddingExtractor` bridge maps exhaustion to the typed variant (not
+  `Legacy(...)`). Empty `EmbedderPool` reports `ResourceExhausted`.
 - **Bring-your-own embedder is a supported, non-deprecated library API.**
   Offline `Pipeline` and online `StreamingPipeline` are generic over
   `E: Embedder` (always available; no `onnx` required). Implement

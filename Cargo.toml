@@ -9,7 +9,7 @@ resolver = "2"
 
 [package]
 name = "polyvoice"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 # MSRV tracks ort-enabled (real) builds: ort 2.0.0-rc.11+ needs Rust 1.88.
 # Pure non-ort library features may compile on older toolchains, but CI pins 1.88.
@@ -199,7 +199,7 @@ symphonia = { version = "0.6", optional = true, default-features = true, feature
 
 # Error handling
 anyhow = "1"
-thiserror = "1"
+thiserror = "2"
 
 # Logging
 tracing = "0.1"

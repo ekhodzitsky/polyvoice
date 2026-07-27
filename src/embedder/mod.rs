@@ -54,13 +54,26 @@ pub trait Embedder: Send + Sync {
 }
 
 /// Errors from `Embedder` implementations.
-#[derive(Debug, thiserror::Error)]
+///
+/// Marked `#[non_exhaustive]` so new variants (e.g. back-pressure) can land in
+/// minor releases without forcing every consumer match to update.
+#[non_exhaustive]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum EmbedderError {
     #[error("audio too short for this embedder: {actual_secs:.3}s < {min_secs:.3}s")]
     AudioTooShort { actual_secs: f32, min_secs: f32 },
 
     #[error("ONNX inference failed: {detail}")]
     InferenceFailed { detail: String },
+
+    /// Encoder concurrency / session pool exhausted (or equivalent back-pressure).
+    ///
+    /// Prefer this variant over stuffing the marker into
+    /// [`EmbedderError::InferenceFailed`] so serving layers can classify metrics
+    /// with `downcast` / [`EmbedderError::is_resource_exhausted`] instead of
+    /// substring-matching English messages.
+    #[error("resource exhausted: {detail}")]
+    ResourceExhausted { detail: String },
 
     #[error("expected embedding dim {expected}, got {actual}")]
     DimMismatch { expected: usize, actual: usize },
@@ -73,6 +86,43 @@ pub enum EmbedderError {
 
     #[error("legacy adapter error: {0}")]
     Legacy(String),
+}
+
+impl EmbedderError {
+    /// True when this error reports encoder resource exhaustion.
+    ///
+    /// Matches the typed [`EmbedderError::ResourceExhausted`] variant and, for
+    /// transitional consumers, legacy strings that still embed
+    /// `"pool exhausted"` in [`EmbedderError::InferenceFailed`] or
+    /// [`EmbedderError::Legacy`].
+    pub fn is_resource_exhausted(&self) -> bool {
+        match self {
+            Self::ResourceExhausted { .. } => true,
+            Self::InferenceFailed { detail } | Self::Legacy(detail) => {
+                detail_looks_exhausted(detail)
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Substring still used by historical extractors / metrics classifiers.
+fn detail_looks_exhausted(detail: &str) -> bool {
+    detail.contains("pool exhausted")
+}
+
+/// Map a legacy [`crate::embedding::EmbeddingError`] into [`EmbedderError`],
+/// preserving exhaustion as a typed variant when possible.
+#[allow(deprecated)]
+fn from_legacy_embedding_error(err: crate::embedding::EmbeddingError) -> EmbedderError {
+    use crate::embedding::EmbeddingError as Legacy;
+    match err {
+        Legacy::ResourceExhausted(detail) => EmbedderError::ResourceExhausted { detail },
+        Legacy::InferenceFailed(detail) if detail_looks_exhausted(&detail) => {
+            EmbedderError::ResourceExhausted { detail }
+        }
+        other => EmbedderError::Legacy(other.to_string()),
+    }
 }
 
 /// Bridge: any legacy [`crate::embedding::EmbeddingExtractor`] is an [`Embedder`].
@@ -93,7 +143,7 @@ where
     fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
         let config = crate::types::DiarizationConfig::default();
         self.extract(audio, &config)
-            .map_err(|e| EmbedderError::Legacy(e.to_string()))
+            .map_err(from_legacy_embedding_error)
     }
 }
 
@@ -196,7 +246,9 @@ impl<E: Embedder> EmbedderPool<E> {
     pub fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
         if self.dim == 0 {
             // Empty-construction case (no items in the pool).
-            return Err(EmbedderError::Legacy("empty pool".to_owned()));
+            return Err(EmbedderError::ResourceExhausted {
+                detail: "empty embedder pool".to_owned(),
+            });
         }
         let embedder = self.pool.checkout();
         embedder.embed(audio)
@@ -598,7 +650,11 @@ mod pool_tests {
         let err = pool
             .embed(&[0.0_f32; 100])
             .expect_err("empty pool must fail");
-        assert!(matches!(err, EmbedderError::Legacy(_)));
+        assert!(
+            matches!(err, EmbedderError::ResourceExhausted { .. }),
+            "empty pool is resource exhaustion, got {err}"
+        );
+        assert!(err.is_resource_exhausted());
     }
 
     #[test]
@@ -628,5 +684,70 @@ mod pool_tests {
             ),
             "expected DimMismatch(192, 256), got {err}"
         );
+    }
+
+    #[test]
+    fn resource_exhausted_classifier() {
+        let typed = EmbedderError::ResourceExhausted {
+            detail: "speaker sessions busy".into(),
+        };
+        assert!(typed.is_resource_exhausted());
+
+        let legacy_string = EmbedderError::InferenceFailed {
+            detail: "onnx session pool exhausted".into(),
+        };
+        assert!(legacy_string.is_resource_exhausted());
+
+        let other = EmbedderError::DimMismatch {
+            expected: 1,
+            actual: 2,
+        };
+        assert!(!other.is_resource_exhausted());
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn legacy_bridge_preserves_resource_exhausted() {
+        use crate::embedding::{EmbeddingError, EmbeddingExtractor};
+        use crate::types::DiarizationConfig;
+
+        struct ExhaustedExtractor;
+        impl EmbeddingExtractor for ExhaustedExtractor {
+            fn extract(
+                &self,
+                _samples: &[f32],
+                _config: &DiarizationConfig,
+            ) -> Result<Vec<f32>, EmbeddingError> {
+                Err(EmbeddingError::ResourceExhausted("sessions busy".into()))
+            }
+            fn embedding_dim(&self) -> usize {
+                4
+            }
+        }
+
+        let err = ExhaustedExtractor.embed(&[0.0; 16]).expect_err("must fail");
+        assert!(
+            matches!(
+                err,
+                EmbedderError::ResourceExhausted { ref detail } if detail == "sessions busy"
+            ),
+            "bridge must not collapse exhaustion into Legacy, got {err}"
+        );
+        assert!(err.is_resource_exhausted());
+    }
+
+    #[test]
+    fn pipeline_and_streaming_error_helpers() {
+        use crate::pipeline::PipelineError;
+        use crate::streaming::StreamingError;
+
+        let emb = EmbedderError::ResourceExhausted {
+            detail: "busy".into(),
+        };
+        let pe = PipelineError::Embedding(emb.clone());
+        let se = StreamingError::Embedding(emb);
+        assert!(pe.is_resource_exhausted());
+        assert!(se.is_resource_exhausted());
+        assert!(!PipelineError::NoSpeech.is_resource_exhausted());
     }
 }

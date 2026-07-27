@@ -157,4 +157,19 @@ impl TimeRange {
     pub fn duration(&self) -> f64 {
         (self.end - self.start).max(0.0)
     }
+
+    /// Midpoint `(start + end) / 2` in seconds.
+    #[inline]
+    pub fn midpoint(&self) -> f64 {
+        (self.start + self.end) / 2.0
+    }
+
+    /// Inclusive coverage: `start <= t && end >= t`.
+    ///
+    /// Used by midpoint word→speaker labeling; on overlapping turns the caller
+    /// decides which covering turn wins (typically first in slice order).
+    #[inline]
+    pub fn contains_instant(&self, t: f64) -> bool {
+        self.start <= t && self.end >= t
+    }
 }
