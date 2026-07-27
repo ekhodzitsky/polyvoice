@@ -199,7 +199,7 @@ symphonia = { version = "0.6", optional = true, default-features = true, feature
 
 # Error handling
 anyhow = "1"
-thiserror = "1"
+thiserror = "2"
 
 # Logging
 tracing = "0.1"
