@@ -41,7 +41,7 @@ impl EmbeddingError {
         match self {
             Self::ResourceExhausted(_) => true,
             Self::InferenceFailed(msg) => msg.contains("pool exhausted"),
-            _ => false,
+            Self::ModelNotLoaded(_) | Self::InvalidInput { .. } => false,
         }
     }
 }
