@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`thiserror` 1 → 2** on the polyvoice crate dependency. Ort-free / library
+  consumers no longer pull `thiserror` 1 solely for diarization; aligns with
+  product stacks already on thiserror 2 (optional features that transitively
+  pin thiserror 1, e.g. via `faer`, are unchanged).
+
 ### Added
 
 - **Bring-your-own embedder is a supported, non-deprecated library API.**
