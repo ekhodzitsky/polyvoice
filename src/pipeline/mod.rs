@@ -52,6 +52,19 @@ pub enum PipelineError {
     AudioTooLong { actual_secs: f32, max_secs: f32 },
 }
 
+impl PipelineError {
+    /// True when the failure is encoder resource exhaustion (pool / back-pressure).
+    ///
+    /// Walks the typed [`EmbedderError`] payload so metrics code can avoid
+    /// substring-matching display strings.
+    pub fn is_resource_exhausted(&self) -> bool {
+        match self {
+            Self::Embedding(e) => e.is_resource_exhausted(),
+            _ => false,
+        }
+    }
+}
+
 pub struct Pipeline {
     config: DiarizationConfig,
     vad_config: VadConfig,
