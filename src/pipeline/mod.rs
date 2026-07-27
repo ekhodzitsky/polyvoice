@@ -152,12 +152,14 @@ impl Pipeline {
     /// let result = pipeline.run_with_clusterer(&samples, &embedder, &mut vad, &vbx)?;
     /// ```
     ///
-    /// Requires features `clusterer` (and `vbx` when using [`VbxClusterer`]).
+    /// Requires features `clusterer` (and `vbx` when using
+    /// [`crate::clusterer::vbx::VbxClusterer`]).
     /// Embeddings still come from the caller's [`Embedder`] (typically
     /// L2-normalized); VBx restores scale via its configured `emb_scale`.
     ///
     /// Durations for each embedding window are passed to
-    /// [`Clusterer::cluster_with_durations`] so short-segment filtering works.
+    /// [`crate::clusterer::Clusterer::cluster_with_durations`] so short-segment
+    /// filtering works.
     #[cfg(feature = "clusterer")]
     pub fn run_with_clusterer<E, V, C>(
         &self,
