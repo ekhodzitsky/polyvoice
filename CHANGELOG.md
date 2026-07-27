@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Library-mode BYO example and integration tests.** `examples/byo_embedder.rs`
+  and `tests/byo_embedder_library.rs` run with `--no-default-features` (no
+  network, no ONNX): custom `Embedder` + `EnergyVad` + offline `Pipeline` and
+  streaming `LatencyPreset::Realtime`. `docs/library-mode.md` documents the
+  product STT consumer pattern (word midpoint labeling, stable turns, latency
+  presets). README library-mode blurb points at the example.
 - **Bring-your-own embedder is a supported, non-deprecated library API.**
   Offline `Pipeline` and online `StreamingPipeline` are generic over
   `E: Embedder` (always available; no `onnx` required). Implement
