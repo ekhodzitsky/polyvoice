@@ -24,8 +24,26 @@ pub enum EmbeddingError {
     ModelNotLoaded(String),
     #[error("inference failed: {0}")]
     InferenceFailed(String),
+    /// Encoder concurrency / session pool exhausted (legacy surface).
+    ///
+    /// Prefer [`crate::embedder::EmbedderError::ResourceExhausted`] on the
+    /// supported [`crate::embedder::Embedder`] path.
+    #[error("resource exhausted: {0}")]
+    ResourceExhausted(String),
     #[error("invalid input: expected {expected} samples, got {got}")]
     InvalidInput { expected: usize, got: usize },
+}
+
+#[allow(deprecated)]
+impl EmbeddingError {
+    /// True when this legacy error reports encoder resource exhaustion.
+    pub fn is_resource_exhausted(&self) -> bool {
+        match self {
+            Self::ResourceExhausted(_) => true,
+            Self::InferenceFailed(msg) => msg.contains("pool exhausted"),
+            Self::ModelNotLoaded(_) | Self::InvalidInput { .. } => false,
+        }
+    }
 }
 
 /// Legacy trait for speaker embedding extractors.
