@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `assign_speakers_by_midpoint`, `label_words`, and `UncoveredPolicy`
   (`None` for offline files, `LastTurn` for streaming tails). No `attribution`
   feature and no ASR trait required. Richer max-overlap join stays behind
-  `attribution`.
+  `attribution`. Also adds `TimeRange::midpoint` and
+  `TimeRange::contains_instant` used by the helpers.
 - **Bring-your-own embedder is a supported, non-deprecated library API.**
   Offline `Pipeline` and online `StreamingPipeline` are generic over
   `E: Embedder` (always available; no `onnx` required). Implement

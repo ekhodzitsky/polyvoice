@@ -121,8 +121,8 @@ pub use resegmentation::extract_overlap_time_ranges;
 /// Midpoint word→speaker labeling for STT stacks (always-on, no models).
 pub mod labeling;
 pub use labeling::{
-    UncoveredPolicy, assign_speakers_by_midpoint, assign_speakers_by_midpoint_into, label_words,
-    midpoint, speaker_at, speaker_at_stable,
+    UncoveredPolicy, assign_speakers_by_midpoint, label_words, midpoint, speaker_at,
+    speaker_at_stable,
 };
 
 #[cfg(feature = "attribution")]
