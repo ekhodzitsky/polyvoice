@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Always-on midpoint word→speaker labeling** (`polyvoice::labeling`).
+  Pure interval coverage for STT stacks: `speaker_at`, `speaker_at_stable`,
+  `assign_speakers_by_midpoint`, `label_words`, and `UncoveredPolicy`
+  (`None` for offline files, `LastTurn` for streaming tails). No `attribution`
+  feature and no ASR trait required. Richer max-overlap join stays behind
+  `attribution`. Also adds `TimeRange::midpoint` and
+  `TimeRange::contains_instant` used by the helpers.
 - **Typed resource-exhaustion errors for embedders.**
   `EmbedderError::ResourceExhausted` (and legacy
   `EmbeddingError::ResourceExhausted`) so serving layers classify pool /
