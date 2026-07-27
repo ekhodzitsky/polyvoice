@@ -62,6 +62,15 @@ pub enum EmbedderError {
     #[error("ONNX inference failed: {detail}")]
     InferenceFailed { detail: String },
 
+    /// Encoder concurrency / session pool exhausted (or equivalent back-pressure).
+    ///
+    /// Prefer this variant over stuffing the marker into
+    /// [`EmbedderError::InferenceFailed`] so serving layers can classify metrics
+    /// with `downcast` / [`EmbedderError::is_resource_exhausted`] instead of
+    /// substring-matching English messages.
+    #[error("resource exhausted: {detail}")]
+    ResourceExhausted { detail: String },
+
     #[error("expected embedding dim {expected}, got {actual}")]
     DimMismatch { expected: usize, actual: usize },
 
@@ -73,6 +82,23 @@ pub enum EmbedderError {
 
     #[error("legacy adapter error: {0}")]
     Legacy(String),
+}
+
+impl EmbedderError {
+    /// True when this error reports encoder resource exhaustion.
+    ///
+    /// Matches the typed [`EmbedderError::ResourceExhausted`] variant and, for
+    /// transitional consumers, legacy strings that still embed
+    /// `"pool exhausted"` in [`EmbedderError::InferenceFailed`] or
+    /// [`EmbedderError::Legacy`].
+    pub fn is_resource_exhausted(&self) -> bool {
+        match self {
+            Self::ResourceExhausted { .. } => true,
+            Self::InferenceFailed { detail } => detail.contains("pool exhausted"),
+            Self::Legacy(detail) => detail.contains("pool exhausted"),
+            _ => false,
+        }
+    }
 }
 
 /// Bridge: any legacy [`crate::embedding::EmbeddingExtractor`] is an [`Embedder`].
@@ -628,5 +654,24 @@ mod pool_tests {
             ),
             "expected DimMismatch(192, 256), got {err}"
         );
+    }
+
+    #[test]
+    fn resource_exhausted_classifier() {
+        let typed = EmbedderError::ResourceExhausted {
+            detail: "speaker sessions busy".into(),
+        };
+        assert!(typed.is_resource_exhausted());
+
+        let legacy_string = EmbedderError::InferenceFailed {
+            detail: "onnx session pool exhausted".into(),
+        };
+        assert!(legacy_string.is_resource_exhausted());
+
+        let other = EmbedderError::DimMismatch {
+            expected: 1,
+            actual: 2,
+        };
+        assert!(!other.is_resource_exhausted());
     }
 }
