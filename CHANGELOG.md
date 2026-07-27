@@ -7,21 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **BYO offline clustering injection.** `Pipeline::run_with_clusterer` (feature
-  `clusterer`) accepts any `Clusterer`. `Pipeline::run_with_vbx_from_dir`
-  (feature `vbx`) loads PLDA from a local directory with no network/`download`.
-  `PipelineError::Clustering` reports clusterer failures. Integration test
-  `library_vbx_from_dir` + expanded `ort-free-core` CI / `docs/library-mode.md`
-  surface contract.
-
 ## [0.12.0] - 2026-07-27
 
-Crate version bump: additive enum variants on `EmbedderError` /
-`EmbeddingError` are a breaking change for exhaustive matches
-(`cargo-semver-checks` / Rust semver). On 0.x this is a minor release that
-allows that surface growth; both enums are now `#[non_exhaustive]`.
+Library-mode / STT-consumer focused release. Crate version bump: additive enum
+variants on `EmbedderError` / `EmbeddingError` (and `PipelineError::Clustering`)
+are a breaking change for exhaustive matches (`cargo-semver-checks` / Rust
+semver). On 0.x this is a minor release that allows that surface growth; both
+embedder error enums are now `#[non_exhaustive]`.
 
 ### Changed
 
@@ -33,6 +25,12 @@ allows that surface growth; both enums are now `#[non_exhaustive]`.
 
 ### Added
 
+- **BYO offline clustering injection.** `Pipeline::run_with_clusterer` (feature
+  `clusterer`) accepts any `Clusterer`. `Pipeline::run_with_vbx_from_dir`
+  (feature `vbx`) loads PLDA from a local directory with no network/`download`.
+  `PipelineError::Clustering` reports clusterer failures. Integration test
+  `library_vbx_from_dir` + expanded `ort-free-core` CI / `docs/library-mode.md`
+  surface contract.
 - **Library-mode BYO example and integration tests.** `examples/byo_embedder.rs`
   and `tests/byo_embedder_library.rs` run with `--no-default-features` (no
   network, no ONNX): custom `Embedder` + `EnergyVad` + offline `Pipeline` and
