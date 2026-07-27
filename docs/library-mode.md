@@ -45,8 +45,8 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 
 | Feature | Surface | Notes |
 |---------|---------|-------|
-| `clusterer` | `Clusterer`, `AhcClusterer`, `MinClusterSizeClusterer`, … | Trait + AHC adapters |
-| `vbx` | VBx / PLDA clustering (requires `clusterer`) | Pure-Rust ndarray; PLDA weights supplied by caller |
+| `clusterer` | `Clusterer`, `AhcClusterer`, `MinClusterSizeClusterer`, …; `Pipeline::run_with_clusterer` | Trait + AHC adapters; pluggable BYO clustering |
+| `vbx` | `VbxClusterer`, `Pipeline::run_with_vbx_from_dir` (requires `clusterer`) | Pure-Rust ndarray; PLDA from local dir (no download) |
 | `spectral` | `spectral` + `NmeScClusterer` (with `clusterer`) | Pulls `faer`, not `ort` |
 | `segmentation` | `PowersetDecoder`, `Aggregator`, `Segmenter` trait, … | Decoder / aggregator without ONNX segmenter |
 | `embedder` | (mostly empty flag) | ONNX adapters (`CamPlusPlus`, ResNet34, …) still need `onnx` + `embedder`; the `Embedder` **trait** itself is always-on |
@@ -78,6 +78,7 @@ A production BYO-embedder consumer typically:
 3. Uses `EnergyVad` (or its own VAD) with `Pipeline` offline and `StreamingPipeline` online.
 4. Does **not** enable `onnx`, so no `ort` native library is linked.
 5. After ASR, maps words onto diarization turns (midpoint coverage — see below).
+6. Optionally inject VBx with local PLDA (`features = ["clusterer", "vbx"]`) — still no `onnx`.
 
 ```rust,ignore
 use polyvoice::{
@@ -87,8 +88,22 @@ use polyvoice::{
 // Replace DummyExtractor with your Embedder impl (Candle WeSpeaker, etc.).
 let extractor = DummyExtractor::new(256);
 let mut vad = EnergyVad::new(-40.0, 16_000, 512);
-let result = Pipeline::new(DiarizationConfig::default(), VadConfig::default())
-    .run(&samples, &extractor, &mut vad)?;
+let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
+// Default: free AHC (cosine threshold from DiarizationConfig).
+let result = pipeline.run(&samples, &extractor, &mut vad)?;
+```
+
+VBx offline (PLDA weights on disk — e.g. side-loaded next to your models, or
+`fixtures/vbx-plda` in this repo):
+
+```rust,ignore
+// cargo dependency: features = ["clusterer", "vbx"]
+let result = pipeline.run_with_vbx_from_dir(
+    &samples, &extractor, &mut vad,
+    std::path::Path::new("/models/vbx-plda"),
+    /* max_speakers */ 20,
+)?;
+// Or: VbxClusterer::from_dir(...) + pipeline.run_with_clusterer(...)
 ```
 
 Runnable copy of this path (mock embedder, no models, no network):
@@ -96,6 +111,7 @@ Runnable copy of this path (mock embedder, no models, no network):
 ```bash
 cargo run --no-default-features --example byo_embedder
 cargo test --no-default-features --test byo_embedder_library
+cargo test --no-default-features --features clusterer,vbx --test library_vbx_from_dir
 ```
 
 ### What you implement
@@ -163,10 +179,29 @@ let mut pipeline = StreamingPipeline::with_latency_preset(
 - No bundled WeSpeaker / Silero ONNX weights on this path.
 - No `pipeline_v2` (ONNX production stack) — that is the CLI/FFI default, not BYO.
 - DER quality tracks **your** embedder; library mode does not claim SOTA alone.
+- VBx PLDA is **caller-supplied** (`from_dir`); library mode never auto-downloads.
+
+## Surface contract (freeze)
+
+Breaking changes to the following symbols require a deliberate semver bump and
+an update to this section. CI job `ort-free-core` must stay green.
+
+| Contract | Gate |
+|----------|------|
+| `--no-default-features` has no `ort` in the normal dep graph | `scripts/check-ort-free.sh` |
+| `clusterer,vbx` same | same script |
+| `Pipeline::run` / `StreamingPipeline` accept `E: Embedder` | `cargo test --no-default-features --lib` |
+| `Pipeline::run_with_clusterer` / `run_with_vbx_from_dir` | `cargo test --no-default-features --features clusterer,vbx --lib` + `library_vbx_from_dir` |
+| Midpoint labeling always-on | `cargo test --no-default-features --lib labeling` |
+| BYO example / mock multi-speaker | `byo_embedder` example + `byo_embedder_library` test |
+
+Do **not** move production CLI accuracy onto this path without an explicit
+product decision (`pipeline_v2` remains the ONNX default).
 
 ## Related docs
 
 - [API reference](API.md) — full type and pipeline documentation
 - [README](../README.md) — install paths including library mode
 - Example: `examples/byo_embedder.rs`
+- PLDA fixtures: `fixtures/vbx-plda/`
 - CI job `ort-free-core` / `scripts/check-ort-free.sh` — regression gate
