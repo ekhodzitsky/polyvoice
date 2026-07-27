@@ -54,6 +54,10 @@ pub trait Embedder: Send + Sync {
 }
 
 /// Errors from `Embedder` implementations.
+///
+/// Marked `#[non_exhaustive]` so new variants (e.g. back-pressure) can land in
+/// minor releases without forcing every consumer match to update.
+#[non_exhaustive]
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum EmbedderError {
     #[error("audio too short for this embedder: {actual_secs:.3}s < {min_secs:.3}s")]
@@ -721,9 +725,7 @@ mod pool_tests {
             }
         }
 
-        let err = ExhaustedExtractor
-            .embed(&[0.0; 16])
-            .expect_err("must fail");
+        let err = ExhaustedExtractor.embed(&[0.0; 16]).expect_err("must fail");
         assert!(
             matches!(
                 err,

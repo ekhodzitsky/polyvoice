@@ -8,9 +8,9 @@ not want the ONNX Runtime (`ort`) native dylib.
 ```toml
 # Cargo.toml
 [dependencies]
-polyvoice = { version = "0.11", default-features = false }
+polyvoice = { version = "0.12", default-features = false }
 # optional pure-Rust extras:
-# polyvoice = { version = "0.11", default-features = false, features = ["clusterer", "vbx"] }
+# polyvoice = { version = "0.12", default-features = false, features = ["clusterer", "vbx"] }
 ```
 
 CI enforces that `ort` never appears in the normal dependency graph for
