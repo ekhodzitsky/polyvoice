@@ -34,7 +34,7 @@ CI enforces that `ort` never appears in the normal dependency graph for
 | Window / overlap / RTTM / WAV | `window`, `overlap`, `rttm`, `wav`, `format` | I/O and post-processing |
 | Fbank features | `FbankConfig`, `FbankExtractor` | Pure-Rust front-end features |
 | ASR trait stubs | `Asr`, `AsrError` | Trait surface only |
-| Word midpoint labeling | `labeling::{speaker_at, assign_speakers_by_midpoint, label_words, UncoveredPolicy}` | STT product join (offline vs streaming fallback) |
+| Word midpoint labeling | `labeling::{speaker_at, speaker_at_stable, assign_speakers_by_midpoint, label_words, UncoveredPolicy}` | STT product join; see module docs for offline vs streaming |
 
 ### Feature-gated pure-Rust (no `ort`)
 
