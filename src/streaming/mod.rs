@@ -88,6 +88,16 @@ pub enum StreamingError {
     Embedding(#[from] EmbedderError),
 }
 
+impl StreamingError {
+    /// True when the failure is encoder resource exhaustion (pool / back-pressure).
+    pub fn is_resource_exhausted(&self) -> bool {
+        match self {
+            Self::Embedding(e) => e.is_resource_exhausted(),
+            Self::Vad(_) => false,
+        }
+    }
+}
+
 /// Stateful streaming diarization pipeline.
 ///
 /// Generic over a [`VoiceActivityDetector`] `V` and an [`Embedder`] `E`.
