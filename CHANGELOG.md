@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Typed resource-exhaustion errors for embedders.**
+  `EmbedderError::ResourceExhausted` (and legacy
+  `EmbeddingError::ResourceExhausted`) so serving layers classify pool /
+  back-pressure failures without substring-matching messages.
+  `EmbedderError::is_resource_exhausted`, `PipelineError::is_resource_exhausted`,
+  and `StreamingError::is_resource_exhausted` also recognize transitional
+  `"pool exhausted"` strings in `InferenceFailed` / `Legacy`. The legacy
+  `EmbeddingExtractor` bridge maps exhaustion to the typed variant (not
+  `Legacy(...)`). Empty `EmbedderPool` reports `ResourceExhausted`.
 - **Bring-your-own embedder is a supported, non-deprecated library API.**
   Offline `Pipeline` and online `StreamingPipeline` are generic over
   `E: Embedder` (always available; no `onnx` required). Implement
