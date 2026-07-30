@@ -25,7 +25,15 @@ rm python/pyproject.toml.bak
 sed -i.bak "s/polyvoice [0-9]\+\.[0-9]\+\.[0-9]\+/polyvoice ${VERSION}/" tests/cli_smoke_test.rs
 rm tests/cli_smoke_test.rs.bak
 
-# 5. CHANGELOG.md — prepend new section if not present
+# 5. Lockfiles — every lockfile that pins the path dependency on the core crate
+# (the workspace root's own plus the standalone crates') goes stale on a version
+# bump; re-resolve just the polyvoice entry in each.
+cargo update -p polyvoice --precise "${VERSION}"
+for MANIFEST in fuzz/Cargo.toml polyvoice-asr-sherpa/Cargo.toml python/Cargo.toml; do
+    cargo update --manifest-path "${MANIFEST}" -p polyvoice --precise "${VERSION}"
+done
+
+# 6. CHANGELOG.md — prepend new section if not present
 if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
     DATE=$(date +%Y-%m-%d)
     awk -v ver="${VERSION}" -v date="${DATE}" '
