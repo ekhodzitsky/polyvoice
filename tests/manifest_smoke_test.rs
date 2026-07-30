@@ -56,21 +56,22 @@ fn int8_sha256_is_real_not_placeholder() {
 }
 
 #[test]
-fn mobile_profile_resolves_to_v2_hotfix() {
-    // V2 hotfix: Mobile uses powerset + resnet34 because CAM++ ONNX is broken.
+fn mobile_profile_resolves_to_int8() {
+    // Mobile ships the recalibrated INT8 pair: dynamic-quant powerset +
+    // static-QDQ ResNet34 (DER at or below the fp32 baseline on AMI).
     let m = parse();
     let prof = m.profile("mobile").expect("mobile profile present");
-    assert_eq!(prof.segmenter, "powerset_fp32");
-    assert_eq!(prof.embedder, "wespeaker_resnet34");
+    assert_eq!(prof.segmenter, "powerset_int8");
+    assert_eq!(prof.embedder, "resnet34_int8");
 }
 
 #[test]
-fn balanced_profile_resolves_to_v2_hotfix() {
-    // V2 hotfix: Balanced uses powerset + resnet34 (same as Mobile for now).
+fn balanced_profile_resolves_to_int8() {
+    // Balanced ships the same recalibrated INT8 pair as Mobile.
     let m = parse();
     let prof = m.profile("balanced").expect("balanced profile present");
-    assert_eq!(prof.segmenter, "powerset_fp32");
-    assert_eq!(prof.embedder, "wespeaker_resnet34");
+    assert_eq!(prof.segmenter, "powerset_int8");
+    assert_eq!(prof.embedder, "resnet34_int8");
 }
 
 #[test]
@@ -80,8 +81,8 @@ fn mobile_bundle_under_relaxed_15mb_budget() {
     let seg = m.model(&prof.segmenter).unwrap();
     let emb = m.model(&prof.embedder).unwrap();
     let total = seg.size.unwrap_or(0) + emb.size.unwrap_or(0);
-    // V2 hotfix mobile bundle (powerset_fp32 + wespeaker_resnet34) is ~32 MB;
-    // budget updated to 35 MB until INT8 re-validated.
+    // INT8 bundle (powerset dynamic + resnet34 static QDQ) is ~8.4 MB, far
+    // under the 35 MB budget kept from the fp32 era.
     assert!(
         total <= BUNDLE_BUDGET_BYTES,
         "mobile bundle {} bytes > {} budget",
@@ -108,7 +109,16 @@ fn balanced_bundle_under_35mb_budget() {
 #[test]
 fn int8_entries_have_calibration_descriptor() {
     let m = parse();
-    for id in ["powerset_int8", "cam_pp_int8", "resnet34_int8"] {
+    // powerset_int8 is weights-only dynamic quantization — no calibration
+    // data is involved, the field must say so instead of naming a dataset.
+    let powerset = m.model("powerset_int8").expect("powerset_int8");
+    let calib = powerset.calibration.as_deref().unwrap_or("");
+    assert!(
+        calib.contains("dynamic"),
+        "powerset_int8 calibration field must document dynamic quantization (got '{calib}')"
+    );
+    // Static-QDQ embedders must name their calibration set.
+    for id in ["cam_pp_int8", "resnet34_int8"] {
         let entry = m.model(id).expect(id);
         let calib = entry.calibration.as_deref().unwrap_or("");
         assert!(
