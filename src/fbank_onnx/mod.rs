@@ -68,11 +68,15 @@ impl FbankOnnxExtractor {
             return Err(FbankExtractorError::EmptyPool);
         }
         let mut sessions = Vec::with_capacity(pool_size);
+        // Each pool session gets a fair share of the machine's cores: a
+        // single-session extractor (the common CLI case) uses all of them,
+        // while a loaded pool does not oversubscribe.
+        let intra = std::thread::available_parallelism()
+            .map(|n| (n.get() / pool_size).max(1))
+            .unwrap_or(1);
         for i in 0..pool_size {
-            // intra_threads(1): this extractor parallelises across the session
-            // pool, so each session stays single-threaded.
             let session =
-                crate::onnx::build_session_with_ep(model_path, ep, Some(1)).map_err(|e| {
+                crate::onnx::build_session_with_ep(model_path, ep, Some(intra)).map_err(|e| {
                     FbankExtractorError::SessionBuild {
                         index: i,
                         source: e,
