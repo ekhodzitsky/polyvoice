@@ -18,6 +18,8 @@ pub enum FbankError {
     Fft(String),
     #[error("invalid shape: {0}")]
     Shape(String),
+    #[error("invalid fbank config: {0}")]
+    InvalidConfig(String),
 }
 
 /// Configuration for log-mel filterbank extraction.
@@ -53,6 +55,60 @@ impl Default for FbankConfig {
             f_max: 7600.0,
             pre_emphasis: 0.97,
         }
+    }
+}
+
+impl FbankConfig {
+    /// { true }
+    /// `pub fn validate(&self) -> Result<(), FbankError>`
+    /// { true }
+    /// Check the config for the constraints [`FbankExtractor`] relies on.
+    ///
+    /// Returns the first violation found as [`FbankError::InvalidConfig`].
+    pub fn validate(&self) -> Result<(), FbankError> {
+        if self.sample_rate == 0 {
+            return Err(FbankError::InvalidConfig(
+                "FbankConfig::sample_rate must be > 0".to_string(),
+            ));
+        }
+        if self.n_fft == 0 {
+            return Err(FbankError::InvalidConfig(
+                "FbankConfig::n_fft must be > 0".to_string(),
+            ));
+        }
+        if self.win_length == 0 {
+            return Err(FbankError::InvalidConfig(
+                "FbankConfig::win_length must be > 0".to_string(),
+            ));
+        }
+        if self.hop_length == 0 {
+            return Err(FbankError::InvalidConfig(
+                "FbankConfig::hop_length must be > 0".to_string(),
+            ));
+        }
+        if self.win_length > self.n_fft {
+            return Err(FbankError::InvalidConfig(format!(
+                "FbankConfig::win_length ({}) must be <= n_fft ({})",
+                self.win_length, self.n_fft
+            )));
+        }
+        if self.n_mels == 0 {
+            return Err(FbankError::InvalidConfig(
+                "FbankConfig::n_mels must be > 0".to_string(),
+            ));
+        }
+        if !self.f_min.is_finite() || self.f_min < 0.0 {
+            return Err(FbankError::InvalidConfig(
+                "FbankConfig::f_min must be finite and non-negative".to_string(),
+            ));
+        }
+        if !self.f_max.is_finite() || self.f_max <= self.f_min {
+            return Err(FbankError::InvalidConfig(format!(
+                "FbankConfig::f_max must be finite and greater than f_min ({})",
+                self.f_min
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -115,10 +171,23 @@ impl FbankExtractor {
     ///
     /// # Panics
     ///
-    /// Panics if `config` is invalid (see [`FbankConfig`] fields).
-    #[allow(clippy::panic)] // Intentional precondition panic.
+    /// Panics if `config` is invalid (see [`FbankConfig::validate`]).
+    /// Use [`try_new`](Self::try_new) for a fallible alternative.
+    #[allow(clippy::panic)] // Documented convenience over `try_new`.
     pub fn new(config: FbankConfig) -> Self {
-        Self::validate_config(&config);
+        match Self::try_new(config) {
+            Ok(extractor) => extractor,
+            Err(e) => panic!("{e}"),
+        }
+    }
+
+    /// { true }
+    /// `pub fn try_new(config: FbankConfig) -> Result<Self, FbankError>`
+    /// { true }
+    /// Fallible constructor: validates `config` via [`FbankConfig::validate`]
+    /// and returns [`FbankError::InvalidConfig`] instead of panicking.
+    pub fn try_new(config: FbankConfig) -> Result<Self, FbankError> {
+        config.validate()?;
         let mut planner = RealFftPlanner::<f32>::new();
         let r2c = planner.plan_fft_forward(config.n_fft);
         let window = hamming_window(config.win_length);
@@ -129,46 +198,12 @@ impl FbankExtractor {
             config.f_min,
             config.f_max,
         );
-        Self {
+        Ok(Self {
             config,
             r2c,
             window,
             mel_filters,
-        }
-    }
-
-    #[allow(clippy::panic)]
-    fn validate_config(config: &FbankConfig) {
-        if config.sample_rate == 0 {
-            panic!("FbankConfig::sample_rate must be > 0");
-        }
-        if config.n_fft == 0 {
-            panic!("FbankConfig::n_fft must be > 0");
-        }
-        if config.win_length == 0 {
-            panic!("FbankConfig::win_length must be > 0");
-        }
-        if config.hop_length == 0 {
-            panic!("FbankConfig::hop_length must be > 0");
-        }
-        if config.win_length > config.n_fft {
-            panic!(
-                "FbankConfig::win_length ({}) must be <= n_fft ({})",
-                config.win_length, config.n_fft
-            );
-        }
-        if config.n_mels == 0 {
-            panic!("FbankConfig::n_mels must be > 0");
-        }
-        if !config.f_min.is_finite() || config.f_min < 0.0 {
-            panic!("FbankConfig::f_min must be finite and non-negative");
-        }
-        if !config.f_max.is_finite() || config.f_max <= config.f_min {
-            panic!(
-                "FbankConfig::f_max must be finite and greater than f_min ({})",
-                config.f_min
-            );
-        }
+        })
     }
 
     /// { true }
@@ -402,5 +437,42 @@ mod tests {
             ..Default::default()
         };
         let _ = FbankExtractor::new(config);
+    }
+
+    #[test]
+    fn fbank_config_validate_accepts_default() {
+        assert!(FbankConfig::default().validate().is_ok());
+    }
+
+    #[test]
+    fn fbank_config_validate_reports_first_violation() {
+        let config = FbankConfig {
+            hop_length: 0,
+            n_mels: 0,
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        match err {
+            FbankError::InvalidConfig(detail) => {
+                assert!(
+                    detail.contains("hop_length"),
+                    "first violation is hop_length, got: {detail}"
+                );
+            }
+            other => panic!("expected InvalidConfig, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fbank_extractor_try_new_rejects_invalid_config() {
+        let config = FbankConfig {
+            sample_rate: 0,
+            ..Default::default()
+        };
+        match FbankExtractor::try_new(config) {
+            Ok(_) => panic!("expected Err for sample_rate == 0"),
+            Err(e) => assert!(matches!(e, FbankError::InvalidConfig(_))),
+        }
+        assert!(FbankExtractor::try_new(FbankConfig::default()).is_ok());
     }
 }

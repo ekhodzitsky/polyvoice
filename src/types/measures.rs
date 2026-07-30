@@ -90,50 +90,6 @@ impl Default for Confidence {
     }
 }
 
-/// A non-negative duration in seconds.
-///
-/// Invariant: inner >= 0.0.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Seconds(f32);
-
-impl Seconds {
-    /// { true }
-    /// `pub fn new(v: f32) -> Option<Self>`
-    /// { ret.is_some() == (v >= 0.0) }
-    /// Create a validated non-negative duration in seconds.
-    ///
-    /// Returns `None` if `v` is negative.
-    ///
-    /// ```rust
-    /// use polyvoice::Seconds;
-    /// assert!(Seconds::new(3.5).is_some());
-    /// assert!(Seconds::new(-1.0).is_none());
-    /// ```
-    pub fn new(v: f32) -> Option<Self> {
-        (v >= 0.0).then_some(Self(v))
-    }
-
-    /// { true }
-    /// pub fn get(&self) -> f32
-    /// { ret == self.0 && ret >= 0.0 }
-    /// Return the raw duration value in seconds.
-    ///
-    /// ```rust
-    /// use polyvoice::Seconds;
-    /// let s = Seconds::new(2.0).unwrap();
-    /// assert_eq!(s.get(), 2.0);
-    /// ```
-    pub fn get(&self) -> f32 {
-        self.0
-    }
-}
-
-impl Default for Seconds {
-    fn default() -> Self {
-        Self(0.0)
-    }
-}
-
 /// A time interval in seconds.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TimeRange {

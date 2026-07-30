@@ -1,86 +1,27 @@
 //! DER regression test for the CLI using pipeline v2 (default as of v0.6.8+).
 //!
-//! Runs `polyvoice diarize` via `cargo run` and asserts DER stays within
-//! tolerance of the v2 baseline. This prevents a repeat of the 0.6.1 incident
-//! where pipeline v2 shipped as default without long-form audio validation.
+//! Runs the `polyvoice diarize` binary built alongside the tests (assert_cmd)
+//! and asserts DER stays within tolerance of the v2 baseline. This prevents a
+//! repeat of the 0.6.1 incident where pipeline v2 shipped as default without
+//! long-form audio validation.
 //!
 //! Run with:
 //!   cargo test --test cli_der_regression_test --features "cli,download" -- --ignored
 
 #![cfg(all(feature = "cli", feature = "download"))]
 
+mod common;
+
 use polyvoice::der::{DerDecomposition, compute_der_decomposition};
 use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
-use serde::Deserialize;
 use std::path::Path;
-
-/// Release-gate signal: when `POLYVOICE_REQUIRE_DATA=1` is set (the release gate
-/// exports it), missing test data is a hard failure instead of a silent skip —
-/// so a partial cache/download miss can never green-light a release without
-/// actually running DER. Unset (local dev) keeps the soft-skip ergonomics.
-fn require_data() -> bool {
-    std::env::var("POLYVOICE_REQUIRE_DATA")
-        .map(|v| v == "1")
-        .unwrap_or(false)
-}
-
-#[derive(Deserialize)]
-struct Baseline {
-    #[serde(rename = "v2_e2e_smoke")]
-    v2_e2e_smoke: DatasetBaseline,
-    // v2-family AMI entry; hosts the overlap-excluded long-form floor.
-    #[serde(rename = "hybrid_ami_test_single")]
-    ami_v2: AmiBaseline,
-}
-
-#[derive(Deserialize)]
-struct DatasetBaseline {
-    #[serde(rename = "der_collar_0_25")]
-    der_collar_0_25: f64,
-    /// No-collar (collar=0) DER baseline — the headline like-for-like metric.
-    /// `None` (JSON null) = not yet measured → the no-collar gate stays inactive.
-    der_no_collar: Option<f64>,
-    tolerance: f64,
-}
-
-/// Gate `measured` (a 0..1 ratio) against an optional percent baseline. Inactive
-/// (prints the value to record) while the baseline is null in der_baseline.json.
-fn assert_no_collar(dataset: &str, measured: f64, baseline_pct: Option<f64>, tolerance_pct: f64) {
-    match baseline_pct {
-        Some(expected_pct) => {
-            let bound = (expected_pct + tolerance_pct) / 100.0;
-            assert!(
-                measured <= bound,
-                "no-collar DER regression on {dataset}: expected <= {:.2}%, got {:.2}% (baseline {:.2}% + tolerance {:.2}%)",
-                bound * 100.0,
-                measured * 100.0,
-                expected_pct,
-                tolerance_pct,
-            );
-        }
-        None => println!(
-            "{dataset}: no-collar baseline not yet measured — record {:.2}% as der_no_collar in tests/der_baseline.json to activate the gate",
-            measured * 100.0
-        ),
-    }
-}
-
-#[derive(Deserialize)]
-struct AmiBaseline {
-    /// Overlap-excluded DER floor. `None` (JSON null) = not yet measured → the
-    /// numeric long-form gate stays inactive; set it to activate the gate.
-    der_single_speaker: Option<f64>,
-    der_single_speaker_tolerance: Option<f64>,
-}
-
-fn load_baseline() -> Baseline {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/der_baseline.json");
-    let raw = std::fs::read_to_string(&path).expect("read der_baseline.json");
-    serde_json::from_str(&raw).expect("parse der_baseline.json")
-}
 
 /// Run CLI `polyvoice diarize --v2` and return
 /// (DER decomposition at collar 0.25, at collar 0, num_speakers, stem).
+///
+/// Uses the binary cargo built for this test invocation (assert_cmd), so the
+/// features come from the outer `cargo test --features ...` call — no nested
+/// `cargo run` rebuild or target-lock wait inside the test.
 fn run_cli_diarize(
     wav_path: &Path,
     rttm_path: &Path,
@@ -94,15 +35,8 @@ fn run_cli_diarize(
     let output_rttm = tempfile::NamedTempFile::with_suffix(".rttm").expect("create temp rttm");
     let output_path = output_rttm.path().to_path_buf();
 
-    let mut cmd = std::process::Command::new("cargo");
+    let mut cmd = common::polyvoice_cmd();
     cmd.args([
-        "run",
-        "--quiet",
-        "--features",
-        "cli",
-        "--bin",
-        "polyvoice",
-        "--",
         "diarize",
         wav_path.to_str().expect("wav path is valid utf-8"),
         "--profile",
@@ -114,14 +48,14 @@ fn run_cli_diarize(
     ]);
     // Prefer env (release-check exports it); else the checked-in fixtures so
     // local `cargo test -- --ignored` exercises the real default clusterer.
-    let fixture_plda = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
+    let fixture_plda = common::vbx_plda_fixture_dir();
     if let Ok(dir) = std::env::var("POLYVOICE_VBX_PLDA_DIR") {
         cmd.args(["--vbx-plda-dir", &dir]);
     } else if fixture_plda.join("plda_transform.npy").is_file() {
         cmd.args(["--vbx-plda-dir", fixture_plda.to_str().expect("utf-8 path")]);
     }
 
-    let output = cmd.output().expect("spawn cargo run");
+    let output = cmd.output().expect("spawn polyvoice diarize");
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!("CLI diarize failed for {stem}: {stderr}");
@@ -141,21 +75,7 @@ fn run_cli_diarize(
         turns
     };
 
-    let ref_turns = {
-        let raw = parse_rttm_file(rttm_path).expect("parse ground-truth rttm");
-        let grouped = group_by_file(&raw);
-        let rttm_key = if stem.contains(".Mix-Headset") {
-            stem.trim_end_matches(".Mix-Headset")
-        } else {
-            &stem
-        };
-        let segs: Vec<_> = grouped
-            .get(rttm_key)
-            .map(|v| v.iter().map(|s| (*s).clone()).collect())
-            .unwrap_or_default();
-        let (turns, _map) = to_speaker_turns(&segs);
-        turns
-    };
+    let ref_turns = common::load_ref_turns(rttm_path, &stem);
 
     // Same hypothesis scored at both collars: 0.25 for the historical gate,
     // 0 (no-collar) for the headline like-for-like metric.
@@ -169,20 +89,14 @@ fn run_cli_diarize(
     (decomp, decomp_no_collar, num_speakers, stem)
 }
 
-#[ignore = "requires cached ONNX bundle + tests/data/e2e-smoke/"]
+#[ignore = "requires downloaded models"]
 #[test]
 fn cli_der_regression_v2_e2e_smoke() {
-    let baseline = load_baseline();
+    let baseline = common::load_baseline(&common::der_baseline_path());
     let wav_path = Path::new("tests/data/e2e-smoke/audio/fuzfh.wav");
     let rttm_path = Path::new("tests/data/e2e-smoke/rttm/fuzfh.rttm");
 
-    if !wav_path.is_file() {
-        assert!(
-            !require_data(),
-            "release gate requires e2e-smoke data but it is missing: {}",
-            wav_path.display()
-        );
-        println!("e2e-smoke WAV not found — skipping (set POLYVOICE_REQUIRE_DATA=1 to require it)");
+    if !common::require_wav(wav_path) {
         return;
     }
 
@@ -195,25 +109,11 @@ fn cli_der_regression_v2_e2e_smoke() {
         der_no_collar * 100.0
     );
 
-    let expected = baseline.v2_e2e_smoke.der_collar_0_25 / 100.0;
-    let tolerance = baseline.v2_e2e_smoke.tolerance / 100.0;
-    assert!(
-        der <= expected + tolerance,
-        "DER regression: expected <= {:.2}%, got {:.2}% (baseline {:.2}% + tolerance {:.2}%)",
-        (expected + tolerance) * 100.0,
-        der * 100.0,
-        expected * 100.0,
-        tolerance * 100.0,
-    );
-    assert_no_collar(
-        "v2_e2e_smoke",
-        der_no_collar,
-        baseline.v2_e2e_smoke.der_no_collar,
-        baseline.v2_e2e_smoke.tolerance,
-    );
+    common::gate_against_baseline("v2_e2e_smoke", der, &baseline.v2_e2e_smoke);
+    common::assert_no_collar("v2_e2e_smoke", der_no_collar, &baseline.v2_e2e_smoke);
 }
 
-#[ignore = "requires cached ONNX bundle + data/ami-test-single/"]
+#[ignore = "requires downloaded models and dataset"]
 #[test]
 fn cli_der_regression_v2_ami_single() {
     let audio_dir = Path::new("data/ami-test-single/audio");
@@ -234,18 +134,12 @@ fn cli_der_regression_v2_ami_single() {
         rttm_path_alt
     };
 
-    if !wav_path.is_file() {
-        assert!(
-            !require_data(),
-            "release gate requires AMI test data but it is missing: {}",
-            wav_path.display()
-        );
-        println!("AMI WAV not found — skipping (set POLYVOICE_REQUIRE_DATA=1 to require it)");
+    if !common::require_wav(&wav_path) {
         return;
     }
 
     // No-collar decomposition is not gated here — on ~79%-overlap audio total DER
-    // is miss-bound at any collar (see the comment below).
+    // is miss-bound at any collar (see common::gate_ami_longform).
     let (decomp, _decomp_no_collar, num_speakers, stem) = run_cli_diarize(&wav_path, &rttm_path);
     let der = decomp.total.der;
     let single_der = decomp.single_speaker.der;
@@ -269,45 +163,13 @@ fn cli_der_regression_v2_ami_single() {
             r.ref_frames
         );
     }
-    // Total DER is deliberately NOT gated here: AMI EN2002a is ~79% overlapping
-    // speech, and pipeline v2 emits one speaker per frame, so the miss term alone
-    // holds DER near 88% whether diarization is healthy or collapsed — a DER ceiling
-    // cannot tell the two apart. Gate instead on the signals that move when
-    // diarization regresses: speaker count must not collapse and clustering confusion
-    // must stay low. Mirrors der_v2_baseline_test::v2_der_ami_test_single.
-    assert!(
-        num_speakers >= 2,
-        "pipeline_v2 collapsed to {num_speakers} speaker(s) on EN2002a (NaN-embedding regression?)"
+    // Shared AMI long-form gate (speaker-count collapse + clustering confusion
+    // + overlap-excluded DER floor); mirrors der_v2_baseline_test::v2_der_ami_test_single.
+    let baseline = common::load_baseline(&common::der_baseline_path());
+    common::gate_ami_longform(
+        num_speakers,
+        confusion,
+        single_der,
+        &baseline.hybrid_ami_test_single,
     );
-    assert!(
-        confusion < 0.25,
-        "pipeline_v2 clustering regressed on EN2002a: confusion={:.1}% exceeds 25%",
-        confusion * 100.0
-    );
-    // Numeric long-form floor: overlap-excluded DER DOES discriminate
-    // healthy vs collapsed diarization on high-overlap audio, unlike total DER. The
-    // gate activates only once a baseline is measured and recorded in
-    // tests/der_baseline.json (hybrid_ami_test_single.der_single_speaker); until then
-    // the printed value above is the measurement to record.
-    let baseline = load_baseline();
-    match (
-        baseline.ami_v2.der_single_speaker,
-        baseline.ami_v2.der_single_speaker_tolerance,
-    ) {
-        (Some(floor), Some(tol)) => {
-            let ceiling = (floor + tol) / 100.0;
-            assert!(
-                single_der <= ceiling,
-                "long-form floor regressed: overlap-excluded DER={:.2}% exceeds {:.2}% (baseline {:.2}% + tol {:.2}%)",
-                single_der * 100.0,
-                ceiling * 100.0,
-                floor,
-                tol,
-            );
-        }
-        _ => println!(
-            "  overlap-excluded DER baseline not yet measured — record {:.2}% in tests/der_baseline.json to activate the long-form floor",
-            single_der * 100.0
-        ),
-    }
 }

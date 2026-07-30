@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-//! Integration test for the M4 OverlapResegmenter on synthetic data.
+//! Integration test for the OverlapResegmenter on synthetic data.
 //! Pure-CPU; runs in normal `cargo test` (no model required).
 
 #![cfg(feature = "resegmentation")]
@@ -8,34 +8,22 @@ use polyvoice::resegmentation::{
     OverlapRegionInput, OverlapResegmenter, ResegmentInputs, Resegmenter, SpeakerCentroid,
     compute_centroids,
 };
-use polyvoice::types::{SpeakerId, SpeakerTurn, TimeRange};
+use polyvoice::types::{SpeakerId, TimeRange};
 
-fn unit(dim: usize, axis: usize) -> Vec<f32> {
-    let mut v = vec![0.0_f32; dim];
-    v[axis] = 1.0;
-    v
-}
-
-fn turn(start: f64, end: f64, spk: u32) -> SpeakerTurn {
-    SpeakerTurn {
-        speaker: SpeakerId(spk),
-        time: TimeRange { start, end },
-        text: None,
-        stable: true,
-    }
-}
+mod common;
+use common::{turn, unit_vec};
 
 #[test]
 fn end_to_end_synthetic_two_speakers_overlap() {
     // Two speakers, one overlap region. Embeddings are 8-d unit vectors.
     let dim = 8;
     let embeddings = vec![
-        unit(dim, 0),
-        unit(dim, 0),
-        unit(dim, 0),
-        unit(dim, 1),
-        unit(dim, 1),
-        unit(dim, 1),
+        unit_vec(dim, 0),
+        unit_vec(dim, 0),
+        unit_vec(dim, 0),
+        unit_vec(dim, 1),
+        unit_vec(dim, 1),
+        unit_vec(dim, 1),
     ];
     let labels = vec![0, 0, 0, 1, 1, 1];
     let centroids = compute_centroids(&embeddings, &labels);
@@ -50,7 +38,7 @@ fn end_to_end_synthetic_two_speakers_overlap() {
         },
         primary_speaker: SpeakerId(0),
         secondary_speaker: None,
-        embedding: unit(dim, 1),
+        embedding: unit_vec(dim, 1),
     }];
 
     let r = OverlapResegmenter::default();
@@ -73,12 +61,12 @@ fn end_to_end_synthetic_two_speakers_overlap() {
 fn end_to_end_three_speakers_two_pairs() {
     let dim = 8;
     let embeddings = vec![
-        unit(dim, 0),
-        unit(dim, 0),
-        unit(dim, 1),
-        unit(dim, 1),
-        unit(dim, 2),
-        unit(dim, 2),
+        unit_vec(dim, 0),
+        unit_vec(dim, 0),
+        unit_vec(dim, 1),
+        unit_vec(dim, 1),
+        unit_vec(dim, 2),
+        unit_vec(dim, 2),
     ];
     let labels = vec![0, 0, 1, 1, 2, 2];
     let centroids = compute_centroids(&embeddings, &labels);
@@ -94,7 +82,7 @@ fn end_to_end_three_speakers_two_pairs() {
             },
             primary_speaker: SpeakerId(0),
             secondary_speaker: None,
-            embedding: unit(dim, 1),
+            embedding: unit_vec(dim, 1),
         },
         // 4.0..5.0: primary 2, secondary best should be 1.
         OverlapRegionInput {
@@ -104,7 +92,7 @@ fn end_to_end_three_speakers_two_pairs() {
             },
             primary_speaker: SpeakerId(2),
             secondary_speaker: None,
-            embedding: unit(dim, 1),
+            embedding: unit_vec(dim, 1),
         },
     ];
 
@@ -134,11 +122,11 @@ fn rttm_round_trip_preserves_overlap_turns() {
     let centroids = vec![
         SpeakerCentroid {
             speaker: SpeakerId(0),
-            embedding: unit(dim, 0),
+            embedding: unit_vec(dim, 0),
         },
         SpeakerCentroid {
             speaker: SpeakerId(1),
-            embedding: unit(dim, 1),
+            embedding: unit_vec(dim, 1),
         },
     ];
     let primary = vec![turn(0.0, 1.0, 0)];
@@ -149,7 +137,7 @@ fn rttm_round_trip_preserves_overlap_turns() {
         },
         primary_speaker: SpeakerId(0),
         secondary_speaker: None,
-        embedding: unit(dim, 1),
+        embedding: unit_vec(dim, 1),
     }];
     let r = OverlapResegmenter::default();
     let out = r
@@ -172,7 +160,7 @@ fn rttm_round_trip_preserves_overlap_turns() {
 }
 
 mod proptests {
-    use super::{turn, unit};
+    use super::common::{turn, unit_vec};
     use polyvoice::resegmentation::{
         OverlapRegionInput, OverlapResegmenter, ResegmentInputs, Resegmenter, SpeakerCentroid,
         compute_centroids,
@@ -221,7 +209,7 @@ mod proptests {
             let centroids: Vec<SpeakerCentroid> = (0..num_centroids)
                 .map(|i| SpeakerCentroid {
                     speaker: SpeakerId(i as u32),
-                    embedding: unit(dim, i % dim),
+                    embedding: unit_vec(dim, i % dim),
                 })
                 .collect();
             // Build primary turns over distinct, non-overlapping intervals so the
@@ -268,7 +256,7 @@ mod proptests {
             let centroids: Vec<SpeakerCentroid> = (0..num_centroids)
                 .map(|i| SpeakerCentroid {
                     speaker: SpeakerId(i as u32),
-                    embedding: unit(dim, i % dim),
+                    embedding: unit_vec(dim, i % dim),
                 })
                 .collect();
             // Deliberately unsorted primary turns — the resegmenter must still
@@ -284,7 +272,7 @@ mod proptests {
                     time: TimeRange { start: i as f64 * 0.9, end: i as f64 * 0.9 + 0.4 },
                     primary_speaker: SpeakerId(0),
                     secondary_speaker: None,
-                    embedding: unit(dim, (i + 1) % dim),
+                    embedding: unit_vec(dim, (i + 1) % dim),
                 })
                 .collect();
 
@@ -317,7 +305,7 @@ mod proptests {
             let mut labels: Vec<usize> = Vec::with_capacity(total);
             for cluster in 0..num_clusters {
                 for _ in 0..members_per_cluster {
-                    embeddings.push(unit(dim, cluster % dim));
+                    embeddings.push(unit_vec(dim, cluster % dim));
                     labels.push(cluster);
                 }
             }

@@ -1,4 +1,4 @@
-//! M6b — FFI smoke tests for ABI v3.
+//! FFI smoke tests for ABI v3.
 
 #![cfg(feature = "ffi")]
 
@@ -10,7 +10,7 @@ use polyvoice::ffi::{
 use std::ptr;
 
 #[test]
-#[ignore = "requires cached Balanced ONNX bundle"]
+#[ignore = "requires downloaded models"]
 fn ffi_create_destroy_balanced_round_trip() {
     let mut handle: *mut PolyvoicePipeline = ptr::null_mut();
     // SAFETY: handle is non-null, null cache dir uses default registry path.
@@ -50,7 +50,21 @@ fn ffi_create_invalid_profile_returns_invalid_arg() {
 }
 
 #[test]
-#[ignore = "requires cached Balanced ONNX bundle"]
+fn ffi_create_rejects_parent_dir_traversal() {
+    let mut handle: *mut PolyvoicePipeline = ptr::null_mut();
+    let dir = std::ffi::CString::new("../evil").expect("no interior nul");
+    // The cache-dir check runs before any registry/model access, so this test
+    // needs no cached models.
+    // SAFETY: handle is non-null; dir is a valid nul-terminated string.
+    let rc = unsafe {
+        polyvoice_pipeline_create(PolyvoiceProfile::Mobile as i32, dir.as_ptr(), &mut handle)
+    };
+    assert_eq!(rc, 1, "parent-dir traversal must return InvalidArg");
+    assert!(handle.is_null(), "handle must remain null on error");
+}
+
+#[test]
+#[ignore = "requires downloaded models"]
 fn ffi_run_on_silence_returns_valid_json() {
     let mut handle: *mut PolyvoicePipeline = ptr::null_mut();
     // SAFETY: handle is non-null, null cache dir uses default registry path.
@@ -138,7 +152,7 @@ fn ffi_run_format_unknown_format_returns_invalid_arg() {
 }
 
 #[test]
-#[ignore = "requires cached Balanced ONNX bundle"]
+#[ignore = "requires downloaded models"]
 fn ffi_run_format_renders_every_format() {
     let mut handle: *mut PolyvoicePipeline = ptr::null_mut();
     // SAFETY: handle is non-null, null cache dir uses default registry path.

@@ -1,15 +1,16 @@
 [workspace]
 # The core crate is the workspace root package; the opt-in ASR companion is the
 # only added member so they share one ONNX runtime (ort) and one lockfile.
-# python/ (maturin) and fuzz/ stay standalone — excluded so their builds and
-# lockfiles are unaffected.
+# python/ (maturin), fuzz/, and polyvoice-asr-sherpa/ stay standalone — excluded
+# or self-isolated via their own [workspace], so their builds and lockfiles are
+# unaffected and sherpa-onnx's second C++ runtime never enters the core graph.
 members = ["polyvoice-asr"]
 exclude = ["python", "fuzz"]
 resolver = "2"
 
 [package]
 name = "polyvoice"
-version = "0.12.0"
+version = "0.13.0"
 edition = "2024"
 # MSRV tracks ort-enabled (real) builds: ort 2.0.0-rc.11+ needs Rust 1.88.
 # Pure non-ort library features may compile on older toolchains, but CI pins 1.88.
@@ -24,15 +25,14 @@ categories = ["multimedia::audio", "science"]
 # scripts/, tests/, benchmarks/, demo.gif, models/*.onnx — is excluded
 # automatically. NOTE: src/models/{manifest.toml,signing.pub.base64} and
 # schema/diarization-result-v1.json are include_str!'d at compile time, and
-# examples/hybrid_benchmark.rs + benches/der_ami.rs are declared targets — all
-# MUST stay listed or the published crate fails to build/package.
+# benches/der_ami.rs is a declared target — all MUST stay listed or the
+# published crate fails to build/package.
 include = [
   "src/**/*.rs",
   "src/models/manifest.toml",
   "src/models/signing.pub.base64",
   "schema/diarization-result-v1.json",
   "benches/der_ami.rs",
-  "examples/hybrid_benchmark.rs",
   "include/*.h",
   # Leading slash anchors to the package root — a bare name matches at ANY depth
   # (gitignore globbing), which would drag in every per-module README.md etc.
@@ -55,12 +55,13 @@ pre-release-replacements = [
 ]
 
 # default = [] is intentional: the published default graph is the ort-free
-# library core (BYO embedder + EnergyVad + Pipeline / StreamingPipeline).
+# library core (BYO embedder + EnergyVad + pipeline::LegacyPipeline /
+# StreamingPipeline).
 # docs.rs still documents the full ONNX / pipeline_v2 surface explicitly so
 # API pages are not empty of the production path.
 # TODO: drop the ort RC pin once ort 2.0.0 stable lands.
 [package.metadata.docs.rs]
-features = ["onnx", "segmentation", "embedder", "clusterer", "resegmentation", "download", "spectral"]
+features = ["onnx", "segmentation", "embedder", "clusterer", "resegmentation", "download", "spectral", "vbx", "attribution", "sortformer"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -69,20 +70,27 @@ crate-type = ["cdylib", "rlib"]
 default = []
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
-# C FFI bindings (ABI v3). Requires the full pipeline stack.
-ffi = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"]
+# Internal bundle: the full ONNX diarization stack (runtime, model downloads,
+# segmentation, embeddings, clustering, resegmentation) shared by the
+# ffi/cli/mcp front doors. src/pipeline_v2 is cfg-gated on the same set (with
+# a compile_error! backstop), so half-wired feature combos simply exclude it.
+# Not a consumer-facing entry point — enable one of the front doors instead.
+pipeline-full = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"]
+# C FFI bindings (ABI v3). Requires the full pipeline stack. Includes VBx so the
+# C ABI ships the same production default (pipeline v2 + VBx) as the CLI/MCP.
+ffi = ["pipeline-full", "vbx"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
 download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
 # CLI binary (polyvoice command). Includes VBx so the post-gate default path
 # (pipeline v2 + VBx) is available without an extra feature flag.
-cli = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "vbx", "dep:clap", "dep:clap_complete"]
+cli = ["pipeline-full", "vbx", "dep:clap", "dep:clap_complete"]
 
 # Multi-format audio decode (symphonia) + resampling to 16 kHz (rubato) for the
 # CLI / loading layer. Opt-in only — keeps the default library surface free of
 # media-codec deps. Rebuild the CLI with `--features "cli,audio-io"`.
 audio-io = ["dep:rubato", "dep:symphonia"]
 
-# Execution providers (forward `ort` features). Used by Pipeline implementations from M1+.
+# Execution providers (forward `ort` features). Used by the Pipeline implementations.
 coreml = ["onnx", "ort/coreml"]
 nnapi = ["onnx", "ort/nnapi"]
 xnnpack = ["onnx", "ort/xnnpack"]
@@ -104,8 +112,8 @@ spectral = ["dep:faer"]
 segmentation = []
 
 # ONNX-backed Embedder adapters (CAM++/ResNet34/ERes2NetV2) + docs.rs grouping.
-# The pure-Rust Embedder trait, EmbedderPool, and overlap mask are always
-# compiled (feature-free library BYO path). Enabling this feature alone adds
+# The pure-Rust Embedder trait and overlap mask are always compiled
+# (feature-free library BYO path). Enabling this feature alone adds
 # nothing without `onnx`; with `onnx` it exports CamPlusPlusExtractor etc.
 embedder = []
 
@@ -122,7 +130,7 @@ vbx = ["clusterer"]
 # v1.0 Overlap-aware post-clustering resegmentation pass.
 # Pure-Rust, wasm32-clean — does not require `onnx`. Operates on already-
 # computed speaker centroids and overlap-region embeddings supplied by the
-# caller (M6 Pipeline wires the embedder pool into this).
+# caller (the crate-root Pipeline wires the embedder pool into this).
 resegmentation = []
 
 # Optional NVIDIA Streaming Sortformer v2 E2E diarizer (≤4 speakers).
@@ -140,18 +148,6 @@ vad-earshot = ["dep:earshot"]
 # Pure-Rust, wasm32-clean — no onnx/model/IO. Operates only on TimeRange/SpeakerId.
 attribution = []
 
-# v1.0 Pipeline + Profile builder API. Requires the full M1–M5 stack — the
-# builder loads ONNX through ModelRegistry (download feature) for
-# Mobile/Balanced profiles. The module gates itself with a `compile_error!`
-# if onnx/segmentation/embedder/clusterer/resegmentation are missing, so
-# half-wired feature combos cannot ship.
-
-# Model profile bundles. M0 only emits metadata; CLI uses these to pick which
-# manifest entries to ensure(). M5 will introduce INT8 model variants.
-profile-mobile = []
-profile-balanced = []
-profile-all = ["profile-mobile", "profile-balanced"]
-
 # MCP stdio server (agent front door). Opt-in only — NEVER in default. Pulls
 # rmcp + schemars + tokio and the full diarization pipeline stack so the `diarize`
 # tool can run. `ort` is the SAME crate dependency as the core (polyvoice-mcp is a
@@ -159,12 +155,7 @@ profile-all = ["profile-mobile", "profile-balanced"]
 # automatically — no dual-runtime risk.
 # Agent MCP server: same production stack as `cli` (pipeline v2 + VBx default).
 mcp = [
-    "onnx",
-    "download",
-    "segmentation",
-    "embedder",
-    "clusterer",
-    "resegmentation",
+    "pipeline-full",
     "vbx",
     "dep:rmcp",
     "dep:schemars",
@@ -226,7 +217,6 @@ schemars = { version = "1.2.1", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std"], optional = true }
 
 [dev-dependencies]
-hound = "3.5"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 proptest = "1"
@@ -236,10 +226,6 @@ mockall = "0.13"
 assert_cmd = "2"
 predicates = "3"
 insta = { version = "1.47.2", features = ["json"] }
-
-[[example]]
-name = "hybrid_benchmark"
-required-features = ["onnx", "segmentation", "embedder", "clusterer", "resegmentation", "download"]
 
 [[bench]]
 name = "der_ami"

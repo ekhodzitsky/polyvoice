@@ -1,18 +1,11 @@
 //! K-Means++ clustering with automatic k selection via silhouette score.
 
-/// K-means++ result: labels + centroids + WCSS.
-pub struct KmeansResult {
-    pub labels: Vec<usize>,
-    pub centroids: Vec<Vec<f64>>,
-    pub wcss: f64,
-}
-
 /// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
 /// `pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize>`
 /// { ret.len() == embeddings.len() }
 /// K-means++ initialization + Lloyd's algorithm with deterministic seed.
 pub fn kmeans_pp(embeddings: &[Vec<f32>], k: usize, max_iter: usize) -> Vec<usize> {
-    kmeans_pp_with_seed(embeddings, k, max_iter, 42).labels
+    kmeans_pp_with_seed(embeddings, k, max_iter, 42)
 }
 
 fn kmeans_pp_with_seed(
@@ -20,32 +13,20 @@ fn kmeans_pp_with_seed(
     k: usize,
     max_iter: usize,
     seed: u64,
-) -> KmeansResult {
+) -> Vec<usize> {
     let n = embeddings.len();
     if n == 0 {
-        return KmeansResult {
-            labels: Vec::new(),
-            centroids: Vec::new(),
-            wcss: 0.0,
-        };
+        return Vec::new();
     }
     if k == 0 {
         // Defensive fallback: caller asked for zero clusters, treat as one.
-        return KmeansResult {
-            labels: vec![0; n],
-            centroids: Vec::new(),
-            wcss: 0.0,
-        };
+        return vec![0; n];
     }
     let dim = embeddings[0].len();
     if !embeddings.iter().all(|e| e.len() == dim) {
         // Defensive fallback: mixed dimensions would break distance math.
         // Return a single cluster rather than panicking.
-        return KmeansResult {
-            labels: vec![0; n],
-            centroids: Vec::new(),
-            wcss: 0.0,
-        };
+        return vec![0; n];
     }
     let k = k.min(n);
 
@@ -67,7 +48,7 @@ fn kmeans_pp_with_seed(
             }
         }
         let total: f64 = dists.iter().sum();
-        // Degenerate-seeding guard (mirrors src/spectral/mod.rs): when every
+        // Degenerate-seeding guard: when every
         // remaining point already sits on a chosen centroid (collapsed /
         // homogeneous embeddings) the cumulative-sum sampler would fall through
         // and pick duplicate centroids; a non-finite total would do the same.
@@ -131,21 +112,7 @@ fn kmeans_pp_with_seed(
         centroids = new_centroids;
     }
 
-    // Compute WCSS.
-    let wcss: f64 = embeddings
-        .iter()
-        .enumerate()
-        .map(|(i, emb)| {
-            let d = cosine_distance_f32_f64(emb, &centroids[labels[i]]);
-            d * d
-        })
-        .sum();
-
-    KmeansResult {
-        labels,
-        centroids,
-        wcss,
-    }
+    labels
 }
 
 fn cosine_distance_f32_f64(a: &[f32], b: &[f64]) -> f64 {
@@ -244,12 +211,13 @@ pub fn kmeans_auto_k(
     let k_max = k_max.max(k_min).min(n);
 
     // Precompute pairwise cosine distances once for silhouette.
+    let sims = crate::utils::pairwise_cosine_similarity_matrix(embeddings);
     let mut dists = vec![0.0f64; n * n];
     let mut total_dist = 0.0;
     let mut dist_count = 0usize;
     for i in 0..n {
         for j in (i + 1)..n {
-            let d = 1.0 - crate::utils::cosine_similarity(&embeddings[i], &embeddings[j]);
+            let d = 1.0 - sims[i * n + j];
             let d = d.max(0.0) as f64;
             dists[i * n + j] = d;
             dists[j * n + i] = d;
@@ -271,11 +239,11 @@ pub fn kmeans_auto_k(
         let mut trial_best_score = f64::NEG_INFINITY;
         let mut trial_best_labels = vec![0usize; n];
         for t in 0..trials.max(1) {
-            let result = kmeans_pp_with_seed(embeddings, k, max_iter, 42 + t as u64);
-            let score = silhouette_score_with_dists(n, &result.labels, &dists);
+            let labels = kmeans_pp_with_seed(embeddings, k, max_iter, 42 + t as u64);
+            let score = silhouette_score_with_dists(n, &labels, &dists);
             if score > trial_best_score {
                 trial_best_score = score;
-                trial_best_labels = result.labels;
+                trial_best_labels = labels;
             }
         }
         if trial_best_score > best_score {

@@ -9,8 +9,10 @@ the type foundation that all other modules build on.
 
 - `SpeakerId`, `SpeakerIdRemap`
 - `DiarizationConfig`, `ClusterConfig`, `WindowConfig`, `SpeechFilterConfig`
+- `ConfigError` (`DiarizationConfig::validate` — window geometry, cosine threshold, non-negative durations)
+- `DEFAULT_AHC_THRESHOLD` (single source for the shipped AHC cosine-threshold default)
 - `Profile`
-- `SampleRate`, `Confidence`, `Seconds`
+- `SampleRate`, `Confidence`
 - `TimeRange`, `Segment`, `SpeakerTurn`, `WordAlignment`
 - `DiarizationResult` (canonical v1: + `schema_version`, `audio`, `provenance`, `speakers[]`), `AudioMeta`, `Provenance`, `SpeakerSummary`
 - `remap_segments`, `remap_turns`

@@ -45,19 +45,80 @@ impl PowersetConfig {
     /// config. Only non-`None` meta fields replace the current values — stage
     /// defaults stay for anything the model/manifest did not carry.
     ///
+    /// Window geometry is overlaid as a pair and only when the result stays
+    /// valid (`0 < hop_secs <= window_secs`, positive sample rate, at least
+    /// one sample per window/hop): inconsistent model metadata is ignored in
+    /// favor of the current values so it cannot turn into a panic inside
+    /// `segment()`. Geometry written directly onto the public fields is
+    /// re-validated by `segment()` and reported as
+    /// [`SegmentationError::InvalidGeometry`].
+    ///
     /// Available when the `download` feature (models module) is enabled.
     #[cfg(feature = "download")]
     pub fn with_model_meta(mut self, meta: &crate::models::ModelConfigMeta) -> Self {
-        if let Some(sr) = meta.sample_rate {
+        if let Some(sr) = meta.sample_rate
+            && sr > 0
+        {
             self.sample_rate = sr;
         }
-        if let Some(w) = meta.window_secs {
-            self.window_secs = w;
-        }
-        if let Some(h) = meta.hop_secs {
-            self.hop_secs = h;
+        let candidate = PowersetConfig {
+            window_secs: meta.window_secs.unwrap_or(self.window_secs),
+            hop_secs: meta.hop_secs.unwrap_or(self.hop_secs),
+            sample_rate: self.sample_rate,
+            aggregation: self.aggregation.clone(),
+        };
+        if candidate.validate_geometry().is_ok() {
+            self.window_secs = candidate.window_secs;
+            self.hop_secs = candidate.hop_secs;
         }
         self
+    }
+
+    /// Validate the window geometry against the contract of
+    /// [`crate::window::WindowIter`] (used by `segment`): positive finite
+    /// durations, hop not larger than the window, and a sample rate that
+    /// turns both into at least one sample.
+    fn validate_geometry(&self) -> Result<(), SegmentationError> {
+        if self.sample_rate == 0 {
+            return Err(SegmentationError::InvalidGeometry {
+                detail: "sample_rate must be > 0".to_string(),
+            });
+        }
+        let window_secs = self.window_secs;
+        let hop_secs = self.hop_secs;
+        if !window_secs.is_finite() || window_secs <= 0.0 {
+            return Err(SegmentationError::InvalidGeometry {
+                detail: format!("window_secs must be finite and > 0, got {window_secs}"),
+            });
+        }
+        if !hop_secs.is_finite() || hop_secs <= 0.0 {
+            return Err(SegmentationError::InvalidGeometry {
+                detail: format!("hop_secs must be finite and > 0, got {hop_secs}"),
+            });
+        }
+        if hop_secs > window_secs {
+            return Err(SegmentationError::InvalidGeometry {
+                detail: format!("hop_secs ({hop_secs}) must be <= window_secs ({window_secs})"),
+            });
+        }
+        if self.window_samples() == 0 || self.hop_samples() == 0 {
+            return Err(SegmentationError::InvalidGeometry {
+                detail: format!(
+                    "window_secs ({window_secs}) / hop_secs ({hop_secs}) must each yield at \
+                     least one sample at sample_rate {}",
+                    self.sample_rate
+                ),
+            });
+        }
+        Ok(())
+    }
+
+    fn window_samples(&self) -> usize {
+        (self.window_secs * self.sample_rate as f32) as usize
+    }
+
+    fn hop_samples(&self) -> usize {
+        (self.hop_secs * self.sample_rate as f32) as usize
     }
 }
 
@@ -126,11 +187,11 @@ impl PowersetSegmenter {
     }
 
     fn window_samples(&self) -> usize {
-        (self.config.window_secs * self.config.sample_rate as f32) as usize
+        self.config.window_samples()
     }
 
     fn hop_samples(&self) -> usize {
-        (self.config.hop_secs * self.config.sample_rate as f32) as usize
+        self.config.hop_samples()
     }
 
     /// Run inference on a single 10-second window.
@@ -187,6 +248,7 @@ impl PowersetSegmenter {
 
 impl Segmenter for PowersetSegmenter {
     fn segment(&self, audio: &[f32]) -> Result<Vec<RawSegment>, SegmentationError> {
+        self.config.validate_geometry()?;
         if audio.len() < MIN_AUDIO_SAMPLES {
             return Err(SegmentationError::AudioTooShort {
                 actual_secs: audio.len() as f32 / self.config.sample_rate as f32,
@@ -220,5 +282,111 @@ impl Segmenter for PowersetSegmenter {
 
     fn supports_overlap(&self) -> bool {
         true
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_geometry_accepts_default() {
+        assert!(PowersetConfig::default().validate_geometry().is_ok());
+    }
+
+    #[test]
+    fn validate_geometry_rejects_zero_window() {
+        let config = PowersetConfig {
+            window_secs: 0.0,
+            ..Default::default()
+        };
+        let err = config.validate_geometry().unwrap_err();
+        assert!(matches!(err, SegmentationError::InvalidGeometry { .. }));
+    }
+
+    #[test]
+    fn validate_geometry_rejects_hop_larger_than_window() {
+        let config = PowersetConfig {
+            window_secs: 1.0,
+            hop_secs: 2.0,
+            ..Default::default()
+        };
+        let err = config.validate_geometry().unwrap_err();
+        match err {
+            SegmentationError::InvalidGeometry { detail } => {
+                assert!(detail.contains("hop_secs"), "got: {detail}");
+            }
+            other => panic!("expected InvalidGeometry, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_geometry_rejects_sub_sample_window() {
+        // Positive but truncates to zero samples at 16 kHz.
+        let config = PowersetConfig {
+            window_secs: 1e-9,
+            hop_secs: 1e-9,
+            ..Default::default()
+        };
+        let err = config.validate_geometry().unwrap_err();
+        assert!(matches!(err, SegmentationError::InvalidGeometry { .. }));
+    }
+
+    #[test]
+    fn validate_geometry_rejects_zero_sample_rate() {
+        let config = PowersetConfig {
+            sample_rate: 0,
+            ..Default::default()
+        };
+        let err = config.validate_geometry().unwrap_err();
+        assert!(matches!(err, SegmentationError::InvalidGeometry { .. }));
+    }
+
+    #[cfg(feature = "download")]
+    #[test]
+    fn with_model_meta_applies_valid_geometry() {
+        let meta = crate::models::ModelConfigMeta {
+            sample_rate: Some(16000),
+            window_secs: Some(5.0),
+            hop_secs: Some(0.5),
+            ..Default::default()
+        };
+        let config = PowersetConfig::default().with_model_meta(&meta);
+        assert!((config.window_secs - 5.0).abs() < 1e-6);
+        assert!((config.hop_secs - 0.5).abs() < 1e-6);
+    }
+
+    #[cfg(feature = "download")]
+    #[test]
+    fn with_model_meta_ignores_invalid_geometry() {
+        let default = PowersetConfig::default();
+        // hop > window after overlay: the pair must be rejected wholesale.
+        let meta = crate::models::ModelConfigMeta {
+            window_secs: Some(1.0),
+            hop_secs: Some(2.0),
+            ..Default::default()
+        };
+        let config = PowersetConfig::default().with_model_meta(&meta);
+        assert!((config.window_secs - default.window_secs).abs() < 1e-6);
+        assert!((config.hop_secs - default.hop_secs).abs() < 1e-6);
+
+        // Non-positive window: rejected as well.
+        let meta = crate::models::ModelConfigMeta {
+            window_secs: Some(0.0),
+            ..Default::default()
+        };
+        let config = PowersetConfig::default().with_model_meta(&meta);
+        assert!((config.window_secs - default.window_secs).abs() < 1e-6);
+
+        // Zero sample rate: rejected, valid hop still applies.
+        let meta = crate::models::ModelConfigMeta {
+            sample_rate: Some(0),
+            hop_secs: Some(0.5),
+            ..Default::default()
+        };
+        let config = PowersetConfig::default().with_model_meta(&meta);
+        assert_eq!(config.sample_rate, default.sample_rate);
+        assert!((config.hop_secs - 0.5).abs() < 1e-6);
     }
 }

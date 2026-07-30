@@ -5,8 +5,10 @@ module: src/spectral
 level: subsystem
 layer: algorithm
 purpose: >
-  Owns spectral clustering implementation using eigendecomposition via faer.
-  Does NOT own the NME-SC adapter (clusterer.rs) or generic clustering traits.
+  Owns the shared spectral-graph math (k-NN cosine affinity → normalized
+  Laplacian → eigenspectrum) and the NME-SC eigengap k selection behind
+  NmeScClusterer. Does NOT own the NME-SC adapter (clusterer) or generic
+  clustering traits.
 status: stable
 owners:
   - polyvoice-core
@@ -30,52 +32,59 @@ authority:
     - cross-workcell write
     - public surface migration
 surface:
-  - name: spectral_cluster
-    kind: function
-    visibility: public
+  - name: SpectralGraph
+    kind: struct
+    visibility: crate
     contract: >
-      Spectral clustering on embeddings: affinity matrix → Laplacian →
-      eigendecomposition → k-means on eigenvectors. Returns cluster labels.
+      k-NN cosine affinity → normalized Laplacian → sorted eigenspectrum,
+      plus the row-normalized spectral embedding over the first k
+      eigenvectors. Single graph-construction path.
     proof:
       kind: unit-test
-      target: src/spectral::mod::tests
+      target: src/clusterer::mod::nme_sc_tests
+      command: cargo test --lib clusterer --features "clusterer,spectral"
+  - name: select_k_by_normalized_eigengap
+    kind: function
+    visibility: crate
+    contract: >
+      NME-SC normalized-maximum eigengap k selection over the ascending
+      normalized-Laplacian eigenvalues. Search width is capped by
+      MAX_EIGENGAP_CANDIDATES (20).
+    proof:
+      kind: unit-test
+      target: src/spectral::mod::tests::eigengap_selects_k_on_known_sequence
       command: cargo test --lib spectral --features spectral
 dependencies:
   internal:
     - module: utils
       scope: utility
-      reason: cosine_similarity for affinity matrix.
+      reason: pairwise_cosine_similarity_matrix for the affinity graph.
   external:
     - name: faer
       scope: math
-      reason: SVD and eigendecomposition for spectral clustering.
+      reason: Eigendecomposition of the normalized Laplacian.
 consumers:
   - path: src/clusterer/mod.rs
     uses:
-      - spectral_cluster
-invariants:
-  - id: labels-contiguous
-    rule: Output labels are contiguous integers starting from 0.
-    proof:
-      kind: unit-test
-      target: src/spectral::mod::tests
-      command: cargo test --lib spectral --features spectral
+      - SpectralGraph
+      - select_k_by_normalized_eigengap
 verification:
   pre_change:
     - cargo test --lib spectral --features spectral
   full:
     - cargo test --lib spectral --features spectral
+    - cargo test --lib clusterer --features "clusterer,spectral"
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:
     - Tuning affinity matrix parameters.
     - Adding normalization strategies.
   forbidden_mutations:
-    - Removing spectral_cluster or changing its signature.
+    - Changing the crate-private surface without updating NmeScClusterer.
   escalation:
-    - Changes to spectral_cluster signature or output semantics.
+    - Changes to graph construction or eigengap semantics.
 ---
 
 # src/spectral
 
-Spectral clustering using eigendecomposition (faer).
+Spectral graph math using eigendecomposition (faer), consumed by NmeScClusterer.

@@ -40,14 +40,28 @@ surface:
       kind: unit-test
       target: src/kmeans::mod::tests
       command: cargo test --lib kmeans
+  - name: kmeans_auto_k
+    kind: function
+    visibility: public
+    contract: >
+      Automatic k selection in [k_min, k_max] via silhouette score over a
+      precomputed pairwise cosine-distance matrix, `trials` runs per k.
+    proof:
+      kind: unit-test
+      target: src/kmeans::mod::tests
+      command: cargo test --lib kmeans
 dependencies:
-  internal: []
+  internal:
+    - module: utils
+      scope: utility
+      reason: cosine_similarity_f32_f64, pairwise_cosine_similarity_matrix, XorShift64Star.
   external: []
 
 consumers:
-  - path: src/spectral/mod.rs
+  - path: src/clusterer/mod.rs
     uses:
       - kmeans_pp
+      - kmeans_auto_k
 invariants:
   - id: labels-contiguous
     rule: Output labels are in 0..k.
@@ -99,7 +113,7 @@ agent_policy:
     - Tuning convergence criteria.
     - Optimizing distance computations.
   forbidden_mutations:
-    - Changing kmeans_pp signature without updating spectral.rs.
+    - Changing kmeans_pp signature without updating the consumers above.
   escalation:
     - Changes to output semantics or signature.
 ---

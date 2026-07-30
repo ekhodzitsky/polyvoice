@@ -43,6 +43,8 @@ impl Default for VbxConfig {
     fn default() -> Self {
         // Starting point from the speakrs WeSpeaker recipe; retune on dev, never test.
         // loop_prob defaults to 0.0 (GMM) so the speakrs parity fixtures hold.
+        // The shipped clusterer tuning (fa=0.3, loop_prob=0.9) lives in
+        // VbxClustererConfig::default — the single source of truth for it.
         Self {
             fa: 0.07,
             fb: 0.8,
@@ -343,6 +345,85 @@ pub fn hard_labels(gamma: &Array2<f32>) -> Vec<usize> {
 use crate::clusterer::plda::PldaModel;
 use crate::clusterer::{Clusterer, ClustererError};
 
+/// Full configuration for [`VbxClusterer`]: the VBx inference hyperparameters
+/// plus the clusterer-level knobs (AHC seed threshold, embedding rescale,
+/// short-segment filter, cAHC-ASC stop).
+///
+/// [`VbxClustererConfig::default`] is the dev-calibrated production tuning and
+/// the single source of truth for it — [`VbxClusterer::from_dir`] uses it
+/// verbatim, so the public constructor is deterministic in its arguments. The
+/// nested [`VbxConfig`] here deliberately differs from [`VbxConfig::default`]:
+/// `fa = 0.3` and `loop_prob = 0.9` are the polyvoice dev optimum, while the
+/// bare `VbxConfig` default keeps the upstream speakrs values (`fa = 0.07`,
+/// GMM mode) pinned by the parity fixtures.
+#[derive(Debug, Clone, Copy)]
+pub struct VbxClustererConfig {
+    /// VBx variational-inference hyperparameters.
+    pub vbx: VbxConfig,
+    /// Cosine-similarity threshold for the over-segmenting AHC seed. A higher
+    /// cutoff yields more seed clusters that the VBx prior then prunes.
+    pub ahc_threshold: f32,
+    /// Scale applied to the (L2-normalized) input embeddings before the PLDA
+    /// transform, restoring the raw WeSpeaker magnitude the PLDA
+    /// mean-centering expects.
+    pub emb_scale: f32,
+    /// Exclude embeddings shorter than this many seconds from AHC/VB; reassign
+    /// afterward by nearest PLDA-feature centroid. `0.0` disables filtering.
+    pub min_embedding_secs: f64,
+    /// cAHC-ASC stop for the AHC seed: refuse to merge two clusters that both
+    /// already have at least this many members. `0` disables.
+    pub ahc_established_min_members: usize,
+}
+
+impl Default for VbxClustererConfig {
+    fn default() -> Self {
+        Self {
+            vbx: VbxConfig {
+                fa: 0.3,
+                loop_prob: 0.9,
+                ..VbxConfig::default()
+            },
+            ahc_threshold: 0.5,
+            emb_scale: 4.88,
+            // cVBx short-segment recipe.
+            min_embedding_secs: 1.6,
+            ahc_established_min_members: 0,
+        }
+    }
+}
+
+impl VbxClustererConfig {
+    /// Explicit opt-in for offline tuning: overlay the
+    /// `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,AHC_ASC_MEMBERS}`
+    /// env vars onto [`Self::default`]. Missing or malformed values keep the
+    /// default. Nothing in the library calls this implicitly — production
+    /// construction (`from_dir`, the pipeline builder) is env-free.
+    pub fn from_env() -> Self {
+        fn parse_or<T: std::str::FromStr>(name: &str, fallback: T) -> T {
+            std::env::var(name)
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(fallback)
+        }
+        let d = Self::default();
+        Self {
+            vbx: VbxConfig {
+                fa: parse_or("POLYVOICE_VBX_FA", d.vbx.fa),
+                fb: parse_or("POLYVOICE_VBX_FB", d.vbx.fb),
+                loop_prob: parse_or("POLYVOICE_VBX_LOOP_PROB", d.vbx.loop_prob),
+                ..d.vbx
+            },
+            ahc_threshold: parse_or("POLYVOICE_VBX_AHC_THRESHOLD", d.ahc_threshold),
+            emb_scale: parse_or("POLYVOICE_VBX_EMB_SCALE", d.emb_scale),
+            min_embedding_secs: parse_or("POLYVOICE_VBX_MIN_EMB_SECS", d.min_embedding_secs),
+            ahc_established_min_members: parse_or(
+                "POLYVOICE_VBX_AHC_ASC_MEMBERS",
+                d.ahc_established_min_members,
+            ),
+        }
+    }
+}
+
 /// VBx clusterer: PLDA-transform 256-d embeddings, seed with an over-segmented
 /// AHC pass, then run VBx variational inference whose prior auto-determines the
 /// speaker count. Implements the [`Clusterer`] trait; embeddings are assumed to
@@ -423,72 +504,37 @@ impl VbxClusterer {
     /// `scripts/build-vbx-plda.py`. This is the path shipped builds use (the
     /// directory is resolved through the model registry / `--vbx-plda-dir`).
     ///
-    /// Hyperparameters default to the dev-calibrated optimum (fa=0.3,
-    /// loop_prob=0.9 i.e. the canonical forward-backward VBx, ahc_threshold=0.5,
-    /// emb_scale=4.88, min_embedding_secs=1.6); the
-    /// `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,AHC_ASC_MEMBERS}`
-    /// env vars override each one for offline tuning. One global set — never
-    /// branch on dataset name.
+    /// Uses [`VbxClustererConfig::default`] verbatim (fa=0.3, loop_prob=0.9
+    /// i.e. the canonical forward-backward VBx, ahc_threshold=0.5,
+    /// emb_scale=4.88, min_embedding_secs=1.6) — one global set, never branched
+    /// on dataset name, and no env reads. For explicit overrides use
+    /// [`Self::from_dir_with_config`] (e.g. with [`VbxClustererConfig::from_env`]
+    /// for offline tuning).
     pub fn from_dir(
         plda_dir: &std::path::Path,
         max_speakers: usize,
     ) -> Result<Self, ClustererError> {
-        let plda = PldaModel::from_dir(plda_dir).map_err(|e| ClustererError::AlgorithmFailed {
-            detail: format!("load PLDA from {}: {e}", plda_dir.display()),
-        })?;
-        // Over-init seed threshold: higher cosine cutoff → more seed clusters that
-        // VBx then prunes (the prior drives the final count).
-        let ahc_threshold = std::env::var("POLYVOICE_VBX_AHC_THRESHOLD")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.5);
-        // fa=0.3 is the polyvoice dev-calibrated optimum (VbxConfig::default keeps
-        // the upstream 0.07 the speakrs parity fixtures were generated with).
-        let config = VbxConfig {
-            fa: std::env::var("POLYVOICE_VBX_FA")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0.3),
-            fb: std::env::var("POLYVOICE_VBX_FB")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or_else(|| VbxConfig::default().fb),
-            // Canonical forward-backward VBx (temporal smoothing); 0 → GMM update.
-            loop_prob: std::env::var("POLYVOICE_VBX_LOOP_PROB")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0.9),
-            ..VbxConfig::default()
-        };
-        let emb_scale = std::env::var("POLYVOICE_VBX_EMB_SCALE")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(4.88);
-        // cVBx short-segment filter default (1.6 s); set 0 to disable.
-        let min_embedding_secs = std::env::var("POLYVOICE_VBX_MIN_EMB_SECS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(1.6);
-        let ahc_established_min_members = std::env::var("POLYVOICE_VBX_AHC_ASC_MEMBERS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        Ok(
-            Self::new(plda, config, ahc_threshold, max_speakers, 128, emb_scale)
-                .with_min_embedding_secs(min_embedding_secs)
-                .with_ahc_established_min_members(ahc_established_min_members),
-        )
+        Self::from_dir_with_config(plda_dir, max_speakers, VbxClustererConfig::default())
     }
 
-    /// Construct from the `POLYVOICE_VBX_PLDA_DIR` env var (dev wiring). Shipped
-    /// builds pass the resolved directory to [`VbxClusterer::from_dir`] instead.
-    pub fn from_env(max_speakers: usize) -> Result<Self, ClustererError> {
-        let dir = std::env::var("POLYVOICE_VBX_PLDA_DIR").map_err(|_| {
-            ClustererError::AlgorithmFailed {
-                detail: "POLYVOICE_VBX_PLDA_DIR not set".to_owned(),
-            }
-        })?;
-        Self::from_dir(std::path::Path::new(&dir), max_speakers)
+    /// [`Self::from_dir`] with an explicit configuration in place of the
+    /// dev-calibrated defaults.
+    pub fn from_dir_with_config(
+        plda_dir: &std::path::Path,
+        max_speakers: usize,
+        config: VbxClustererConfig,
+    ) -> Result<Self, ClustererError> {
+        let plda = PldaModel::from_dir(plda_dir)?;
+        Ok(Self::new(
+            plda,
+            config.vbx,
+            config.ahc_threshold,
+            max_speakers,
+            128,
+            config.emb_scale,
+        )
+        .with_min_embedding_secs(config.min_embedding_secs)
+        .with_ahc_established_min_members(config.ahc_established_min_members))
     }
 
     /// Ensure the six PLDA `.npy` files via the model registry (SHA-256 verified
@@ -511,10 +557,11 @@ impl VbxClusterer {
     }
 
     /// When embeddings come from dense non-contiguous windows, force GMM-VBx
-    /// (HMM self-loop assumption is invalid). Explicit env override still wins
-    /// if `POLYVOICE_VBX_LOOP_PROB` is set.
+    /// (the HMM self-loop assumption is invalid there). Windowed extract always
+    /// wins over the configured `loop_prob`; run HMM-VBx by embedding
+    /// contiguous per-segment units instead.
     pub fn auto_gmm_for_windowed(mut self, windowed: bool) -> Self {
-        if windowed && std::env::var("POLYVOICE_VBX_LOOP_PROB").is_err() {
+        if windowed {
             self.config = self.config.gmm();
         }
         self
@@ -555,16 +602,13 @@ impl VbxClusterer {
         let labels_kept = self.cluster_kept(&kept_embs)?;
 
         if short.is_empty() {
-            // Reconstruct full order when kept is a proper subset without short
-            // (should not happen) or kept is identity.
-            if kept.len() == embeddings.len() && kept.iter().enumerate().all(|(i, &k)| i == k) {
-                return Ok(labels_kept);
-            }
-            let mut full = vec![0usize; embeddings.len()];
-            for (&idx, &lab) in kept.iter().zip(labels_kept.iter()) {
-                full[idx] = lab;
-            }
-            return Ok(full);
+            // `partition_by_min_duration` partitions 0..n into kept ∪ short,
+            // so an empty `short` means `kept` is exactly 0..n and the kept
+            // labels already cover every embedding in order.
+            debug_assert!(
+                kept.len() == embeddings.len() && kept.iter().enumerate().all(|(i, &k)| i == k)
+            );
+            return Ok(labels_kept);
         }
 
         // PLDA features for reassignment of short embeddings.
@@ -669,10 +713,14 @@ mod tests {
             Ok(_) => panic!("missing PLDA dir must error"),
             Err(e) => e,
         };
+        assert!(
+            matches!(err, ClustererError::Plda(_)),
+            "expected the typed PLDA error, got {err:?}"
+        );
         let msg = format!("{err}");
         assert!(
-            msg.contains("load PLDA"),
-            "error should name the PLDA load: {msg}"
+            msg.contains("/no/such/plda/dir"),
+            "error should name the PLDA dir: {msg}"
         );
     }
 

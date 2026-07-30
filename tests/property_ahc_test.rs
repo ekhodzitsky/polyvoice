@@ -68,7 +68,8 @@ proptest! {
             }),
     ) {
         let _ = (count, dim);
-        let (labels, threshold) = polyvoice::ahc::agglomerative_cluster_auto(&embeddings);
+        let (labels, threshold) =
+            polyvoice::ahc::agglomerative_cluster_auto_max_clusters(&embeddings, 0);
         prop_assert_eq!(labels.len(), count);
         prop_assert!((0.0..=1.0).contains(&threshold),
             "auto threshold must be in [0, 1], got {}", threshold);

@@ -36,10 +36,12 @@ surface:
     visibility: public
     contract: >
       ONNX-backed Silero VAD. Implements VoiceActivityDetector.
-      Requires 512-sample frames at 16kHz. The session is an OrtSession built
-      via onnx::build_session_with_ep (InferenceRuntime); this module does not
-      import ort::. new() keeps the historical CPU default; with_ep() selects
-      an execution provider explicitly.
+      Requires 512-sample frames at 16kHz. The session is a RuntimeSession
+      built via onnx::build_session_with_ep (InferenceRuntime); this module
+      does not import ort::. new() keeps the historical CPU default;
+      with_ep() selects an execution provider explicitly. Construction
+      failures are the typed SileroVadError (ZeroChunkSize / Session),
+      never anyhow.
     proof:
       kind: unit-test
       target: src/silero_vad::mod::tests
@@ -57,13 +59,7 @@ consumers:
   - path: src/ffi/mod.rs
     uses:
       - SileroVad
-  - path: tests/e2e_smoke_test.rs
-    uses:
-      - SileroVad
   - path: tests/der_regression_test.rs
-    uses:
-      - SileroVad
-  - path: tests/der_ami_baseline_test.rs
     uses:
       - SileroVad
 invariants:
@@ -78,7 +74,7 @@ verification:
     - cargo test --lib silero_vad --features onnx
   full:
     - cargo test --lib silero_vad --features onnx
-    - cargo test --test e2e_smoke_test --features onnx,download
+    - cargo test --test der_regression_test --features onnx,download
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:

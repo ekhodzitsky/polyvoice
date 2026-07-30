@@ -8,8 +8,7 @@ use serde::{Deserialize, Serialize};
 /// `Custom` defers all model selection to the caller and is used by `PipelineBuilder`
 /// when individual `Segmenter`/`Embedder`/`Clusterer` instances are supplied directly.
 ///
-/// Added in v0.6 (M0).
-/// §5.1 for the full motivation.
+/// Added in v0.6.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Profile {
     Mobile,
@@ -32,7 +31,7 @@ impl Profile {
     pub const fn default_threshold(self) -> f32 {
         match self {
             Profile::Mobile => 0.55,
-            Profile::Balanced => 0.45,
+            Profile::Balanced => super::config::DEFAULT_AHC_THRESHOLD,
             Profile::Custom => 0.5,
         }
     }

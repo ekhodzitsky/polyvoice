@@ -7,7 +7,7 @@ default path.
 ## Accuracy / scoring
 
 - [ ] **Modern scoring beyond VBx.** Pluggable scoring backend + AS-norm domain
-      profiles on top of PLDA (see roadmap AS-norm work).
+      profiles on top of PLDA.
 - [ ] **VBx/HMM-style resegmentation** upgrading the centroid-nearest pass for
       overlap regions.
 - [ ] **Calibrated binarization** of segmentation posteriors before clustering
@@ -23,7 +23,5 @@ default path.
 
 ## Hygiene
 
-- [ ] Fold or soft-deprecate `HybridPipeline` once dense windows + powerset
-      speech regions are fully covered by main `Pipeline` knobs + docs.
 - [ ] Optional: split pure orchestration from ONNX builder adapters so
       `Profile::Custom` mock tests do not need the full feature soup.

@@ -2,7 +2,7 @@
 use super::frame::{
     DerResult, Region, build_collar_mask, build_speaker_frames, der_core, optimal_speaker_mapping,
 };
-use crate::types::SpeakerTurn;
+use crate::types::{SpeakerTurn, TimeRange};
 use std::collections::HashMap;
 
 /// Per-speaker recall: how much of one reference speaker's speech the mapped
@@ -68,8 +68,6 @@ fn compute_per_speaker_recall(
         return Vec::new();
     }
 
-    let resolution = 0.01;
-    const MAX_FRAMES: usize = 24 * 3600 * 100;
     let max_time = reference
         .iter()
         .chain(hypothesis.iter())
@@ -78,11 +76,11 @@ fn compute_per_speaker_recall(
     if !max_time.is_finite() || max_time < 0.0 {
         return Vec::new();
     }
-    let n_frames = ((max_time / resolution).ceil() as usize + 1).min(MAX_FRAMES);
+    let n_frames = TimeRange::grid_frame_count(max_time);
 
-    let collar_mask = build_collar_mask(reference, collar, resolution, n_frames);
-    let ref_frames = build_speaker_frames(reference, resolution, n_frames);
-    let hyp_frames = build_speaker_frames(hypothesis, resolution, n_frames);
+    let collar_mask = build_collar_mask(reference, collar, n_frames);
+    let ref_frames = build_speaker_frames(reference, n_frames);
+    let hyp_frames = build_speaker_frames(hypothesis, n_frames);
     let mapping = optimal_speaker_mapping(&ref_frames, &hyp_frames, &collar_mask);
 
     // Invert the 1-to-1 hyp->ref mapping to ref->hyp.

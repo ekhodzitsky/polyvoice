@@ -1,8 +1,9 @@
 #![no_main]
-#![allow(deprecated)] // exercises soft-deprecated SpeakerCluster surface
+#![allow(deprecated)] // exercises deprecated SpeakerCluster surface
 
 use libfuzzer_sys::fuzz_target;
-use polyvoice::{ClusterConfig, SpeakerCluster};
+use polyvoice::ClusterConfig;
+use polyvoice::cluster::SpeakerCluster;
 
 fuzz_target!(|data: &[u8]| {
     // Convert bytes to f32 embedding (each 4 bytes).

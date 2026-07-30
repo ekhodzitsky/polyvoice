@@ -66,40 +66,15 @@ pub fn reassign_short_by_cosine(
             out[idx] = lab;
         }
     }
-    // One representative embedding per distinct kept label (first member).
+    // L2-normalized centroid per distinct kept label; slots with no members
+    // stay zero and are skipped by the `counts` check below.
     let max_lab = kept_labels.iter().copied().max().unwrap_or(0);
-    let mut rep: Vec<Option<usize>> = vec![None; max_lab + 1];
-    for (&idx, &lab) in kept.iter().zip(kept_labels.iter()) {
-        if idx < n && rep[lab].is_none() {
-            rep[lab] = Some(idx);
-        }
-    }
-    // Prefer centroids over a single representative for more stable assignment.
-    let dim = embeddings.first().map(Vec::len).unwrap_or(0);
-    let mut centroids = vec![vec![0.0f32; dim]; max_lab + 1];
+    let centroids =
+        crate::utils::normalized_mean_centroids(embeddings, kept, kept_labels, max_lab + 1);
     let mut counts = vec![0usize; max_lab + 1];
     for (&idx, &lab) in kept.iter().zip(kept_labels.iter()) {
-        if idx >= n || lab > max_lab {
-            continue;
-        }
-        for (a, &x) in centroids[lab].iter_mut().zip(embeddings[idx].iter()) {
-            *a += x;
-        }
-        counts[lab] += 1;
-    }
-    for (lab, c) in centroids.iter_mut().enumerate() {
-        if counts[lab] == 0 {
-            continue;
-        }
-        let inv = 1.0 / counts[lab] as f32;
-        for v in c.iter_mut() {
-            *v *= inv;
-        }
-        let norm = c.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 1e-12 {
-            for v in c.iter_mut() {
-                *v /= norm;
-            }
+        if idx < n && lab <= max_lab {
+            counts[lab] += 1;
         }
     }
     for &idx in short {

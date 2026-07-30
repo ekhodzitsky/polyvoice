@@ -29,14 +29,12 @@ pub enum SortformerError {
          got {requested}. Prefer the VBx clusterer path for meetings with more speakers"
     )]
     MaxSpeakersExceeded { requested: usize },
-    #[error("Sortformer requires 16 kHz mono audio; got sample_rate={sample_rate}")]
-    UnsupportedSampleRate { sample_rate: u32 },
     #[error("feature extraction failed: {0}")]
-    Features(String),
+    Features(#[from] realfft::FftError),
     #[error("inference failed: {0}")]
-    Inference(String),
+    Inference(#[from] crate::onnx::InferenceError),
     #[error("model load failed: {0}")]
-    Load(String),
+    Load(#[from] crate::onnx::OnnxError),
     #[error("missing ONNX output '{name}' (available: {available:?})")]
     MissingOutput {
         name: &'static str,

@@ -1,59 +1,14 @@
 //! Library-mode BYO embedder path: no onnx feature, no network, no model files.
 
 use polyvoice::{
-    ClusterConfig, DiarizationConfig, Embedder, EmbedderError, EnergyVad, Pipeline, VadConfig,
+    ClusterConfig, DiarizationConfig, Embedder, EmbedderError, EnergyVad, VadConfig,
+    pipeline::LegacyPipeline,
     streaming::{LatencyPreset, StreamingParams, StreamingPipeline},
     types::WindowConfig,
 };
 
-/// Alternating unit axes — deterministic two-speaker clustering without a model.
-struct AxisEmbedder {
-    dim: usize,
-    flip: std::sync::atomic::AtomicUsize,
-}
-
-impl AxisEmbedder {
-    fn new(dim: usize) -> Self {
-        assert!(dim >= 2);
-        Self {
-            dim,
-            flip: std::sync::atomic::AtomicUsize::new(0),
-        }
-    }
-}
-
-impl Embedder for AxisEmbedder {
-    fn dim(&self) -> usize {
-        self.dim
-    }
-
-    fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-        if audio.is_empty() {
-            return Err(EmbedderError::AudioTooShort {
-                actual_secs: 0.0,
-                min_secs: 0.01,
-            });
-        }
-        let n = self.flip.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let mut v = vec![0.0f32; self.dim];
-        if n.is_multiple_of(2) {
-            v[0] = 1.0;
-        } else {
-            v[1] = 1.0;
-        }
-        Ok(v)
-    }
-}
-
-fn speech_pcm(secs: f32, sr: u32) -> Vec<f32> {
-    let n = (secs * sr as f32) as usize;
-    (0..n)
-        .map(|i| {
-            let t = i as f32 / sr as f32;
-            0.3 * (2.0 * std::f32::consts::PI * 300.0 * t).sin()
-        })
-        .collect()
-}
+mod common;
+use common::{AxisEmbedder, speech_pcm};
 
 fn short_window_config() -> DiarizationConfig {
     DiarizationConfig {
@@ -77,7 +32,7 @@ fn offline_custom_embedder_finds_multiple_speakers() {
     let config = short_window_config();
     let vad_config = VadConfig::default();
     let mut vad = EnergyVad::new(-40.0, sr, vad_config.frame_size);
-    let result = Pipeline::new(config, vad_config)
+    let result = LegacyPipeline::new(config, vad_config)
         .run(&samples, &AxisEmbedder::new(32), &mut vad)
         .expect("pipeline");
     assert!(

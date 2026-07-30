@@ -1,10 +1,10 @@
 //! v1.0 OverlapResegmenter — overlap-aware post-clustering pass.
 //!
-//! Added in v0.6 (M4).
-//!
 //! Pure Rust, wasm32-clean. Operates on already-computed speaker centroids and
-//! overlap-region embeddings supplied by the caller. M6 (`Pipeline`) wires the
-//! `EmbedderPool` and `apply_overlap_mask` into this.
+//! overlap-region embeddings supplied by the caller: `pipeline_v2::Pipeline`
+//! computes them with its own `Embedder` (masking overlap spans via
+//! `crate::embedder::apply_overlap_mask`) and passes them in as
+//! [`OverlapRegionInput`]s.
 
 use crate::types::{SpeakerId, SpeakerTurn, TimeRange};
 
@@ -18,7 +18,7 @@ const TIME_RANGE_EPS_SECS: f64 = 1e-6;
 /// list of `SpeakerTurn`s where overlap regions may produce two turns over the
 /// same time range with different speakers.
 ///
-/// In v1.0 (M4) the polyvoice crate introduces `Resegmenter` as the canonical
+/// In v1.0 the polyvoice crate introduces `Resegmenter` as the canonical
 /// trait. The legacy `crate::overlap::detect_overlaps` remains as an
 /// interval-only helper unrelated to this pass.
 pub trait Resegmenter: Send + Sync {
@@ -195,7 +195,7 @@ pub fn extract_overlap_time_ranges(
 /// cluster centroid (by cosine similarity) above a configurable threshold and
 /// minimum duration.
 ///
-/// Typical usage (from `Pipeline` in M6):
+/// Typical usage (from `Pipeline`):
 ///
 /// ```rust,ignore
 /// let r = OverlapResegmenter::default();
