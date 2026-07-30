@@ -36,19 +36,19 @@
     "profile": "balanced",
     "pipeline": "v2",
     "clusterer": "vbx",
-    "der_collar_0_25": 17.66,
-    "der_no_collar": 25.17,
-    "der_collar_macro": 16.86,
-    "der_collar_micro": 17.66,
-    "der_no_collar_macro": 24.12,
-    "der_no_collar_micro": 25.17,
-    "miss": 7.69,
-    "false_alarm": 1.7,
-    "confusion": 7.47,
+    "der_collar_0_25": 15.71,
+    "der_no_collar": 23.42,
+    "der_collar_macro": 15.24,
+    "der_collar_micro": 15.71,
+    "der_no_collar_macro": 22.66,
+    "der_no_collar_micro": 23.42,
+    "miss": 7.44,
+    "false_alarm": 1.75,
+    "confusion": 6.05,
     "speaker_count": {
-      "exact": 3,
+      "exact": 2,
       "plus_minus_1": 3,
-      "off_by_2_or_more": 10
+      "off_by_2_or_more": 11
     },
     "tolerance": 1.5,
     "model_versions": {
@@ -56,8 +56,8 @@
       "embedder": "wespeaker_resnet34",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational \u2014 full 16-meeting AMI Mix-Headset gate 2026-07-25; pipeline v2 + VBx. CLI default in 0.11. micro no-collar 25.17% / collar 17.66%.",
-    "_filled_by": "benchmarks/results/full-der-2026-07-25/v2-vbx-ami-test-16.json"
+    "_status": "operational \u2014 full 16-meeting AMI Mix-Headset gate 2026-07-25; pipeline v2 + VBx. CLI default in 0.11. Re-measured 2026-07-30 with the 2.0s powerset window hop (CPU provider): micro no-collar 23.42% / collar 15.71% (was 25.17% / 17.66% at 1.0s hop).",
+    "_filled_by": "benchmarks/results/powerset-hop2-2026-07-30/v2-vbx-ami-test-16.json"
   },
   "voxconverse_dev": {
     "files": null,
