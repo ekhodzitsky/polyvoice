@@ -40,3 +40,6 @@ path = "fuzz_targets/fuzz_cluster_assign.rs"
 test = false
 doc = false
 bench = false
+
+[lints.clippy]
+unwrap_used = "deny"
