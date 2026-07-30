@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+- **~3× faster pipeline v2 end-to-end.** Powerset segmentation and embedding
+  no longer serialize on a single ONNX session. The segmenter runs its 10-s
+  windows across a session pool (new `PowersetConfig.pool_size`, default
+  `clamp(cores,1,4)`, each session gets a fair-share
+  `available_parallelism / pool_size` intra-op threads), and
+  `embed_primary_segments` embeds all units in one `embed_batch` fanned out
+  across the embedder pool instead of a sequential per-unit loop.
+  `parallel_embed_batch` now caps its thread count at the pool size, so spare
+  threads no longer spin in the pool's blocking checkout. AMI EN2002a
+  (35.7 min), M1 Pro: RTFx 11.9 → 35.4 on the CPU provider (segmentation
+  107.8 → 34.5 s, embedding 71.8 → 26.0 s), DER bit-identical.
 - **~3.6× faster embedding extraction on CPU.** `FbankOnnxExtractor` pool
   sessions previously pinned `intra_threads(1)`, leaving every core but one
   idle on single-file runs. Sessions now get a fair share of the machine
