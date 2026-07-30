@@ -13,8 +13,8 @@ Polyvoice positions itself as a **pure-Rust, CPU-only, MIT-licensed, ungated** s
 | License | MIT (code and shipped models) |
 | Deployment | CPU-first, ~30 MB, no Python runtime |
 | Bindings | Rust library, Python (maturin), C FFI, CLI, MCP server |
-| Streaming | First-class `OnlineDiarizer` |
-| DER benchmark | 18.5% on VoxConverse-test (collar 0, overlap-scored) |
+| Streaming | First-class `streaming::StreamingPipeline` |
+| DER benchmark | 15.4% on VoxConverse-test (collar 0, overlap-scored; v2+VBx default, 2026-07) |
 
 ## Competitor comparison
 
@@ -70,11 +70,11 @@ Polyvoice positions itself as a **pure-Rust, CPU-only, MIT-licensed, ungated** s
 
 Polyvoice owns a defensible niche that the Python/C++ incumbents do not serve well: a **pure-Rust, CPU-only, MIT-licensed, ungated, streaming diarization engine** that embeds into Rust applications without a Python runtime. Competitors are stronger on accuracy, ecosystem, and bindings, but they are heavier, GPU-oriented, and often gated or commercially restricted.
 
-The main threat is the **accuracy gap**. If polyvoice stays at 18.5% DER while pyannote sits at 11.2%, accuracy-sensitive users will accept the heavier stack. The roadmap already targets this with VBx, PLDA, better segmentation, and EEND/Sortformer spikes. The priority should be:
+The main threat is the **accuracy gap**. VBx + PLDA already cut it from ~7 to ~4 DER points (15.4% vs pyannote's 11.2% on VoxConverse-test), but if it stalls there, accuracy-sensitive users will accept the heavier stack. The roadmap already targets the rest with better segmentation, embeddings, and EEND/Sortformer spikes. The priority should be:
 
 1. **Close the DER gap** with optional ONNX accuracy profiles (EEND/Sortformer, WavLM/CAM++ embeddings) while keeping the CPU-first default.
 2. **Own the deployability story** — pre-built binaries, Docker, WASM, mobile, and clear "no Python, no GPU, no token" messaging.
 3. **Productize who-said-what** — diarization + ASR attribution as the primary user-facing surface, not just raw speaker turns.
 4. **Stay license-clean** — do not introduce gated or copyleft models; use permissive weights or ship conversion/provenance docs.
 
-If the project cannot narrow the accuracy gap to within ~3–5 DER points of pyannote on standard benchmarks within the next major releases, it risks remaining a curiosity rather than a production option. With the current trajectory, it is worth continuing.
+If the project cannot keep the accuracy gap within ~3–5 DER points of pyannote on standard benchmarks over the next major releases, it risks remaining a curiosity rather than a production option. With the current trajectory, it is worth continuing.

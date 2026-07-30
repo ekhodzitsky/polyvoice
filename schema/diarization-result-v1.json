@@ -72,6 +72,10 @@
         "text": {
           "type": "string",
           "description": "Transcript for this turn. ADDITIVE: present only when an ASR backend (polyvoice-asr) ran the who-said-what cascade; absent otherwise."
+        },
+        "stable": {
+          "type": "boolean",
+          "description": "ADDITIVE: whether the speaker label has stabilized. Streaming may emit provisional labels (`stable: false`) that can still change until the speaker cache reaches its stability threshold; offline pipeline turns are always stable. Present only when false — omitted when true, and an absent field deserializes as true, so offline payloads stay unchanged."
         }
       }
     },
