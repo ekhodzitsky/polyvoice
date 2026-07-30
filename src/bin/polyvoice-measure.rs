@@ -7,12 +7,13 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use polyvoice::cli_common;
 use polyvoice::der::compute_der;
+use polyvoice::embedder::{ERes2NetV2Extractor, Embedder, ResNet34Adapter};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::Pipeline;
-use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
+use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::streaming::{LatencyPreset, StreamingPipeline};
-use polyvoice::types::{ClusterConfig, DiarizationConfig, SpeakerTurn};
+use polyvoice::types::SpeakerTurn;
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use polyvoice::{FbankOnnxExtractor, SileroVad};
@@ -179,32 +180,6 @@ fn hardware() -> Hardware {
     }
 }
 
-fn list_wavs(dataset: &Path, max_files: usize) -> Result<Vec<PathBuf>> {
-    let audio_dir = dataset.join("audio");
-    let mut wavs: Vec<PathBuf> = std::fs::read_dir(&audio_dir)
-        .with_context(|| format!("read_dir {}", audio_dir.display()))?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "wav"))
-        .map(|e| e.path())
-        .collect();
-    wavs.sort();
-    wavs.truncate(max_files);
-    Ok(wavs)
-}
-
-fn load_ref_turns(rttm_dir: &Path, stem: &str) -> Result<Vec<SpeakerTurn>> {
-    let rttm = rttm_dir.join(format!("{stem}.rttm"));
-    let raw = parse_rttm_file(&rttm).with_context(|| format!("parse {}", rttm.display()))?;
-    let grouped = group_by_file(&raw);
-    let segs: Vec<_> = grouped
-        .get(stem)
-        .or_else(|| stem.split('.').next().and_then(|s| grouped.get(s)))
-        .map(|v| v.iter().map(|s| (*s).clone()).collect())
-        .unwrap_or_default();
-    let (turns, _) = to_speaker_turns(&segs);
-    Ok(turns)
-}
-
 fn macro_der(pairs: &[(f64, f64)]) -> (f64, f64) {
     if pairs.is_empty() {
         return (0.0, 0.0);
@@ -230,7 +205,7 @@ fn run_streaming(
     let registry = ModelRegistry::default()?;
     let emb_path = registry.ensure("wespeaker_resnet34")?;
     let vad_path = registry.ensure("silero_vad")?;
-    let wavs = list_wavs(&dataset, max_files)?;
+    let wavs = cli_common::list_wavs(&dataset, Some(max_files))?;
     let rttm_dir = dataset.join("rttm");
     let presets = [
         LatencyPreset::Realtime,
@@ -258,7 +233,7 @@ fn run_streaming(
                 eprintln!("[SKIP] {stem}: sample rate {sr_hz}");
                 continue;
             }
-            let ref_t = load_ref_turns(&rttm_dir, stem)?;
+            let ref_t = cli_common::load_ref_turns(&rttm_dir, stem)?;
             let extractor = FbankOnnxExtractor::new(
                 &emb_path,
                 256,
@@ -342,84 +317,32 @@ fn run_streaming(
     Ok(())
 }
 
+/// One legacy-pipeline VAD arm over the dataset. The embedder session and the
+/// VAD are built once by the caller and reused across files: sessions are
+/// file-independent and `LegacyPipeline::run` resets the VAD state at the
+/// start of every run, so reuse is numerically identical to per-file
+/// construction.
 #[cfg(feature = "vad-earshot")]
-fn run_legacy_arm_silero(
+fn run_legacy_arm<V: polyvoice::vad::VoiceActivityDetector>(
     name: &str,
-    wavs: &[PathBuf],
-    rttm_dir: &Path,
-    emb_path: &Path,
-    vad_path: &Path,
     frame_size: usize,
-) -> Result<VadArm> {
-    let mut ders = Vec::new();
-    let mut audio_secs = 0.0_f64;
-    let mut wall_secs = 0.0_f64;
-    let mut n_ok = 0_usize;
-
-    for wav in wavs {
-        let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        if !rttm_dir.join(format!("{stem}.rttm")).is_file() {
-            continue;
-        }
-        let (samples, sr_hz) = read_wav(wav)?;
-        let ref_t = load_ref_turns(rttm_dir, stem)?;
-        let extractor =
-            FbankOnnxExtractor::new(emb_path, 256, 1, polyvoice::onnx::ExecutionProvider::Cpu)?;
-        let mut vad = SileroVad::new(vad_path, frame_size)?;
-        let vad_config = VadConfig {
-            frame_size,
-            threshold: 0.5,
-            ..VadConfig::default()
-        };
-        let pipeline = Pipeline::new(
-            DiarizationConfig {
-                cluster: ClusterConfig {
-                    threshold: 0.45,
-                    ..Default::default()
-                },
-                ..DiarizationConfig::default()
-            },
-            vad_config,
-        );
-        let t0 = Instant::now();
-        let result = pipeline.run(&samples, &extractor, &mut vad)?;
-        let wall = t0.elapsed().as_secs_f64();
-        let audio = samples.len() as f64 / sr_hz as f64;
-        ders.push(der_pair(&ref_t, &result.turns));
-        audio_secs += audio;
-        wall_secs += wall;
-        n_ok += 1;
-        eprint!(".");
-    }
-    eprintln!();
-    let (c0, c025) = macro_der(&ders);
-    let rtf = if audio_secs > 0.0 {
-        wall_secs / audio_secs
-    } else {
-        0.0
-    };
-    Ok(VadArm {
-        name: name.into(),
-        frame_size,
-        macro_der_collar_0: c0,
-        macro_der_collar_025: c025,
-        mean_rtf: rtf,
-        files: n_ok,
-    })
-}
-
-#[cfg(feature = "vad-earshot")]
-fn run_legacy_arm_earshot(
-    name: &str,
     wavs: &[PathBuf],
     rttm_dir: &Path,
-    emb_path: &Path,
+    extractor: &FbankOnnxExtractor,
+    mut vad: V,
 ) -> Result<VadArm> {
+    let pipeline = LegacyPipeline::new(
+        cli_common::legacy_diarization_config(polyvoice::DEFAULT_AHC_THRESHOLD),
+        VadConfig {
+            frame_size,
+            threshold: 0.5,
+            ..VadConfig::default()
+        },
+    );
     let mut ders = Vec::new();
     let mut audio_secs = 0.0_f64;
     let mut wall_secs = 0.0_f64;
     let mut n_ok = 0_usize;
-    let frame_size = 256_usize;
 
     for wav in wavs {
         let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
@@ -427,27 +350,13 @@ fn run_legacy_arm_earshot(
             continue;
         }
         let (samples, sr_hz) = read_wav(wav)?;
-        let ref_t = load_ref_turns(rttm_dir, stem)?;
-        let extractor =
-            FbankOnnxExtractor::new(emb_path, 256, 1, polyvoice::onnx::ExecutionProvider::Cpu)?;
-        let mut vad = polyvoice::EarshotVad::new();
-        let vad_config = VadConfig {
-            frame_size,
-            threshold: 0.5,
-            ..VadConfig::default()
-        };
-        let pipeline = Pipeline::new(
-            DiarizationConfig {
-                cluster: ClusterConfig {
-                    threshold: 0.45,
-                    ..Default::default()
-                },
-                ..DiarizationConfig::default()
-            },
-            vad_config,
-        );
+        if sr_hz != 16_000 {
+            eprintln!("[SKIP] {stem}: sample rate {sr_hz}");
+            continue;
+        }
+        let ref_t = cli_common::load_ref_turns(rttm_dir, stem)?;
         let t0 = Instant::now();
-        let result = pipeline.run(&samples, &extractor, &mut vad)?;
+        let result = pipeline.run(&samples, extractor, &mut vad)?;
         let wall = t0.elapsed().as_secs_f64();
         let audio = samples.len() as f64 / sr_hz as f64;
         ders.push(der_pair(&ref_t, &result.turns));
@@ -484,18 +393,35 @@ fn run_vad_parity(dataset: PathBuf, max_files: usize, output: Option<PathBuf>) -
         let registry = ModelRegistry::default()?;
         let emb_path = registry.ensure("wespeaker_resnet34")?;
         let vad_path = registry.ensure("silero_vad")?;
-        let wavs = list_wavs(&dataset, max_files)?;
+        let wavs = cli_common::list_wavs(&dataset, Some(max_files))?;
         let rttm_dir = dataset.join("rttm");
+        // One embedder session shared by both arms (file-independent).
+        let extractor =
+            FbankOnnxExtractor::new(&emb_path, 256, 1, polyvoice::onnx::ExecutionProvider::Cpu)?;
 
         eprintln!("Silero arm…");
-        let silero = run_legacy_arm_silero("silero", &wavs, &rttm_dir, &emb_path, &vad_path, 512)?;
+        let silero = run_legacy_arm(
+            "silero",
+            512,
+            &wavs,
+            &rttm_dir,
+            &extractor,
+            SileroVad::new(&vad_path, 512)?,
+        )?;
         eprintln!(
             "silero DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
             silero.macro_der_collar_0, silero.macro_der_collar_025, silero.mean_rtf
         );
 
         eprintln!("Earshot arm…");
-        let earshot = run_legacy_arm_earshot("earshot", &wavs, &rttm_dir, &emb_path)?;
+        let earshot = run_legacy_arm(
+            "earshot",
+            polyvoice::EARSHOT_FRAME_SIZE,
+            &wavs,
+            &rttm_dir,
+            &extractor,
+            polyvoice::EarshotVad::new(),
+        )?;
         eprintln!(
             "earshot DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
             earshot.macro_der_collar_0, earshot.macro_der_collar_025, earshot.mean_rtf
@@ -554,31 +480,7 @@ fn eer_from_scores(mut pairs: Vec<(f32, bool)>) -> f64 {
     if n_pos == 0.0 || n_neg == 0.0 {
         return 1.0;
     }
-    // Sweep threshold from high to low (accept if score >= thr).
-    let mut best = 1.0_f64;
-    for thr in pairs.iter().map(|p| p.0) {
-        let mut fa = 0.0;
-        let mut fr = 0.0;
-        for &(s, same) in &pairs {
-            if same && s < thr {
-                fr += 1.0;
-            }
-            if !same && s >= thr {
-                fa += 1.0;
-            }
-        }
-        let far = fa / n_neg;
-        let frr = fr / n_pos;
-        let err = (far + frr) / 2.0;
-        // Track min |FAR-FRR| point
-        let gap = (far - frr).abs();
-        if gap < best || (gap - best).abs() < 1e-12 && err < best {
-            // Use average of FAR/FRR at best-balance threshold
-            best = err.max((far - frr).abs()); // placeholder
-        }
-        let _ = best;
-    }
-    // Recompute properly: find thr minimizing |FAR-FRR|
+    // Sweep thresholds; keep the point minimizing |FAR-FRR|.
     let mut best_gap = f64::INFINITY;
     let mut best_eer = 1.0_f64;
     for thr in pairs.iter().map(|p| p.0) {
@@ -623,7 +525,7 @@ fn pairs_from_rttm_dataset(
     max_files: usize,
     max_pairs: usize,
 ) -> Result<Vec<MemPair>> {
-    let wavs = list_wavs(dataset, max_files)?;
+    let wavs = cli_common::list_wavs(dataset, Some(max_files))?;
     let rttm_dir = dataset.join("rttm");
     let mut out: Vec<MemPair> = Vec::new();
     let mut by_spk: Vec<(String, Vec<f32>)> = Vec::new(); // (file_spk, crop) for cross-file negs
@@ -638,17 +540,15 @@ fn pairs_from_rttm_dataset(
         if sr != 16_000 {
             continue;
         }
-        let raw = parse_rttm_file(&rttm)?;
-        let grouped = group_by_file(&raw);
-        let segs = grouped
-            .get(stem)
-            .or_else(|| stem.split('.').next().and_then(|s| grouped.get(s)));
-        let Some(segs) = segs else { continue };
+        let segs = cli_common::load_rttm_segments(&rttm_dir, stem)?;
+        if segs.is_empty() {
+            continue;
+        }
 
         // Collect per-speaker slices (≥0.6 s so 0.5 s crop works).
         let mut spk_slices: std::collections::HashMap<String, Vec<Vec<f32>>> =
             std::collections::HashMap::new();
-        for s in segs {
+        for s in &segs {
             let start = (s.start * sr as f64).floor() as usize;
             let end = (s.end() * sr as f64).ceil() as usize;
             if end <= start || end > samples.len() {
@@ -704,30 +604,27 @@ fn pairs_from_rttm_dataset(
     Ok(out)
 }
 
-fn run_embedder_short(
-    veri_list: PathBuf,
-    wav_root: PathBuf,
-    durations: String,
-    max_pairs: usize,
-    der_dataset: Option<PathBuf>,
-    der_max_files: usize,
-    output: Option<PathBuf>,
-) -> Result<()> {
-    use polyvoice::embedder::{ERes2NetV2Extractor, Embedder, ResNet34Adapter};
-
-    let registry = ModelRegistry::default()?;
-    let durs: Vec<f32> = durations
-        .split(',')
-        .filter_map(|s| s.trim().parse().ok())
-        .collect();
+fn parse_durations(s: &str) -> Result<Vec<f32>> {
+    let durs: Vec<f32> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
     if durs.is_empty() {
         anyhow::bail!("empty --durations");
     }
+    Ok(durs)
+}
 
-    // Prefer VoxCeleb-style list; fall back to RTTM-derived pairs from der_dataset or wav_root.
+/// Build the in-memory verification pairs: the VoxCeleb-style list when the
+/// audio is present, otherwise RTTM-derived pairs from `der_dataset` (or
+/// `wav_root` when it itself is a dataset directory).
+fn load_verification_pairs(
+    veri_list: &Path,
+    wav_root: &Path,
+    max_pairs: usize,
+    der_dataset: Option<&Path>,
+    der_max_files: usize,
+) -> Result<Vec<MemPair>> {
     let mut mem_pairs: Vec<MemPair> = Vec::new();
     if veri_list.is_file() {
-        let list_text = std::fs::read_to_string(&veri_list)?;
+        let list_text = std::fs::read_to_string(veri_list)?;
         for line in list_text.lines() {
             let mut parts = line.split_whitespace();
             let Some(lab) = parts.next() else { continue };
@@ -750,11 +647,10 @@ fn run_embedder_short(
     }
     if mem_pairs.is_empty() {
         let ds = der_dataset
-            .clone()
             .filter(|p| p.join("audio").is_dir())
             .or_else(|| {
                 if wav_root.join("audio").is_dir() {
-                    Some(wav_root.clone())
+                    Some(wav_root)
                 } else {
                     None
                 }
@@ -764,13 +660,25 @@ fn run_embedder_short(
             "no VoxCeleb audio; building short-seg pairs from RTTM under {}",
             ds.display()
         );
-        mem_pairs = pairs_from_rttm_dataset(&ds, der_max_files.max(10), max_pairs)?;
+        mem_pairs = pairs_from_rttm_dataset(ds, der_max_files.max(10), max_pairs)?;
     }
     eprintln!("verification pairs available: {}", mem_pairs.len());
     if mem_pairs.is_empty() {
         anyhow::bail!("no verification pairs constructed");
     }
+    Ok(mem_pairs)
+}
 
+/// Both embedders under comparison plus their model paths (the DER comparison
+/// re-derives fbank extractors from the paths).
+struct EmbedderModels {
+    default_path: PathBuf,
+    eres_path: PathBuf,
+    default_emb: ResNet34Adapter,
+    eres_emb: ERes2NetV2Extractor,
+}
+
+fn load_embedder_models(registry: &ModelRegistry) -> Result<EmbedderModels> {
     let default_path = registry.ensure("wespeaker_resnet34")?;
     let eres_path = registry
         .ensure("eres2netv2")
@@ -780,121 +688,139 @@ fn run_embedder_short(
         ResNet34Adapter::new(&default_path, 2, polyvoice::onnx::ExecutionProvider::Cpu)?;
     let eres_emb =
         ERes2NetV2Extractor::new(&eres_path, 2, polyvoice::onnx::ExecutionProvider::Cpu)?;
+    Ok(EmbedderModels {
+        default_path,
+        eres_path,
+        default_emb,
+        eres_emb,
+    })
+}
 
-    fn score_arm(emb: &dyn Embedder, pairs: &[MemPair], durs: &[f32]) -> Result<Vec<EerBucket>> {
-        let mut out = Vec::new();
-        for &dur in durs {
-            let mut scores = Vec::new();
-            for (same, sa, sb) in pairs {
-                let ca = crop_center(sa, 16_000, dur);
-                let cb = crop_center(sb, 16_000, dur);
-                if ca.len() < 4000 || cb.len() < 4000 {
-                    continue;
-                }
-                let ea = match emb.embed(&ca) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                let eb = match emb.embed(&cb) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                scores.push((cosine(&ea, &eb), *same));
-            }
-            let eer = eer_from_scores(scores.clone());
-            eprintln!("  duration={dur:.1}s pairs={} EER={eer:.2}%", scores.len());
-            out.push(EerBucket {
-                duration_secs: dur,
-                pairs: scores.len(),
-                eer,
-            });
-        }
-        Ok(out)
-    }
-
-    eprintln!("default ResNet34 short-seg EER…");
-    let def_eer = score_arm(&default_emb, &mem_pairs, &durs)?;
-    eprintln!("ERes2NetV2 short-seg EER…");
-    let eres_eer = score_arm(&eres_emb, &mem_pairs, &durs)?;
-
-    // Optional DER on diarization dataset with each embedder via legacy pipeline.
-    let mut def_der0 = None;
-    let mut def_der25 = None;
-    let mut eres_der0 = None;
-    let mut eres_der25 = None;
-    let mut der_files = None;
-    if let Some(ds) = der_dataset {
-        let wavs = list_wavs(&ds, der_max_files)?;
-        let rttm_dir = ds.join("rttm");
-        let vad_path = registry.ensure("silero_vad")?;
-        let mut d_pairs = Vec::new();
-        let mut e_pairs = Vec::new();
-        let mut n = 0_usize;
-        for wav in &wavs {
-            let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            if !rttm_dir.join(format!("{stem}.rttm")).is_file() {
+fn score_arm(emb: &dyn Embedder, pairs: &[MemPair], durs: &[f32]) -> Result<Vec<EerBucket>> {
+    let mut out = Vec::new();
+    for &dur in durs {
+        let mut scores = Vec::new();
+        for (same, sa, sb) in pairs {
+            let ca = crop_center(sa, 16_000, dur);
+            let cb = crop_center(sb, 16_000, dur);
+            if ca.len() < 4000 || cb.len() < 4000 {
                 continue;
             }
-            let (samples, sr_hz) = read_wav(wav)?;
-            let ref_t = load_ref_turns(&rttm_dir, stem)?;
-            let config = DiarizationConfig {
-                cluster: ClusterConfig {
-                    threshold: 0.45,
-                    ..Default::default()
-                },
-                ..DiarizationConfig::default()
+            let ea = match emb.embed(&ca) {
+                Ok(v) => v,
+                Err(_) => continue,
             };
-            let vad_config = VadConfig {
-                frame_size: 512,
-                threshold: 0.5,
-                ..VadConfig::default()
+            let eb = match emb.embed(&cb) {
+                Ok(v) => v,
+                Err(_) => continue,
             };
-            let pipeline = Pipeline::new(config, vad_config);
-
-            let mut vad_d = SileroVad::new(&vad_path, 512)?;
-            let ext_d = FbankOnnxExtractor::new(
-                &default_path,
-                256,
-                1,
-                polyvoice::onnx::ExecutionProvider::Cpu,
-            )?;
-            let res_d = pipeline.run(&samples, &ext_d, &mut vad_d)?;
-            d_pairs.push(der_pair(&ref_t, &res_d.turns));
-
-            let mut vad_e = SileroVad::new(&vad_path, 512)?;
-            // ERes2Net uses same fbank front-end path via FbankOnnxExtractor with dim 192
-            let ext_e = FbankOnnxExtractor::new(
-                &eres_path,
-                192,
-                1,
-                polyvoice::onnx::ExecutionProvider::Cpu,
-            )?;
-            let res_e = pipeline.run(&samples, &ext_e, &mut vad_e)?;
-            e_pairs.push(der_pair(&ref_t, &res_e.turns));
-            n += 1;
-            eprint!(".");
-            let _ = sr_hz;
+            scores.push((cosine(&ea, &eb), *same));
         }
-        eprintln!();
-        let (d0, d25) = macro_der(&d_pairs);
-        let (e0, e25) = macro_der(&e_pairs);
-        def_der0 = Some(d0);
-        def_der25 = Some(d25);
-        eres_der0 = Some(e0);
-        eres_der25 = Some(e25);
-        der_files = Some(n);
-        eprintln!("DER default ResNet34: 0={d0:.2}% 0.25={d25:.2}% files={n}");
-        eprintln!("DER ERes2NetV2:       0={e0:.2}% 0.25={e25:.2}% files={n}");
+        let eer = eer_from_scores(scores.clone());
+        eprintln!("  duration={dur:.1}s pairs={} EER={eer:.2}%", scores.len());
+        out.push(EerBucket {
+            duration_secs: dur,
+            pairs: scores.len(),
+            eer,
+        });
     }
+    Ok(out)
+}
 
-    let report = EmbedderReport {
+/// Macro DER at collar 0 and 0.25 for each embedder, plus the scored file count.
+struct DerComparison {
+    default_der: (f64, f64),
+    eres_der: (f64, f64),
+    files: usize,
+}
+
+/// DER of both embedders over a diarization dataset via the legacy pipeline.
+/// All ONNX sessions (both embedders, one VAD) and the pipeline are built once
+/// and reused across files: sessions are file-independent and
+/// `LegacyPipeline::run` resets the VAD state at the start of every run, so
+/// reuse is numerically identical to per-file construction.
+fn run_der_comparison(
+    registry: &ModelRegistry,
+    dataset: &Path,
+    max_files: usize,
+    default_path: &Path,
+    eres_path: &Path,
+) -> Result<DerComparison> {
+    let wavs = cli_common::list_wavs(dataset, Some(max_files))?;
+    let rttm_dir = dataset.join("rttm");
+    let vad_path = registry.ensure("silero_vad")?;
+    let pipeline = LegacyPipeline::new(
+        cli_common::legacy_diarization_config(polyvoice::DEFAULT_AHC_THRESHOLD),
+        VadConfig {
+            frame_size: 512,
+            threshold: 0.5,
+            ..VadConfig::default()
+        },
+    );
+    let mut vad = SileroVad::new(&vad_path, 512)?;
+    let ext_d = FbankOnnxExtractor::new(
+        default_path,
+        256,
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )?;
+    // ERes2Net uses same fbank front-end path via FbankOnnxExtractor with dim 192
+    let ext_e =
+        FbankOnnxExtractor::new(eres_path, 192, 1, polyvoice::onnx::ExecutionProvider::Cpu)?;
+    let mut d_pairs = Vec::new();
+    let mut e_pairs = Vec::new();
+    let mut n = 0_usize;
+    for wav in &wavs {
+        let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        if !rttm_dir.join(format!("{stem}.rttm")).is_file() {
+            continue;
+        }
+        let (samples, sr_hz) = read_wav(wav)?;
+        if sr_hz != 16_000 {
+            eprintln!("[SKIP] {stem}: sample rate {sr_hz}");
+            continue;
+        }
+        let ref_t = cli_common::load_ref_turns(&rttm_dir, stem)?;
+        let res_d = pipeline.run(&samples, &ext_d, &mut vad)?;
+        d_pairs.push(der_pair(&ref_t, &res_d.turns));
+        let res_e = pipeline.run(&samples, &ext_e, &mut vad)?;
+        e_pairs.push(der_pair(&ref_t, &res_e.turns));
+        n += 1;
+        eprint!(".");
+    }
+    eprintln!();
+    let (d0, d25) = macro_der(&d_pairs);
+    let (e0, e25) = macro_der(&e_pairs);
+    eprintln!("DER default ResNet34: 0={d0:.2}% 0.25={d25:.2}% files={n}");
+    eprintln!("DER ERes2NetV2:       0={e0:.2}% 0.25={e25:.2}% files={n}");
+    Ok(DerComparison {
+        default_der: (d0, d25),
+        eres_der: (e0, e25),
+        files: n,
+    })
+}
+
+fn build_embedder_report(
+    max_pairs: usize,
+    models: &EmbedderModels,
+    def_eer: Vec<EerBucket>,
+    eres_eer: Vec<EerBucket>,
+    der: Option<DerComparison>,
+) -> EmbedderReport {
+    let (def_der, eres_der, der_files) = match &der {
+        Some(d) => (Some(d.default_der), Some(d.eres_der), Some(d.files)),
+        None => (None, None, None),
+    };
+    let (def_der0, def_der25) = def_der.unzip();
+    let (eres_der0, eres_der25) = eres_der.unzip();
+    EmbedderReport {
         schema: "polyvoice-embedder-short-v1".into(),
         hardware: hardware(),
         max_pairs,
         default_embedder: EmbedderArm {
             name: "wespeaker-resnet34".into(),
             model_id: "wespeaker_resnet34".into(),
-            dim: default_emb.dim(),
+            dim: models.default_emb.dim(),
             short_seg_eer: def_eer,
             der_macro_collar_0: def_der0,
             der_macro_collar_025: def_der25,
@@ -903,13 +829,53 @@ fn run_embedder_short(
         eres2netv2: EmbedderArm {
             name: "eres2netv2".into(),
             model_id: "eres2netv2".into(),
-            dim: eres_emb.dim(),
+            dim: models.eres_emb.dim(),
             short_seg_eer: eres_eer,
             der_macro_collar_0: eres_der0,
             der_macro_collar_025: eres_der25,
             der_files,
         },
+    }
+}
+
+fn run_embedder_short(
+    veri_list: PathBuf,
+    wav_root: PathBuf,
+    durations: String,
+    max_pairs: usize,
+    der_dataset: Option<PathBuf>,
+    der_max_files: usize,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    let registry = ModelRegistry::default()?;
+    let durs = parse_durations(&durations)?;
+    let mem_pairs = load_verification_pairs(
+        &veri_list,
+        &wav_root,
+        max_pairs,
+        der_dataset.as_deref(),
+        der_max_files,
+    )?;
+    let models = load_embedder_models(&registry)?;
+
+    eprintln!("default ResNet34 short-seg EER…");
+    let def_eer = score_arm(&models.default_emb, &mem_pairs, &durs)?;
+    eprintln!("ERes2NetV2 short-seg EER…");
+    let eres_eer = score_arm(&models.eres_emb, &mem_pairs, &durs)?;
+
+    // Optional DER on diarization dataset with each embedder via legacy pipeline.
+    let der = match der_dataset {
+        Some(ds) => Some(run_der_comparison(
+            &registry,
+            &ds,
+            der_max_files,
+            &models.default_path,
+            &models.eres_path,
+        )?),
+        None => None,
     };
+
+    let report = build_embedder_report(max_pairs, &models, def_eer, eres_eer, der);
     let json = serde_json::to_string_pretty(&report)?;
     if let Some(path) = output {
         std::fs::write(&path, &json)?;

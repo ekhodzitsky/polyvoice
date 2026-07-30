@@ -31,26 +31,53 @@ pub struct FbankOnnxExtractor {
     fbank: FbankExtractor,
 }
 
+/// Errors from [`FbankOnnxExtractor`] construction.
+///
+/// Distinguishes a caller configuration error (`pool_size == 0`) from a
+/// backend session-build failure so adapters can map each cause onto their
+/// own error surface instead of flattening everything into one message.
+#[cfg(feature = "onnx")]
+#[derive(Clone, thiserror::Error, Debug)]
+pub enum FbankExtractorError {
+    /// `pool_size` was 0 — the session pool must hold at least one session.
+    #[error("pool_size must be > 0")]
+    EmptyPool,
+
+    /// A pooled inference session failed to build (missing/invalid model file
+    /// or backend error); `index` is the pool slot being constructed.
+    #[error("session {index}: {source}")]
+    SessionBuild {
+        index: usize,
+        #[source]
+        source: crate::onnx::OnnxError,
+    },
+}
+
 #[cfg(feature = "onnx")]
 impl FbankOnnxExtractor {
     /// { pool_size > 0 }
-    /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
+    /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, FbankExtractorError>`
     /// { true }
     pub fn new(
         model_path: &Path,
         embedding_dim: usize,
         pool_size: usize,
         ep: crate::onnx::ExecutionProvider,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, FbankExtractorError> {
         if pool_size == 0 {
-            anyhow::bail!("pool_size must be > 0");
+            return Err(FbankExtractorError::EmptyPool);
         }
         let mut sessions = Vec::with_capacity(pool_size);
         for i in 0..pool_size {
             // intra_threads(1): this extractor parallelises across the session
             // pool, so each session stays single-threaded.
-            let session = crate::onnx::build_session_with_ep(model_path, ep, Some(1))
-                .map_err(|e| anyhow::anyhow!("session {i}: {e}"))?;
+            let session =
+                crate::onnx::build_session_with_ep(model_path, ep, Some(1)).map_err(|e| {
+                    FbankExtractorError::SessionBuild {
+                        index: i,
+                        source: e,
+                    }
+                })?;
             sessions.push(session);
         }
         Ok(Self {
@@ -92,9 +119,10 @@ impl Embedder for FbankOnnxExtractor {
             })?;
 
         if fbank.is_empty() {
+            let sample_rate = self.fbank.config.sample_rate as f32;
             return Err(EmbedderError::AudioTooShort {
-                actual_secs: samples.len() as f32 / 16_000.0,
-                min_secs: min_samples as f32 / 16_000.0,
+                actual_secs: samples.len() as f32 / sample_rate,
+                min_secs: min_samples as f32 / sample_rate,
             });
         }
 
@@ -135,48 +163,5 @@ impl Embedder for FbankOnnxExtractor {
         l2_normalize(&mut embedding);
 
         Ok(embedding)
-    }
-}
-
-#[cfg(not(feature = "onnx"))]
-#[derive(Debug)]
-pub struct FbankOnnxExtractor;
-
-#[cfg(not(feature = "onnx"))]
-impl FbankOnnxExtractor {
-    /// { false }
-    /// `fn new(_model_path: &Path, _embedding_dim: usize, _pool_size: usize) -> Result<Self, anyhow::Error>`
-    /// { false }
-    pub fn new(
-        _model_path: &Path,
-        _embedding_dim: usize,
-        _pool_size: usize,
-    ) -> anyhow::Result<Self> {
-        anyhow::bail!("the `onnx` feature is not enabled")
-    }
-}
-
-#[cfg(all(test, not(feature = "onnx")))]
-mod tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn fbank_onnx_extractor_new_without_onnx_fails() {
-        let result = FbankOnnxExtractor::new(Path::new("dummy.onnx"), 256, 1);
-        assert!(result.is_err());
-        let err = match result {
-            Err(e) => e.to_string(),
-            Ok(_) => panic!("expected error"),
-        };
-        assert!(
-            err.contains("onnx") || err.contains("not enabled"),
-            "expected onnx-related error, got: {err}"
-        );
-    }
-
-    #[test]
-    fn fbank_onnx_extractor_stub_exists() {
-        let _ = FbankOnnxExtractor;
     }
 }

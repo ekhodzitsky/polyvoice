@@ -1,6 +1,6 @@
 //! v1.0 `Clusterer` trait + concrete clusterers (NME-SC, AHC).
 //!
-//! Added in v0.6 (M3).
+//! Added in v0.6.
 
 #[cfg(feature = "vbx")]
 pub mod plda;
@@ -17,13 +17,18 @@ pub use short_filter::{
     partition_by_min_duration, reassign_short_by_cosine, reassign_short_by_features,
 };
 
+/// Inputs smaller than this many embeddings make k-means / NME-SC unstable,
+/// so the clusterers delegate to AHC instead.
+const AHC_FALLBACK_N: usize = 8;
+
 /// Speaker clusterer — turns a batch of L2-normalized speaker embeddings into
 /// per-embedding cluster labels in the range `0..K` where `K` is the inferred
 /// number of clusters.
 ///
-/// In v1.0 (M3) the polyvoice crate introduces `Clusterer` as the canonical
-/// trait. The legacy free functions `ahc::agglomerative_cluster_auto` and
-/// `spectral::spectral_cluster` remain available — M6 will deprecate them.
+/// `Clusterer` is the production clustering surface: pipeline v2, CLI, FFI,
+/// Python, and MCP all go through it. The free functions in `ahc`, `kmeans`,
+/// and `spectral` are the math layer underneath — used directly by the
+/// BYO/legacy `LegacyPipeline` and wrapped here by the `Clusterer` adapters.
 #[cfg_attr(test, mockall::automock)]
 pub trait Clusterer: Send + Sync {
     /// Cluster `embeddings`. Each inner vector must have the same length and
@@ -78,6 +83,11 @@ pub enum ClustererError {
 
     #[error("clustering failed: {detail}")]
     AlgorithmFailed { detail: String },
+
+    /// PLDA model load/transform failure (VBx backend).
+    #[cfg(feature = "vbx")]
+    #[error("PLDA model error: {0}")]
+    Plda(#[from] crate::clusterer::plda::PldaError),
 }
 
 /// Verifies that every embedding in `embeddings` has the same dimension.
@@ -100,8 +110,8 @@ fn uniform_dim(embeddings: &[Vec<f32>]) -> Result<(), ClustererError> {
     Ok(())
 }
 
-/// AHC (agglomerative hierarchical clustering) wrapper exposing the legacy
-/// `crate::ahc::agglomerative_cluster_auto` through the v1.0 `Clusterer` trait.
+/// AHC (agglomerative hierarchical clustering) wrapper exposing the
+/// `crate::ahc` free functions through the v1.0 `Clusterer` trait.
 pub struct AhcClusterer {
     max_clusters: usize,
     /// Fixed cosine-similarity threshold. When `Some`, `agglomerative_cluster`
@@ -226,14 +236,18 @@ impl Clusterer for MinClusterSizeClusterer {
 }
 
 /// K-Means++ clusterer with automatic k selection via silhouette score.
-pub struct KMeansClusterer {
+pub struct KmeansClusterer {
     max_clusters: usize,
     max_iter: usize,
     trials: usize,
     fast_mode: bool,
 }
 
-impl KMeansClusterer {
+/// Deprecated alias for the pre-rename name; use [`KmeansClusterer`].
+#[deprecated(note = "renamed to KmeansClusterer")]
+pub type KMeansClusterer = KmeansClusterer;
+
+impl KmeansClusterer {
     /// Create a new K-means clusterer with automatic k selection.
     /// `max_clusters` is the upper bound on the number of clusters.
     pub fn new(max_clusters: usize) -> Self {
@@ -265,13 +279,13 @@ impl KMeansClusterer {
     }
 }
 
-impl Default for KMeansClusterer {
+impl Default for KmeansClusterer {
     fn default() -> Self {
         Self::new(64)
     }
 }
 
-impl Clusterer for KMeansClusterer {
+impl Clusterer for KmeansClusterer {
     fn cluster(&self, embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
         if embeddings.is_empty() {
             return Err(ClustererError::TooFewEmbeddings { actual: 0, min: 1 });
@@ -281,7 +295,7 @@ impl Clusterer for KMeansClusterer {
         }
         uniform_dim(embeddings)?;
         // Fallback to AHC for tiny inputs where k-means is unstable.
-        if embeddings.len() < 8 {
+        if embeddings.len() < AHC_FALLBACK_N {
             return AhcClusterer::new(self.max_clusters).cluster(embeddings);
         }
         let n = embeddings.len();
@@ -537,9 +551,8 @@ mod min_cluster_size_tests {
 /// NME-SC (Normalized Maximum Eigengap Spectral Clustering) clusterer.
 ///
 /// Thin adapter over the shared spectral graph (k-NN affinity + Laplacian
-/// spectrum in `crate::spectral`), then eigengap-selected k and `kmeans_pp` on
-/// the spectral embedding. Differs from [`crate::spectral::spectral_cluster`]
-/// only in k-selection (pure eigengap here vs eigengap-seeded BIC there).
+/// spectrum in `crate::spectral`): the normalized-maximum eigengap picks `k`
+/// directly, then `kmeans_pp` runs on the spectral embedding.
 #[cfg(feature = "spectral")]
 pub struct NmeScClusterer {
     max_clusters: usize,
@@ -576,19 +589,20 @@ impl Clusterer for NmeScClusterer {
         }
         uniform_dim(embeddings)?;
         // Fallback: tiny k-NN graphs collapse to 1 cluster; delegate to AHC.
-        const FALLBACK_N: usize = 8;
-        if n < FALLBACK_N {
+        if n < AHC_FALLBACK_N {
             return AhcClusterer::new(self.max_clusters).cluster(embeddings);
         }
 
-        // Shared k-NN affinity → Laplacian → eigenspectrum with spectral_cluster.
+        // Shared k-NN affinity → Laplacian → eigenspectrum from crate::spectral.
         let Some(graph) = crate::spectral::SpectralGraph::from_embeddings(embeddings) else {
             return Ok(vec![0; n]);
         };
 
-        // Normalized Maximum Eigengap (Park et al. 2020) drives k directly —
-        // unlike spectral_cluster, there is no BIC override.
-        let max_k = self.max_clusters.min(graph.n()).min(20);
+        // Normalized Maximum Eigengap (Park et al. 2020) drives k directly.
+        let max_k = self
+            .max_clusters
+            .min(graph.n())
+            .min(crate::spectral::MAX_EIGENGAP_CANDIDATES);
         let k = crate::spectral::select_k_by_normalized_eigengap(&graph.eig_asc(), max_k).max(1);
 
         let spectral = graph.embedding_f32(k);
@@ -658,7 +672,7 @@ mod nme_sc_tests {
     #[test]
     fn nme_sc_fallback_to_ahc_on_small_n() {
         let c = NmeScClusterer::default();
-        // 3 well-separated embeddings — with n < 10 NME-SC delegates to AHC.
+        // 3 well-separated embeddings — below AHC_FALLBACK_N, NME-SC delegates to AHC.
         let embeddings = vec![
             vec![1.0, 0.0, 0.0],
             vec![0.0, 1.0, 0.0],
@@ -700,7 +714,7 @@ mod dim_uniformity_tests {
 
     #[test]
     fn kmeans_rejects_dim_mismatch() {
-        let c = KMeansClusterer::default();
+        let c = KmeansClusterer::default();
         let err = c
             .cluster(&mismatched_embeddings())
             .expect_err("mismatched dims must fail");

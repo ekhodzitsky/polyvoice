@@ -38,13 +38,19 @@ surface:
       kind: unit-test
       target: src/types::mod::tests
       command: cargo test --lib types
-  - name: DiarizationConfig / ClusterConfig / WindowConfig / SpeechFilterConfig
+  - name: DiarizationConfig / ClusterConfig / WindowConfig / SpeechFilterConfig / DEFAULT_AHC_THRESHOLD
     kind: struct
     visibility: public
-    contract: Top-level and sub-configuration for diarization pipeline parameters.
+    contract: >
+      Top-level and sub-configuration for diarization pipeline parameters.
+      DiarizationConfig::validate checks field ranges (window geometry,
+      cosine threshold, non-negative durations) and reports typed
+      ConfigError failures. DEFAULT_AHC_THRESHOLD is the single source for
+      the shipped AHC cosine-threshold default across library and CLI
+      surfaces.
     proof:
       kind: unit-test
-      target: src/types::mod::tests
+      target: src/types::config::tests
       command: cargo test --lib types
   - name: Profile
     kind: enum
@@ -69,7 +75,7 @@ surface:
       kind: unit-test
       target: src/types::mod::diarization_result_tests
       command: cargo test --lib types
-  - name: SampleRate / Confidence / Seconds
+  - name: SampleRate / Confidence
     kind: struct
     visibility: public
     contract: Newtypes enforcing valid ranges (sample rate 8–192kHz, confidence 0–1).
@@ -95,10 +101,18 @@ consumers:
       - DiarizationConfig / ClusterConfig / WindowConfig / SpeechFilterConfig
       - Profile
       - SpeakerTurn / Segment / TimeRange / WordAlignment / DiarizationResult
-      - SampleRate / Confidence / Seconds
+      - SampleRate / Confidence
       - remap_segments / remap_turns
       - polyvoice_internal
 invariants:
+  - id: diarization-config-validate
+    rule: DiarizationConfig::validate rejects window_secs<=0, hop_secs<=0,
+      hop>window, cosine threshold outside [-1, 1], and negative/non-finite
+      speech-filter or max-duration values; the default config is valid.
+    proof:
+      kind: unit-test
+      target: src/types::config::tests
+      command: cargo test --lib types
   - id: sample-rate-range
     rule: SampleRate constructor rejects values outside 8000..=192000.
     proof:

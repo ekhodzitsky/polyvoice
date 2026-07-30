@@ -7,8 +7,9 @@ embedding pipelines.
 
 ## Surfaces
 
-- `FbankConfig` — configuration
-- `FbankExtractor` — mel-filterbank extractor
+- `FbankConfig` — configuration; `validate()` checks field constraints
+- `FbankExtractor` — mel-filterbank extractor; `try_new` validates the config
+  (`FbankError::InvalidConfig`), `new` is a panicking convenience over it
 - `apply_cmvn` — cepstral mean and variance normalization
 
 ## Dependencies

@@ -37,7 +37,7 @@ self-describing model metadata (ONNX `metadata_props` with manifest fallback).
 
 ```bash
 cargo test --lib models --features download
-cargo test --test m5_manifest_smoke_test --features download
+cargo test --test manifest_smoke_test --features download
 ```
 
 ## Notes

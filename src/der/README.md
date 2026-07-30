@@ -82,6 +82,11 @@ To refresh a baseline after a legitimate accuracy change: run the test with
 field plus its `_status`/`_filled_by` provenance — never widen `tolerance` to
 make a regression pass.
 - Speaker mapping uses the shared Kuhn-Munkres solver (`crate::hungarian`),
+  via the `map_max_cooccurrence` helper shared with WDER (`der::wder`),
   giving the globally optimal label assignment (matching pyannote.metrics).
   Greedy 1-to-1 mapping was replaced with optimal Hungarian mapping because it over-counted
   confusion on cross-talk/fragmented files.
+- The 10 ms frame grid (resolution, 24 h frame cap, per-turn frame ranges) is
+  shared with the exclusive-timeline projection via crate-visible associated
+  items on `TimeRange` (`grid_frame_count` / `grid_frame_range`, defined in
+  `types::result`).

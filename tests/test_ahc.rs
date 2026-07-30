@@ -1,11 +1,8 @@
 use polyvoice::ahc::agglomerative_cluster;
 use polyvoice::utils::l2_normalize;
 
-fn unit_vec(dim: usize, axis: usize) -> Vec<f32> {
-    let mut v = vec![0.0f32; dim];
-    v[axis] = 1.0;
-    v
-}
+mod common;
+use common::unit_vec;
 
 fn noisy_vec(dim: usize, axis: usize, noise: f32) -> Vec<f32> {
     let mut v = unit_vec(dim, axis);

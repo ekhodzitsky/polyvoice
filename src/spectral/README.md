@@ -2,21 +2,22 @@
 
 ## Purpose
 
-Spectral clustering using affinity matrix + Laplacian + eigendecomposition
-via faer. Used by NmeScClusterer.
+Spectral clustering math: k-NN cosine affinity → normalized Laplacian →
+eigendecomposition via faer. The crate-private graph construction is consumed
+by `NmeScClusterer` (in `src/clusterer`), which runs `kmeans_pp` on the
+spectral embedding.
 
 ## Surfaces
 
-- `spectral_cluster(embeddings, max_k) -> Vec<usize>`
+No public items. Crate-private:
+
+- `SpectralGraph` — graph construction + spectral embedding
+- `select_k_by_normalized_eigengap` — NME-SC eigengap k selection
 
 ## Dependencies
 
-- `utils` — cosine_similarity
-- `faer` — SVD/eigendecomposition
-
-## Invariants
-
-- Output labels are contiguous integers starting from 0.
+- `utils` — pairwise_cosine_similarity_matrix (flat cosine affinity source)
+- `faer` — eigendecomposition
 
 ## Verification
 

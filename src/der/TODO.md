@@ -17,6 +17,4 @@
 
 ## Next
 
-- [ ] Add dedicated `criterion` micro-benchmark for `compute_der` on synthetic data.
-- [ ] Switch from greedy to Hungarian optimal mapping (only if benchmarking shows significant accuracy improvement).
 - [ ] Support overlap-aware DER variants (Jaccard-style multi-speaker metrics).

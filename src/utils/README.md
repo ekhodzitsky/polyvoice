@@ -10,6 +10,10 @@ Math and array utilities: cosine similarity, L2 normalization, mean vector, merg
 - `l2_normalize` — in-place L2 normalization.
 - `mean_vector` — element-wise mean of a vector of vectors.
 - `merge_segments` — greedy merge of overlapping segments.
+- `pairwise_cosine_similarity_matrix` (crate-private) — flat row-major n×n
+  cosine-similarity matrix, shared by ahc / kmeans / spectral.
+- `normalized_mean_centroids` (crate-private) — per-label L2-normalized mean
+  centroids over selected members.
 
 ## Dependencies
 

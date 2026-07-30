@@ -64,14 +64,14 @@ pub fn compute_wder(reference: &[WordAlignment], hypothesis: &[WordAlignment]) -
             .iter()
             .filter_map(|r| {
                 let ref_spk = r.speaker?.0;
-                let r_mid = (r.time.start + r.time.end) / 2.0;
+                let r_mid = r.time.midpoint();
                 let r_word = r.word.to_ascii_lowercase();
                 let mut best: Option<(usize, f64)> = None;
                 for (i, h) in hypothesis.iter().enumerate() {
                     if h.word.to_ascii_lowercase() != r_word {
                         continue;
                     }
-                    let h_mid = (h.time.start + h.time.end) / 2.0;
+                    let h_mid = h.time.midpoint();
                     let dist = (r_mid - h_mid).abs();
                     if best.is_none_or(|(_, d)| dist < d) {
                         best = Some((i, dist));
@@ -99,35 +99,9 @@ pub fn compute_wder(reference: &[WordAlignment], hypothesis: &[WordAlignment]) -
         }
     }
 
-    let mapping = if cooccurrence.is_empty() {
-        HashMap::new()
-    } else {
-        // Reuse the same Hungarian path as frame DER via a one-frame co-occurrence
-        // matrix: build tiny "frames" of co-occurring pairs.
-        let mut hyp_ids: Vec<u32> = cooccurrence.keys().map(|&(h, _)| h).collect();
-        hyp_ids.sort_unstable();
-        hyp_ids.dedup();
-        let mut ref_ids: Vec<u32> = cooccurrence.keys().map(|&(_, r)| r).collect();
-        ref_ids.sort_unstable();
-        ref_ids.dedup();
-        let n = hyp_ids.len().max(ref_ids.len());
-        let mut cost = vec![vec![0.0_f32; n]; n];
-        for (&(h, r), &count) in &cooccurrence {
-            if let (Ok(i), Ok(j)) = (hyp_ids.binary_search(&h), ref_ids.binary_search(&r)) {
-                cost[i][j] = -(count as f32);
-            }
-        }
-        let assignment = crate::hungarian::solve(&cost).unwrap_or_default();
-        let mut mapping: HashMap<u32, u32> = HashMap::new();
-        for (row, &col) in assignment.iter().enumerate() {
-            if let (Some(&h), Some(&r)) = (hyp_ids.get(row), ref_ids.get(col))
-                && cooccurrence.get(&(h, r)).copied().unwrap_or(0) > 0
-            {
-                mapping.insert(h, r);
-            }
-        }
-        mapping
-    };
+    // Optimal (Hungarian) speaker mapping based on co-occurrence — the same
+    // max-co-occurrence path as frame DER.
+    let mapping = crate::hungarian::map_max_cooccurrence(&cooccurrence);
 
     let total_words = pairs.len() as u64;
     let mut speaker_errors = 0u64;

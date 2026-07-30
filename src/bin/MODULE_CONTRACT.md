@@ -7,7 +7,9 @@ layer: cli
 purpose: >
   CLI and agent-facing binaries: polyvoice (main diarization toolkit),
   polyvoice-bench (DER harness), polyvoice-measure, and polyvoice-mcp (MCP
-  stdio server). Thin wrappers over the library; no business logic.
+  stdio server). Thin wrappers over the library; shared wiring (flag-to-config
+  translation, pipeline construction, dataset walking) lives in
+  src/cli_common.
 status: stable
 owners:
   - polyvoice-cli
@@ -64,8 +66,22 @@ surface:
       kind: unit-test
       target: src/bin/polyvoice-mcp.rs tests
       command: cargo test --bin polyvoice-mcp --features mcp
+  - name: polyvoice-measure
+    kind: binary
+    visibility: public
+    contract: >
+      Measurement harness: streaming latency presets, VAD parity
+      (silero vs earshot, needs vad-earshot), short-segment embedder EER.
+      Same legacy/v2 wiring as the other binaries via src/cli_common.
+    proof:
+      kind: build
+      target: src/bin/polyvoice-measure.rs
+      command: cargo build --bin polyvoice-measure --features cli
 dependencies:
   internal:
+    - module: cli_common
+      scope: orchestration
+      reason: Shared flag parsing, pipeline construction, and dataset walking for all binaries.
     - module: pipeline_v2
       scope: orchestration
       reason: Production ONNX default for polyvoice / mcp / bench defaults.
@@ -82,9 +98,13 @@ consumers:
       - polyvoice
       - polyvoice-bench
       - polyvoice-mcp
+      - polyvoice-measure
 invariants:
   - id: thin-wrapper
-    rule: CLI binaries contain no business logic; all algorithms live in lib modules.
+    rule: >
+      CLI binaries contain no business logic; wiring shared across binaries
+      (flag-to-config translation, pipeline construction, dataset walking)
+      lives in src/cli_common, algorithms in lib modules.
     proof:
       kind: static-check
       target: src/bin/
@@ -130,8 +150,4 @@ risks:
     severity: minor
     mitigation: ModelRegistry::ensure_for_profile returns descriptive errors.
     status: accepted
-gaps:
-  - description: No property tests for CLI argument parsing.
-    severity: info
-    status: open
 ---

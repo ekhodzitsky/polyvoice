@@ -36,8 +36,10 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      VoiceActivityDetector over earshot 256-sample frames @ 16 kHz. Buffers
-      partial frames; scores in [0, 1].
+      VoiceActivityDetector over earshot 256-sample frames @ 16 kHz. Follows
+      the crate-wide frame contract: process accepts only multiples of 256
+      (partial chunks are rejected, never buffered) and returns one score in
+      [0, 1] per frame.
     proof:
       kind: unit-test
       target: src/earshot_vad::tests
@@ -84,7 +86,7 @@ verification:
     - cargo clippy --all-targets --features vad-earshot -- -D warnings
 agent_policy:
   allowed_mutations:
-    - Improving buffering / error messages.
+    - Improving error messages.
     - AdapterRegistry integration.
   forbidden_mutations:
     - Making earshot the default VAD without DER parity evidence.

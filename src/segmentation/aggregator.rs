@@ -10,14 +10,17 @@
 //! 2. Use Kuhn-Munkres on `-IoU` to find the assignment that maps window i+1's
 //!    local indices onto window i's. Apply the permutation so the same person
 //!    has the same index file-wide.
-//! 3. For every audio frame, average the per-class logits across every window
-//!    that contains that frame.
-//! 4. Argmax each averaged logit vector → frame label.
+//! 3. For every audio frame, average the per-class softmax probabilities
+//!    (decoded once by `PowersetDecoder`) across every window that contains
+//!    that frame, remapping each window's classes through its permutation.
+//! 4. Argmax each averaged probability vector → frame label.
 //! 5. Run-length encode consecutive identical labels into `RawSegment`s.
 
 use crate::hungarian;
 use crate::segmentation::binarize::{BinarizationConfig, binarize_frames};
-use crate::segmentation::decoder::{FrameLabel, PowersetClass, PowersetDecoder};
+use crate::segmentation::decoder::{
+    FrameLabel, MAX_LOCAL_SPEAKERS, NUM_POWERSET_CLASSES, PowersetClass, PowersetDecoder,
+};
 use crate::segmentation::{RawSegment, SegmentationError};
 use crate::types::TimeRange;
 
@@ -41,7 +44,7 @@ impl WindowOutput {
         logits: Vec<f32>,
         num_frames: usize,
     ) -> Result<Self, SegmentationError> {
-        if logits.len() != num_frames * 7 {
+        if logits.len() != num_frames * NUM_POWERSET_CLASSES {
             return Err(SegmentationError::InvalidOutputShape {
                 actual_shape: vec![logits.len()],
             });
@@ -133,7 +136,7 @@ impl Aggregator {
 
         // 2) Hungarian-align each adjacent window pair: permute window i+1's local
         // speaker indices onto window i's reference frame.
-        let mut permutations: Vec<[u8; 3]> =
+        let mut permutations: Vec<[u8; MAX_LOCAL_SPEAKERS]> =
             std::iter::repeat_n([0u8, 1u8, 2u8], windows.len()).collect();
 
         for i in 1..windows.len() {
@@ -162,9 +165,9 @@ impl Aggregator {
         a_labels: &[FrameLabel],
         b: &WindowOutput,
         b_labels: &[FrameLabel],
-        a_perm_so_far: &[u8; 3],
-    ) -> Result<[u8; 3], SegmentationError> {
-        let n = self.config.max_local_speakers.min(3);
+        a_perm_so_far: &[u8; MAX_LOCAL_SPEAKERS],
+    ) -> Result<[u8; MAX_LOCAL_SPEAKERS], SegmentationError> {
+        let n = self.config.max_local_speakers.min(MAX_LOCAL_SPEAKERS);
         let overlap_start = a.start_time.max(b.start_time);
         let overlap_end = a.end_time.min(b.end_time);
         if overlap_end <= overlap_start || n == 0 {
@@ -177,17 +180,17 @@ impl Aggregator {
             return Ok([0, 1, 2]);
         }
 
-        let mut a_masks = vec![vec![false; grid_len]; 3];
-        let mut b_masks = vec![vec![false; grid_len]; 3];
+        let mut a_masks = vec![vec![false; grid_len]; MAX_LOCAL_SPEAKERS];
+        let mut b_masks = vec![vec![false; grid_len]; MAX_LOCAL_SPEAKERS];
         for k in 0..grid_len {
             let t = overlap_start + k as f32 * stride;
             if let Some(idx_a) = self.frame_index_at(a, t)
                 && idx_a < a_labels.len()
             {
                 for s in a_labels[idx_a].class.speakers() {
-                    if (s as usize) < 3 {
+                    if (s as usize) < MAX_LOCAL_SPEAKERS {
                         let permuted = a_perm_so_far[s as usize] as usize;
-                        if permuted < 3 {
+                        if permuted < MAX_LOCAL_SPEAKERS {
                             a_masks[permuted][k] = true;
                         }
                     }
@@ -197,7 +200,7 @@ impl Aggregator {
                 && idx_b < b_labels.len()
             {
                 for s in b_labels[idx_b].class.speakers() {
-                    if (s as usize) < 3 {
+                    if (s as usize) < MAX_LOCAL_SPEAKERS {
                         b_masks[s as usize][k] = true;
                     }
                 }
@@ -258,7 +261,7 @@ impl Aggregator {
             let bi = assignment[ai];
             if bi < b_active.len() {
                 let b_idx = b_active[bi];
-                if b_idx < 3 && a_idx < 3 {
+                if b_idx < MAX_LOCAL_SPEAKERS && a_idx < MAX_LOCAL_SPEAKERS {
                     perm[b_idx] = a_idx as u8;
                 }
             }
@@ -287,114 +290,45 @@ impl Aggregator {
         Some(idx.min(w.num_frames - 1))
     }
 
-    /// Average per-class logits across windows that contain each global frame,
-    /// then argmax + run-length encode into `RawSegment`s.
+    /// Average per-class probabilities across windows that contain each global
+    /// frame, then argmax + run-length encode into `RawSegment`s.
     fn average_and_run_length_encode(
         &self,
         windows: &[WindowOutput],
         window_labels: &[Vec<FrameLabel>],
-        permutations: &[[u8; 3]],
+        permutations: &[[u8; MAX_LOCAL_SPEAKERS]],
     ) -> Result<Vec<RawSegment>, SegmentationError> {
-        let stride = windows[0].frame_stride().max(1e-6);
-        let global_start = windows
-            .iter()
-            .map(|w| w.start_time)
-            .fold(f32::INFINITY, f32::min);
-        let global_end = windows
-            .iter()
-            .map(|w| w.end_time)
-            .fold(f32::NEG_INFINITY, f32::max);
-        let global_frames = ((global_end - global_start) / stride).ceil() as usize;
+        let grid = GlobalGrid::from_windows(windows);
+        let (summed_probs, counts) = accumulate_grid(windows, window_labels, permutations, &grid);
+        let (frame_classes, frame_confidences) =
+            self.classify_frames(&summed_probs, &counts, grid.stride);
 
-        let mut summed_probs = vec![[0.0_f32; 7]; global_frames];
-        let mut counts = vec![0_u32; global_frames];
-
-        for (wi, w) in windows.iter().enumerate() {
-            let perm = permutations[wi];
-            for f in 0..w.num_frames {
-                let t_center = w.frame_time(f) + 0.5 * stride;
-                let g_idx_f = (t_center - global_start) / stride;
-                if g_idx_f < 0.0 {
-                    continue;
-                }
-                let g_idx = g_idx_f.floor() as usize;
-                if g_idx >= global_frames {
-                    continue;
-                }
-                if window_labels[wi].get(f).is_none() {
-                    continue;
-                }
-
-                let frame_logits = &w.logits[f * 7..(f + 1) * 7];
-
-                let mut max_logit = f32::NEG_INFINITY;
-                for &l in frame_logits {
-                    if l > max_logit {
-                        max_logit = l;
-                    }
-                }
-                let mut exps = [0.0_f32; 7];
-                let mut sum = 0.0_f32;
-                for (i, &l) in frame_logits.iter().enumerate() {
-                    exps[i] = (l - max_logit).exp();
-                    sum += exps[i];
-                }
-                let inv_sum = if sum > 0.0 { 1.0 / sum } else { 1.0 };
-
-                // Apply permutation: rebuild the softmax vector under the file-global
-                // speaker ordering by remapping each class's speaker set through `perm`.
-                let mut remapped = [0.0_f32; 7];
-                for (c, _) in exps.iter().enumerate() {
-                    if let Some(class) = PowersetDecoder::class_for_index(c) {
-                        let speakers = class.speakers();
-                        let remapped_speakers: Vec<u8> = speakers
-                            .iter()
-                            .map(|s| {
-                                if (*s as usize) < 3 {
-                                    perm[*s as usize]
-                                } else {
-                                    *s
-                                }
-                            })
-                            .collect();
-                        let new_class = match remapped_speakers.as_slice() {
-                            [] => 0,
-                            [s] => 1 + (*s as usize),
-                            [a, b] => {
-                                let (lo, hi) = if a < b {
-                                    (*a as usize, *b as usize)
-                                } else {
-                                    (*b as usize, *a as usize)
-                                };
-                                match (lo, hi) {
-                                    (0, 1) => 4,
-                                    (0, 2) => 5,
-                                    (1, 2) => 6,
-                                    _ => 0,
-                                }
-                            }
-                            _ => 0,
-                        };
-                        remapped[new_class] += exps[c] * inv_sum;
-                    }
-                }
-
-                for (i, &p) in remapped.iter().enumerate() {
-                    summed_probs[g_idx][i] += p;
-                }
-                counts[g_idx] += 1;
-            }
+        let mut encoder = RleEncoder::new(grid.start, grid.stride, self.config.min_segment_secs);
+        for g in 0..grid.frames {
+            encoder.push_frame(g, frame_classes[g], frame_confidences[g]);
         }
+        Ok(encoder.finish(grid.frames))
+    }
 
-        let (frame_classes, frame_confidences) = if let Some(bin) = &self.config.binarization {
-            let mut avg_probs = vec![[0.0_f32; 7]; global_frames];
+    /// Reduce the accumulated probability sums to per-frame classes +
+    /// confidences, either via the calibrated binarization or the plain
+    /// per-frame argmax.
+    fn classify_frames(
+        &self,
+        summed_probs: &[[f32; NUM_POWERSET_CLASSES]],
+        counts: &[u32],
+        stride: f32,
+    ) -> (Vec<Option<PowersetClass>>, Vec<f32>) {
+        let global_frames = summed_probs.len();
+        if let Some(bin) = &self.config.binarization {
+            let mut avg_probs = vec![[0.0_f32; NUM_POWERSET_CLASSES]; global_frames];
             let mut has_data = vec![false; global_frames];
             for g in 0..global_frames {
                 if counts[g] == 0 {
                     continue;
                 }
                 let inv = 1.0 / counts[g] as f32;
-                for c in 0..7 {
+                for c in 0..NUM_POWERSET_CLASSES {
                     avg_probs[g][c] = summed_probs[g][c] * inv;
                 }
                 has_data[g] = true;
@@ -423,133 +357,229 @@ impl Aggregator {
                 frame_confidences.push(maxp);
             }
             (frame_classes, frame_confidences)
-        };
+        }
+    }
+}
 
-        // Run-length encode per speaker. A run is broken not only when the
-        // speaker falls silent but also when its overlap status flips: a speaker
-        // talking across a brief overlap emits separate solo and overlap
-        // segments rather than one run tainted by the overlap. This keeps
-        // `is_overlap` precise (a segment is overlap iff *every* frame in it was
-        // an overlap frame) and makes two simultaneously-active speakers emit
-        // time-equal overlap segments that `extract_overlap_time_ranges` pairs.
-        let mut segments: Vec<RawSegment> = Vec::new();
-        // (start_global_frame, confidence_sum, confidence_count, is_overlap_run)
-        let mut active: [Option<(usize, f32, f32, bool)>; 3] = [None, None, None];
+/// Global frame-grid geometry shared by probability accumulation and the
+/// run-length encoder.
+struct GlobalGrid {
+    start: f32,
+    stride: f32,
+    frames: usize,
+}
 
-        for g in 0..global_frames {
-            let frame_class = frame_classes[g];
-            let conf = frame_confidences[g];
-            let is_overlap_frame = frame_class.map(|c| c.is_overlap()).unwrap_or(false);
-            let active_speakers: Vec<u8> = match frame_class {
-                Some(c) => c.speakers(),
-                None => Vec::new(),
+impl GlobalGrid {
+    fn from_windows(windows: &[WindowOutput]) -> Self {
+        let stride = windows[0].frame_stride().max(1e-6);
+        let start = windows
+            .iter()
+            .map(|w| w.start_time)
+            .fold(f32::INFINITY, f32::min);
+        let end = windows
+            .iter()
+            .map(|w| w.end_time)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let frames = ((end - start) / stride).ceil() as usize;
+        Self {
+            start,
+            stride,
+            frames,
+        }
+    }
+}
+
+/// Accumulate permutation-remapped frame probabilities onto the global grid:
+/// every window frame contributes its softmax vector (decoded once by
+/// `PowersetDecoder`) to the global frame covering its center. Returns the
+/// per-global-frame probability sums and contribution counts.
+fn accumulate_grid(
+    windows: &[WindowOutput],
+    window_labels: &[Vec<FrameLabel>],
+    permutations: &[[u8; MAX_LOCAL_SPEAKERS]],
+    grid: &GlobalGrid,
+) -> (Vec<[f32; NUM_POWERSET_CLASSES]>, Vec<u32>) {
+    let mut summed_probs = vec![[0.0_f32; NUM_POWERSET_CLASSES]; grid.frames];
+    let mut counts = vec![0_u32; grid.frames];
+
+    for (wi, w) in windows.iter().enumerate() {
+        let perm = permutations[wi];
+        for f in 0..w.num_frames {
+            let t_center = w.frame_time(f) + 0.5 * grid.stride;
+            let g_idx_f = (t_center - grid.start) / grid.stride;
+            if g_idx_f < 0.0 {
+                continue;
+            }
+            let g_idx = g_idx_f.floor() as usize;
+            if g_idx >= grid.frames {
+                continue;
+            }
+            let Some(label) = window_labels[wi].get(f) else {
+                continue;
             };
 
-            for (s, slot) in active.iter_mut().enumerate() {
-                let s_active_now = active_speakers.iter().any(|x| *x as usize == s);
-                let ov_now = s_active_now && is_overlap_frame;
-                match (*slot, s_active_now) {
-                    (None, true) => {
-                        *slot = Some((g, conf, 1.0, ov_now));
+            let remapped = remap_probs(&label.probs, &perm);
+            for (i, &p) in remapped.iter().enumerate() {
+                summed_probs[g_idx][i] += p;
+            }
+            counts[g_idx] += 1;
+        }
+    }
+    (summed_probs, counts)
+}
+
+/// Remap one frame's softmax vector into the file-global speaker ordering:
+/// each class's speaker set is mapped through `perm` and its probability mass
+/// added to the remapped class. Classes whose remapped set the powerset scheme
+/// cannot express fall back to class 0 (silence), matching the historical
+/// behavior; such sets are unreachable from decoded classes and a valid
+/// permutation.
+fn remap_probs(
+    probs: &[f32; NUM_POWERSET_CLASSES],
+    perm: &[u8; MAX_LOCAL_SPEAKERS],
+) -> [f32; NUM_POWERSET_CLASSES] {
+    let mut remapped = [0.0_f32; NUM_POWERSET_CLASSES];
+    for (c, &p) in probs.iter().enumerate() {
+        if let Some(class) = PowersetDecoder::class_for_index(c) {
+            let speakers = class.speakers();
+            let remapped_speakers: Vec<u8> = speakers
+                .iter()
+                .map(|s| {
+                    if (*s as usize) < MAX_LOCAL_SPEAKERS {
+                        perm[*s as usize]
+                    } else {
+                        *s
                     }
-                    (Some((start_g, conf_sum, conf_count, run_ov)), true) if run_ov == ov_now => {
-                        *slot = Some((start_g, conf_sum + conf, conf_count + 1.0, run_ov));
-                    }
-                    (Some((start_g, conf_sum, conf_count, run_ov)), true) => {
-                        // Overlap status flipped — close the current run, open a new one at g.
-                        push_segment(
-                            &mut segments,
-                            global_start,
-                            stride,
-                            s,
-                            start_g,
-                            g,
-                            conf_sum,
-                            conf_count,
-                            run_ov,
-                            self.config.min_segment_secs,
-                        );
-                        *slot = Some((g, conf, 1.0, ov_now));
-                    }
-                    (Some((start_g, conf_sum, conf_count, run_ov)), false) => {
-                        push_segment(
-                            &mut segments,
-                            global_start,
-                            stride,
-                            s,
-                            start_g,
-                            g,
-                            conf_sum,
-                            conf_count,
-                            run_ov,
-                            self.config.min_segment_secs,
-                        );
-                        *slot = None;
-                    }
-                    (None, false) => {}
+                })
+                .collect();
+            let new_class =
+                PowersetClass::from_speakers(&remapped_speakers).map_or(0, PowersetClass::index);
+            remapped[new_class] += p;
+        }
+    }
+    remapped
+}
+
+/// One speaker's open run: start frame, accumulated confidence, and whether
+/// the run is an overlap run.
+#[derive(Clone, Copy)]
+struct RunState {
+    start_g: usize,
+    conf_sum: f32,
+    conf_count: f32,
+    is_overlap: bool,
+}
+
+/// Run-length encoder over per-frame classes, holding one open run per local
+/// speaker. A run is broken not only when the speaker falls silent but also
+/// when its overlap status flips: a speaker talking across a brief overlap
+/// emits separate solo and overlap segments rather than one run tainted by the
+/// overlap. This keeps `is_overlap` precise (a segment is overlap iff *every*
+/// frame in it was an overlap frame) and makes two simultaneously-active
+/// speakers emit time-equal overlap segments that
+/// `extract_overlap_time_ranges` pairs.
+struct RleEncoder {
+    global_start: f32,
+    stride: f32,
+    min_segment_secs: f32,
+    active: [Option<RunState>; MAX_LOCAL_SPEAKERS],
+    segments: Vec<RawSegment>,
+}
+
+impl RleEncoder {
+    fn new(global_start: f32, stride: f32, min_segment_secs: f32) -> Self {
+        Self {
+            global_start,
+            stride,
+            min_segment_secs,
+            active: [None; MAX_LOCAL_SPEAKERS],
+            segments: Vec::new(),
+        }
+    }
+
+    /// Feed one global frame: open, extend, split, or close each speaker's run.
+    fn push_frame(&mut self, g: usize, frame_class: Option<PowersetClass>, conf: f32) {
+        let is_overlap_frame = frame_class.map(|c| c.is_overlap()).unwrap_or(false);
+        let active_speakers: Vec<u8> = match frame_class {
+            Some(c) => c.speakers(),
+            None => Vec::new(),
+        };
+
+        for s in 0..MAX_LOCAL_SPEAKERS {
+            let s_active_now = active_speakers.iter().any(|x| *x as usize == s);
+            let ov_now = s_active_now && is_overlap_frame;
+            match (self.active[s], s_active_now) {
+                (None, true) => {
+                    self.active[s] = Some(RunState {
+                        start_g: g,
+                        conf_sum: conf,
+                        conf_count: 1.0,
+                        is_overlap: ov_now,
+                    });
                 }
+                (Some(run), true) if run.is_overlap == ov_now => {
+                    self.active[s] = Some(RunState {
+                        conf_sum: run.conf_sum + conf,
+                        conf_count: run.conf_count + 1.0,
+                        ..run
+                    });
+                }
+                (Some(run), true) => {
+                    // Overlap status flipped — close the current run, open a new one at g.
+                    self.emit_segment(s, run, g);
+                    self.active[s] = Some(RunState {
+                        start_g: g,
+                        conf_sum: conf,
+                        conf_count: 1.0,
+                        is_overlap: ov_now,
+                    });
+                }
+                (Some(run), false) => {
+                    self.emit_segment(s, run, g);
+                    self.active[s] = None;
+                }
+                (None, false) => {}
             }
         }
+    }
 
-        // Flush trailing active runs.
-        for (s, slot) in active.iter().enumerate() {
-            if let Some((start_g, conf_sum, conf_count, run_ov)) = *slot {
-                push_segment(
-                    &mut segments,
-                    global_start,
-                    stride,
-                    s,
-                    start_g,
-                    global_frames,
-                    conf_sum,
-                    conf_count,
-                    run_ov,
-                    self.config.min_segment_secs,
-                );
+    /// Flush the trailing open runs and return the segments sorted by start time.
+    fn finish(mut self, global_frames: usize) -> Vec<RawSegment> {
+        for s in 0..MAX_LOCAL_SPEAKERS {
+            if let Some(run) = self.active[s] {
+                self.emit_segment(s, run, global_frames);
             }
         }
-
-        segments.sort_by(|a, b| {
+        self.segments.sort_by(|a, b| {
             a.time
                 .start
                 .partial_cmp(&b.time.start)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-        Ok(segments)
+        self.segments
     }
-}
 
-/// Emit one run as a `RawSegment`, skipping runs shorter than `min_segment_secs`.
-/// `start_g`/`end_g` are global frame indices; the run carries a single
-/// `is_overlap` flag because the RLE splits runs at every overlap-status change.
-#[allow(clippy::too_many_arguments)]
-fn push_segment(
-    segments: &mut Vec<RawSegment>,
-    global_start: f32,
-    stride: f32,
-    speaker: usize,
-    start_g: usize,
-    end_g: usize,
-    conf_sum: f32,
-    conf_count: f32,
-    is_overlap: bool,
-    min_segment_secs: f32,
-) {
-    let start_t = global_start + start_g as f32 * stride;
-    let end_t = global_start + end_g as f32 * stride;
-    if end_t - start_t < min_segment_secs {
-        return;
+    /// Emit one run as a `RawSegment`, skipping runs shorter than
+    /// `min_segment_secs`. `end_g` is the exclusive end global frame index; the
+    /// run carries a single `is_overlap` flag because the RLE splits runs at
+    /// every overlap-status change.
+    fn emit_segment(&mut self, speaker: usize, run: RunState, end_g: usize) {
+        let start_t = self.global_start + run.start_g as f32 * self.stride;
+        let end_t = self.global_start + end_g as f32 * self.stride;
+        if end_t - start_t < self.min_segment_secs {
+            return;
+        }
+        let mean_conf = (run.conf_sum / run.conf_count.max(1.0)).clamp(0.0, 1.0);
+        self.segments.push(RawSegment {
+            time: TimeRange {
+                start: start_t as f64,
+                end: end_t as f64,
+            },
+            local_speaker_idx: speaker as u8,
+            is_overlap: run.is_overlap,
+            confidence: PowersetDecoder::frame_confidence(mean_conf),
+        });
     }
-    let mean_conf = (conf_sum / conf_count.max(1.0)).clamp(0.0, 1.0);
-    segments.push(RawSegment {
-        time: TimeRange {
-            start: start_t as f64,
-            end: end_t as f64,
-        },
-        local_speaker_idx: speaker as u8,
-        is_overlap,
-        confidence: PowersetDecoder::frame_confidence(mean_conf),
-    });
 }
 
 #[allow(clippy::unwrap_used)]
@@ -561,6 +591,67 @@ mod tests {
         f[1] = p; // class 1 = {spk0}
         f[0] = 1.0 - p;
         f
+    }
+
+    /// The class-index remap used by `remap_probs` must agree with the
+    /// historical inline table on every reachable input: all 7 classes crossed
+    /// with all 27 permutations valued in 0..=2 (including non-bijective ones).
+    /// Probability mass is preserved exactly (same accumulation order).
+    #[test]
+    fn remap_probs_matches_historical_class_table() {
+        fn historical_table(speakers: &[u8]) -> usize {
+            match speakers {
+                [] => 0,
+                [s] => 1 + (*s as usize),
+                [a, b] => {
+                    let (lo, hi) = if a < b {
+                        (*a as usize, *b as usize)
+                    } else {
+                        (*b as usize, *a as usize)
+                    };
+                    match (lo, hi) {
+                        (0, 1) => 4,
+                        (0, 2) => 5,
+                        (1, 2) => 6,
+                        _ => 0,
+                    }
+                }
+                _ => 0,
+            }
+        }
+        let probs = [0.05_f32, 0.3, 0.2, 0.1, 0.15, 0.1, 0.1];
+        for p0 in 0..MAX_LOCAL_SPEAKERS as u8 {
+            for p1 in 0..MAX_LOCAL_SPEAKERS as u8 {
+                for p2 in 0..MAX_LOCAL_SPEAKERS as u8 {
+                    let perm = [p0, p1, p2];
+                    let remapped = remap_probs(&probs, &perm);
+                    let mut expected = [0.0_f32; NUM_POWERSET_CLASSES];
+                    for (c, &p) in probs.iter().enumerate() {
+                        let class = PowersetDecoder::class_for_index(c).unwrap();
+                        let mapped: Vec<u8> = class
+                            .speakers()
+                            .iter()
+                            .map(|s| {
+                                if (*s as usize) < MAX_LOCAL_SPEAKERS {
+                                    perm[*s as usize]
+                                } else {
+                                    *s
+                                }
+                            })
+                            .collect();
+                        expected[historical_table(&mapped)] += p;
+                    }
+                    assert_eq!(remapped, expected, "perm {perm:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn remap_probs_with_identity_permutation_is_exact() {
+        let probs = [0.05_f32, 0.3, 0.2, 0.1, 0.15, 0.1, 0.1];
+        let remapped = remap_probs(&probs, &[0, 1, 2]);
+        assert_eq!(remapped, probs);
     }
 
     #[test]

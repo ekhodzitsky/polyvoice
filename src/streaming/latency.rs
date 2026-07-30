@@ -115,13 +115,12 @@ impl LatencyPreset {
     }
 
     /// Parse a CLI / config name (`realtime`, `balanced`, `accurate`).
+    ///
+    /// Thin compatibility wrapper over [`FromStr`](std::str::FromStr); new code
+    /// should prefer `name.parse()` or `LatencyPreset::from_str` for a typed
+    /// error.
     pub fn parse_name(name: &str) -> Option<Self> {
-        match name.trim().to_ascii_lowercase().as_str() {
-            "realtime" | "real-time" | "low" | "low-latency" => Some(Self::Realtime),
-            "balanced" | "default" => Some(Self::Balanced),
-            "accurate" | "accuracy" | "high" => Some(Self::Accurate),
-            _ => None,
-        }
+        name.parse().ok()
     }
 
     /// Canonical lowercase name for CLI / docs.
@@ -133,6 +132,36 @@ impl LatencyPreset {
         }
     }
 }
+
+impl std::str::FromStr for LatencyPreset {
+    type Err = LatencyPresetParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "realtime" | "real-time" | "low" | "low-latency" => Ok(Self::Realtime),
+            "balanced" | "default" => Ok(Self::Balanced),
+            "accurate" | "accuracy" | "high" => Ok(Self::Accurate),
+            other => Err(LatencyPresetParseError(other.to_owned())),
+        }
+    }
+}
+
+/// Returned by `LatencyPreset::from_str` when the input doesn't match a known
+/// preset name or alias.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LatencyPresetParseError(pub String);
+
+impl std::fmt::Display for LatencyPresetParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unknown latency preset '{}': expected realtime|balanced|accurate",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for LatencyPresetParseError {}
 
 impl StreamingParams {
     /// Build params from a preset (same as [`LatencyPreset::params`]).
@@ -177,6 +206,23 @@ mod tests {
             Some(LatencyPreset::Accurate)
         );
         assert_eq!(LatencyPreset::parse_name("nope"), None);
+    }
+
+    #[test]
+    fn from_str_matches_parse_name_with_typed_error() {
+        use std::str::FromStr;
+        for (name, preset) in [
+            ("realtime", LatencyPreset::Realtime),
+            (" low-latency ", LatencyPreset::Realtime),
+            ("Balanced", LatencyPreset::Balanced),
+            ("accuracy", LatencyPreset::Accurate),
+        ] {
+            assert_eq!(LatencyPreset::from_str(name), Ok(preset));
+            assert_eq!(name.parse::<LatencyPreset>(), Ok(preset));
+        }
+        let err = LatencyPreset::from_str("nope").expect_err("unknown preset");
+        assert_eq!(err, LatencyPresetParseError("nope".to_owned()));
+        assert!(err.to_string().contains("nope"));
     }
 
     #[test]

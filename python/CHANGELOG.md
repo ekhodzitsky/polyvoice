@@ -1,6 +1,27 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.0] - 2026-07-30
+
+### Changed
+
+- **VBx is now the unconditional default clusterer** (`clusterer=None`),
+  matching the CLI: previously VBx was selected only when a PLDA directory
+  was configured. PLDA params resolve via `vbx_plda_dir` →
+  `POLYVOICE_VBX_PLDA_DIR` → registry download; pass `clusterer="ahc"` to
+  opt out. The `Pipeline.balanced()` / `.mobile()` signatures are unchanged.
+- Align with the core refactor: the Rust error surface is fully typed
+  (`anyhow` / string errors removed from public constructors); Python keeps
+  mapping these to `ValueError` / `OSError` / `RuntimeError` with the typed
+  detail in the message.
+- Build hygiene: the crate declares `rust-version = "1.88"` (tracking the
+  core MSRV) and adopts the same clippy lint set as the workspace
+  (`unwrap_used = "deny"`).
+
+## [0.12.0] - 2026-07-27
+
+### Changed
+
+- Lockstep version bump with core 0.12.0; no python-side changes.
 
 ## [0.11.0] - 2026-07-25
 

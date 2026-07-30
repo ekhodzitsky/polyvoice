@@ -49,7 +49,7 @@ pub struct ModelEntry {
     /// Filename used when caching to disk. Required so the cache is deterministic
     /// across renames upstream.
     pub filename: String,
-    /// Optional calibration descriptor (filled in M5 for INT8 entries).
+    /// Optional calibration descriptor (set for INT8 entries).
     #[serde(default)]
     pub calibration: Option<String>,
     /// Minisign signature (raw .minisig text) — optional during transition.

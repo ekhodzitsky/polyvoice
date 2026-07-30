@@ -1,16 +1,13 @@
 #![allow(clippy::unwrap_used)]
-//! M6b — smoke tests for the polyvoice CLI using assert_cmd + predicates.
+//! Smoke tests for the polyvoice CLI using assert_cmd + predicates.
 
 #![cfg(feature = "cli")]
 
 use assert_cmd::Command;
 use predicates::prelude::*;
 
-fn polyvoice() -> Command {
-    let mut cmd = Command::cargo_bin("polyvoice").unwrap();
-    cmd.env("RUST_BACKTRACE", "0");
-    cmd
-}
+mod common;
+use common::polyvoice_cmd;
 
 fn polyvoice_bench() -> Command {
     let mut cmd = Command::cargo_bin("polyvoice-bench").unwrap();
@@ -20,7 +17,7 @@ fn polyvoice_bench() -> Command {
 
 #[test]
 fn help_top_level() {
-    polyvoice()
+    polyvoice_cmd()
         .arg("--help")
         .assert()
         .success()
@@ -31,7 +28,7 @@ fn help_top_level() {
 
 #[test]
 fn help_diarize() {
-    polyvoice()
+    polyvoice_cmd()
         .args(["diarize", "--help"])
         .assert()
         .success()
@@ -42,7 +39,7 @@ fn help_diarize() {
 
 #[test]
 fn version_prints_correctly() {
-    polyvoice()
+    polyvoice_cmd()
         .arg("--version")
         .assert()
         .success()
@@ -54,7 +51,7 @@ fn version_prints_correctly() {
 
 #[test]
 fn diarize_invalid_profile_errors() {
-    polyvoice()
+    polyvoice_cmd()
         .args(["diarize", "/nonexistent/file.wav", "--profile", "garbage"])
         .assert()
         .failure()
@@ -65,7 +62,7 @@ fn diarize_invalid_profile_errors() {
 
 #[test]
 fn diarize_missing_file_errors() {
-    polyvoice()
+    polyvoice_cmd()
         .args([
             "diarize",
             "/nonexistent/directory/file.wav",
@@ -81,7 +78,7 @@ fn diarize_missing_file_errors() {
 
 #[test]
 fn models_list_runs_without_panic() {
-    polyvoice()
+    polyvoice_cmd()
         .args(["models", "list"])
         .assert()
         .stderr(predicate::str::contains("panicked at").not());
@@ -89,7 +86,7 @@ fn models_list_runs_without_panic() {
 
 #[test]
 fn models_info_shows_metadata() {
-    polyvoice()
+    polyvoice_cmd()
         .args(["models", "info", "silero_vad"])
         .assert()
         .success()
@@ -98,7 +95,7 @@ fn models_info_shows_metadata() {
 
 #[test]
 fn download_models_help_shows_profiles() {
-    polyvoice()
+    polyvoice_cmd()
         .args(["download-models", "--help"])
         .assert()
         .success()
@@ -118,7 +115,7 @@ fn bench_help_shows_args() {
 
 #[test]
 fn schema_outputs_valid_json_contract() {
-    let assert = polyvoice().arg("schema").assert().success();
+    let assert = polyvoice_cmd().arg("schema").assert().success();
     let json: serde_json::Value =
         serde_json::from_slice(&assert.get_output().stdout).expect("schema must be valid JSON");
     assert_eq!(json["title"], "DiarizationResult");

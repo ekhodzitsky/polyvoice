@@ -1,7 +1,8 @@
 //! Real-time streaming diarization pipeline.
 //!
 //! Processes audio incrementally chunk-by-chunk with bounded latency.
-//! Unlike the offline [`Pipeline`](crate::pipeline::Pipeline), `StreamingPipeline`
+//! Unlike the offline [`LegacyPipeline`](crate::pipeline::LegacyPipeline),
+//! `StreamingPipeline`
 //! emits [`SpeakerTurn`]s as soon as each embedding window is processed.
 //!
 //! Generic over [`crate::Embedder`] — bring-your-own encoders work without the
@@ -51,7 +52,7 @@
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let vad = EnergyVad::new(-40.0, 16000, 512);
-//!     // DummyExtractor implements Embedder via the legacy bridge.
+//!     // DummyExtractor implements Embedder directly.
 //!     let extractor = DummyExtractor::new(256);
 //!     let mut pipeline = StreamingPipeline::with_latency_preset(
 //!         vad,
@@ -70,7 +71,7 @@ mod latency;
 mod stability;
 
 pub use cache::{ArrivalOrderSpeakerCache, AssignResult};
-pub use latency::{LatencyPreset, StreamingParams};
+pub use latency::{LatencyPreset, LatencyPresetParseError, StreamingParams};
 pub use stability::{label_flip_rate, prefer_current_speaker};
 
 use crate::VadConfig;
@@ -86,6 +87,14 @@ pub enum StreamingError {
     Vad(#[from] VadError),
     #[error("embedding error: {0}")]
     Embedding(#[from] EmbedderError),
+    #[error(
+        "VAD returned {got} probabilities for one {frame_samples}-sample frame; \
+         StreamingPipeline requires exactly one probability per VadConfig::frame_size \
+         samples, so VadConfig::frame_size must equal the detector's native frame size"
+    )]
+    VadFrameMismatch { frame_samples: usize, got: usize },
+    #[error("invalid streaming params: {detail}")]
+    InvalidParams { detail: String },
 }
 
 impl StreamingError {
@@ -93,7 +102,7 @@ impl StreamingError {
     pub fn is_resource_exhausted(&self) -> bool {
         match self {
             Self::Embedding(e) => e.is_resource_exhausted(),
-            Self::Vad(_) => false,
+            Self::Vad(_) | Self::VadFrameMismatch { .. } | Self::InvalidParams { .. } => false,
         }
     }
 }
@@ -135,7 +144,9 @@ where
     /// `0.08`). Prefer [`Self::with_latency_preset`] for named latency modes.
     ///
     /// # Errors
-    /// Returns `VadError::InvalidChunkSize` if the VAD `frame_size` is zero.
+    /// Returns `VadError::InvalidChunkSize` if the VAD `frame_size` is zero and
+    /// [`StreamingError::InvalidParams`] if the config's window geometry is not
+    /// positive and ordered (`0 < hop_secs <= window_secs`).
     pub fn new(
         vad: V,
         extractor: E,
@@ -171,13 +182,23 @@ where
     }
 
     /// Construct with full control over diarization config and streaming params.
+    ///
+    /// `params.speaker_cache_cap == 0` is clamped to 1, matching the
+    /// `max_speakers.max(1)` policy of [`Self::new`].
+    ///
+    /// # Errors
+    /// Returns `VadError::InvalidChunkSize` if the VAD `frame_size` is zero and
+    /// [`StreamingError::InvalidParams`] if the window geometry is not positive
+    /// and ordered (`0 < hop_secs <= window_secs`, yielding at least one sample
+    /// each at the configured sample rate).
     pub fn with_params(
         vad: V,
         extractor: E,
         mut config: DiarizationConfig,
         vad_config: VadConfig,
-        params: StreamingParams,
+        mut params: StreamingParams,
     ) -> Result<Self, StreamingError> {
+        params.speaker_cache_cap = params.speaker_cache_cap.max(1);
         // Keep window geometry on the diarization config aligned with params.
         config.window.window_secs = params.window_secs;
         config.window.hop_secs = params.hop_secs;
@@ -195,19 +216,10 @@ where
         preset: Option<LatencyPreset>,
     ) -> Result<Self, StreamingError> {
         let frame_size = vad_config.frame_size;
-        if frame_size == 0 {
-            return Err(VadError::InvalidChunkSize {
-                expected: 1,
-                got: 0,
-            }
-            .into());
-        }
         let sample_rate = config.window.sample_rate.get();
-        let sr_f = sample_rate as f32;
-        let ms_per_frame = (frame_size as f32 / sr_f) * 1000.0;
-        let min_silence_frames = (vad_config.min_silence_ms / ms_per_frame).ceil() as usize;
-        let min_speech_frames =
-            ((config.speech_filter.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
+        let geometry =
+            vad_config.frame_geometry(sample_rate, config.speech_filter.min_speech_secs)?;
+        Self::validate_window_geometry(&config, &params)?;
 
         let cache = ArrivalOrderSpeakerCache::new(
             params.speaker_cache_cap,
@@ -216,8 +228,11 @@ where
             params.prefer_current_margin,
         );
 
-        let vad_state =
-            VadStateMachine::new(vad_config.threshold, min_silence_frames, min_speech_frames);
+        let vad_state = VadStateMachine::new(
+            vad_config.threshold,
+            geometry.min_silence_frames,
+            geometry.min_speech_frames,
+        );
 
         Ok(Self {
             vad,
@@ -233,6 +248,43 @@ where
             turns: Vec::new(),
             total_frames: 0,
         })
+    }
+
+    /// Reject window geometry that would otherwise panic inside
+    /// [`WindowBuffer`]: non-positive or non-finite durations, a hop larger
+    /// than the window, or durations too small to yield even one sample at
+    /// the configured sample rate.
+    fn validate_window_geometry(
+        config: &DiarizationConfig,
+        params: &StreamingParams,
+    ) -> Result<(), StreamingError> {
+        let window_secs = params.window_secs;
+        let hop_secs = params.hop_secs;
+        if !window_secs.is_finite() || window_secs <= 0.0 {
+            return Err(StreamingError::InvalidParams {
+                detail: format!("window_secs must be finite and > 0, got {window_secs}"),
+            });
+        }
+        if !hop_secs.is_finite() || hop_secs <= 0.0 {
+            return Err(StreamingError::InvalidParams {
+                detail: format!("hop_secs must be finite and > 0, got {hop_secs}"),
+            });
+        }
+        if hop_secs > window_secs {
+            return Err(StreamingError::InvalidParams {
+                detail: format!("hop_secs ({hop_secs}) must be <= window_secs ({window_secs})"),
+            });
+        }
+        if config.window_samples() == 0 || config.hop_samples() == 0 {
+            return Err(StreamingError::InvalidParams {
+                detail: format!(
+                    "window_secs ({window_secs}) / hop_secs ({hop_secs}) must each yield at \
+                     least one sample at sample_rate {}",
+                    config.window.sample_rate.get()
+                ),
+            });
+        }
+        Ok(())
     }
 
     /// Active streaming parameters (window, cache cap, stability knobs).
@@ -265,6 +317,14 @@ where
     /// There is no minimum chunk size; sub-frame chunks are buffered transparently.
     ///
     /// Returned turns may have `stable: false` (provisional); see module docs.
+    ///
+    /// # VAD frame contract
+    ///
+    /// The detector's native frame size must equal [`VadConfig::frame_size`],
+    /// so each buffered frame yields exactly one probability (see the trait's
+    /// [frame contract](VoiceActivityDetector#frame-contract)). A mismatch is
+    /// rejected with [`StreamingError::VadFrameMismatch`] on the first frame
+    /// instead of silently shifting every derived timestamp.
     pub fn feed(&mut self, samples: &[f32]) -> Result<Vec<SpeakerTurn>, StreamingError> {
         let mut new_turns = Vec::new();
         self.vad_buffer.extend_from_slice(samples);
@@ -274,38 +334,49 @@ where
             let frame: Vec<f32> = self.vad_buffer.drain(..frame_size).collect();
             let probs = self.vad.process(&frame)?;
 
-            // Each call to process on exactly frame_size samples is expected to
-            // return at least one probability. If the VAD returns more than one
-            // (e.g. sub-frame resolution), we treat them as successive frames.
-            for &prob in &probs {
-                let current_frame = self.total_frames;
-                self.total_frames += 1;
+            // Frame-numbering guard: frame indices are converted to sample
+            // offsets as `frame_index * frame_size`, which is only exact when
+            // each `frame_size` block yields exactly one probability. A
+            // detector whose native frame differs from `VadConfig::frame_size`
+            // would silently shift every timestamp, so reject it loudly on
+            // the first offending frame.
+            if probs.len() != 1 {
+                return Err(StreamingError::VadFrameMismatch {
+                    frame_samples: frame_size,
+                    got: probs.len(),
+                });
+            }
 
-                if let Some(event) = self.vad_state.advance(prob, current_frame) {
-                    match event {
-                        VadEvent::SpeechStart { start_frame } => {
+            let prob = probs[0];
+            let current_frame = self.total_frames;
+            self.total_frames += 1;
+
+            if let Some(event) = self.vad_state.advance(prob, current_frame) {
+                match event {
+                    VadEvent::SpeechStart { start_frame } => {
+                        self.window_buffer.clear();
+                        self.window_buffer.set_next_start(start_frame * frame_size);
+                    }
+                    VadEvent::SpeechEnd {
+                        start_frame,
+                        end_frame,
+                    } => {
+                        let seg_end_sample = end_frame * frame_size;
+                        if self
+                            .vad_state
+                            .meets_min_speech_duration(start_frame, end_frame)
+                        {
+                            new_turns.extend(self.flush_window_buffer(seg_end_sample)?);
+                        } else {
                             self.window_buffer.clear();
-                            self.window_buffer.set_next_start(start_frame * frame_size);
-                        }
-                        VadEvent::SpeechEnd {
-                            start_frame,
-                            end_frame,
-                        } => {
-                            let seg_end_sample = end_frame * frame_size;
-                            let duration_frames = end_frame - start_frame;
-                            if duration_frames >= self.vad_state.min_speech_frames() {
-                                new_turns.extend(self.flush_window_buffer(seg_end_sample)?);
-                            } else {
-                                self.window_buffer.clear();
-                            }
                         }
                     }
                 }
+            }
 
-                if self.vad_state.in_speech() {
-                    self.window_buffer.extend(&frame);
-                    new_turns.extend(self.try_extract_windows()?);
-                }
+            if self.vad_state.in_speech() {
+                self.window_buffer.extend(&frame);
+                new_turns.extend(self.try_extract_windows()?);
             }
         }
 
@@ -333,8 +404,10 @@ where
             end_frame,
         }) = self.vad_state.flush(self.total_frames)
         {
-            let duration_frames = end_frame - start_frame;
-            if duration_frames >= self.vad_state.min_speech_frames() {
+            if self
+                .vad_state
+                .meets_min_speech_duration(start_frame, end_frame)
+            {
                 let seg_end_sample = end_frame * self.frame_size;
                 new_turns.extend(self.flush_window_buffer(seg_end_sample)?);
             } else {
@@ -421,7 +494,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::embedding::DummyExtractor;
+    use crate::embedder::DummyExtractor;
     use crate::types::SpeakerId;
     use crate::{EnergyVad, VadConfig};
 
@@ -487,6 +560,26 @@ mod tests {
             !turns.is_empty(),
             "expected at least one turn for 5 s of speech"
         );
+    }
+
+    #[test]
+    fn feed_rejects_vad_with_mismatched_native_frame() {
+        // Native VAD frame 256 < VadConfig::frame_size 512: each pipeline frame
+        // yields two probabilities, which would silently stretch every
+        // timestamp — the pipeline must fail loudly on the first frame instead.
+        let vad = EnergyVad::new(-40.0, 16000, 256);
+        let extractor = DummyExtractor::new(256);
+        let mut p =
+            StreamingPipeline::new(vad, extractor, default_config(), default_vad_config()).unwrap();
+        let err = p.feed(&loud_samples(1.0)).unwrap_err();
+        assert!(!err.is_resource_exhausted());
+        match err {
+            StreamingError::VadFrameMismatch { frame_samples, got } => {
+                assert_eq!(frame_samples, 512);
+                assert_eq!(got, 2);
+            }
+            other => panic!("expected VadFrameMismatch, got {other:?}"),
+        }
     }
 
     #[test]
@@ -593,6 +686,98 @@ mod tests {
             p.speaker_cache_cap()
         );
         assert!(p.cache_len() <= 2);
+    }
+
+    #[test]
+    fn with_params_rejects_non_positive_window_secs() {
+        let params = StreamingParams {
+            window_secs: 0.0,
+            ..LatencyPreset::Balanced.params()
+        };
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let res = StreamingPipeline::with_params(
+            vad,
+            extractor,
+            DiarizationConfig::default(),
+            default_vad_config(),
+            params,
+        );
+        assert!(matches!(res, Err(StreamingError::InvalidParams { .. })));
+    }
+
+    #[test]
+    fn with_params_rejects_hop_larger_than_window() {
+        let params = StreamingParams {
+            window_secs: 0.5,
+            hop_secs: 1.0,
+            ..LatencyPreset::Balanced.params()
+        };
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let res = StreamingPipeline::with_params(
+            vad,
+            extractor,
+            DiarizationConfig::default(),
+            default_vad_config(),
+            params,
+        );
+        match res {
+            Err(StreamingError::InvalidParams { detail }) => {
+                assert!(detail.contains("hop_secs"), "got: {detail}");
+            }
+            Err(other) => panic!("expected InvalidParams, got {other:?}"),
+            Ok(_) => panic!("expected InvalidParams error"),
+        }
+    }
+
+    #[test]
+    fn with_params_rejects_sub_sample_window() {
+        // Positive but so small it truncates to zero samples at 16 kHz.
+        let params = StreamingParams {
+            window_secs: 1e-9,
+            hop_secs: 1e-9,
+            ..LatencyPreset::Balanced.params()
+        };
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let res = StreamingPipeline::with_params(
+            vad,
+            extractor,
+            DiarizationConfig::default(),
+            default_vad_config(),
+            params,
+        );
+        assert!(matches!(res, Err(StreamingError::InvalidParams { .. })));
+    }
+
+    #[test]
+    fn with_params_clamps_zero_speaker_cache_cap() {
+        let params = StreamingParams {
+            speaker_cache_cap: 0,
+            ..LatencyPreset::Balanced.params()
+        };
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let p = StreamingPipeline::with_params(
+            vad,
+            extractor,
+            DiarizationConfig::default(),
+            default_vad_config(),
+            params,
+        )
+        .unwrap();
+        assert_eq!(p.speaker_cache_cap(), 1);
+    }
+
+    #[test]
+    fn new_rejects_zero_window_secs_in_config() {
+        let mut config = default_config();
+        config.window.window_secs = 0.0;
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let res = StreamingPipeline::new(vad, extractor, config, default_vad_config());
+        assert!(matches!(res, Err(StreamingError::InvalidParams { .. })));
     }
 
     #[test]

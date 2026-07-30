@@ -3,6 +3,26 @@
 //! [`WindowIter`] iterates over `(start, end)` sample ranges.
 //! [`WindowBuffer`] buffers incoming samples and yields full windows.
 
+/// Invalid window geometry rejected by [`WindowIter::try_new`] and
+/// [`WindowBuffer::try_new`].
+#[derive(thiserror::Error, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowError {
+    /// Window size must be positive.
+    #[error("win must be > 0")]
+    ZeroWindow,
+    /// Hop size must be positive.
+    #[error("hop must be > 0")]
+    ZeroHop,
+    /// Hop must not exceed the window size.
+    #[error("hop ({hop}) must be <= win ({win})")]
+    HopExceedsWindow {
+        /// Requested hop size in samples.
+        hop: usize,
+        /// Requested window size in samples.
+        win: usize,
+    },
+}
+
 /// Iterator over fixed-size (or partial trailing) windows.
 ///
 /// Yields `(start_sample, end_sample)` pairs.  `end_sample` is exclusive.
@@ -28,24 +48,41 @@ impl WindowIter {
     /// # Panics
     ///
     /// Panics if `win == 0`, `hop == 0`, or `hop > win`.
-    #[allow(clippy::panic)] // Intentional precondition panic.
+    /// Use [`try_new`](Self::try_new) for a fallible alternative.
+    #[allow(clippy::panic)] // Documented convenience over `try_new`.
     pub fn new(total: usize, win: usize, hop: usize) -> Self {
+        match Self::try_new(total, win, hop) {
+            Ok(iter) => iter,
+            Err(e) => panic!("WindowIter::new: {e}"),
+        }
+    }
+
+    /// { true }
+    /// `pub fn try_new(total: usize, win: usize, hop: usize) -> Result<Self, WindowError>`
+    /// { ret.is_ok() == (win > 0 && hop > 0 && hop <= win) }
+    /// Fallible constructor: validates the window geometry and returns
+    /// [`WindowError`] instead of panicking.
+    ///
+    /// * `total` — total number of samples in the audio region.
+    /// * `win`   — window size in samples (must be > 0).
+    /// * `hop`   — hop size in samples (must be > 0 and <= `win`).
+    pub fn try_new(total: usize, win: usize, hop: usize) -> Result<Self, WindowError> {
         if win == 0 {
-            panic!("WindowIter::new: win must be > 0");
+            return Err(WindowError::ZeroWindow);
         }
         if hop == 0 {
-            panic!("WindowIter::new: hop must be > 0");
+            return Err(WindowError::ZeroHop);
         }
         if hop > win {
-            panic!("WindowIter::new: hop ({hop}) must be <= win ({win})");
+            return Err(WindowError::HopExceedsWindow { hop, win });
         }
-        Self {
+        Ok(Self {
             start: 0,
             total,
             win,
             hop,
             include_partial: false,
-        }
+        })
     }
 
     /// { true }
@@ -103,23 +140,39 @@ impl WindowBuffer {
     /// # Panics
     ///
     /// Panics if `win == 0`, `hop == 0`, or `hop > win`.
-    #[allow(clippy::panic)] // Intentional precondition panic.
+    /// Use [`try_new`](Self::try_new) for a fallible alternative.
+    #[allow(clippy::panic)] // Documented convenience over `try_new`.
     pub fn new(win: usize, hop: usize) -> Self {
+        match Self::try_new(win, hop) {
+            Ok(buf) => buf,
+            Err(e) => panic!("WindowBuffer::new: {e}"),
+        }
+    }
+
+    /// { true }
+    /// `pub fn try_new(win: usize, hop: usize) -> Result<Self, WindowError>`
+    /// { ret.is_ok() == (win > 0 && hop > 0 && hop <= win) }
+    /// Fallible constructor: validates the window geometry and returns
+    /// [`WindowError`] instead of panicking.
+    ///
+    /// * `win` — window size in samples (must be > 0).
+    /// * `hop` — hop size in samples (must be > 0 and <= `win`).
+    pub fn try_new(win: usize, hop: usize) -> Result<Self, WindowError> {
         if win == 0 {
-            panic!("WindowBuffer::new: win must be > 0");
+            return Err(WindowError::ZeroWindow);
         }
         if hop == 0 {
-            panic!("WindowBuffer::new: hop must be > 0");
+            return Err(WindowError::ZeroHop);
         }
         if hop > win {
-            panic!("WindowBuffer::new: hop ({hop}) must be <= win ({win})");
+            return Err(WindowError::HopExceedsWindow { hop, win });
         }
-        Self {
+        Ok(Self {
             buf: Vec::new(),
             win,
             hop,
             next_start: 0,
-        }
+        })
     }
 
     /// { true }
@@ -190,14 +243,6 @@ impl WindowBuffer {
     /// Clear all buffered samples and reset the next-start offset.
     pub fn clear(&mut self) {
         self.buf.clear();
-    }
-
-    /// { true }
-    /// `pub fn reset_start(&mut self)`
-    /// { self.next_start == 0 }
-    /// Reset the next-start offset to `0`.  The buffer itself is **not** cleared.
-    pub fn reset_start(&mut self) {
-        self.next_start = 0;
     }
 
     /// { true }
@@ -297,6 +342,40 @@ mod tests {
     #[should_panic(expected = "WindowBuffer::new: hop (5) must be <= win (4)")]
     fn window_buffer_rejects_hop_greater_than_win() {
         let _ = WindowBuffer::new(4, 5);
+    }
+
+    #[test]
+    fn window_iter_try_new_reports_geometry_errors() {
+        assert_eq!(
+            WindowIter::try_new(10, 0, 1).unwrap_err(),
+            WindowError::ZeroWindow
+        );
+        assert_eq!(
+            WindowIter::try_new(10, 2, 0).unwrap_err(),
+            WindowError::ZeroHop
+        );
+        assert_eq!(
+            WindowIter::try_new(10, 2, 3).unwrap_err(),
+            WindowError::HopExceedsWindow { hop: 3, win: 2 }
+        );
+        assert!(WindowIter::try_new(10, 2, 1).is_ok());
+    }
+
+    #[test]
+    fn window_buffer_try_new_reports_geometry_errors() {
+        assert_eq!(
+            WindowBuffer::try_new(0, 1).unwrap_err(),
+            WindowError::ZeroWindow
+        );
+        assert_eq!(
+            WindowBuffer::try_new(4, 0).unwrap_err(),
+            WindowError::ZeroHop
+        );
+        assert_eq!(
+            WindowBuffer::try_new(4, 5).unwrap_err(),
+            WindowError::HopExceedsWindow { hop: 5, win: 4 }
+        );
+        assert!(WindowBuffer::try_new(4, 2).is_ok());
     }
 }
 

@@ -55,15 +55,6 @@ pub fn speaker_at_stable(turns: &[SpeakerTurn], t: f64) -> Option<SpeakerId> {
         .map(|turn| turn.speaker)
 }
 
-/// Midpoint of a time range in seconds.
-///
-/// Thin alias of [`TimeRange::midpoint`] for call sites that already import
-/// this module.
-#[inline]
-pub fn midpoint(time: &TimeRange) -> f64 {
-    time.midpoint()
-}
-
 fn resolve_at(
     turns: &[SpeakerTurn],
     t: f64,
@@ -233,7 +224,6 @@ mod tests {
             start: 1.0,
             end: 3.0,
         };
-        assert!((midpoint(&tr) - 2.0).abs() < f64::EPSILON);
         assert!((tr.midpoint() - 2.0).abs() < f64::EPSILON);
     }
 }

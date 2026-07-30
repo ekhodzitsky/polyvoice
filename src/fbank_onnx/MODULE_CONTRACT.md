@@ -1,13 +1,14 @@
 ---
 schema_version: 1
 kind: module_contract
-module: src/ecapa
+module: src/fbank_onnx
 level: leaf
 layer: algorithm
 purpose: >
   Owns the shared fbank + ONNX speaker embedding engine (FbankOnnxExtractor)
   used by WeSpeaker / CAM++ / ERes2Net adapters and the CLI --legacy path.
-  Implements Embedder directly. Module name is historical (not ECAPA-only).
+  Implements Embedder directly. Generic across model families (not ECAPA-only);
+  renamed from `ecapa` (hard rename, no alias).
 status: stable
 owners:
   - polyvoice-core
@@ -16,7 +17,7 @@ workcell:
   parent: ""
   children: []
   owns_paths:
-    - src/ecapa/
+    - src/fbank_onnx/
   context_budget:
     max_files: 6
     max_source_lines: 400
@@ -30,7 +31,7 @@ authority:
   migration_lease_required:
     - cross-workcell write
     - public surface migration
-    - renaming the module away from ecapa
+    - renaming the module away from fbank_onnx
 surface:
   - name: FbankOnnxExtractor
     kind: struct
@@ -38,11 +39,22 @@ surface:
     contract: >
       Pooled fbank→ONNX Embedder. Input 16 kHz mono; output L2-normalized
       embedding of configured dim. Prefer architecture adapters in embedder
-      when the model family is fixed.
+      when the model family is fixed. Construction failures are the typed
+      FbankExtractorError (EmptyPool vs SessionBuild), never anyhow.
     proof:
       kind: unit-test
-      target: src/ecapa::tests
-      command: cargo test --lib ecapa --features onnx
+      target: src/fbank_onnx::tests
+      command: cargo test --lib fbank_onnx --features onnx
+  - name: FbankExtractorError
+    kind: enum
+    visibility: public
+    contract: >
+      Typed construction error: EmptyPool (pool_size == 0) or SessionBuild
+      (per-slot OnnxError source).
+    proof:
+      kind: compile-time
+      target: src/fbank_onnx/mod.rs
+      command: cargo check --features onnx --lib
 dependencies:
   internal:
     - module: embedder
@@ -67,16 +79,16 @@ consumers:
       - FbankOnnxExtractor
 invariants:
   - id: implements-embedder
-    rule: FbankOnnxExtractor implements Embedder (not EmbeddingExtractor).
+    rule: FbankOnnxExtractor implements Embedder directly.
     proof:
       kind: compile-time
-      target: src/ecapa/mod.rs
+      target: src/fbank_onnx/mod.rs
       command: cargo check --features onnx --lib
 verification:
   pre_change:
-    - cargo test --lib ecapa --features onnx
+    - cargo test --lib fbank_onnx --features onnx
   full:
-    - cargo test --lib ecapa --features onnx
+    - cargo test --lib fbank_onnx --features onnx
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:
@@ -88,6 +100,6 @@ agent_policy:
     - Changing ONNX I/O layout assumptions.
 ---
 
-# src/ecapa
+# src/fbank_onnx
 
 Shared fbank + ONNX embedder engine (`FbankOnnxExtractor` implements `Embedder`).

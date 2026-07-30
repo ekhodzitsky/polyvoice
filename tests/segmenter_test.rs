@@ -33,7 +33,7 @@ fn synthetic_two_speaker_audio() -> Vec<f32> {
 }
 
 #[test]
-#[ignore = "real network — run with --ignored"]
+#[ignore = "requires network"]
 fn powerset_segmenter_emits_segments_on_real_model() {
     let tmp = TempDir::new().expect("temp dir");
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
@@ -59,7 +59,7 @@ fn powerset_segmenter_emits_segments_on_real_model() {
 }
 
 #[test]
-#[ignore = "real network — run with --ignored"]
+#[ignore = "requires network"]
 fn powerset_segmenter_rejects_short_audio() {
     let tmp = TempDir::new().expect("temp dir");
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
