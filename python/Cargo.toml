@@ -2,6 +2,9 @@
 name = "polyvoice-python"
 version = "0.13.0"
 edition = "2024"
+# Tracks the core crate's MSRV (the path dependency on polyvoice requires 1.88);
+# pyo3 itself is fine with older toolchains.
+rust-version = "1.88.0"
 publish = false
 
 [lib]
@@ -12,3 +15,6 @@ crate-type = ["cdylib"]
 polyvoice = { path = "..", features = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation", "vbx"] }
 pyo3 = { version = "0.28", features = ["extension-module"] }
 serde_json = "1"
+
+[lints.clippy]
+unwrap_used = "deny"

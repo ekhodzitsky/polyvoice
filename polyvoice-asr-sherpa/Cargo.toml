@@ -2,7 +2,8 @@
 name = "polyvoice-asr-sherpa"
 version = "0.10.0"
 edition = "2024"
-rust-version = "1.85.0"
+# Tracks the core crate's MSRV (polyvoice requires 1.88 for ort-enabled builds).
+rust-version = "1.88.0"
 description = "Opt-in CJK/multilingual ASR companion for polyvoice: SenseVoice and Paraformer via sherpa-onnx. Ships a SECOND C++ ONNX runtime — never a default feature."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
