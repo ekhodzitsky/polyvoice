@@ -14,16 +14,17 @@ v1 = "wespeaker_resnet34"
 latest = "silero_vad"
 v1 = "silero_vad"
 
-# v0.5 legacy profiles — point at proven FP32 models until v1.0 components
-# are validated. Mobile uses CAM++ (512-dim), Balanced uses WeSpeaker ResNet34
-# (256-dim). Both share Silero VAD for speech segmentation.
+# Shipping profiles. Both use the recalibrated INT8 pair (powerset dynamic
+# weights-only + ResNet34 static QDQ) — DER on ami-test-single is at or below
+# the FP32 baseline. The FP32 models stay available via their model ids for
+# direct ModelRegistry::ensure() callers.
 [profiles.mobile]
-segmenter = "powerset_fp32"
-embedder  = "wespeaker_resnet34"
+segmenter = "powerset_int8"
+embedder  = "resnet34_int8"
 
 [profiles.balanced]
-segmenter = "powerset_fp32"
-embedder  = "wespeaker_resnet34"
+segmenter = "powerset_int8"
+embedder  = "resnet34_int8"
 
 # Legacy v0.5 entries — kept for back-compat callers that pass the model id
 # directly to ModelRegistry::ensure(). Profiles do not reference them anymore.
@@ -104,22 +105,22 @@ trusted comment: polyvoice v0.6.0-alpha.3 | cam_pp_fp32.onnx
 pnLedo8TIV+K14fAyL54r1d9mWm1rN18C50BA/QQclyfP01tOaJVbxcJB+GZ4+AA/fluvTDJewlPn1gMo33wBA==
 '''
 
-# v1.0 INT8 artifacts. Hashes/sizes are real, taken from
-# `bash scripts/publish-models.sh` output. Calibration set: VoxConverse-dev
-# random 500-sample (seed 42). See docs/calibration/<date>-int8-validation.md.
-#
-# NOTE (2026-05-07): hashes below are PROVISIONAL — produced from a
-# preview calibration that used voxconverse-test as a stand-in calibration set
-# (because the dev split download was still in progress). They will be
-# overwritten by `publish-models.sh` after the full VoxConverse-dev calibration
-# completes. Sizes are stable across calibration sets (compression depends on
-# weight statistics, not calibration distribution).
+# v1.0 INT8 artifacts, recalibrated against VoxConverse-dev:
+# - powerset_int8: weights-only dynamic quantization (QInt8, per-channel) —
+#   static QDQ is not viable for this recurrent model (int8 activations on the
+#   LSTM path destroy posteriors even when every compute op is excluded).
+#   No calibration data.
+# - resnet34_int8: static QDQ (QInt8, per-channel), calibrated on 1819 real
+#   fbank+CMVN speech windows (0.5-5 s RTTM segments, VoxConverse-dev), with
+#   the statistics-pooling tail and the input conv kept in fp32.
+# - cam_pp_int8: unchanged from the previous calibration; not referenced by
+#   any shipping profile.
 [models.powerset_int8]
-url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/v0.6.0-alpha.2/powerset_int8.onnx"
-sha256   = "ef549ac4b068fdb8df273d2df43cd9c150a3edc26f859b0c9b5c07f2db7914aa"
-size     = 5737909
+url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/models-int8-v2/powerset_int8.onnx"
+sha256   = "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+size     = 1649256
 filename = "powerset_int8.onnx"
-calibration = "voxconverse_dev_500_samples_seed_42"
+calibration = "weights-only dynamic quant, no calibration data"
 license  = "MIT"
 license_url = "https://github.com/k2-fsa/sherpa-onnx"
 provenance = "INT8 quant of sherpa-onnx-pyannote-segmentation-3-0"
@@ -131,9 +132,9 @@ hop_secs = 2.0
 num_speakers = 3
 signature = '''
 untrusted comment: signature from minisign secret key
-RUQGu9FvZMmIhU/BRu4ryq+ErSzXtl11bOOsOU0N43fBlBw5PlG0CcAVg1tcdHocfuTBfslpnb1igiBfkQBU9ZGFaf/Ec2Yu3go=
-trusted comment: polyvoice v0.6.0-alpha.3 | powerset_int8.onnx
-WCgtdOCkchC7LjeKxisHOzcAS3+84kMP9F2so0dd2vs1WLP0r2sv0rCzKPYovV+l/Nk2EG+RYbh1eisAj1knAw==
+RUQGu9FvZMmIhcR4tl4/adcGnamCx9bdqn19jau2fR13+ZlGWjIhvGY8dKVtMRAsqNRAG4ConovFvFtg+i/Oi6pHViljSAxm9w8=
+trusted comment: polyvoice model signing | powerset_int8.onnx
+2uP5mp2QmktBQ9Ef6miZpxT03EvqajAehheme+PFMU7Rj+PQ9uTE9HoI7HxOwR8k2uQuHNXYPOqn3cqWSdCyCg==
 '''
 
 [models.cam_pp_int8]
@@ -157,11 +158,11 @@ XHIN9IgSVAhMFVb0TazR7NjXwO/ba2iCHQzrXsJEJ6hM4KpnrpjUgFaxTHkH4nVxlq8/5Pp4ODUc4qku
 '''
 
 [models.resnet34_int8]
-url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/v0.6.0-alpha.2/resnet34_int8.onnx"
-sha256   = "d4528ed19bac510e9f8dfe08515bc3c2860f8f4d135aa5ce875b346ed0f3bbae"
-size     = 6766646
+url      = "https://github.com/ekhodzitsky/polyvoice/releases/download/models-int8-v2/resnet34_int8.onnx"
+sha256   = "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+size     = 6765058
 filename = "resnet34_int8.onnx"
-calibration = "voxconverse_dev_500_samples_seed_42"
+calibration = "voxconverse_dev_fbank_cmvn_rttm_segments_1819"
 license  = "Apache-2.0"
 license_url = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34"
 provenance = "INT8 quant of Wespeaker ResNet34"
@@ -171,9 +172,9 @@ sample_rate = 16000
 embedding_dim = 256
 signature = '''
 untrusted comment: signature from minisign secret key
-RUQGu9FvZMmIhfT3/3pshTKu6WUH1VBohHK2UjcgjH77Gd6GHqQJJXp74rJtfoiEUx6e3jfPsfAIt6N7NmpjyL4xmPugQ+d9uAs=
-trusted comment: polyvoice v0.6.0-alpha.3 | resnet34_int8.onnx
-OdzDgAbIm1wmfjPhvZFqPYFl5dvBTlquEGjx1ZCJ10xpvY2IVP1xFvOtzGPT4hrzuf9h94KFUuya8/yvcSN/DQ==
+RUQGu9FvZMmIhbyEbyzNuaI/cMPl2FynsjuPIz8pYuz56z6foEDqfdGOk4aMvB3pecxJQ4T16PmSK55buKIsMRDdrudPy498CwI=
+trusted comment: polyvoice model signing | resnet34_int8.onnx
+vthsMhwnQ8gSFSnTRWU9j3JiuQAQpAHsf7Tc1vKTad0o/IjuuPu7YPXY3vh/TvwaPMDNm3FqHgcKZ98VoMn6AA==
 '''
 
 # Optional ERes2NetV2 (Apache-2.0, ungated). Short-utterance-oriented 192-d
