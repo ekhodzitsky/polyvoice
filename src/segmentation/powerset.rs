@@ -10,7 +10,6 @@ use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, RuntimeSession
 use crate::segmentation::aggregator::{AggregationConfig, Aggregator, WindowOutput};
 use crate::segmentation::{MIN_AUDIO_SAMPLES, RawSegment, SegmentationError, Segmenter};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 /// Tunable parameters for `PowersetSegmenter`.
 #[derive(Debug, Clone)]
@@ -23,6 +22,18 @@ pub struct PowersetConfig {
     pub sample_rate: u32,
     /// Forwarded to the inner `Aggregator`.
     pub aggregation: AggregationConfig,
+    /// Number of pooled inference sessions; windows fan out across them.
+    /// `0` is treated as 1. Default: `clamp(available_parallelism, 1, 4)`.
+    pub pool_size: usize,
+}
+
+/// Default session-pool size: a few parallel windows without oversubscribing
+/// the machine (each session still gets a fair share of intra-op threads).
+fn default_pool_size() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .clamp(1, 4)
 }
 
 impl Default for PowersetConfig {
@@ -36,6 +47,7 @@ impl Default for PowersetConfig {
             hop_secs: 1.0,
             sample_rate: 16000,
             aggregation: AggregationConfig::default(),
+            pool_size: default_pool_size(),
         }
     }
 }
@@ -66,6 +78,7 @@ impl PowersetConfig {
             hop_secs: meta.hop_secs.unwrap_or(self.hop_secs),
             sample_rate: self.sample_rate,
             aggregation: self.aggregation.clone(),
+            pool_size: self.pool_size,
         };
         if candidate.validate_geometry().is_ok() {
             self.window_secs = candidate.window_secs;
@@ -124,7 +137,7 @@ impl PowersetConfig {
 
 /// ONNX-backed powerset speaker segmenter.
 pub struct PowersetSegmenter {
-    session: Mutex<RuntimeSession>,
+    pool: crate::utils::ObjectPool<RuntimeSession>,
     input_name: String,
     config: PowersetConfig,
     model_path: PathBuf,
@@ -154,18 +167,30 @@ impl PowersetSegmenter {
         ep: crate::onnx::ExecutionProvider,
     ) -> Result<Self, SegmentationError> {
         let path = model_path.as_ref().to_path_buf();
-        let session = crate::onnx::build_session_with_ep(&path, ep, None).map_err(|e| {
-            SegmentationError::ModelIo {
-                path: path.clone(),
-                detail: e.to_string(),
+        let pool_size = config.pool_size.max(1);
+        // Each pool session gets a fair share of the machine's cores so a
+        // loaded pool does not oversubscribe (same policy as the embedder).
+        let intra = std::thread::available_parallelism()
+            .map(|n| (n.get() / pool_size).max(1))
+            .unwrap_or(1);
+        let mut sessions = Vec::with_capacity(pool_size);
+        let mut input_name = None;
+        for _ in 0..pool_size {
+            let session =
+                crate::onnx::build_session_with_ep(&path, ep, Some(intra)).map_err(|e| {
+                    SegmentationError::ModelIo {
+                        path: path.clone(),
+                        detail: e.to_string(),
+                    }
+                })?;
+            if input_name.is_none() {
+                input_name = Some(session.primary_input_name().unwrap_or("waveform").to_owned());
             }
-        })?;
-        let input_name = session
-            .primary_input_name()
-            .unwrap_or("waveform")
-            .to_owned();
+            sessions.push(session);
+        }
+        let input_name = input_name.unwrap_or_else(|| "waveform".to_owned());
         Ok(Self {
-            session: Mutex::new(session),
+            pool: crate::utils::ObjectPool::new(sessions),
             input_name,
             config,
             model_path: path,
@@ -198,6 +223,7 @@ impl PowersetSegmenter {
     /// Returns (logits_flat_row_major, num_frames).
     fn infer_window(
         &self,
+        session: &mut RuntimeSession,
         window: &[f32],
         window_idx: usize,
     ) -> Result<(Vec<f32>, usize), SegmentationError> {
@@ -210,8 +236,7 @@ impl PowersetSegmenter {
         // Shape [1, 1, win_samples] matching the model's "waveform" input.
         let input_tensor = InferenceTensor::f32(vec![1, 1, win_samples], buf);
 
-        let mut guard = self.session.lock().unwrap_or_else(|e| e.into_inner());
-        let outputs = guard
+        let outputs = session
             .run(&[NamedTensor::new(self.input_name.as_str(), &input_tensor)])
             .map_err(|e| SegmentationError::InferenceFailed {
                 window_idx,
@@ -258,19 +283,56 @@ impl Segmenter for PowersetSegmenter {
 
         let win_samples = self.window_samples();
         let hop_samples = self.hop_samples();
-        let mut windows: Vec<WindowOutput> = Vec::new();
-        for (window_idx, (start_sample, _end_sample)) in
+
+        // Window starts are computed up front so worker threads only borrow
+        // `audio` immutably. Each window is independent (the segmenter keeps
+        // no state across windows), so chunks fan out across scoped threads
+        // that check out pooled sessions; results are flattened in window
+        // order, keeping the aggregated output bit-identical to the
+        // sequential version.
+        let specs: Vec<(usize, usize)> =
             crate::window::WindowIter::new(audio.len(), win_samples, hop_samples)
                 .include_partial()
                 .enumerate()
-        {
-            let slice = &audio[start_sample..(start_sample + win_samples).min(audio.len())];
-            let (logits, num_frames) = self.infer_window(slice, window_idx)?;
-            let start_t = start_sample as f32 / self.config.sample_rate as f32;
-            let end_t = (start_sample + win_samples) as f32 / self.config.sample_rate as f32;
-            let w = WindowOutput::new(start_t, end_t, logits, num_frames)?;
-            windows.push(w);
-        }
+                .map(|(window_idx, (start_sample, _end_sample))| (window_idx, start_sample))
+                .collect();
+
+        let n = specs.len();
+        let num_threads = self.config.pool_size.max(1).min(n).max(1);
+        let chunk_size = n.div_ceil(num_threads);
+
+        let windows: Vec<WindowOutput> = std::thread::scope(|s| {
+            let handles: Vec<_> = specs
+                .chunks(chunk_size.max(1))
+                .map(|chunk| {
+                    s.spawn(move || {
+                        let mut session = self.pool.checkout();
+                        chunk
+                            .iter()
+                            .map(|&(window_idx, start_sample)| {
+                                let slice = &audio
+                                    [start_sample..(start_sample + win_samples).min(audio.len())];
+                                let (logits, num_frames) =
+                                    self.infer_window(&mut session, slice, window_idx)?;
+                                let start_t =
+                                    start_sample as f32 / self.config.sample_rate as f32;
+                                let end_t = (start_sample + win_samples) as f32
+                                    / self.config.sample_rate as f32;
+                                WindowOutput::new(start_t, end_t, logits, num_frames)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+
+            let mut windows = Vec::with_capacity(n);
+            for h in handles {
+                // A panicking worker panics here too, as in the sequential version.
+                let chunk_results = h.join().unwrap_or_else(|e| std::panic::resume_unwind(e));
+                windows.extend(chunk_results);
+            }
+            windows.into_iter().collect::<Result<Vec<_>, _>>()
+        })?;
 
         let agg = Aggregator::new(self.config.aggregation.clone());
         agg.stitch(&windows)
