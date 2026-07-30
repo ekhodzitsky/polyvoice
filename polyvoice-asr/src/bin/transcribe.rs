@@ -74,8 +74,13 @@ fn main() -> Result<()> {
     let models = registry
         .ensure_for_profile(profile)
         .context("ensure diarization models")?;
-    let extractor = FbankOnnxExtractor::new(&models.embedder_path, profile.embedding_dim(), 1)
-        .context("load embedder")?;
+    let extractor = FbankOnnxExtractor::new(
+        &models.embedder_path,
+        profile.embedding_dim(),
+        1,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
+    .context("load embedder")?;
     let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
     let mut vad = SileroVad::new(&vad_path, 512).context("load VAD")?;
     let config = DiarizationConfig {

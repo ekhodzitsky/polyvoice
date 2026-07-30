@@ -30,12 +30,29 @@ const ERR_REGISTRY: i32 = 30;
 const ERR_INTERNAL: i32 = 99;
 
 /// Build a structured MCP error carrying the FFI `{code, message}` payload.
+/// Client-caused bad input maps to `invalid_params`; everything else (model
+/// load, inference, registry, internal) maps to `internal_error`.
 fn err(code: i32, message: impl Into<String>) -> ErrorData {
     let message = message.into();
-    ErrorData::invalid_params(
-        message.clone(),
-        Some(serde_json::json!({ "code": code, "message": message })),
-    )
+    let data = Some(serde_json::json!({ "code": code, "message": message }));
+    if code == ERR_INVALID_ARG {
+        ErrorData::invalid_params(message, data)
+    } else {
+        ErrorData::internal_error(message, data)
+    }
+}
+
+/// Validate the optional speaker ceiling, mirroring the CLI's range check.
+fn resolve_max_speakers(n: Option<usize>) -> Result<u8, ErrorData> {
+    match n {
+        None => Ok(PipelineConfig::default().max_speakers),
+        Some(v) => u8::try_from(v).ok().filter(|&u| u >= 1).ok_or_else(|| {
+            err(
+                ERR_INVALID_ARG,
+                format!("max_speakers must be in 1..=255, got {v}"),
+            )
+        }),
+    }
 }
 
 // ----- tool input/output DTOs (strict schemas; additionalProperties: false) -----
@@ -56,7 +73,7 @@ struct DiarizeInput {
     /// Ignored for "vbx".
     #[serde(default)]
     threshold: Option<f32>,
-    /// Cap the number of speakers (clustering ceiling).
+    /// Cap the number of speakers (clustering ceiling; must be in 1..=255).
     #[serde(default)]
     max_speakers: Option<usize>,
     /// Optional directory with VBx PLDA `.npy` params (overrides env/registry).
@@ -295,10 +312,7 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
             ));
         }
     };
-    let max_speakers = input
-        .max_speakers
-        .map(|n| u8::try_from(n).unwrap_or(u8::MAX))
-        .unwrap_or_else(|| PipelineConfig::default().max_speakers);
+    let max_speakers = resolve_max_speakers(input.max_speakers)?;
 
     let registry = ModelRegistry::default().map_err(|e| err(ERR_REGISTRY, e.to_string()))?;
     // Ensure profile models exist before build (clearer error mapping).
@@ -366,6 +380,39 @@ mod tests {
         assert!(!cap.asr_available);
         assert!(cap.tools.iter().any(|t| t == "polyvoice.diarize"));
         assert_eq!(cap.output_formats.len(), 5);
+    }
+
+    #[test]
+    fn invalid_arg_maps_to_jsonrpc_invalid_params() {
+        let e = err(ERR_INVALID_ARG, "bad input");
+        assert_eq!(e.code.0, -32602);
+        let data = e.data.expect("data");
+        assert_eq!(data["code"], ERR_INVALID_ARG);
+        assert!(data["message"].as_str().unwrap().contains("bad input"));
+    }
+
+    #[test]
+    fn model_load_maps_to_jsonrpc_internal_error() {
+        let e = err(ERR_MODEL_LOAD, "no model");
+        assert_eq!(e.code.0, -32603);
+        let data = e.data.expect("data");
+        assert_eq!(data["code"], ERR_MODEL_LOAD);
+    }
+
+    #[test]
+    fn max_speakers_accepts_default_and_valid_range() {
+        assert_eq!(resolve_max_speakers(None).unwrap(), 20);
+        assert_eq!(resolve_max_speakers(Some(1)).unwrap(), 1);
+        assert_eq!(resolve_max_speakers(Some(255)).unwrap(), 255);
+    }
+
+    #[test]
+    fn max_speakers_rejects_out_of_range_with_invalid_arg() {
+        for bad in [0usize, 256, 1000] {
+            let e = resolve_max_speakers(Some(bad)).unwrap_err();
+            assert_eq!(e.code.0, -32602);
+            assert_eq!(e.data.expect("data")["code"], ERR_INVALID_ARG);
+        }
     }
 
     #[test]
