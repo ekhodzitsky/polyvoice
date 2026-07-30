@@ -1,11 +1,16 @@
 //! C FFI ABI v3 for polyvoice Pipeline (v0.6.5+).
 //!
+//! The pipeline matches the CLI/MCP production default: pipeline v2 with VBx
+//! clustering. On first use the builder resolves the VBx PLDA params from
+//! `POLYVOICE_VBX_PLDA_DIR` or downloads them via the model registry (needs
+//! network access unless pre-cached).
+//!
 //! Threading model: `PolyvoicePipeline` is `Send`. Each `*mut PolyvoicePipeline`
 //! owns its data; callers must call `polyvoice_pipeline_destroy` exactly once.
 //! All entry points are wrapped in `catch_unwind` per spec §8.4.
 
 use crate::models::ModelRegistry;
-use crate::pipeline_v2::Pipeline;
+use crate::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
 use crate::types::{Profile, SampleRate};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int};
@@ -21,6 +26,8 @@ pub enum PolyvoiceProfile {
 pub enum PolyvoiceStatus {
     Ok = 0,
     InvalidArg = 1,
+    /// Reserved for ABI stability: the current implementation never returns
+    /// this status (pipeline_v2 has no matching error). Do not reuse the value.
     AudioTooShort = 2,
     AudioTooLong = 3,
     ModelLoad = 10,
@@ -43,6 +50,20 @@ pub enum PolyvoiceFormat {
 /// RTTM has a file-id column but the FFI runs on a raw sample buffer with no
 /// filename; emit this fixed id (callers can post-process if they need another).
 const FFI_RTTM_FILE_ID: &str = "audio";
+
+/// Reject path-traversal attempts (e.g. `"../../evil"`) before the path is
+/// passed to `ModelRegistry::with_cache_dir`. Absolute paths such as
+/// `/opt/polyvoice/models` are legitimate cache locations and are accepted.
+fn validate_cache_dir(s: &str) -> Result<(), c_int> {
+    let cache_path = std::path::Path::new(s);
+    if cache_path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(PolyvoiceStatus::InvalidArg as c_int);
+    }
+    Ok(())
+}
 
 /// Project `result` into the requested format. Returns a status code on failure.
 fn render_result(result: &crate::types::DiarizationResult, format: c_int) -> Result<String, c_int> {
@@ -109,29 +130,29 @@ polyvoice_pipeline_create(
                 }
                 .to_str()
                     .map_err(|_| PolyvoiceStatus::InvalidArg as c_int)?;
-                // Reject path-traversal attempts (e.g. "../../evil") before the
-                // path is passed to ModelRegistry::with_cache_dir.  FFI-002.
-                let cache_path = std::path::Path::new(s);
-                if cache_path.is_absolute() {
-                    return Err(PolyvoiceStatus::InvalidArg as c_int);
-                }
-                if cache_path
-                    .components()
-                    .any(|c| matches!(c, std::path::Component::ParentDir))
-                {
-                    return Err(PolyvoiceStatus::InvalidArg as c_int);
-                }
+                validate_cache_dir(s)?;
                 ModelRegistry::with_cache_dir(s)
             }
             .map_err(|_| PolyvoiceStatus::Registry as c_int)?;
+            // Same production default as the CLI/MCP front doors: pipeline v2
+            // with VBx clustering (the builder resolves the PLDA params from
+            // POLYVOICE_VBX_PLDA_DIR or the registry download).
+            let config = PipelineConfig {
+                profile: prof,
+                clusterer: ClustererKind::Vbx,
+                ..PipelineConfig::default()
+            };
             let pipeline = Pipeline::builder()
-                .profile(prof)
+                .config(config)
                 .with_models_from(registry)
                 .build()
                 .map_err(|e| match e {
                     crate::pipeline_v2::ConfigError::Registry(_) |
                     crate::pipeline_v2::ConfigError::UnknownModel { .. } => {
                         PolyvoiceStatus::Registry as c_int
+                    }
+                    crate::pipeline_v2::ConfigError::Load { .. } => {
+                        PolyvoiceStatus::ModelLoad as c_int
                     }
                     crate::pipeline_v2::ConfigError::MissingRegistry { .. } |
                     crate::pipeline_v2::ConfigError::CustomComponentInProfile { .. } |
@@ -153,6 +174,74 @@ polyvoice_pipeline_create(
         Ok(Err(code)) => code,
         Err(_) => PolyvoiceStatus::Internal as c_int,
     }
+}
+
+/// Shared body of `polyvoice_pipeline_run` and `polyvoice_pipeline_run_format`:
+/// validates the raw inputs, runs the pipeline, and renders the result in
+/// `format` (see `PolyvoiceFormat`). Returns the rendered string; the caller
+/// hands it to C via [`emit_c_string`].
+///
+/// # Safety
+/// - `pipeline` must be a valid pointer returned by `polyvoice_pipeline_create`.
+/// - `samples` must point to at least `n_samples` valid f32 values.
+unsafe fn run_impl(
+    pipeline: *mut PolyvoicePipeline,
+    samples: *const c_float,
+    n_samples: usize,
+    sample_rate: u32,
+    format: c_int,
+) -> Result<String, c_int> {
+    if pipeline.is_null() || samples.is_null() {
+        return Err(PolyvoiceStatus::InvalidArg as c_int);
+    }
+    // Reject unknown formats before touching the pipeline.
+    if !(PolyvoiceFormat::Json as c_int..=PolyvoiceFormat::Txt as c_int).contains(&format) {
+        return Err(PolyvoiceStatus::InvalidArg as c_int);
+    }
+    let pipeline = unsafe {
+        // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
+        &*pipeline
+    };
+    // SAFETY: samples was checked non-null; n_samples is caller-provided length.
+    const MAX_SAMPLES: usize = 16000 * 3600; // 1 hour at 16 kHz
+    if n_samples > MAX_SAMPLES {
+        return Err(PolyvoiceStatus::AudioTooLong as c_int);
+    }
+    let samples = unsafe {
+        // SAFETY: samples was checked non-null; n_samples was validated against MAX_SAMPLES.
+        std::slice::from_raw_parts(samples, n_samples)
+    };
+    let sr = SampleRate::new(sample_rate).ok_or(PolyvoiceStatus::InvalidArg as c_int)?;
+    let result = pipeline.inner.run(samples, sr).map_err(|e| match e {
+        crate::pipeline_v2::PipelineError::UnsupportedSampleRate { .. } => {
+            PolyvoiceStatus::InvalidArg as c_int
+        }
+        crate::pipeline_v2::PipelineError::Registry(_) => PolyvoiceStatus::Registry as c_int,
+        _ => PolyvoiceStatus::Inference as c_int,
+    })?;
+    render_result(&result, format)
+}
+
+/// Hand `rendered` to C as a nul-terminated string written to
+/// `out_str`/`out_str_len`. The string must later be freed with
+/// `polyvoice_free_string`.
+///
+/// # Safety
+/// `out_str` and `out_str_len` must be valid non-null pointers.
+unsafe fn emit_c_string(
+    rendered: String,
+    out_str: *mut *mut c_char,
+    out_str_len: *mut usize,
+) -> Result<(), c_int> {
+    let len = rendered.len();
+    let cstr = CString::new(rendered).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
+    let ptr_out = cstr.into_raw();
+    unsafe {
+        // SAFETY: out_str and out_str_len were checked non-null by the caller.
+        *out_str = ptr_out;
+        *out_str_len = len;
+    }
+    Ok(())
 }
 
 /// Run diarization on a buffer of f32 samples and return JSON.
@@ -178,47 +267,15 @@ polyvoice_pipeline_run(
     out_json_len: *mut usize,
 ) -> c_int {
     let r = catch_unwind(AssertUnwindSafe(|| -> Result<(), c_int> {
-        if pipeline.is_null() || samples.is_null() || out_json.is_null() || out_json_len.is_null() {
+        if out_json.is_null() || out_json_len.is_null() {
             return Err(PolyvoiceStatus::InvalidArg as c_int);
         }
-        let pipeline = unsafe { // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
-            &*pipeline
-        };
-        // SAFETY: samples was checked non-null; n_samples is caller-provided length.
-        const MAX_SAMPLES: usize = 16000 * 3600; // 1 hour at 16 kHz
-        if n_samples > MAX_SAMPLES {
-            return Err(PolyvoiceStatus::AudioTooLong as c_int);
-        }
-        let samples = unsafe { // SAFETY: samples was checked non-null; n_samples was validated against MAX_SAMPLES.
-            std::slice::from_raw_parts(samples, n_samples)
-        };
-        let sr = SampleRate::new(sample_rate)
-            .ok_or(PolyvoiceStatus::InvalidArg as c_int)?;
-        let result = pipeline
-            .inner
-            .run(samples, sr)
-            .map_err(|e| match e {
-                crate::pipeline_v2::PipelineError::UnsupportedSampleRate { .. } => {
-                    PolyvoiceStatus::InvalidArg as c_int
-                }
-                crate::pipeline_v2::PipelineError::ModelLoad { .. } => {
-                    PolyvoiceStatus::ModelLoad as c_int
-                }
-                crate::pipeline_v2::PipelineError::Registry(_) => {
-                    PolyvoiceStatus::Registry as c_int
-                }
-                _ => PolyvoiceStatus::Inference as c_int,
-            })?;
-        let json =
-            serde_json::to_string(&result).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
-        let len = json.len();
-        let cstr = CString::new(json).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
-        let ptr_out = cstr.into_raw();
+        let rendered = unsafe { // SAFETY: caller upholds the safety contract documented in # Safety above.
+            run_impl(pipeline, samples, n_samples, sample_rate, PolyvoiceFormat::Json as c_int)
+        }?;
         unsafe { // SAFETY: out_json and out_json_len were checked non-null above.
-            *out_json = ptr_out;
-            *out_json_len = len;
+            emit_c_string(rendered, out_json, out_json_len)
         }
-        Ok(())
     }));
     match r {
         Ok(Ok(())) => PolyvoiceStatus::Ok as c_int,
@@ -255,49 +312,15 @@ polyvoice_pipeline_run_format(
     out_str_len: *mut usize,
 ) -> c_int {
     let r = catch_unwind(AssertUnwindSafe(|| -> Result<(), c_int> {
-        if pipeline.is_null() || samples.is_null() || out_str.is_null() || out_str_len.is_null() {
+        if out_str.is_null() || out_str_len.is_null() {
             return Err(PolyvoiceStatus::InvalidArg as c_int);
         }
-        // Reject unknown formats before touching the pipeline.
-        if !(PolyvoiceFormat::Json as c_int..=PolyvoiceFormat::Txt as c_int).contains(&format) {
-            return Err(PolyvoiceStatus::InvalidArg as c_int);
-        }
-        let pipeline = unsafe { // SAFETY: pipeline was checked non-null; caller owns it for the duration of this call.
-            &*pipeline
-        };
-        const MAX_SAMPLES: usize = 16000 * 3600; // 1 hour at 16 kHz
-        if n_samples > MAX_SAMPLES {
-            return Err(PolyvoiceStatus::AudioTooLong as c_int);
-        }
-        let samples = unsafe { // SAFETY: samples was checked non-null; n_samples was validated against MAX_SAMPLES.
-            std::slice::from_raw_parts(samples, n_samples)
-        };
-        let sr = SampleRate::new(sample_rate)
-            .ok_or(PolyvoiceStatus::InvalidArg as c_int)?;
-        let result = pipeline
-            .inner
-            .run(samples, sr)
-            .map_err(|e| match e {
-                crate::pipeline_v2::PipelineError::UnsupportedSampleRate { .. } => {
-                    PolyvoiceStatus::InvalidArg as c_int
-                }
-                crate::pipeline_v2::PipelineError::ModelLoad { .. } => {
-                    PolyvoiceStatus::ModelLoad as c_int
-                }
-                crate::pipeline_v2::PipelineError::Registry(_) => {
-                    PolyvoiceStatus::Registry as c_int
-                }
-                _ => PolyvoiceStatus::Inference as c_int,
-            })?;
-        let rendered = render_result(&result, format)?;
-        let len = rendered.len();
-        let cstr = CString::new(rendered).map_err(|_| PolyvoiceStatus::Internal as c_int)?;
-        let ptr_out = cstr.into_raw();
+        let rendered = unsafe { // SAFETY: caller upholds the safety contract documented in # Safety above.
+            run_impl(pipeline, samples, n_samples, sample_rate, format)
+        }?;
         unsafe { // SAFETY: out_str and out_str_len were checked non-null above.
-            *out_str = ptr_out;
-            *out_str_len = len;
+            emit_c_string(rendered, out_str, out_str_len)
         }
-        Ok(())
     }));
     match r {
         Ok(Ok(())) => PolyvoiceStatus::Ok as c_int,
@@ -400,6 +423,27 @@ mod tests {
             assert!(
                 rendered.contains(marker),
                 "format {format} missing marker {marker:?}: {rendered}"
+            );
+        }
+    }
+
+    #[test]
+    fn cache_dir_rejects_parent_dir_traversal() {
+        for path in ["../evil", "models/../../evil", ".."] {
+            assert_eq!(
+                validate_cache_dir(path),
+                Err(PolyvoiceStatus::InvalidArg as c_int),
+                "traversal path must be rejected: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn cache_dir_accepts_absolute_and_relative_paths() {
+        for path in ["/opt/polyvoice/models", "models/cache", "."] {
+            assert!(
+                validate_cache_dir(path).is_ok(),
+                "legitimate cache dir must be accepted: {path}"
             );
         }
     }

@@ -2,7 +2,7 @@
 //!
 //! Pattern used by product STT stacks: the consumer owns speaker embeddings
 //! (Candle WeSpeaker, tract, custom); polyvoice owns Energy VAD, offline
-//! `Pipeline`, streaming `StreamingPipeline`, and clustering.
+//! `pipeline::LegacyPipeline`, streaming `StreamingPipeline`, and clustering.
 //!
 //! ```bash
 //! cargo run --no-default-features --example byo_embedder
@@ -12,7 +12,8 @@
 //! [`polyvoice::Embedder`].
 
 use polyvoice::{
-    ClusterConfig, DiarizationConfig, Embedder, EmbedderError, EnergyVad, Pipeline, VadConfig,
+    ClusterConfig, DiarizationConfig, Embedder, EmbedderError, EnergyVad, VadConfig,
+    pipeline::LegacyPipeline,
     streaming::{LatencyPreset, StreamingPipeline},
     types::WindowConfig,
 };
@@ -104,8 +105,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- Offline ---
     let mut vad = EnergyVad::new(-40.0, sr, vad_config.frame_size);
-    let result =
-        Pipeline::new(config, vad_config).run(&samples, &OrthogonalEmbedder::new(256), &mut vad)?;
+    let result = LegacyPipeline::new(config, vad_config).run(
+        &samples,
+        &OrthogonalEmbedder::new(256),
+        &mut vad,
+    )?;
     println!(
         "offline: {} speakers, {} turns",
         result.num_speakers,

@@ -17,16 +17,16 @@ pub use metadata::{MetaSource, ModelConfigMeta, load_model_config, read_onnx_met
 
 use crate::types::Profile;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// The default manifest shipped with the crate. Embedded at compile time.
 pub const DEFAULT_MANIFEST_TOML: &str = include_str!("manifest.toml");
 
 /// One VBx PLDA artifact: manifest id, on-disk filename, sha256, byte size.
 ///
-/// Source of truth for ids + integrity checks (must match `manifest.toml` and
-/// `fixtures/vbx-plda/`). Not profile-resolved — only pulled when the `vbx`
-/// clusterer is selected without a local PLDA dir. SHA-256 only until minisign
-/// signatures land (same optional-model pattern as `sortformer_v2`).
+/// Not profile-resolved — only pulled when the `vbx` clusterer is selected
+/// without a local PLDA dir. SHA-256 only until minisign signatures land
+/// (same optional-model pattern as `sortformer_v2`).
 #[derive(Clone, Copy, Debug)]
 pub struct VbxPldaArtifact {
     pub id: &'static str,
@@ -35,55 +35,77 @@ pub struct VbxPldaArtifact {
     pub size: u64,
 }
 
-/// The six precomputed VBx PLDA `.npy` files, in `PldaModel::from_dir` order.
-pub const VBX_PLDA_ARTIFACTS: &[VbxPldaArtifact] = &[
-    VbxPldaArtifact {
-        id: "vbx_plda_transform",
-        filename: "plda_transform.npy",
-        sha256: "90261469714415743f4b8a86ee6b89466db858bde3c5944367cccfb7abd34f14",
-        size: 131_200,
-    },
-    VbxPldaArtifact {
-        id: "vbx_plda_phi_computed",
-        filename: "plda_phi_computed.npy",
-        sha256: "6ef7cf2f5a23a45b66f440f9a996a4cf5c047b369829af695d50ef18aa0a35e3",
-        size: 1_152,
-    },
-    VbxPldaArtifact {
-        id: "vbx_plda_mean1",
-        filename: "plda_mean1.npy",
-        sha256: "e424c0c352182aa8e0f555dec1f3b30e29a20b9ed6b25d339f112af92e51e36f",
-        size: 2_176,
-    },
-    VbxPldaArtifact {
-        id: "vbx_plda_mean2",
-        filename: "plda_mean2.npy",
-        sha256: "6f6fb708a2037197b5b84ffeaa8f140cb878088fbecd6ab042ad26a7691bd2cf",
-        size: 640,
-    },
-    VbxPldaArtifact {
-        id: "vbx_plda_lda",
-        filename: "plda_lda.npy",
-        sha256: "e20c9b012bebd1aabda5a38a127e63a43cf35debdc502715fc143e2fb6bc3c4b",
-        size: 131_200,
-    },
-    VbxPldaArtifact {
-        id: "vbx_plda_mu",
-        filename: "plda_mu.npy",
-        sha256: "d286d48acf99bbc1ed1502fed0a3e361ae5626ce1870c8be9f7397c5e47886c6",
-        size: 1_152,
-    },
+/// Manifest model ids of the six precomputed VBx PLDA `.npy` files, in
+/// `PldaModel::from_dir` order. This is the only hardcoded part of the
+/// artifact table; filenames, hashes and sizes come from the embedded
+/// manifest via [`vbx_plda_artifacts`].
+pub const VBX_PLDA_MODEL_IDS: &[&str] = &[
+    "vbx_plda_transform",
+    "vbx_plda_phi_computed",
+    "vbx_plda_mean1",
+    "vbx_plda_mean2",
+    "vbx_plda_lda",
+    "vbx_plda_mu",
 ];
 
-/// Manifest model ids only (same order as [`VBX_PLDA_ARTIFACTS`]).
-pub const VBX_PLDA_MODEL_IDS: &[&str] = &[
-    VBX_PLDA_ARTIFACTS[0].id,
-    VBX_PLDA_ARTIFACTS[1].id,
-    VBX_PLDA_ARTIFACTS[2].id,
-    VBX_PLDA_ARTIFACTS[3].id,
-    VBX_PLDA_ARTIFACTS[4].id,
-    VBX_PLDA_ARTIFACTS[5].id,
-];
+/// The six precomputed VBx PLDA artifacts, in [`VBX_PLDA_MODEL_IDS`] order.
+///
+/// Built from [`default_manifest`] on first call so `manifest.toml` stays the
+/// single source of truth for ids + integrity checks (previously the sha256 /
+/// size / filename values were hardcoded here and kept consistent with the
+/// manifest by a test). Entry strings are leaked once so the table keeps
+/// handing out `&'static str`; bounded to six short manifest strings per
+/// process.
+#[allow(clippy::panic)] // missing VBx PLDA entry = embedded static-asset bug, same
+// rationale as `default_manifest`'s `expect`; covered by unit tests on every build.
+pub fn vbx_plda_artifacts() -> &'static [VbxPldaArtifact; 6] {
+    static TABLE: OnceLock<[VbxPldaArtifact; 6]> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let manifest = default_manifest();
+        std::array::from_fn(|i| {
+            let id = VBX_PLDA_MODEL_IDS[i];
+            // A missing entry is a static-asset bug, same class as a malformed
+            // embedded manifest (see `default_manifest`); the
+            // `optional_vbx_plda_entries_present_but_not_in_profiles` test
+            // covers this on every build.
+            let entry = manifest.model(id).unwrap_or_else(|| {
+                panic!("embedded manifest is missing VBx PLDA entry '{id}' — static-asset bug")
+            });
+            VbxPldaArtifact {
+                id,
+                filename: leak_manifest_string(&entry.filename),
+                sha256: leak_manifest_string(&entry.sha256),
+                size: entry.size.unwrap_or_else(|| {
+                    panic!("manifest VBx PLDA entry '{id}' has no size — static-asset bug")
+                }),
+            }
+        })
+    })
+}
+
+/// Leak a manifest string so [`vbx_plda_artifacts`] can keep the `&'static str`
+/// shape callers already use. Runs once per entry per process.
+fn leak_manifest_string(s: &str) -> &'static str {
+    Box::leak(s.to_owned().into_boxed_str())
+}
+
+/// Backwards-compatible iterable over [`vbx_plda_artifacts`]: keeps
+/// `for art in VBX_PLDA_ARTIFACTS` call sites working now that the table is
+/// manifest-derived instead of a const slice.
+#[derive(Clone, Copy, Debug)]
+pub struct VbxPldaArtifacts;
+
+/// The six precomputed VBx PLDA `.npy` files, in `PldaModel::from_dir` order.
+pub const VBX_PLDA_ARTIFACTS: VbxPldaArtifacts = VbxPldaArtifacts;
+
+impl IntoIterator for VbxPldaArtifacts {
+    type Item = &'static VbxPldaArtifact;
+    type IntoIter = std::slice::Iter<'static, VbxPldaArtifact>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        vbx_plda_artifacts().iter()
+    }
+}
 
 /// { true }
 /// pub fn default_manifest() -> Manifest
@@ -91,9 +113,10 @@ pub const VBX_PLDA_MODEL_IDS: &[&str] = &[
 /// Parse the bundled default manifest. Panics in debug if the embedded TOML is
 /// malformed — that's a static asset bug caught by `cargo test`.
 ///
-/// This is the *only* place the project allows `expect` on the embedded manifest:
-/// the asset is shipped with the crate, and `embedded_manifest_parses` test
-/// verifies it parses on every build.
+/// This and [`vbx_plda_artifacts`] are the only places the project allows
+/// panics on the embedded manifest: the asset is shipped with the crate, and
+/// the `embedded_manifest_parses` / VBx PLDA entry tests verify it on every
+/// build.
 #[allow(clippy::expect_used)]
 pub fn default_manifest() -> Manifest {
     // SAFETY: embedded manifest.toml is a compile-time static asset;
@@ -339,23 +362,7 @@ impl ModelRegistry {
     /// In release builds every profile-resolved model must carry a manifest
     /// signature (`UnsignedModel` otherwise); all bundled models are signed.
     pub fn ensure_for_profile(&self, profile: Profile) -> Result<ProfileModels, RegistryError> {
-        if profile == Profile::Custom {
-            return Err(RegistryError::CustomProfileUnresolvable);
-        }
-        let prof = self
-            .manifest
-            .profile(profile.manifest_id())
-            .ok_or_else(|| RegistryError::ProfileNotFound {
-                profile: profile.manifest_id().to_owned(),
-            })?;
-        self.require_signature_for(&prof.segmenter)?;
-        self.require_signature_for(&prof.embedder)?;
-        let segmenter_path = self.ensure(&prof.segmenter)?;
-        let embedder_path = self.ensure(&prof.embedder)?;
-        Ok(ProfileModels {
-            segmenter_path,
-            embedder_path,
-        })
+        self.ensure_for_profile_with(profile, Self::ensure)
     }
 
     /// { true }
@@ -367,6 +374,19 @@ impl ModelRegistry {
         &self,
         profile: Profile,
     ) -> Result<ProfileModels, RegistryError> {
+        self.ensure_for_profile_with(profile, Self::ensure_in_cache_only)
+    }
+
+    /// Shared body of `ensure_for_profile` and `ensure_in_cache_only_for_profile`:
+    /// resolves the profile's segmenter/embedder ids, enforces signature
+    /// presence, then delegates each model to `ensure_fn` (`Self::ensure`
+    /// online, `Self::ensure_in_cache_only` offline — mirroring the same
+    /// strictness so the offline test path can exercise both modes).
+    fn ensure_for_profile_with(
+        &self,
+        profile: Profile,
+        ensure_fn: impl Fn(&Self, &str) -> Result<PathBuf, RegistryError>,
+    ) -> Result<ProfileModels, RegistryError> {
         if profile == Profile::Custom {
             return Err(RegistryError::CustomProfileUnresolvable);
         }
@@ -376,12 +396,10 @@ impl ModelRegistry {
             .ok_or_else(|| RegistryError::ProfileNotFound {
                 profile: profile.manifest_id().to_owned(),
             })?;
-        // Mirror ensure_for_profile's strictness so the offline test path can
-        // exercise both modes without network access.
         self.require_signature_for(&prof.segmenter)?;
         self.require_signature_for(&prof.embedder)?;
-        let segmenter_path = self.ensure_in_cache_only(&prof.segmenter)?;
-        let embedder_path = self.ensure_in_cache_only(&prof.embedder)?;
+        let segmenter_path = ensure_fn(self, &prof.segmenter)?;
+        let embedder_path = ensure_fn(self, &prof.embedder)?;
         Ok(ProfileModels {
             segmenter_path,
             embedder_path,
@@ -636,12 +654,15 @@ mod tests {
     #[test]
     fn optional_vbx_plda_entries_present_but_not_in_profiles() {
         let m = default_manifest();
-        assert_eq!(VBX_PLDA_MODEL_IDS.len(), VBX_PLDA_ARTIFACTS.len());
-        for (art, listed_id) in VBX_PLDA_ARTIFACTS.iter().zip(VBX_PLDA_MODEL_IDS.iter()) {
+        let artifacts = vbx_plda_artifacts();
+        assert_eq!(VBX_PLDA_MODEL_IDS.len(), artifacts.len());
+        for (art, listed_id) in artifacts.iter().zip(VBX_PLDA_MODEL_IDS.iter()) {
             assert_eq!(art.id, *listed_id);
             let entry = m
                 .model(art.id)
                 .unwrap_or_else(|| panic!("missing manifest entry {}", art.id));
+            // The table is manifest-derived, so these hold by construction;
+            // keep the explicit checks to pin the derivation itself.
             assert_eq!(entry.sha256, art.sha256, "{} sha256 mismatch", art.id);
             assert_eq!(entry.size, Some(art.size), "{} size mismatch", art.id);
             assert_eq!(entry.filename, art.filename, "{} filename mismatch", art.id);

@@ -25,7 +25,7 @@ use polyvoice::vad::VoiceActivityDetector;
 use polyvoice::wav::read_wav;
 
 #[test]
-#[ignore = "requires cached Balanced ONNX bundle + bundled e2e clip"]
+#[ignore = "requires downloaded models"]
 fn coreml_full_pipeline_smoke() {
     let registry = ModelRegistry::default().expect("registry");
 

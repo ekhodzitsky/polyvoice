@@ -18,8 +18,13 @@ CLI and agent entry points for the polyvoice speaker diarization toolkit.
   production path as CLI (pipeline v2 + VBx by default).
 - **`polyvoice-measure`** — Measurement / latency utilities.
 
+Shared wiring (flag-to-config translation, pipeline construction, dataset
+walking) lives in **`src/cli_common`** (compiled with `cli` or `mcp`) so each
+binary stays a thin wrapper.
+
 ## Dependencies
 
+- `src/cli_common` — shared flag parsing, pipeline construction, dataset walking.
 - `src/pipeline_v2` — production ONNX orchestration (default).
 - `src/pipeline` — BYO / `--legacy` path.
 - `src/models` — model registry and download.
@@ -29,7 +34,8 @@ CLI and agent entry points for the polyvoice speaker diarization toolkit.
 
 ## Invariants
 
-- Binaries are thin wrappers; algorithms live in `lib` modules.
+- Binaries are thin wrappers; shared wiring lives in `src/cli_common`,
+  algorithms in `lib` modules.
 - Default diarization path matches shipped CLI accuracy gate (v2 + VBx).
 - `polyvoice-bench` expects `audio/*.wav` + `rttm/*.rttm`.
 

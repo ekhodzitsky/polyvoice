@@ -6,20 +6,17 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use polyvoice::cli_common;
 use polyvoice::der::{
     DerResult, compute_der, compute_der_decomposition, compute_der_single_speaker_regions,
     compute_der_with_uem, parse_uem,
 };
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::Pipeline;
-use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig, StageTimings};
-use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
-use polyvoice::types::{
-    ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate, TimeRange,
-};
+use polyvoice::pipeline::LegacyPipeline;
+use polyvoice::pipeline_v2::{Pipeline as V2Pipeline, PipelineConfig, StageTimings};
+use polyvoice::types::{DiarizationResult, Profile, SampleRate, TimeRange};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
-use polyvoice::{FbankOnnxExtractor, SileroVad};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -36,14 +33,15 @@ struct Args {
     output: Option<PathBuf>,
     #[arg(long, default_value = "0.25")]
     collar: f64,
-    /// Score DER over single-speaker reference regions only (md-eval
-    /// --skip-overlap semantics): overlapped speech frames are excluded from
-    /// scoring. Cannot be combined with --uem.
+    /// Score the headline DER over single-speaker reference regions only
+    /// (md-eval skip-overlap semantics): overlap frames are excluded from both
+    /// the speaker mapping and the error counts, per file and in all
+    /// aggregates. Incompatible with --uem.
     #[arg(long, default_value = "false")]
     skip_overlap: bool,
     #[arg(long)]
     max_files: Option<usize>,
-    #[arg(long, default_value = "0.45")]
+    #[arg(long, default_value_t = polyvoice::DEFAULT_AHC_THRESHOLD)]
     threshold: f32,
     /// Which pipeline to benchmark: `v2` (powerset segmentation + embeddings +
     /// clusterer + overlap resegmentation — the shipped CLI default) or
@@ -158,8 +156,8 @@ struct BenchReport {
     der_collar_micro: f64,
     der_no_collar_micro: f64,
     collar_secs: f64,
-    /// Headline DER was scored over single-speaker reference regions only
-    /// (md-eval --skip-overlap semantics).
+    /// True when --skip-overlap was active: the headline DER (per file and in
+    /// all aggregates) is computed over single-speaker reference regions only.
     skip_overlap: bool,
     averaging_policy: &'static str,
     /// Debug-formatted resolved execution provider (e.g. "CoreMl", "Cpu") —
@@ -176,14 +174,6 @@ struct BenchReport {
     speaker_count: SpeakerCountDiagnostics,
     model_hashes: Vec<ModelHash>,
     per_file: Vec<PerFileResult>,
-}
-
-fn parse_profile(name: &str) -> Result<Profile> {
-    match name {
-        "mobile" => Ok(Profile::Mobile),
-        "balanced" => Ok(Profile::Balanced),
-        other => anyhow::bail!("invalid profile: {other}"),
-    }
 }
 
 fn git_sha() -> String {
@@ -269,9 +259,8 @@ fn hex_lower(bytes: &[u8]) -> String {
 
 /// Legacy pipeline + its ONNX sessions (Silero VAD + sliding-window embedder).
 struct LegacyRunner {
-    pipeline: Pipeline,
-    extractor: FbankOnnxExtractor,
-    vad: SileroVad,
+    pipeline: LegacyPipeline,
+    stack: cli_common::LegacyStack,
 }
 
 /// The pipeline under benchmark. Both arms produce a `DiarizationResult` so all
@@ -289,7 +278,11 @@ impl Runner {
         sr: SampleRate,
     ) -> Result<(DiarizationResult, Option<StageTimings>)> {
         match self {
-            Runner::Legacy(l) => Ok((l.pipeline.run(samples, &l.extractor, &mut l.vad)?, None)),
+            Runner::Legacy(l) => Ok((
+                l.pipeline
+                    .run(samples, &l.stack.extractor, &mut l.stack.vad)?,
+                None,
+            )),
             Runner::V2(p) => {
                 let (result, timings) = p.run_with_timings(samples, sr)?;
                 Ok((result, Some(timings)))
@@ -298,30 +291,19 @@ impl Runner {
     }
 }
 
-fn parse_execution_provider(s: &str) -> Result<polyvoice::onnx::ExecutionProvider> {
-    use polyvoice::onnx::ExecutionProvider as Ep;
-    Ok(match s {
-        "auto" => Ep::auto(),
-        "cpu" => Ep::Cpu,
-        "coreml" => Ep::CoreMl,
-        "nnapi" => Ep::Nnapi,
-        "cuda" => Ep::Cuda,
-        "xnnpack" => Ep::XnnPack,
-        other => anyhow::bail!(
-            "unknown --execution-provider '{other}' (expected auto|cpu|coreml|nnapi|cuda|xnnpack)"
-        ),
-    })
+/// The runner plus everything the report needs that is file-independent.
+struct BenchRunner {
+    runner: Runner,
+    segmenter_id: String,
+    resolved_ep: polyvoice::onnx::ExecutionProvider,
+    profile: Profile,
+    registry: ModelRegistry,
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
-    if args.skip_overlap && args.uem.is_some() {
-        anyhow::bail!("--skip-overlap cannot be combined with --uem");
-    }
-    if args.skip_overlap {
-        eprintln!("skip-overlap: scoring DER over single-speaker reference regions only");
-    }
-    let profile = parse_profile(&args.profile)?;
+/// Build the requested pipeline. Each arm verifies the integrity of exactly
+/// the models it loads and yields the segmenter id for the report.
+fn build_runner(args: &Args) -> Result<BenchRunner> {
+    let profile: Profile = args.profile.parse()?;
     let registry = ModelRegistry::default().context("registry")?;
     let models = registry
         .ensure_for_profile(profile)
@@ -333,24 +315,16 @@ fn main() -> Result<()> {
     let explicit_ep = args
         .execution_provider
         .as_deref()
-        .map(parse_execution_provider)
+        .map(cli_common::parse_execution_provider)
         .transpose()?;
     let resolved_ep = match args.pipeline.as_str() {
         "v2" => explicit_ep.unwrap_or_else(polyvoice::onnx::ExecutionProvider::auto),
         _ => explicit_ep.unwrap_or(polyvoice::onnx::ExecutionProvider::Cpu),
     };
 
-    // Build the requested pipeline. Each path verifies the integrity of exactly
-    // the models it loads and returns the segmenter id for the report.
-    let (mut runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
+    let (runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
         "v2" => {
-            let clusterer = match args.clusterer.as_str() {
-                "ahc" => ClustererKind::Ahc {
-                    threshold: args.threshold,
-                },
-                "vbx" => ClustererKind::Vbx,
-                other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
-            };
+            let clusterer = cli_common::parse_clusterer_kind(&args.clusterer, args.threshold)?;
             let binarization = if args.binarize_onset.is_some()
                 || args.binarize_offset.is_some()
                 || args.binarize_min_on.is_some()
@@ -390,49 +364,285 @@ fn main() -> Result<()> {
                 .unwrap_or_default();
             check_model_sha256(&registry, &seg_id, &models.segmenter_path)?;
             check_model_sha256(&registry, &emb_id, &models.embedder_path)?;
-            let pipeline = V2Pipeline::builder()
-                .config(cfg)
-                .with_models_from(registry.clone())
-                .build()
-                .context("build v2 pipeline")?;
+            let pipeline = cli_common::build_v2_pipeline(cfg, registry.clone())?;
             (Runner::V2(Box::new(pipeline)), seg_id)
         }
         other => {
             if other != "legacy" {
                 anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')");
             }
-            let embedding_dim = profile.embedding_dim();
-            let extractor =
-                FbankOnnxExtractor::new(&models.embedder_path, embedding_dim, 1, resolved_ep)
-                    .context("load embedder")?;
             let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
-            let vad = SileroVad::new(&vad_path, 512).context("load vad")?;
+            let stack = cli_common::load_legacy_stack(
+                &models.embedder_path,
+                profile.embedding_dim(),
+                resolved_ep,
+                &vad_path,
+                512,
+            )?;
 
             // Integrity gate: a DER number is only trustworthy if produced by
             // the EXACT shipped artifact — hard-fail if the on-disk embedder/VAD
             // sha256 disagrees with the manifest (swapped/corrupted/non-FP32).
             verify_model_integrity(&registry, profile, &models.embedder_path, &vad_path)?;
 
-            let config = DiarizationConfig {
-                cluster: ClusterConfig {
-                    threshold: args.threshold,
-                    min_cluster_size: args.min_cluster_size.unwrap_or(1),
-                    min_cluster_secs: args.min_cluster_secs.unwrap_or(0.0),
-                    ..Default::default()
-                },
-                ..DiarizationConfig::default()
-            };
-            let pipeline = Pipeline::new(config, VadConfig::default());
+            let mut config = cli_common::legacy_diarization_config(args.threshold);
+            config.cluster.min_cluster_size = args.min_cluster_size.unwrap_or(1);
+            config.cluster.min_cluster_secs = args.min_cluster_secs.unwrap_or(0.0);
+            let pipeline = LegacyPipeline::new(config, VadConfig::default());
             (
-                Runner::Legacy(Box::new(LegacyRunner {
-                    pipeline,
-                    extractor,
-                    vad,
-                })),
+                Runner::Legacy(Box::new(LegacyRunner { pipeline, stack })),
                 "silero_vad".to_owned(),
             )
         }
     };
+    Ok(BenchRunner {
+        runner,
+        segmenter_id,
+        resolved_ep,
+        profile,
+        registry,
+    })
+}
+
+/// One scored file: the report row plus the inputs the aggregates need.
+struct FileOutcome {
+    row: PerFileResult,
+    der_pair: (DerResult, DerResult),
+    ref_count: usize,
+    hyp_count: usize,
+    audio_secs: f64,
+    runtime_secs: f64,
+}
+
+/// Run one wav through the pipeline and score it. `Ok(None)` means the file
+/// was skipped (no reference RTTM).
+fn run_file(
+    runner: &mut Runner,
+    wav: &Path,
+    rttm_dir: &Path,
+    uem_map: Option<&HashMap<String, Vec<TimeRange>>>,
+    args: &Args,
+) -> Result<Option<FileOutcome>> {
+    let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let rttm = rttm_dir.join(format!("{stem}.rttm"));
+    if !rttm.is_file() {
+        eprintln!("[SKIP] {stem}: no rttm");
+        return Ok(None);
+    }
+    let (samples, sr_hz) = read_wav(wav)?;
+    let sr =
+        SampleRate::new(sr_hz).ok_or_else(|| anyhow::anyhow!("invalid sample rate: {sr_hz}"))?;
+    let audio_secs = samples.len() as f64 / sr_hz as f64;
+
+    let t0 = Instant::now();
+    let (result, stage_timings) = runner.run(&samples, sr)?;
+    let runtime_secs = t0.elapsed().as_secs_f64();
+
+    let ref_turns = cli_common::load_ref_turns(rttm_dir, stem)?;
+
+    // Headline collar + no-collar DER, restricted to the UEM scope when present
+    // (AMI-style id fallback like the RTTM lookup). With --skip-overlap the
+    // headline is the single-speaker-regions DER (md-eval skip-overlap
+    // semantics); that mode rejects --uem at startup. The overlap
+    // decomposition below is a diagnostic and stays over the full file.
+    let scored: Option<&[TimeRange]> = uem_map.and_then(|m| {
+        m.get(stem)
+            .or_else(|| stem.split('.').next().and_then(|s| m.get(s)))
+            .map(|v| v.as_slice())
+    });
+    let (der, der_no_collar) = if args.skip_overlap {
+        (
+            compute_der_single_speaker_regions(&ref_turns, &result.turns, args.collar),
+            compute_der_single_speaker_regions(&ref_turns, &result.turns, 0.0),
+        )
+    } else {
+        match scored {
+            Some(s) => (
+                compute_der_with_uem(&ref_turns, &result.turns, args.collar, s),
+                compute_der_with_uem(&ref_turns, &result.turns, 0.0, s),
+            ),
+            None => (
+                compute_der(&ref_turns, &result.turns, args.collar),
+                compute_der(&ref_turns, &result.turns, 0.0),
+            ),
+        }
+    };
+    let decomp = compute_der_decomposition(&ref_turns, &result.turns, args.collar);
+
+    let ref_speakers: HashSet<_> = ref_turns.iter().map(|t| t.speaker.0).collect();
+    let hyp_speakers: HashSet<_> = result.turns.iter().map(|t| t.speaker.0).collect();
+    let ref_count = ref_speakers.len();
+    let hyp_count = hyp_speakers.len();
+
+    let rt_factor = audio_secs / runtime_secs.max(1e-6);
+
+    println!(
+        "{stem}\t DER={:.3}%\t miss={:.3}%\t fa={:.3}%\t conf={:.3}%\t rt={:.1}x\t spk={}\t turns={}",
+        der.der * 100.0,
+        der.miss_rate * 100.0,
+        der.false_alarm_rate * 100.0,
+        der.confusion_rate * 100.0,
+        rt_factor,
+        result.num_speakers,
+        result.turns.len(),
+    );
+
+    let row = PerFileResult {
+        filename: stem.to_owned(),
+        der_collar: der.der * 100.0,
+        der_no_collar: der_no_collar.der * 100.0,
+        miss_rate: der.miss_rate * 100.0,
+        false_alarm_rate: der.false_alarm_rate * 100.0,
+        confusion_rate: der.confusion_rate * 100.0,
+        der_single_speaker: decomp.single_speaker.der * 100.0,
+        der_overlap: decomp.overlap.der * 100.0,
+        per_speaker_recall: decomp
+            .per_speaker_recall
+            .iter()
+            .map(|s| PerSpeakerRecall {
+                speaker: s.speaker,
+                recall: s.recall,
+            })
+            .collect(),
+        rt_factor,
+        ref_speakers: ref_count,
+        hyp_speakers: hyp_count,
+        num_turns: result.turns.len(),
+        audio_duration_secs: audio_secs,
+        runtime_secs,
+        stage_timings,
+    };
+    Ok(Some(FileOutcome {
+        row,
+        der_pair: (der, der_no_collar),
+        ref_count,
+        hyp_count,
+        audio_secs,
+        runtime_secs,
+    }))
+}
+
+/// Per-run accumulators, folded one [`FileOutcome`] at a time.
+#[derive(Default)]
+struct Accum {
+    totals: Aggregate,
+    /// Per-file (collar, no-collar) DER pairs — the four report aggregates are
+    /// computed from these by the unit-tested aggregate_der helper.
+    der_pairs: Vec<(DerResult, DerResult)>,
+    speaker_exact: usize,
+    speaker_pm1: usize,
+    speaker_off: usize,
+    files_skipped: usize,
+    total_audio_secs: f64,
+    total_runtime_secs: f64,
+    stage_totals: Option<StageTimings>,
+    per_file: Vec<PerFileResult>,
+}
+
+impl Accum {
+    fn record(&mut self, outcome: FileOutcome) {
+        let FileOutcome {
+            row,
+            der_pair,
+            ref_count,
+            hyp_count,
+            audio_secs,
+            runtime_secs,
+        } = outcome;
+        let (der, der_no_collar) = der_pair;
+        self.totals.miss += der.miss_rate;
+        self.totals.false_alarm += der.false_alarm_rate;
+        self.totals.confusion += der.confusion_rate;
+        self.totals.count += 1;
+        match ref_count.abs_diff(hyp_count) {
+            0 => self.speaker_exact += 1,
+            1 => self.speaker_pm1 += 1,
+            _ => self.speaker_off += 1,
+        }
+        self.der_pairs.push((der, der_no_collar));
+        self.total_audio_secs += audio_secs;
+        self.total_runtime_secs += runtime_secs;
+        if let Some(t) = &row.stage_timings {
+            let acc = self.stage_totals.get_or_insert_with(StageTimings::default);
+            acc.segmentation_secs += t.segmentation_secs;
+            acc.embedding_secs += t.embedding_secs;
+            acc.clustering_secs += t.clustering_secs;
+            acc.resegmentation_secs += t.resegmentation_secs;
+        }
+        self.per_file.push(row);
+    }
+}
+
+/// Print the aggregate summary and assemble the JSON report.
+fn build_report(args: &Args, b: &BenchRunner, dataset_name: String, acc: Accum) -> BenchReport {
+    let n = acc.totals.count.max(1) as f64;
+    let agg = aggregate_der(&acc.der_pairs);
+
+    println!(
+        "\n=== Aggregate DER over {} files (collar={:.2}s) ===",
+        acc.totals.count, args.collar
+    );
+    if args.skip_overlap {
+        println!("  skip-overlap  : ON (single-speaker reference regions only)");
+    }
+    println!(
+        "  der_collar    : macro={:.2}%  micro={:.2}%",
+        agg.collar_macro, agg.collar_micro
+    );
+    println!(
+        "  der_no_collar : macro={:.2}%  micro={:.2}%",
+        agg.no_collar_macro, agg.no_collar_micro
+    );
+
+    BenchReport {
+        schema: "polyvoice-bench-v0.10",
+        crate_version: env!("CARGO_PKG_VERSION"),
+        git_sha: git_sha(),
+        host_arch: std::env::consts::ARCH.to_owned(),
+        host_os: std::env::consts::OS.to_owned(),
+        command_line: std::env::args().collect::<Vec<_>>().join(" "),
+        dataset_name,
+        profile: args.profile.clone(),
+        files_processed: acc.totals.count,
+        files_skipped: acc.files_skipped,
+        der_collar_macro: agg.collar_macro,
+        der_no_collar_macro: agg.no_collar_macro,
+        der_collar_micro: agg.collar_micro,
+        der_no_collar_micro: agg.no_collar_micro,
+        collar_secs: args.collar,
+        skip_overlap: args.skip_overlap,
+        averaging_policy: "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
+        resolved_execution_provider: format!("{:?}", b.resolved_ep),
+        host_cpus: std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1),
+        stage_totals: acc.stage_totals,
+        miss: (acc.totals.miss / n) * 100.0,
+        false_alarm: (acc.totals.false_alarm / n) * 100.0,
+        confusion: (acc.totals.confusion / n) * 100.0,
+        rt_factor_avg: acc.total_audio_secs / acc.total_runtime_secs.max(1e-6),
+        speaker_count: SpeakerCountDiagnostics {
+            exact: acc.speaker_exact,
+            plus_minus_1: acc.speaker_pm1,
+            off_by_2_or_more: acc.speaker_off,
+        },
+        model_hashes: model_hashes(&b.registry, b.profile, &b.segmenter_id),
+        per_file: acc.per_file,
+    }
+}
+
+fn main() -> Result<()> {
+    let args = Args::parse();
+    // The DER library has no single-speaker-regions + UEM scorer, so this
+    // combination cannot be honoured — fail loudly instead of scoring the
+    // wrong thing.
+    if args.skip_overlap && args.uem.is_some() {
+        anyhow::bail!("--skip-overlap cannot be combined with --uem");
+    }
+    if args.skip_overlap {
+        println!("skip-overlap: headline DER over single-speaker reference regions only");
+    }
+    let mut b = build_runner(&args)?;
 
     // Optional UEM scoped regions, keyed by file id.
     let uem_map: Option<HashMap<String, Vec<TimeRange>>> = match &args.uem {
@@ -444,19 +654,8 @@ fn main() -> Result<()> {
         None => None,
     };
 
-    let audio_dir = args.dataset.join("audio");
+    let wavs = cli_common::list_wavs(&args.dataset, args.max_files)?;
     let rttm_dir = args.dataset.join("rttm");
-    let mut wavs: Vec<PathBuf> = std::fs::read_dir(&audio_dir)
-        .with_context(|| format!("read_dir {}", audio_dir.display()))?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "wav"))
-        .map(|e| e.path())
-        .collect();
-    wavs.sort();
-    if let Some(n) = args.max_files {
-        wavs.truncate(n);
-    }
-
     let dataset_name = args
         .dataset
         .file_name()
@@ -464,194 +663,15 @@ fn main() -> Result<()> {
         .unwrap_or("unknown")
         .to_owned();
 
-    let mut totals = Aggregate::default();
-    let mut total_audio_secs = 0.0_f64;
-    let mut total_runtime_secs = 0.0_f64;
-    let mut stage_totals: Option<StageTimings> = None;
-    // Per-file (collar, no-collar) DER pairs — the four report aggregates are
-    // computed from these by the unit-tested aggregate_der helper.
-    let mut der_pairs: Vec<(DerResult, DerResult)> = Vec::new();
-    let mut speaker_count_exact = 0_usize;
-    let mut speaker_count_pm1 = 0_usize;
-    let mut speaker_count_off = 0_usize;
-    let mut files_skipped = 0_usize;
-    let mut per_file = Vec::with_capacity(wavs.len());
-
+    let mut acc = Accum::default();
     for wav in &wavs {
-        let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        let rttm = rttm_dir.join(format!("{stem}.rttm"));
-        if !rttm.is_file() {
-            eprintln!("[SKIP] {stem}: no rttm");
-            files_skipped += 1;
-            continue;
-        }
-        let (samples, sr_hz) = read_wav(wav)?;
-        let sr = SampleRate::new(sr_hz)
-            .ok_or_else(|| anyhow::anyhow!("invalid sample rate: {sr_hz}"))?;
-        let audio_secs = samples.len() as f64 / sr_hz as f64;
-
-        let t0 = Instant::now();
-        let (result, stage_timings) = runner.run(&samples, sr)?;
-        let runtime_secs = t0.elapsed().as_secs_f64();
-
-        let ref_turns = {
-            let raw = parse_rttm_file(&rttm).context("parse rttm")?;
-            let grouped = group_by_file(&raw);
-            // AMI-style fallback: EN2002a.Mix-Headset.wav → EN2002a
-            let segs: Vec<_> = grouped
-                .get(stem)
-                .or_else(|| stem.split('.').next().and_then(|s| grouped.get(s)))
-                .map(|v| v.iter().map(|s| (*s).clone()).collect())
-                .unwrap_or_default();
-            let (turns, _map) = to_speaker_turns(&segs);
-            turns
-        };
-
-        // Headline collar + no-collar DER, restricted to the UEM scope when present
-        // (AMI-style id fallback like the RTTM lookup). The overlap decomposition
-        // below is a diagnostic and stays over the full file.
-        let scored: Option<&[TimeRange]> = uem_map.as_ref().and_then(|m| {
-            m.get(stem)
-                .or_else(|| stem.split('.').next().and_then(|s| m.get(s)))
-                .map(|v| v.as_slice())
-        });
-        let (der, der_no_collar) = if args.skip_overlap {
-            (
-                compute_der_single_speaker_regions(&ref_turns, &result.turns, args.collar),
-                compute_der_single_speaker_regions(&ref_turns, &result.turns, 0.0),
-            )
-        } else {
-            match scored {
-                Some(s) => (
-                    compute_der_with_uem(&ref_turns, &result.turns, args.collar, s),
-                    compute_der_with_uem(&ref_turns, &result.turns, 0.0, s),
-                ),
-                None => (
-                    compute_der(&ref_turns, &result.turns, args.collar),
-                    compute_der(&ref_turns, &result.turns, 0.0),
-                ),
-            }
-        };
-        let decomp = compute_der_decomposition(&ref_turns, &result.turns, args.collar);
-
-        let ref_speakers: HashSet<_> = ref_turns.iter().map(|t| t.speaker.0).collect();
-        let hyp_speakers: HashSet<_> = result.turns.iter().map(|t| t.speaker.0).collect();
-        let ref_count = ref_speakers.len();
-        let hyp_count = hyp_speakers.len();
-        let diff = ref_count.abs_diff(hyp_count);
-        match diff {
-            0 => speaker_count_exact += 1,
-            1 => speaker_count_pm1 += 1,
-            _ => speaker_count_off += 1,
-        }
-
-        totals.miss += der.miss_rate;
-        totals.false_alarm += der.false_alarm_rate;
-        totals.confusion += der.confusion_rate;
-        totals.count += 1;
-        der_pairs.push((der, der_no_collar));
-        total_audio_secs += audio_secs;
-        total_runtime_secs += runtime_secs;
-
-        let rt_factor = audio_secs / runtime_secs.max(1e-6);
-
-        println!(
-            "{stem}\t DER={:.3}%\t miss={:.3}%\t fa={:.3}%\t conf={:.3}%\t rt={:.1}x\t spk={}\t turns={}",
-            der.der * 100.0,
-            der.miss_rate * 100.0,
-            der.false_alarm_rate * 100.0,
-            der.confusion_rate * 100.0,
-            rt_factor,
-            result.num_speakers,
-            result.turns.len(),
-        );
-
-        per_file.push(PerFileResult {
-            filename: stem.to_owned(),
-            der_collar: der.der * 100.0,
-            der_no_collar: der_no_collar.der * 100.0,
-            miss_rate: der.miss_rate * 100.0,
-            false_alarm_rate: der.false_alarm_rate * 100.0,
-            confusion_rate: der.confusion_rate * 100.0,
-            der_single_speaker: decomp.single_speaker.der * 100.0,
-            der_overlap: decomp.overlap.der * 100.0,
-            per_speaker_recall: decomp
-                .per_speaker_recall
-                .iter()
-                .map(|s| PerSpeakerRecall {
-                    speaker: s.speaker,
-                    recall: s.recall,
-                })
-                .collect(),
-            rt_factor,
-            ref_speakers: ref_count,
-            hyp_speakers: hyp_count,
-            num_turns: result.turns.len(),
-            audio_duration_secs: audio_secs,
-            runtime_secs,
-            stage_timings,
-        });
-        if let Some(t) = stage_timings {
-            let acc = stage_totals.get_or_insert_with(StageTimings::default);
-            acc.segmentation_secs += t.segmentation_secs;
-            acc.embedding_secs += t.embedding_secs;
-            acc.clustering_secs += t.clustering_secs;
-            acc.resegmentation_secs += t.resegmentation_secs;
+        match run_file(&mut b.runner, wav, &rttm_dir, uem_map.as_ref(), &args)? {
+            Some(outcome) => acc.record(outcome),
+            None => acc.files_skipped += 1,
         }
     }
 
-    let n = totals.count.max(1) as f64;
-    let agg = aggregate_der(&der_pairs);
-    let der_collar_macro = agg.collar_macro;
-    let der_no_collar_macro = agg.no_collar_macro;
-    let der_collar_micro = agg.collar_micro;
-    let der_no_collar_micro = agg.no_collar_micro;
-
-    println!(
-        "\n=== Aggregate DER over {} files (collar={:.2}s) ===",
-        totals.count, args.collar
-    );
-    if args.skip_overlap {
-        println!("  skip-overlap  : ON (single-speaker reference regions only)");
-    }
-    println!("  der_collar    : macro={der_collar_macro:.2}%  micro={der_collar_micro:.2}%");
-    println!("  der_no_collar : macro={der_no_collar_macro:.2}%  micro={der_no_collar_micro:.2}%");
-
-    let report = BenchReport {
-        schema: "polyvoice-bench-v0.10",
-        crate_version: env!("CARGO_PKG_VERSION"),
-        git_sha: git_sha(),
-        host_arch: std::env::consts::ARCH.to_owned(),
-        host_os: std::env::consts::OS.to_owned(),
-        command_line: std::env::args().collect::<Vec<_>>().join(" "),
-        dataset_name,
-        profile: args.profile.clone(),
-        files_processed: totals.count,
-        files_skipped,
-        der_collar_macro,
-        der_no_collar_macro,
-        der_collar_micro,
-        der_no_collar_micro,
-        collar_secs: args.collar,
-        skip_overlap: args.skip_overlap,
-        averaging_policy: "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
-        resolved_execution_provider: format!("{resolved_ep:?}"),
-        host_cpus: std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1),
-        stage_totals,
-        miss: (totals.miss / n) * 100.0,
-        false_alarm: (totals.false_alarm / n) * 100.0,
-        confusion: (totals.confusion / n) * 100.0,
-        rt_factor_avg: total_audio_secs / total_runtime_secs.max(1e-6),
-        speaker_count: SpeakerCountDiagnostics {
-            exact: speaker_count_exact,
-            plus_minus_1: speaker_count_pm1,
-            off_by_2_or_more: speaker_count_off,
-        },
-        model_hashes: model_hashes(&registry, profile, &segmenter_id),
-        per_file,
-    };
+    let report = build_report(&args, &b, dataset_name, acc);
     let json = serde_json::to_string_pretty(&report)?;
     match args.output {
         Some(p) => std::fs::write(&p, json)?,
@@ -803,9 +823,10 @@ mod prop_tests {
         }
 
         #[test]
-        fn parse_profile_accepts_only_valid(s in "[a-zA-Z0-9_-]{1,20}") {
-            let result = parse_profile(&s);
-            if s == "mobile" || s == "balanced" {
+        fn profile_from_str_accepts_only_known_names(s in "[a-zA-Z0-9_-]{1,20}") {
+            let result = s.parse::<Profile>();
+            let lower = s.to_ascii_lowercase();
+            if lower == "mobile" || lower == "balanced" || lower == "custom" {
                 prop_assert!(result.is_ok());
             } else {
                 prop_assert!(result.is_err());

@@ -28,7 +28,7 @@ caller-supplied `Custom` components.
 
 ## How it differs from the BYO `pipeline`
 
-| | BYO `pipeline` (crate root) | `pipeline_v2` |
+| | BYO `pipeline` (`LegacyPipeline`) | `pipeline_v2` |
 |--|----------------------------|---------------|
 | Role | Ort-free library / CLI `--legacy` | ONNX production default |
 | VAD / segmentation | Injected `VoiceActivityDetector` | Powerset `Segmenter` (overlap-aware) |
@@ -60,18 +60,12 @@ let result = pipeline.run(&samples, SampleRate::new(sr_hz).ok_or("bad sr")?)?;
 CLI: `polyvoice meeting.wav` (v2 + VBx). Escape hatches: `--legacy`,
 `--clusterer ahc`. Hidden `--v2` is a no-op kept for old scripts.
 
-## Hybrid sibling
-
-`pipeline_v2::hybrid::HybridPipeline` is a **research/ablation** path
-(powerset-as-VAD + dense sliding windows + Clusterer). It is not wired to
-CLI/FFI/Python. Prefer main `Pipeline` with optional `embed_window_secs` for
-dense embeddings under production overlap handling.
-
 ## Feature gate
 
-The module `compile_error!`s unless **all** of `onnx + download + segmentation +
-embedder + clusterer + resegmentation` are enabled — half-wired combos cannot
-ship. The `cli` feature also enables `vbx` for the default clusterer.
+The module is only compiled when **all** of `onnx + download + segmentation +
+embedder + clusterer + resegmentation` are enabled (cfg-gated in `lib.rs`,
+with a `compile_error!` backstop) — half-wired combos simply exclude it. The
+`cli` feature also enables `vbx` for the default clusterer.
 
 ## Safety guards in `run`
 

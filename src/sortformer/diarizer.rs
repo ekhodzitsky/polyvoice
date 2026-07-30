@@ -9,7 +9,7 @@ use super::config::{
     SortformerError,
 };
 use super::features::SortformerFeatures;
-use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor};
+use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
 use crate::types::{SpeakerId, SpeakerTurn, TimeRange};
 use std::collections::HashMap;
 use std::path::Path;
@@ -89,8 +89,7 @@ impl SortformerDiarizer<crate::onnx::RuntimeSession> {
         }
 
         let session =
-            crate::onnx::build_session_with_ep(path, crate::onnx::ExecutionProvider::Cpu, None)
-                .map_err(|e| SortformerError::Load(e.to_string()))?;
+            crate::onnx::build_session_with_ep(path, crate::onnx::ExecutionProvider::Cpu, None)?;
 
         Ok(Self::from_runtime(session, config))
     }
@@ -280,36 +279,30 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
 
         let chunk = InferenceTensor::f32(vec![1, feed_size, N_MELS], chunk_mel.to_vec());
         let chunk_lengths = InferenceTensor::i64(vec![1], vec![current_len as i64]);
+        // Lend the spkcache/fifo state buffers to the runtime instead of
+        // cloning them (an O(cache) copy per chunk); they are moved back into
+        // `self` right after the run, so error paths leave the state intact.
+        // The buffers are exactly `frames * EMB_DIM` long, so a zero-length
+        // state yields the same empty tensor the old clone branch produced.
         let spkcache = InferenceTensor::f32(
             vec![1, spkcache_len, EMB_DIM],
-            if spkcache_len == 0 {
-                Vec::new()
-            } else {
-                self.spkcache.clone()
-            },
+            std::mem::take(&mut self.spkcache),
         );
         let spkcache_lengths = InferenceTensor::i64(vec![1], vec![spkcache_len as i64]);
-        let fifo = InferenceTensor::f32(
-            vec![1, fifo_len, EMB_DIM],
-            if fifo_len == 0 {
-                Vec::new()
-            } else {
-                self.fifo.clone()
-            },
-        );
+        let fifo = InferenceTensor::f32(vec![1, fifo_len, EMB_DIM], std::mem::take(&mut self.fifo));
         let fifo_lengths = InferenceTensor::i64(vec![1], vec![fifo_len as i64]);
 
-        let outputs = self
-            .session
-            .run(&[
-                NamedTensor::new("chunk", &chunk),
-                NamedTensor::new("chunk_lengths", &chunk_lengths),
-                NamedTensor::new("spkcache", &spkcache),
-                NamedTensor::new("spkcache_lengths", &spkcache_lengths),
-                NamedTensor::new("fifo", &fifo),
-                NamedTensor::new("fifo_lengths", &fifo_lengths),
-            ])
-            .map_err(|e| SortformerError::Inference(e.to_string()))?;
+        let run_result = self.session.run(&[
+            NamedTensor::new("chunk", &chunk),
+            NamedTensor::new("chunk_lengths", &chunk_lengths),
+            NamedTensor::new("spkcache", &spkcache),
+            NamedTensor::new("spkcache_lengths", &spkcache_lengths),
+            NamedTensor::new("fifo", &fifo),
+            NamedTensor::new("fifo_lengths", &fifo_lengths),
+        ]);
+        self.spkcache = reclaim_f32(spkcache);
+        self.fifo = reclaim_f32(fifo);
+        let outputs = run_result?;
 
         let by_name = map_outputs(self.session.output_names(), outputs)?;
 
@@ -326,12 +319,8 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
                 available: by_name.keys().cloned().collect(),
             })?;
 
-        let preds = preds_t
-            .as_f32_slice()
-            .map_err(|e| SortformerError::Inference(e.to_string()))?;
-        let new_embs = embs_t
-            .as_f32_slice()
-            .map_err(|e| SortformerError::Inference(e.to_string()))?;
+        let preds = preds_t.as_f32_slice()?;
+        let new_embs = embs_t.as_f32_slice()?;
 
         // preds shape: [1, spkcache_len + fifo_len + chunk_frames, 4]
         // embs shape:  [1, chunk_emb_frames, 512]
@@ -529,13 +518,16 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
         let n_frames = preds.len() / MAX_SPEAKERS;
         let half = window / 2;
         let mut filtered = preds.to_vec();
+        // Scratch window buffer reused across frames/speakers instead of a
+        // fresh allocation per frame (hot path). Sized to the largest window
+        // the edge-clipped range can produce.
+        let mut values: Vec<f32> = Vec::with_capacity(2 * half + 1);
         for spk in 0..MAX_SPEAKERS {
             for t in 0..n_frames {
                 let start = t.saturating_sub(half);
                 let end = (t + half + 1).min(n_frames);
-                let mut values: Vec<f32> = (start..end)
-                    .map(|i| preds[i * MAX_SPEAKERS + spk])
-                    .collect();
+                values.clear();
+                values.extend((start..end).map(|i| preds[i * MAX_SPEAKERS + spk]));
                 values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 filtered[t * MAX_SPEAKERS + spk] = values[values.len() / 2];
             }
@@ -622,6 +614,17 @@ impl<R: InferenceRuntime> SortformerDiarizer<R> {
 }
 
 const HOP_LENGTH: usize = 160;
+
+/// Move the f32 buffer back out of a tensor built with [`InferenceTensor::f32`].
+/// `streaming_update` lends its state buffers to the runtime without cloning
+/// and reclaims them through this after the run. Falls back to an empty buffer
+/// on the unreachable non-f32 arm instead of panicking.
+fn reclaim_f32(t: InferenceTensor) -> Vec<f32> {
+    match t.data {
+        TensorData::F32(v) => v,
+        TensorData::I64(_) => Vec::new(),
+    }
+}
 
 fn clip_turns_to_audio(turns: &mut Vec<SpeakerTurn>, n_samples: usize) {
     let dur = n_samples as f64 / SAMPLE_RATE as f64;

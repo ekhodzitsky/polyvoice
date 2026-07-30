@@ -17,9 +17,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+use polyvoice::cli_common;
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig};
-use polyvoice::types::{DiarizationResult, Profile, SampleRate};
+use polyvoice::pipeline_v2::PipelineConfig;
+use polyvoice::types::{DEFAULT_AHC_THRESHOLD, DiarizationResult, Profile, SampleRate};
 use polyvoice::wav::read_wav;
 
 // Numeric error codes mirror include/polyvoice.h (do not invent new ones).
@@ -30,8 +31,8 @@ const ERR_REGISTRY: i32 = 30;
 const ERR_INTERNAL: i32 = 99;
 
 /// Build a structured MCP error carrying the FFI `{code, message}` payload.
-/// Client-caused bad input maps to `invalid_params`; everything else (model
-/// load, inference, registry, internal) maps to `internal_error`.
+/// Only genuine bad-input failures map to JSON-RPC invalid params; server-side
+/// failures (model load, inference, registry, internal) are internal errors.
 fn err(code: i32, message: impl Into<String>) -> ErrorData {
     let message = message.into();
     let data = Some(serde_json::json!({ "code": code, "message": message }));
@@ -39,19 +40,6 @@ fn err(code: i32, message: impl Into<String>) -> ErrorData {
         ErrorData::invalid_params(message, data)
     } else {
         ErrorData::internal_error(message, data)
-    }
-}
-
-/// Validate the optional speaker ceiling, mirroring the CLI's range check.
-fn resolve_max_speakers(n: Option<usize>) -> Result<u8, ErrorData> {
-    match n {
-        None => Ok(PipelineConfig::default().max_speakers),
-        Some(v) => u8::try_from(v).ok().filter(|&u| u >= 1).ok_or_else(|| {
-            err(
-                ERR_INVALID_ARG,
-                format!("max_speakers must be in 1..=255, got {v}"),
-            )
-        }),
     }
 }
 
@@ -73,7 +61,7 @@ struct DiarizeInput {
     /// Ignored for "vbx".
     #[serde(default)]
     threshold: Option<f32>,
-    /// Cap the number of speakers (clustering ceiling; must be in 1..=255).
+    /// Cap the number of speakers (clustering ceiling, 1..=255).
     #[serde(default)]
     max_speakers: Option<usize>,
     /// Optional directory with VBx PLDA `.npy` params (overrides env/registry).
@@ -279,6 +267,15 @@ fn project(result: &DiarizationResult, detailed: bool) -> DiarizeOutput {
     }
 }
 
+/// Resolve the optional `max_speakers` cap into the pipeline config's `u8`
+/// ceiling (shared range check with the CLI).
+fn resolve_max_speakers(max_speakers: Option<usize>) -> Result<u8, ErrorData> {
+    match max_speakers {
+        None => Ok(PipelineConfig::default().max_speakers),
+        Some(n) => cli_common::max_speakers_u8(n).map_err(|e| err(ERR_INVALID_ARG, e.to_string())),
+    }
+}
+
 /// Run the production (pipeline v2) diarization path quietly, mapping failures
 /// to FFI-coded MCP errors. Defaults match the CLI: VBx clusterer + registry
 /// PLDA auto-download when `vbx_plda_dir` is unset.
@@ -290,28 +287,17 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
             format!("no such file: {}", input.path),
         ));
     }
-    let profile = match input.profile.as_deref().unwrap_or("balanced") {
-        "balanced" => Profile::Balanced,
-        "mobile" => Profile::Mobile,
-        other => {
-            return Err(err(
-                ERR_INVALID_ARG,
-                format!("invalid profile: {other} (expected balanced|mobile)"),
-            ));
-        }
-    };
-    let clusterer_kind = match input.clusterer.as_deref().unwrap_or("vbx") {
-        "vbx" => ClustererKind::Vbx,
-        "ahc" => ClustererKind::Ahc {
-            threshold: input.threshold.unwrap_or(0.45),
-        },
-        other => {
-            return Err(err(
-                ERR_INVALID_ARG,
-                format!("invalid clusterer: {other} (expected vbx|ahc)"),
-            ));
-        }
-    };
+    let profile: Profile = input
+        .profile
+        .as_deref()
+        .unwrap_or("balanced")
+        .parse()
+        .map_err(|e: polyvoice::types::ProfileParseError| err(ERR_INVALID_ARG, e.to_string()))?;
+    let clusterer_kind = cli_common::parse_clusterer_kind(
+        input.clusterer.as_deref().unwrap_or("vbx"),
+        input.threshold.unwrap_or(DEFAULT_AHC_THRESHOLD),
+    )
+    .map_err(|e| err(ERR_INVALID_ARG, e.to_string()))?;
     let max_speakers = resolve_max_speakers(input.max_speakers)?;
 
     let registry = ModelRegistry::default().map_err(|e| err(ERR_REGISTRY, e.to_string()))?;
@@ -330,23 +316,8 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
             .map(|s| Path::new(s).to_path_buf()),
         ..PipelineConfig::default()
     };
-    let pipeline = V2Pipeline::builder()
-        .config(config)
-        .with_models_from(registry)
-        .build()
-        .map_err(|e| {
-            if matches!(clusterer_kind, ClustererKind::Vbx) {
-                err(
-                    ERR_MODEL_LOAD,
-                    format!(
-                        "build pipeline v2 (clusterer=vbx): {e}; set vbx_plda_dir / \
-                         POLYVOICE_VBX_PLDA_DIR, allow registry PLDA download, or pass clusterer=ahc"
-                    ),
-                )
-            } else {
-                err(ERR_MODEL_LOAD, e.to_string())
-            }
-        })?;
+    let pipeline = cli_common::build_v2_pipeline(config, registry)
+        .map_err(|e| err(ERR_MODEL_LOAD, format!("{e:#}")))?;
 
     let (samples, sr_hz) = read_wav(path).map_err(|e| err(ERR_INVALID_ARG, e.to_string()))?;
     let sr = SampleRate::new(sr_hz)
@@ -383,44 +354,29 @@ mod tests {
     }
 
     #[test]
-    fn invalid_arg_maps_to_jsonrpc_invalid_params() {
-        let e = err(ERR_INVALID_ARG, "bad input");
-        assert_eq!(e.code.0, -32602);
-        let data = e.data.expect("data");
-        assert_eq!(data["code"], ERR_INVALID_ARG);
-        assert!(data["message"].as_str().unwrap().contains("bad input"));
-    }
-
-    #[test]
-    fn model_load_maps_to_jsonrpc_internal_error() {
-        let e = err(ERR_MODEL_LOAD, "no model");
-        assert_eq!(e.code.0, -32603);
-        let data = e.data.expect("data");
-        assert_eq!(data["code"], ERR_MODEL_LOAD);
-    }
-
-    #[test]
-    fn max_speakers_accepts_default_and_valid_range() {
-        assert_eq!(resolve_max_speakers(None).unwrap(), 20);
-        assert_eq!(resolve_max_speakers(Some(1)).unwrap(), 1);
-        assert_eq!(resolve_max_speakers(Some(255)).unwrap(), 255);
-    }
-
-    #[test]
-    fn max_speakers_rejects_out_of_range_with_invalid_arg() {
-        for bad in [0usize, 256, 1000] {
-            let e = resolve_max_speakers(Some(bad)).unwrap_err();
-            assert_eq!(e.code.0, -32602);
-            assert_eq!(e.data.expect("data")["code"], ERR_INVALID_ARG);
-        }
-    }
-
-    #[test]
     fn asr_unavailable_error_carries_ffi_code() {
         let e = asr_unavailable();
         let data = e.data.expect("data");
         assert_eq!(data["code"], ERR_INTERNAL);
         assert!(data["message"].as_str().unwrap().contains("polyvoice-asr"));
+    }
+
+    #[test]
+    fn invalid_arg_maps_to_jsonrpc_invalid_params() {
+        let e = err(ERR_INVALID_ARG, "no such file: x.wav");
+        assert_eq!(e.code.0, -32602);
+        let data = e.data.expect("data");
+        assert_eq!(data["code"], ERR_INVALID_ARG);
+        assert_eq!(data["message"], "no such file: x.wav");
+    }
+
+    #[test]
+    fn model_load_maps_to_jsonrpc_internal_error() {
+        let e = err(ERR_MODEL_LOAD, "model missing");
+        assert_eq!(e.code.0, -32603);
+        let data = e.data.expect("data");
+        assert_eq!(data["code"], ERR_MODEL_LOAD);
+        assert_eq!(data["message"], "model missing");
     }
 
     #[test]
@@ -430,5 +386,32 @@ mod tests {
         let json = serde_json::to_value(&schema).unwrap();
         assert_eq!(json["additionalProperties"], serde_json::json!(false));
         assert!(json["properties"]["path"].is_object());
+    }
+
+    #[test]
+    fn max_speakers_accepts_default_and_valid_range() {
+        assert_eq!(
+            resolve_max_speakers(None).unwrap(),
+            PipelineConfig::default().max_speakers
+        );
+        assert_eq!(resolve_max_speakers(Some(1)).unwrap(), 1);
+        assert_eq!(resolve_max_speakers(Some(255)).unwrap(), 255);
+    }
+
+    #[test]
+    fn max_speakers_rejects_out_of_range_with_invalid_arg() {
+        for n in [0_usize, 256, 1000] {
+            let e = resolve_max_speakers(Some(n)).expect_err("out of range must error");
+            assert_eq!(e.code.0, -32602, "n={n} must map to invalid params");
+            let data = e.data.expect("data");
+            assert_eq!(data["code"], ERR_INVALID_ARG);
+            assert!(
+                data["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("max_speakers must be in 1..=255"),
+                "message must name the valid range: {data}"
+            );
+        }
     }
 }

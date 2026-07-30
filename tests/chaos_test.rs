@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 #![allow(clippy::unwrap_used)]
 //! Chaos / malformed-input tests for the legacy polyvoice pipeline.
 //!
@@ -10,8 +9,8 @@
 
 use polyvoice::{
     ahc::agglomerative_cluster,
-    embedding::DummyExtractor,
-    pipeline::Pipeline,
+    embedder::DummyExtractor,
+    pipeline::LegacyPipeline,
     types::{DiarizationConfig, SampleRate},
     vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech},
     wav::{WavError, read_wav},
@@ -40,7 +39,7 @@ fn segment_speech_with_empty_samples_returns_empty() {
 
 #[test]
 fn pipeline_run_with_empty_samples_returns_ok_zero_speakers() {
-    let pipeline = Pipeline::new(default_config(), default_vad_config());
+    let pipeline = LegacyPipeline::new(default_config(), default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, 16000, 512);
     let result = pipeline.run(&[], &extractor, &mut vad).unwrap();
@@ -55,7 +54,7 @@ fn pipeline_run_with_empty_samples_returns_ok_zero_speakers() {
 
 #[test]
 fn pipeline_run_with_very_short_audio_returns_zero_speakers() {
-    let pipeline = Pipeline::new(default_config(), default_vad_config());
+    let pipeline = LegacyPipeline::new(default_config(), default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, 16000, 512);
     let samples = vec![0.0f32; 100];
@@ -71,7 +70,7 @@ fn pipeline_run_with_very_short_audio_returns_zero_speakers() {
 
 #[test]
 fn pipeline_run_with_all_silence_returns_zero_speakers() {
-    let pipeline = Pipeline::new(default_config(), default_vad_config());
+    let pipeline = LegacyPipeline::new(default_config(), default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, 16000, 512);
     let samples = vec![0.0f32; 16000];
@@ -87,7 +86,7 @@ fn pipeline_run_with_all_silence_returns_zero_speakers() {
 
 #[test]
 fn pipeline_run_with_very_loud_audio_returns_at_least_one_speaker() {
-    let pipeline = Pipeline::new(default_config(), default_vad_config());
+    let pipeline = LegacyPipeline::new(default_config(), default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, 16000, 512);
     let samples = vec![1.0f32; 16000];
@@ -226,7 +225,7 @@ fn vad_process_with_invalid_chunk_size_returns_err() {
 fn pipeline_mismatched_sample_rate_does_not_crash() {
     let mut config = default_config();
     config.window.sample_rate = SampleRate::new(8000).unwrap();
-    let pipeline = Pipeline::new(config, default_vad_config());
+    let pipeline = LegacyPipeline::new(config, default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, 16000, 512);
     // Pass 16000 samples while config claims 8000 Hz — should not panic.
@@ -242,14 +241,14 @@ fn pipeline_mismatched_sample_rate_does_not_crash() {
 fn pipeline_run_with_audio_too_long_returns_audio_too_long_error() {
     let mut config = default_config();
     config.max_duration_secs = 1.0;
-    let pipeline = Pipeline::new(config, default_vad_config());
+    let pipeline = LegacyPipeline::new(config, default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, 16000, 512);
     // 2 seconds at 16 kHz = 32000 samples
     let samples = vec![0.0f32; 32000];
     let result = pipeline.run(&samples, &extractor, &mut vad);
     match result {
-        Err(polyvoice::pipeline::PipelineError::AudioTooLong {
+        Err(polyvoice::pipeline::LegacyPipelineError::AudioTooLong {
             actual_secs,
             max_secs,
         }) => {
@@ -277,7 +276,7 @@ use proptest::prelude::*;
 proptest! {
     #[test]
     fn pipeline_random_samples_never_panic(samples in prop::collection::vec(-1.0f32..=1.0f32, 0..=32000)) {
-        let pipeline = Pipeline::new(default_config(), default_vad_config());
+        let pipeline = LegacyPipeline::new(default_config(), default_vad_config());
         let extractor = DummyExtractor::new(256);
         let mut vad = EnergyVad::new(-40.0, 16000, 512);
         // We only care that this does not panic; Ok/Err are both acceptable.

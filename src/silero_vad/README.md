@@ -8,6 +8,7 @@ trait from vad.rs.
 ## Surfaces
 
 - `SileroVad`
+- `SileroVadError` — typed construction error (`ZeroChunkSize` / `Session`)
 
 ## Dependencies
 

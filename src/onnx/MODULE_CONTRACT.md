@@ -6,9 +6,9 @@ level: subsystem
 layer: infrastructure
 purpose: >
   Owns ONNX model validation (header checks), the InferenceRuntime trait,
-  the OrtSession implementation, and the legacy OnnxEmbeddingExtractor.
+  and the OrtSession implementation.
   Does NOT own model download/registry (models/) or specific model adapters
-  (embedder.rs, ecapa.rs).
+  (embedder.rs, fbank_onnx.rs).
 status: stable
 owners:
   - polyvoice-core
@@ -79,8 +79,10 @@ surface:
     contract: >
       THE single session constructor for embedding + segmentation paths.
       Validates the ONNX header BEFORE the backend parses the file, optionally
-      pins intra-op threads, then registers the requested EP. Returns OrtSession.
-      Unwired providers warn (tracing) and fall back to CPU.
+      pins intra-op threads, then registers the requested EP. Returns
+      RuntimeSession; failures are the typed OnnxError (header Validation vs
+      backend SessionBuild). Unwired providers warn (tracing) and fall back
+      to CPU.
     proof:
       kind: unit-test
       target: src/onnx::mod::tests
@@ -94,23 +96,19 @@ surface:
       kind: unit-test
       target: src/onnx::mod::tests
       command: cargo test --lib onnx --features onnx
-  - name: OnnxEmbeddingExtractor
-    kind: struct
+  - name: OnnxError
+    kind: enum
     visibility: public
     contract: >
-      Legacy ONNX embedding extractor wrapper (pooled OrtSession).
+      Typed error for session construction (Validation / SessionBuild) and
+      metadata_props reads (Metadata). Replaces anyhow/String in this
+      module's public constructors.
     proof:
       kind: unit-test
       target: src/onnx::mod::tests
       command: cargo test --lib onnx --features onnx
 dependencies:
-  internal:
-    - module: embedding
-      scope: trait
-      reason: EmbeddingExtractor trait implementation.
-    - module: types
-      scope: data-shape
-      reason: DiarizationConfig.
+  internal: []
   external:
     - name: ort
       scope: ml-runtime
@@ -120,7 +118,7 @@ consumers:
     uses:
       - validate_onnx_header
       - OnnxValidationError
-      - OnnxEmbeddingExtractor
+      - OnnxError
       - InferenceRuntime
       - OrtSession
       - build_session_with_ep

@@ -10,7 +10,6 @@ benchmarks/
 benches/*
 !benches/der_ami.rs
 examples/*
-!examples/hybrid_benchmark.rs
 tests/data/voxconverse-test/
 tests/data/ami-test-single/
 *.md

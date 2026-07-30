@@ -1,7 +1,8 @@
 //! Math utilities for diarization.
 //!
-//! Shared vector math (cosine similarity, L2 normalization, segment merging)
-//! used by clustering, embedding, and overlap modules. See [`cosine_similarity`].
+//! Shared vector math (cosine similarity, L2 normalization, pairwise
+//! similarity matrices, mean centroids, segment merging) used by clustering,
+//! embedding, and overlap modules. See [`cosine_similarity`].
 
 /// { true }
 /// pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32
@@ -132,6 +133,71 @@ pub fn mean_vector(vectors: &[Vec<f32>]) -> Option<Vec<f32>> {
     Some(sum)
 }
 
+/// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
+/// `pub(crate) fn pairwise_cosine_similarity_matrix(embeddings: &[Vec<f32>]) -> Vec<f32>`
+/// { ret.len() == embeddings.len() * embeddings.len() }
+/// Full symmetric pairwise cosine-similarity matrix as a flat row-major
+/// `n * n` buffer; the diagonal is exactly `1.0`.
+///
+/// Each off-diagonal entry is [`cosine_similarity`] of that pair (f32).
+/// Callers needing `f64` cast entry-wise (there is no extra precision to
+/// keep); callers needing a nested layout chunk the flat rows.
+pub(crate) fn pairwise_cosine_similarity_matrix(embeddings: &[Vec<f32>]) -> Vec<f32> {
+    let n = embeddings.len();
+    let mut m = vec![0.0f32; n * n];
+    for i in 0..n {
+        m[i * n + i] = 1.0;
+        for j in (i + 1)..n {
+            let s = cosine_similarity(&embeddings[i], &embeddings[j]);
+            m[i * n + j] = s;
+            m[j * n + i] = s;
+        }
+    }
+    m
+}
+
+/// { indices.iter().all(|&i| i < embeddings.len()) && labels.len() == indices.len() }
+/// `pub(crate) fn normalized_mean_centroids(embeddings, indices, labels, k) -> Vec<Vec<f32>>`
+/// { ret.len() == k }
+/// Per-slot L2-normalized mean centroid over selected members.
+///
+/// `indices[i]` is an embedding index and `labels[i]` its centroid slot in
+/// `0..k`; embedding `embeddings[indices[i]]` contributes to centroid
+/// `labels[i]`. Labels `>= k` (and out-of-range indices) are skipped. Slots
+/// with no members stay zero vectors. The mean divides by the member count
+/// (same as [`mean_vector`]) and the result is normalized with
+/// [`l2_normalize`].
+pub(crate) fn normalized_mean_centroids(
+    embeddings: &[Vec<f32>],
+    indices: &[usize],
+    labels: &[usize],
+    k: usize,
+) -> Vec<Vec<f32>> {
+    let dim = embeddings.first().map(Vec::len).unwrap_or(0);
+    let mut sums = vec![vec![0.0f32; dim]; k];
+    let mut counts = vec![0usize; k];
+    for (&i, &l) in indices.iter().zip(labels.iter()) {
+        if l >= k {
+            continue;
+        }
+        if let Some(emb) = embeddings.get(i) {
+            for (a, &x) in sums[l].iter_mut().zip(emb.iter()) {
+                *a += x;
+            }
+            counts[l] += 1;
+        }
+    }
+    for (c, &n) in sums.iter_mut().zip(counts.iter()) {
+        if n > 0 {
+            for v in c.iter_mut() {
+                *v /= n as f32;
+            }
+        }
+        l2_normalize(c);
+    }
+    sums
+}
+
 use crate::types::Segment;
 
 /// { true }
@@ -211,16 +277,22 @@ fn mean_confidence(sum: f32, count: u32) -> Option<f32> {
 /// Checkout waits until an item is available; [`Drop`] returns it. Pool
 /// checkout is not a contention-hot path in this crate, so a small mutex pool
 /// is preferred over a dedicated lock-free queue crate.
+///
+/// Compiled for the `onnx` session pool (`fbank_onnx::FbankOnnxExtractor`) and for
+/// unit tests; unused in the default ort-free build.
+#[cfg(any(test, feature = "onnx"))]
 pub(crate) struct ObjectPool<T> {
     items: std::sync::Mutex<Vec<T>>,
 }
 
 /// RAII guard: the pooled item is returned on drop.
+#[cfg(any(test, feature = "onnx"))]
 pub(crate) struct PooledGuard<'a, T> {
     item: Option<T>,
     pool: &'a ObjectPool<T>,
 }
 
+#[cfg(any(test, feature = "onnx"))]
 impl<T> ObjectPool<T> {
     pub(crate) fn new(items: Vec<T>) -> Self {
         Self {
@@ -248,6 +320,7 @@ impl<T> ObjectPool<T> {
     }
 }
 
+#[cfg(any(test, feature = "onnx"))]
 impl<T> std::ops::Deref for PooledGuard<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
@@ -259,6 +332,7 @@ impl<T> std::ops::Deref for PooledGuard<'_, T> {
     }
 }
 
+#[cfg(any(test, feature = "onnx"))]
 impl<T> std::ops::DerefMut for PooledGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         match self.item.as_mut() {
@@ -268,6 +342,7 @@ impl<T> std::ops::DerefMut for PooledGuard<'_, T> {
     }
 }
 
+#[cfg(any(test, feature = "onnx"))]
 impl<T> Drop for PooledGuard<'_, T> {
     fn drop(&mut self) {
         if let Some(item) = self.item.take() {
@@ -417,6 +492,74 @@ mod tests {
         l2_normalize(&mut v);
         assert!(v.iter().all(|x| x.is_finite()));
         assert!(v.iter().all(|&x| x == 0.0));
+    }
+
+    #[test]
+    fn pairwise_cosine_similarity_matrix_is_symmetric_with_unit_diagonal() {
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.9, 0.1, 0.0],
+            vec![0.0, 1.0, 0.0],
+        ];
+        let n = embeddings.len();
+        let m = pairwise_cosine_similarity_matrix(&embeddings);
+        assert_eq!(m.len(), n * n);
+        for i in 0..n {
+            assert_eq!(m[i * n + i], 1.0);
+            for j in 0..n {
+                assert_eq!(m[i * n + j], m[j * n + i]);
+                if i != j {
+                    assert_eq!(
+                        m[i * n + j],
+                        cosine_similarity(&embeddings[i], &embeddings[j])
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pairwise_cosine_similarity_matrix_empty() {
+        assert!(pairwise_cosine_similarity_matrix(&[]).is_empty());
+    }
+
+    #[test]
+    fn normalized_mean_centroids_basic() {
+        let embeddings = vec![
+            vec![1.0, 0.0],
+            vec![1.0, 0.0],
+            vec![0.0, 2.0],
+            vec![0.0, 1.0],
+        ];
+        let indices = [0, 1, 2, 3];
+        let labels = [0, 0, 1, 1];
+        let centroids = normalized_mean_centroids(&embeddings, &indices, &labels, 2);
+        assert_eq!(centroids.len(), 2);
+        for c in &centroids {
+            let norm: f32 = c.iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((norm - 1.0).abs() < 1e-5, "centroid not unit norm");
+        }
+        assert!((centroids[0][0] - 1.0).abs() < 1e-5);
+        assert!((centroids[1][1] - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn normalized_mean_centroids_empty_slot_stays_zero() {
+        let embeddings = vec![vec![1.0, 0.0]];
+        let centroids = normalized_mean_centroids(&embeddings, &[0], &[0], 3);
+        assert_eq!(centroids.len(), 3);
+        assert_eq!(centroids[1], vec![0.0, 0.0]);
+        assert_eq!(centroids[2], vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn normalized_mean_centroids_skips_out_of_range() {
+        let embeddings = vec![vec![1.0, 0.0]];
+        // Label >= k and index >= len are ignored.
+        let centroids = normalized_mean_centroids(&embeddings, &[0, 5], &[7, 0], 2);
+        assert_eq!(centroids.len(), 2);
+        assert_eq!(centroids[0], vec![0.0, 0.0]);
+        assert_eq!(centroids[1], vec![0.0, 0.0]);
     }
 
     fn seg(start: f64, end: f64, spk: u32, conf: Option<f32>) -> Segment {

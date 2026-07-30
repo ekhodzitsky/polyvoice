@@ -1,4 +1,6 @@
-//! M6a — `PipelineBuilder` + `ConfigError`.
+//! `PipelineBuilder` + `ConfigError`: validates a [`PipelineConfig`] and the
+//! injected segmenter/embedder/clusterer components before building a
+//! `Pipeline`.
 
 use crate::clusterer::Clusterer;
 use crate::embedder::Embedder;
@@ -28,6 +30,13 @@ pub enum ConfigError {
     #[error("ONNX model not found in registry: {model_id}")]
     UnknownModel { model_id: String },
 
+    #[error("failed to load model {model_id}: {source}")]
+    Load {
+        model_id: &'static str,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
     #[error("registry resolution failed: {0}")]
     Registry(#[from] RegistryError),
 }
@@ -42,7 +51,6 @@ pub struct PipelineBuilder {
 }
 
 impl PipelineBuilder {
-    #[allow(dead_code)] // used by Pipeline::builder() in Task 5
     pub(crate) fn new() -> Self {
         Self {
             config: PipelineConfig::default(),
@@ -213,8 +221,9 @@ impl PipelineBuilder {
                         seg_cfg,
                         ep,
                     )
-                    .map_err(|e| ConfigError::UnknownModel {
-                        model_id: format!("powerset (cause: {e})"),
+                    .map_err(|e| ConfigError::Load {
+                        model_id: "powerset",
+                        source: Box::new(e),
                     })?,
                 );
                 let embedder: Box<dyn Embedder> = Box::new(
@@ -223,8 +232,9 @@ impl PipelineBuilder {
                         self.config.embedder_pool_size,
                         ep,
                     )
-                    .map_err(|e| ConfigError::UnknownModel {
-                        model_id: format!("resnet34 (cause: {e})"),
+                    .map_err(|e| ConfigError::Load {
+                        model_id: "resnet34",
+                        source: Box::new(e),
                     })?,
                 );
                 let clusterer: Box<dyn Clusterer> = match self.config.clusterer {
@@ -248,23 +258,31 @@ impl PipelineBuilder {
                     #[cfg(feature = "vbx")]
                     ClustererKind::Vbx => {
                         let max = self.config.max_speakers as usize;
-                        // Resolve order: explicit dir → env → registry download.
-                        // `pipeline_v2` always has `download`, so registry is available.
+                        // PLDA resolution order: explicit `vbx_plda_dir` →
+                        // `POLYVOICE_VBX_PLDA_DIR` env → registry download.
+                        // This is the library's single env-resolution point;
+                        // `pipeline_v2` always has `download`, so the registry
+                        // fallback is available.
                         let mut vbx = match &self.config.vbx_plda_dir {
                             Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(dir, max),
-                            None if std::env::var_os("POLYVOICE_VBX_PLDA_DIR").is_some() => {
-                                crate::clusterer::vbx::VbxClusterer::from_env(max)
-                            }
-                            None => {
-                                crate::clusterer::vbx::VbxClusterer::from_registry(&registry, max)
-                            }
+                            None => match std::env::var_os("POLYVOICE_VBX_PLDA_DIR") {
+                                Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(
+                                    std::path::Path::new(&dir),
+                                    max,
+                                ),
+                                None => crate::clusterer::vbx::VbxClusterer::from_registry(
+                                    &registry, max,
+                                ),
+                            },
                         }
-                        .map_err(|e| ConfigError::UnknownModel {
-                            model_id: format!("vbx ({e})"),
+                        .map_err(|e| ConfigError::Load {
+                            model_id: "vbx",
+                            source: Box::new(e),
                         })?;
                         // Dense windowed embeddings are non-contiguous: the HMM
-                        // self-loop assumption is invalid → auto GMM-VBx unless
-                        // POLYVOICE_VBX_LOOP_PROB is set explicitly.
+                        // self-loop assumption is invalid → auto GMM-VBx.
+                        // `loop_prob` is an explicit `VbxConfig` knob; windowed
+                        // mode always forces GMM.
                         let windowed = self.config.embed_window_secs.is_some_and(|w| w > 0.0);
                         vbx = vbx.auto_gmm_for_windowed(windowed);
                         Box::new(vbx)

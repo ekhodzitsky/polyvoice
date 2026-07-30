@@ -6,17 +6,11 @@
 //! - DER is symmetric under optimal speaker mapping
 
 use polyvoice::der::compute_der;
-use polyvoice::types::{SpeakerId, SpeakerTurn, TimeRange};
+use polyvoice::types::SpeakerTurn;
 use proptest::prelude::*;
 
-fn turn(start: f64, end: f64, spk: u32) -> SpeakerTurn {
-    SpeakerTurn {
-        speaker: SpeakerId(spk),
-        time: TimeRange { start, end },
-        text: None,
-        stable: true,
-    }
-}
+mod common;
+use common::turn;
 
 proptest! {
     #![proptest_config(ProptestConfig {

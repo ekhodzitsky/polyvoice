@@ -21,6 +21,8 @@ typedef enum {
 typedef enum {
     POLYVOICE_OK = 0,
     POLYVOICE_ERR_INVALID_ARG = 1,
+    /* Reserved for ABI stability: never returned by the current implementation
+     * (pipeline v2 has no matching error). Do not reuse the value 2. */
     POLYVOICE_ERR_AUDIO_TOO_SHORT = 2,
     POLYVOICE_ERR_AUDIO_TOO_LONG = 3,
     POLYVOICE_ERR_MODEL_LOAD = 10,

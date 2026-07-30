@@ -12,10 +12,19 @@
 //! | 5 | {0, 2} | yes |
 //! | 6 | {1, 2} | yes |
 //!
-//! The decoder takes argmax over softmax, returning a `FrameLabel`.
+//! The decoder takes argmax over softmax, returning a `FrameLabel` that also
+//! carries the full softmax vector, so the aggregator can average and remap
+//! probabilities without recomputing the softmax from the logits.
 
 use crate::segmentation::SegmentationError;
 use crate::types::Confidence;
+
+/// Number of local speakers the powerset scheme addresses: the solo classes
+/// `{0}`, `{1}`, `{2}` and the three pair classes built from them.
+pub const MAX_LOCAL_SPEAKERS: usize = 3;
+
+/// Number of powerset classes: silence + 3 solo + 3 pairs.
+pub const NUM_POWERSET_CLASSES: usize = 7;
 
 /// One of the seven powerset classes, identifying which speakers are active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +51,49 @@ impl PowersetClass {
             PowersetClass::Pair(a, b) => vec![a, b],
         }
     }
+
+    /// Class index in the 7-class powerset scheme — the inverse of
+    /// [`PowersetDecoder::class_for_index`] for the classes it can produce.
+    /// Pair order is normalized (`Pair(1, 0)` indexes like `Pair(0, 1)`).
+    /// Values outside the scheme (an out-of-range solo speaker or an
+    /// unexpressible pair) return 0, matching the historical remap fallback.
+    pub(crate) const fn index(self) -> usize {
+        match self {
+            PowersetClass::Silence => 0,
+            PowersetClass::Speaker(s) => 1 + s as usize,
+            PowersetClass::Pair(a, b) => {
+                let (lo, hi) = if a < b { (a, b) } else { (b, a) };
+                match (lo, hi) {
+                    (0, 1) => 4,
+                    (0, 2) => 5,
+                    (1, 2) => 6,
+                    _ => 0,
+                }
+            }
+        }
+    }
+
+    /// The class whose speaker set is exactly `speakers` — the checked inverse
+    /// of [`Self::index`]. Pair order is normalized, so `[1, 0]` yields
+    /// `Pair(0, 1)`. Returns `None` for sets the powerset scheme cannot
+    /// express (more than two speakers, a duplicated speaker, or an
+    /// out-of-range local index) instead of silently mapping to silence.
+    pub(crate) fn from_speakers(speakers: &[u8]) -> Option<PowersetClass> {
+        match speakers {
+            [] => Some(PowersetClass::Silence),
+            [s] if (*s as usize) < MAX_LOCAL_SPEAKERS => Some(PowersetClass::Speaker(*s)),
+            [a, b] => {
+                let (lo, hi) = if a < b { (*a, *b) } else { (*b, *a) };
+                match (lo, hi) {
+                    (0, 1) => Some(PowersetClass::Pair(0, 1)),
+                    (0, 2) => Some(PowersetClass::Pair(0, 2)),
+                    (1, 2) => Some(PowersetClass::Pair(1, 2)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Decoded label for a single audio frame.
@@ -50,6 +102,37 @@ pub struct FrameLabel {
     pub class: PowersetClass,
     /// Maximum-class softmax probability (∈ [0, 1]). Useful for confidence reporting.
     pub max_softmax: f32,
+    /// Full softmax vector over the powerset classes (sums to 1). Carried so
+    /// the aggregator can average and permute probabilities without
+    /// recomputing the softmax from the logits.
+    pub probs: [f32; NUM_POWERSET_CLASSES],
+}
+
+/// { true }
+/// `pub(crate) fn softmax(logits: &[f32; NUM_POWERSET_CLASSES]) -> [f32; NUM_POWERSET_CLASSES]`
+/// { ret.iter().all(|p| p.is_finite()) }
+/// Stable softmax over one frame's class logits: subtract the max logit for
+/// numerical stability, then normalize. A degenerate zero sum (only possible
+/// with NaN logits) falls back to a unit denominator so the output stays finite.
+pub(crate) fn softmax(logits: &[f32; NUM_POWERSET_CLASSES]) -> [f32; NUM_POWERSET_CLASSES] {
+    let mut max_logit = f32::NEG_INFINITY;
+    for &l in logits {
+        if l > max_logit {
+            max_logit = l;
+        }
+    }
+    let mut probs = [0.0_f32; NUM_POWERSET_CLASSES];
+    let mut sum = 0.0_f32;
+    for (p, &l) in probs.iter_mut().zip(logits.iter()) {
+        *p = (l - max_logit).exp();
+        sum += *p;
+    }
+    // Guard against degenerate sum (sum=0 would only happen with NaN logits).
+    let inv_sum = if sum > 0.0 { 1.0 / sum } else { 1.0 };
+    for p in probs.iter_mut() {
+        *p *= inv_sum;
+    }
+    probs
 }
 
 /// Stateless decoder; methods are associated functions because no per-instance
@@ -76,30 +159,21 @@ impl PowersetDecoder {
     /// { true }
     /// Decode one frame given its 7-vector of logits.
     pub fn decode_frame(logits: &[f32]) -> Result<FrameLabel, SegmentationError> {
-        if logits.len() != 7 {
+        if logits.len() != NUM_POWERSET_CLASSES {
             return Err(SegmentationError::InvalidOutputShape {
                 actual_shape: vec![logits.len()],
             });
         }
-        // Stable softmax: subtract max for numerical stability.
-        let mut max_logit = f32::NEG_INFINITY;
-        for &l in logits {
-            if l > max_logit {
-                max_logit = l;
-            }
-        }
-        let mut exps = [0.0_f32; 7];
-        let mut sum = 0.0_f32;
-        for (i, &l) in logits.iter().enumerate() {
-            exps[i] = (l - max_logit).exp();
-            sum += exps[i];
-        }
-        // Guard against degenerate sum (sum=0 would only happen with NaN logits).
-        let inv_sum = if sum > 0.0 { 1.0 / sum } else { 1.0 };
+        let logits: &[f32; NUM_POWERSET_CLASSES] =
+            logits
+                .first_chunk()
+                .ok_or(SegmentationError::InvalidOutputShape {
+                    actual_shape: vec![logits.len()],
+                })?;
+        let probs = softmax(logits);
         let mut argmax = 0_usize;
         let mut max_softmax = 0.0_f32;
-        for (i, &e) in exps.iter().enumerate() {
-            let p = e * inv_sum;
+        for (i, &p) in probs.iter().enumerate() {
             if p > max_softmax {
                 max_softmax = p;
                 argmax = i;
@@ -108,7 +182,11 @@ impl PowersetDecoder {
         let class = Self::class_for_index(argmax).ok_or(SegmentationError::InvalidOutputShape {
             actual_shape: vec![argmax],
         })?;
-        Ok(FrameLabel { class, max_softmax })
+        Ok(FrameLabel {
+            class,
+            max_softmax,
+            probs,
+        })
     }
 
     /// { true }
@@ -119,14 +197,14 @@ impl PowersetDecoder {
         logits_flat: &[f32],
         num_frames: usize,
     ) -> Result<Vec<FrameLabel>, SegmentationError> {
-        if logits_flat.len() != num_frames * 7 {
+        if logits_flat.len() != num_frames * NUM_POWERSET_CLASSES {
             return Err(SegmentationError::InvalidOutputShape {
                 actual_shape: vec![logits_flat.len()],
             });
         }
         let mut out = Vec::with_capacity(num_frames);
         for i in 0..num_frames {
-            let frame = &logits_flat[i * 7..(i + 1) * 7];
+            let frame = &logits_flat[i * NUM_POWERSET_CLASSES..(i + 1) * NUM_POWERSET_CLASSES];
             out.push(Self::decode_frame(frame)?);
         }
         Ok(out)
@@ -250,5 +328,55 @@ mod tests {
 
         let c = PowersetDecoder::frame_confidence(-1e-7);
         assert!(c.get() >= 0.0);
+    }
+
+    #[test]
+    fn probs_sum_to_one_and_match_max_softmax() {
+        let logits = [0.5_f32, 2.0, -1.0, 0.3, 1.0, -0.2, 0.7];
+        let label = PowersetDecoder::decode_frame(&logits).unwrap();
+        let sum: f32 = label.probs.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-5, "probs must sum to 1, got {sum}");
+        let argmax = label
+            .probs
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(i, _)| i)
+            .unwrap();
+        assert!(approx(label.max_softmax, label.probs[argmax]));
+        assert_eq!(PowersetDecoder::class_for_index(argmax), Some(label.class));
+    }
+
+    #[test]
+    fn class_index_round_trips_through_class_for_index() {
+        for idx in 0..NUM_POWERSET_CLASSES {
+            let class = PowersetDecoder::class_for_index(idx).unwrap();
+            assert_eq!(class.index(), idx, "round-trip failed for {idx}");
+            assert_eq!(
+                PowersetClass::from_speakers(&class.speakers()),
+                Some(class),
+                "from_speakers round-trip failed for {idx}"
+            );
+        }
+    }
+
+    #[test]
+    fn from_speakers_normalizes_pair_order() {
+        assert_eq!(
+            PowersetClass::from_speakers(&[1, 0]),
+            Some(PowersetClass::Pair(0, 1))
+        );
+        assert_eq!(
+            PowersetClass::from_speakers(&[2, 1]),
+            Some(PowersetClass::Pair(1, 2))
+        );
+    }
+
+    #[test]
+    fn from_speakers_rejects_unexpressible_sets() {
+        assert_eq!(PowersetClass::from_speakers(&[0, 1, 2]), None);
+        assert_eq!(PowersetClass::from_speakers(&[3]), None);
+        assert_eq!(PowersetClass::from_speakers(&[1, 1]), None);
+        assert_eq!(PowersetClass::from_speakers(&[0, 3]), None);
     }
 }

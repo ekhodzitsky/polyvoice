@@ -236,19 +236,27 @@ pub fn load_model_config(
 
 /// Read custom metadata key/value pairs from an ONNX file.
 ///
-/// When the `onnx` feature is enabled this opens a short-lived ort session and
-/// queries `ModelMetadata`. Without `onnx`, always returns an empty map so
-/// callers fall through to the manifest/defaults path.
-pub fn read_onnx_metadata_props(path: &Path) -> Result<HashMap<String, String>, String> {
-    #[cfg(feature = "onnx")]
-    {
-        crate::onnx::read_model_metadata_props(path)
-    }
-    #[cfg(not(feature = "onnx"))]
-    {
-        let _ = path;
-        Ok(HashMap::new())
-    }
+/// Opens a short-lived ort session and queries `ModelMetadata`. The typed
+/// [`crate::onnx::OnnxError`] lets callers distinguish an unloadable model
+/// from a metadata read failure.
+#[cfg(feature = "onnx")]
+pub fn read_onnx_metadata_props(
+    path: &Path,
+) -> Result<HashMap<String, String>, crate::onnx::OnnxError> {
+    crate::onnx::read_model_metadata_props(path)
+}
+
+/// Read custom metadata key/value pairs from an ONNX file.
+///
+/// Without the `onnx` feature there is no runtime to query, so this is
+/// infallible and always returns an empty map — callers fall through to the
+/// manifest/defaults path.
+#[cfg(not(feature = "onnx"))]
+pub fn read_onnx_metadata_props(
+    path: &Path,
+) -> Result<HashMap<String, String>, std::convert::Infallible> {
+    let _ = path;
+    Ok(HashMap::new())
 }
 
 #[allow(clippy::unwrap_used)]

@@ -4,19 +4,48 @@
 //! diarization. See [`VoiceActivityDetector`] for the trait and
 //! [`segment_speech`] for the high-level helper.
 
+pub(crate) mod hysteresis;
+
 use crate::types::DiarizationConfig;
+use hysteresis::{RegionEvent, RegionTracker, TailPolicy};
 
 /// Trait for voice activity detectors.
 ///
 /// Implementations are expected to be stateful and process audio in small
 /// fixed-size windows (e.g. 512 samples for Silero VAD).
+///
+/// # Frame contract
+///
+/// Every implementation scores audio in fixed native frames of `F` samples
+/// and follows the same input/output ratio in
+/// [`process`](VoiceActivityDetector::process):
+///
+/// - `samples.len()` must be a multiple of `F` (empty input is allowed and
+///   yields an empty vector). Anything else is rejected with
+///   [`VadError::InvalidChunkSize`] — partial frames are never buffered or
+///   silently dropped inside `process`. Callers that receive arbitrary chunk
+///   sizes must accumulate samples up to a multiple of `F` themselves.
+/// - The returned vector holds exactly `samples.len() / F` probabilities in
+///   `[0, 1]`, one per native frame in input order: probability `i` covers
+///   input samples `[i * F, (i + 1) * F)`. Pipelines that number frames to
+///   derive timestamps rely on this ratio.
+///
+/// Native frame size `F` per implementation shipped in this crate:
+///
+/// - [`EnergyVad`] — the `frame_size` passed to [`EnergyVad::new`].
+/// - `SileroVad` (feature `onnx`) — the `chunk_size` passed to
+///   `SileroVad::new`.
+/// - `EarshotVad` (feature `vad-earshot`) — 256 samples
+///   (`earshot_vad::FRAME_SIZE`).
 pub trait VoiceActivityDetector: Send {
     /// Reset internal state (LSTM buffers, etc.) for a new audio stream.
     fn reset(&mut self);
 
     /// Process a chunk of audio and return speech probability for each frame.
     ///
-    /// The returned vector has one probability per analysis frame within the chunk.
+    /// See the trait-level [frame contract](VoiceActivityDetector#frame-contract)
+    /// for the input-size requirement and the exact
+    /// `probs.len() == samples.len() / F` ratio.
     fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, VadError>;
 
     /// Expected input sample rate.
@@ -52,6 +81,48 @@ impl Default for VadConfig {
     }
 }
 
+/// Frame-level VAD geometry derived from the sample rate: frame duration
+/// plus the duration-based limits expressed in whole frames.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct VadFrameGeometry {
+    /// Duration of one frame in milliseconds.
+    pub ms_per_frame: f32,
+    /// [`VadConfig::min_silence_ms`] in whole frames (ceil).
+    pub min_silence_frames: usize,
+    /// Minimum speech duration (`min_speech_secs`) in whole frames (ceil).
+    pub min_speech_frames: usize,
+}
+
+impl VadConfig {
+    /// { true }
+    /// `pub fn frame_geometry(&self, sample_rate: u32, min_speech_secs: f32) -> Result<VadFrameGeometry, VadError>`
+    /// { ret.is_ok() == (self.frame_size > 0) }
+    /// Derive the frame geometry at `sample_rate`: how long one frame is and
+    /// how the configured durations translate to whole frames.
+    ///
+    /// `min_speech_secs` is the minimum speech duration to keep a region
+    /// (see `SpeechFilterConfig::min_speech_secs`). Rejects `frame_size == 0`
+    /// with [`VadError::InvalidChunkSize`].
+    pub fn frame_geometry(
+        &self,
+        sample_rate: u32,
+        min_speech_secs: f32,
+    ) -> Result<VadFrameGeometry, VadError> {
+        if self.frame_size == 0 {
+            return Err(VadError::InvalidChunkSize {
+                expected: 1,
+                got: 0,
+            });
+        }
+        let ms_per_frame = (self.frame_size as f32 / sample_rate as f32) * 1000.0;
+        Ok(VadFrameGeometry {
+            ms_per_frame,
+            min_silence_frames: (self.min_silence_ms / ms_per_frame).ceil() as usize,
+            min_speech_frames: ((min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize,
+        })
+    }
+}
+
 /// A simple energy-based VAD for tests and fallback scenarios.
 pub struct EnergyVad {
     threshold: f32,
@@ -77,16 +148,36 @@ impl EnergyVad {
     /// # Panics
     ///
     /// Panics if `frame_size == 0`.
-    #[allow(clippy::panic)] // Intentional precondition panic.
+    /// Use [`try_new`](Self::try_new) for a fallible alternative.
+    #[allow(clippy::panic)] // Documented convenience over `try_new`.
     pub fn new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Self {
-        if frame_size == 0 {
-            panic!("EnergyVad::new: frame_size must be > 0");
+        match Self::try_new(threshold_db, sample_rate, frame_size) {
+            Ok(vad) => vad,
+            Err(_) => panic!("EnergyVad::new: frame_size must be > 0"),
         }
-        Self {
+    }
+
+    /// { true }
+    /// `pub fn try_new(threshold_db: f32, sample_rate: u32, frame_size: usize) -> Result<Self, VadError>`
+    /// { ret.is_ok() == (frame_size > 0) }
+    /// Fallible constructor: rejects `frame_size == 0` with
+    /// [`VadError::InvalidChunkSize`] instead of panicking.
+    pub fn try_new(
+        threshold_db: f32,
+        sample_rate: u32,
+        frame_size: usize,
+    ) -> Result<Self, VadError> {
+        if frame_size == 0 {
+            return Err(VadError::InvalidChunkSize {
+                expected: 1,
+                got: 0,
+            });
+        }
+        Ok(Self {
             threshold: 10f32.powf(threshold_db / 20.0),
             sample_rate,
             frame_size,
-        }
+        })
     }
 }
 
@@ -130,14 +221,17 @@ pub enum VadEvent {
 ///
 /// Maintains the same state machine as [`segment_speech`] but operates
 /// frame-by-frame. Useful for both batch and streaming pipelines.
+///
+/// Built on the shared scalar hysteresis core in `hysteresis`: a region
+/// stays open through silence shorter than `min_silence_frames` and closes
+/// *after* the closing silence run. Events always alternate
+/// [`VadEvent::SpeechStart`]/[`VadEvent::SpeechEnd`]; short-region
+/// suppression is applied by callers via
+/// [`meets_min_speech_duration`](VadStateMachine::meets_min_speech_duration).
 #[derive(Debug, Clone)]
 pub struct VadStateMachine {
     threshold: f32,
-    min_silence_frames: usize,
-    min_speech_frames: usize,
-    in_speech: bool,
-    seg_start_frame: usize,
-    silence_count: usize,
+    tracker: RegionTracker,
 }
 
 impl VadStateMachine {
@@ -148,11 +242,7 @@ impl VadStateMachine {
     pub fn new(threshold: f32, min_silence_frames: usize, min_speech_frames: usize) -> Self {
         Self {
             threshold,
-            min_silence_frames,
-            min_speech_frames,
-            in_speech: false,
-            seg_start_frame: 0,
-            silence_count: 0,
+            tracker: RegionTracker::new(min_silence_frames, min_speech_frames, TailPolicy::Keep),
         }
     }
 
@@ -165,63 +255,75 @@ impl VadStateMachine {
     /// [`VadEvent::SpeechEnd`] when a speech region completes (silence
     /// exceeded `min_silence_frames`).
     pub fn advance(&mut self, prob: f32, frame: usize) -> Option<VadEvent> {
-        if self.in_speech {
-            if prob < self.threshold {
-                self.silence_count += 1;
-                if self.silence_count >= self.min_silence_frames {
-                    let event = VadEvent::SpeechEnd {
-                        start_frame: self.seg_start_frame,
-                        end_frame: frame + 1,
-                    };
-                    self.in_speech = false;
-                    self.silence_count = 0;
-                    return Some(event);
-                }
-            } else {
-                self.silence_count = 0;
-            }
-        } else if prob >= self.threshold {
-            self.in_speech = true;
-            self.seg_start_frame = frame;
-            self.silence_count = 0;
-            return Some(VadEvent::SpeechStart { start_frame: frame });
+        // Historical threshold semantics: inside a region only a frame
+        // strictly below the threshold counts toward silence, so a NaN
+        // probability reads as speech inside a region and as silence outside.
+        let active = if self.tracker.in_region() {
+            prob >= self.threshold || prob.is_nan()
+        } else {
+            prob >= self.threshold
+        };
+        match self.tracker.advance(active, frame) {
+            Some(RegionEvent::Start { start_frame }) => Some(VadEvent::SpeechStart { start_frame }),
+            Some(RegionEvent::End {
+                start_frame,
+                end_frame,
+            }) => Some(VadEvent::SpeechEnd {
+                start_frame,
+                end_frame,
+            }),
+            None => None,
         }
-        None
     }
 
     /// { true }
     /// `pub fn flush(&mut self, frame: usize) -> Option<VadEvent>`
-    /// { !self.in_speech }
+    /// { !self.in_speech() }
     /// Finalize any in-flight speech region.
     ///
     /// Returns [`VadEvent::SpeechEnd`] if a region was active.
     pub fn flush(&mut self, frame: usize) -> Option<VadEvent> {
-        if self.in_speech {
-            let event = VadEvent::SpeechEnd {
-                start_frame: self.seg_start_frame,
-                end_frame: frame,
-            };
-            self.in_speech = false;
-            self.silence_count = 0;
-            return Some(event);
+        match self.tracker.flush(frame) {
+            Some(RegionEvent::End {
+                start_frame,
+                end_frame,
+            }) => Some(VadEvent::SpeechEnd {
+                start_frame,
+                end_frame,
+            }),
+            Some(RegionEvent::Start { .. }) | None => None,
         }
-        None
     }
 
     /// { true }
     /// `pub fn in_speech(&self) -> bool`
-    /// { ret == self.in_speech }
+    /// { ret == self.in_speech() }
     /// Whether the detector is currently inside a speech region.
     pub fn in_speech(&self) -> bool {
-        self.in_speech
+        self.tracker.in_region()
     }
 
     /// { true }
     /// `pub fn min_speech_frames(&self) -> usize`
-    /// { ret == self.min_speech_frames }
+    /// { ret == self.min_speech_frames() }
     /// Minimum speech frames required for a region to be emitted.
     pub fn min_speech_frames(&self) -> usize {
-        self.min_speech_frames
+        self.tracker.min_on()
+    }
+
+    /// { true }
+    /// `pub fn meets_min_speech_duration(&self, start_frame: usize, end_frame: usize) -> bool`
+    /// { ret == (end_frame - start_frame >= self.min_speech_frames()) }
+    /// Whether a region spanning `[start_frame, end_frame)` survives the
+    /// minimum speech-duration filter.
+    ///
+    /// Single point for the short-region suppression rule shared by
+    /// [`segment_speech`] and the streaming pipeline. The machine always
+    /// emits `SpeechEnd` for a closed region — swallowing the event would
+    /// break the start/end alternation — so callers apply this predicate to
+    /// decide whether the region produces output.
+    pub fn meets_min_speech_duration(&self, start_frame: usize, end_frame: usize) -> bool {
+        self.tracker.keeps(start_frame, end_frame)
     }
 }
 
@@ -231,6 +333,20 @@ impl VadStateMachine {
 /// Segment speech regions using a voice activity detector.
 ///
 /// Returns a list of `(start_sample, end_sample)` pairs where speech was detected.
+///
+/// Only complete frames are scored: the trailing `samples.len() % frame_size`
+/// samples (a partial tail) are dropped, not padded. Pad upstream or choose a
+/// dividing `frame_size` when the tail matters.
+///
+/// `vad_config.frame_size` should equal the detector's native frame size (see
+/// the [frame contract](VoiceActivityDetector#frame-contract)) so every frame
+/// yields exactly one probability and segment sample indices stay aligned
+/// with the input.
+///
+/// Frame durations are derived from the detector's own
+/// [`sample_rate`](VoiceActivityDetector::sample_rate) — the samples being
+/// framed are consumed by the detector, so they are at its rate. `config`
+/// supplies only the speech-filter duration (`min_speech_secs`).
 ///
 /// ```rust
 /// use polyvoice::{EnergyVad, segment_speech, DiarizationConfig, VadConfig};
@@ -250,12 +366,8 @@ pub fn segment_speech<V: VoiceActivityDetector>(
 ) -> Result<Vec<(usize, usize)>, VadError> {
     vad.reset();
     let frame_size = vad_config.frame_size;
-    if frame_size == 0 {
-        return Err(VadError::InvalidChunkSize {
-            expected: 1,
-            got: 0,
-        });
-    }
+    let geometry =
+        vad_config.frame_geometry(vad.sample_rate(), config.speech_filter.min_speech_secs)?;
     let num_frames = samples.len() / frame_size;
     let mut probs = Vec::with_capacity(num_frames);
     for i in 0..num_frames {
@@ -264,14 +376,11 @@ pub fn segment_speech<V: VoiceActivityDetector>(
         probs.extend(frame_probs);
     }
 
-    let sr = config.window.sample_rate.get() as f32;
-    let ms_per_frame = (frame_size as f32 / sr) * 1000.0;
-    let min_speech_frames =
-        ((config.speech_filter.min_speech_secs * 1000.0) / ms_per_frame).ceil() as usize;
-    let threshold = vad_config.threshold;
-    let min_silence_frames = (vad_config.min_silence_ms / ms_per_frame).ceil() as usize;
-
-    let mut sm = VadStateMachine::new(threshold, min_silence_frames, min_speech_frames);
+    let mut sm = VadStateMachine::new(
+        vad_config.threshold,
+        geometry.min_silence_frames,
+        geometry.min_speech_frames,
+    );
     let mut segments = Vec::new();
 
     for (i, &prob) in probs.iter().enumerate() {
@@ -279,11 +388,9 @@ pub fn segment_speech<V: VoiceActivityDetector>(
             start_frame,
             end_frame,
         }) = sm.advance(prob, i)
+            && sm.meets_min_speech_duration(start_frame, end_frame)
         {
-            let duration_frames = end_frame - start_frame;
-            if duration_frames >= min_speech_frames {
-                segments.push((start_frame * frame_size, end_frame * frame_size));
-            }
+            segments.push((start_frame * frame_size, end_frame * frame_size));
         }
     }
 
@@ -291,11 +398,9 @@ pub fn segment_speech<V: VoiceActivityDetector>(
         start_frame,
         end_frame,
     }) = sm.flush(num_frames)
+        && sm.meets_min_speech_duration(start_frame, end_frame)
     {
-        let duration_frames = end_frame - start_frame;
-        if duration_frames >= min_speech_frames {
-            segments.push((start_frame * frame_size, end_frame * frame_size));
-        }
+        segments.push((start_frame * frame_size, end_frame * frame_size));
     }
 
     Ok(segments)
@@ -491,6 +596,16 @@ mod tests {
     #[should_panic(expected = "EnergyVad::new: frame_size must be > 0")]
     fn energy_vad_rejects_zero_frame_size() {
         let _ = EnergyVad::new(-40.0, 16000, 0);
+    }
+
+    #[test]
+    fn energy_vad_try_new_rejects_zero_frame_size() {
+        let res = EnergyVad::try_new(-40.0, 16000, 0);
+        assert!(matches!(
+            res,
+            Err(VadError::InvalidChunkSize { got: 0, .. })
+        ));
+        assert!(EnergyVad::try_new(-40.0, 16000, 512).is_ok());
     }
 }
 

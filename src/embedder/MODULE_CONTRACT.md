@@ -6,7 +6,8 @@ level: subsystem
 layer: algorithm
 purpose: >
   Owns the Embedder trait, overlap masking, embedder pooling, and ONNX-backed
-  adapter implementations (CAM++, ResNet34). Does NOT own feature extraction
+  adapter implementations (CAM++, ResNet34, ERes2NetV2 — named wrappers over
+  one generic internal fbank+ONNX adapter). Does NOT own feature extraction
   (features.rs) or clustering.
 status: stable
 owners:
@@ -51,9 +52,11 @@ surface:
       command: cargo test --lib embedder
   - name: EmbedderPool
     kind: struct
-    visibility: public
+    visibility: private (cfg(test))
     contract: >
-      Blocking pool of Embedder instances using Mutex<Vec<E>> (utils::ObjectPool).
+      Test-only blocking pool of Embedder instances using Mutex<Vec<E>>
+      (utils::ObjectPool). Not part of the public API: production paths hold
+      a Box<dyn Embedder> or pool ONNX sessions inside FbankOnnxExtractor.
     proof:
       kind: unit-test
       target: src/embedder::mod::tests
@@ -63,6 +66,16 @@ surface:
     visibility: public
     contract: >
       Masks embedding regions that overlap with multiple speakers.
+    proof:
+      kind: unit-test
+      target: src/embedder::mod::tests
+      command: cargo test --lib embedder
+  - name: DummyExtractor
+    kind: struct
+    visibility: public
+    contract: >
+      Deterministic pseudo-random unit-vector embedder for tests and
+      benchmarks (implements Embedder directly).
     proof:
       kind: unit-test
       target: src/embedder::mod::tests
@@ -85,6 +98,17 @@ surface:
       kind: integration-test
       target: tests/embedder_test.rs
       command: cargo test --test embedder_test --features onnx
+  - name: ERes2NetV2Extractor
+    kind: struct
+    visibility: public
+    contract: >
+      ONNX-backed ERes2NetV2 adapter (192-d default, `with_dim` override)
+      wrapping FbankOnnxExtractor.
+    proof:
+      kind: compile-time
+      target: src/bin/polyvoice-measure.rs (constructs it); inference is the
+        shared FbankOnnxExtractor engine covered by tests/embedder_test.rs
+      command: cargo check --features "onnx,embedder"
 dependencies:
   internal: []
   external:
@@ -96,10 +120,11 @@ consumers:
     uses:
       - Embedder
       - EmbedderError
-      - EmbedderPool
       - apply_overlap_mask
+      - DummyExtractor
       - CamPlusPlusExtractor
       - ResNet34Adapter
+      - ERes2NetV2Extractor
       - ort
       - polyvoice_internal
 invariants:
@@ -111,7 +136,8 @@ invariants:
       target: tests/embedder_test.rs
       command: cargo test --test embedder_test --features onnx
   - id: pool-safe-concurrent-access
-    rule: EmbedderPool is safe for concurrent pop/push without data races.
+    rule: utils::ObjectPool checkout/return is safe for concurrent pop/push
+      without data races (EmbedderPool and the ONNX session pool build on it).
     proof:
       kind: unit-test
       target: tests/loom_pool.rs
