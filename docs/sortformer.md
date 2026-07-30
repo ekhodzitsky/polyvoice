@@ -12,9 +12,8 @@ polyvoice = { version = "...", features = ["sortformer", "onnx", "download"] }
 ```
 
 ```bash
-# Explicit download only — never pulled by default profiles or CI
-cargo run --features "cli,sortformer" -- ensure-model sortformer_v2   # if CLI supports it
-# or in library code:
+# Explicit download only — never pulled by default profiles or CI.
+# There is no CLI subcommand for optional adapters; fetch in library code:
 # ModelRegistry::default()?.ensure("sortformer_v2")?
 ```
 

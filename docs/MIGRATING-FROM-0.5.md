@@ -4,13 +4,18 @@
 `pipeline_v2::Pipeline::builder()` API, profile-based model selection, and
 INT8-quantized ONNX bundles. This is intentionally a breaking change.
 
-> **Current status (0.11+):** CLI, FFI, Python, and MCP default to
-> **`pipeline_v2` + VBx**. The always-on crate-root `Pipeline` remains the
-> ort-free / BYO library surface and the CLI `--legacy` escape hatch.
-> Architecture map: [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md).
+> **Status box (read first):** this guide documents the **0.5 → 0.6** migration
+> and is partially outdated — sections marked *archival* below describe APIs
+> that have since been removed (`HybridPipeline`, `OnlineDiarizer`,
+> `OnnxEmbeddingExtractor`, FFI ABI v2). As of **0.11+**, CLI, FFI, Python, and
+> MCP default to **`pipeline_v2` + VBx**; the crate-root `Pipeline` is the v2
+> pipeline (re-exported under the full ONNX feature gate), and the ort-free /
+> BYO library surface is `pipeline::LegacyPipeline` (also the CLI `--legacy`
+> escape hatch). Architecture map:
+> [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md).
 >
-> The sections below retain historical 0.6.x narrative for context; prefer the
-> status box above and the README for what ships today.
+> The sections below retain historical 0.6.x narrative for context; prefer this
+> status box and the README for what ships today.
 
 ## Rust API
 
@@ -39,7 +44,12 @@ let sr = SampleRate::new(16000).unwrap();
 let result = pipeline.run(&samples, sr)?;
 ```
 
-### Hybrid Pipeline (v0.6.3 — API-only)
+### Hybrid Pipeline (v0.6.3 — archival, removed)
+
+> **Archival:** `HybridPipeline` no longer exists. For dense-window embeddings
+> on the production path, use `PipelineConfig::embed_window_secs` on the v2
+> `Pipeline` instead. The example below is kept for historical context only.
+
 For long-form multi-speaker audio, use the hybrid pipeline which treats
 `PowersetSegmenter` as a superior VAD and resolves speakers globally via K-means auto-k:
 
@@ -92,26 +102,27 @@ print(result["num_speakers"], len(result["turns"]))
 ## C FFI
 
 The ABI was renamed and replaced. ABI v1 (`polyvoice_diarizer_*`) is removed.
-ABI v2 entry points: `polyvoice_pipeline_create`, `polyvoice_pipeline_run`,
+The current **ABI v3** entry points: `polyvoice_pipeline_create`,
+`polyvoice_pipeline_run`, `polyvoice_pipeline_run_format`,
 `polyvoice_pipeline_destroy`, `polyvoice_free_string`. See `include/polyvoice.h`
-for the new contract.
+for the contract.
 
 ## Removed types and replacements
 
 | Removed / renamed             | Replacement / note                       |
 |-------------------------------|------------------------------------------|
-| `OfflineDiarizer`             | `pipeline_v2::Pipeline::run` (ONNX) or crate-root `Pipeline` (BYO) |
+| `OfflineDiarizer`             | `pipeline_v2::Pipeline::run` (ONNX) or `pipeline::LegacyPipeline` (BYO) |
 | ONNX profile builder          | `pipeline_v2::Pipeline::builder()` + `PipelineConfig` |
 | `DiarizationConfig`           | Still the BYO/`--legacy` config; ONNX uses `pipeline_v2::PipelineConfig` |
 | `VadConfig` / `EnergyVad`     | Still public for BYO/streaming; ONNX v2 uses `Segmenter` |
 | `DummyExtractor`              | Still public test/mock embedder (implements `Embedder`) |
-| `OnnxEmbeddingExtractor`      | Soft-deprecated; prefer `embedder::ResNet34Adapter` |
+| `OnnxEmbeddingExtractor`      | Removed; use `embedder::ResNet34Adapter` |
 | `EcapaTdnnExtractor`, `EcapaMelOnnxExtractor`, `RawAudioOnnxExtractor` | use `embedder::CamPlusPlusExtractor` or `ResNet34Adapter` |
 | `ClusteringBackend`           | `pipeline_v2::ClustererKind`             |
 | `compute_fbank` (public)      | private; use `FbankExtractor::extract`   |
 
-## OnlineDiarizer is deprecated
+## OnlineDiarizer (archival, removed)
 
-`OnlineDiarizer` remains accessible but is `#[deprecated(since = "0.6.0")]`.
-The streaming pipeline is being redesigned in v1.1 with a richer latency vs.
-DER tradeoff. For offline batch processing, use `Pipeline::builder()`.
+> **Archival:** `OnlineDiarizer` no longer exists. The current streaming entry
+> point is `streaming::StreamingPipeline` with tunable `LatencyPreset`s (see
+> [API.md](API.md)); for offline batch processing, use `Pipeline::builder()`.
