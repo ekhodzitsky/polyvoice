@@ -7,7 +7,7 @@
 //! (higher than this crate's declared 1.88) — enable only on a newer toolchain.
 
 use super::runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
-use super::validate_onnx_header;
+use super::{OnnxError, validate_onnx_header};
 use std::path::Path;
 use std::sync::Arc;
 use tract_onnx::prelude::*;
@@ -41,9 +41,12 @@ impl TractSession {
     ///
     /// `intra_threads` is accepted for API parity with the ort builder and is
     /// currently ignored (tract's default executor is used).
-    pub fn from_path(model_path: &Path, _intra_threads: Option<usize>) -> anyhow::Result<Self> {
+    pub fn from_path(model_path: &Path, _intra_threads: Option<usize>) -> Result<Self, OnnxError> {
         validate_onnx_header(model_path)?;
-        let model = load_runnable(model_path)?;
+        let model = load_runnable(model_path).map_err(|e| OnnxError::SessionBuild {
+            path: model_path.to_path_buf(),
+            detail: format!("{e}"),
+        })?;
 
         let input_names = (0..model.model().inputs.len())
             .map(|i| {

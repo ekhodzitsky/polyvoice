@@ -121,9 +121,9 @@ for sec in sections:
 if changed and not dry_run:
     manifest_path.write_text("\n".join(lines) + "\n")
     print(f"[WRITE] Updated {manifest_path}")
-    print("[TEST] Running m5_manifest_smoke_test...")
+    print("[TEST] Running manifest_smoke_test...")
     subprocess.run(
-        ["cargo", "test", "--test", "m5_manifest_smoke_test", "--features", "download"],
+        ["cargo", "test", "--test", "manifest_smoke_test", "--features", "download"],
         cwd=str(manifest_path.parent.parent.parent),
         check=True,
     )

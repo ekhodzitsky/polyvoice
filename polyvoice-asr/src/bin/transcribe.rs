@@ -12,12 +12,13 @@ use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use polyvoice::format::{write_srt, write_txt, write_vtt};
 use polyvoice::models::ModelRegistry;
+use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::types::{
     ClusterConfig, DiarizationConfig, Profile, SampleRate, SpeakerTurn, WordAlignment,
 };
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
-use polyvoice::{FbankOnnxExtractor, Pipeline, SileroVad, who_said_what};
+use polyvoice::{FbankOnnxExtractor, SileroVad, who_said_what};
 use polyvoice_asr::ParakeetAsr;
 use serde::Serialize;
 
@@ -90,7 +91,7 @@ fn main() -> Result<()> {
         },
         ..DiarizationConfig::default()
     };
-    let pipeline = Pipeline::new(config, VadConfig::default());
+    let pipeline = LegacyPipeline::new(config, VadConfig::default());
 
     if !args.quiet {
         eprintln!("Reading {}...", args.wav.display());

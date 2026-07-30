@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
-//! M5 — manifest smoke tests over the production `src/models/manifest.toml`.
+//! Manifest smoke tests over the production `src/models/manifest.toml`.
 //!
-//! Verifies that after the M5 publish step:
+//! Verifies that after the model publish step:
 //!   - `[profiles.mobile]` resolves to INT8 entries.
 //!   - `[profiles.balanced]` resolves to INT8 entries.
 //!   - Every INT8 sha256 is a real 64-char hex digest (not a placeholder).
@@ -9,7 +9,7 @@
 //!   - Balanced profile total bundle is ≤ 35 MB.
 //!
 //! Mobile bundle budget was relaxed from the original 10 MB target after the
-//! M5 calibration discovered that powerset's SincNet rank-1 weights resist
+//! INT8 calibration discovered that powerset's SincNet rank-1 weights resist
 //! per-channel quantization (compression ratio ~1.04× instead of ~4×). The
 //! actual Mobile bundle lands around 14 MB; we cap at 15 MB to retain a hard
 //! ceiling without papering over the regression.

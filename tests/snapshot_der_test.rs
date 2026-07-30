@@ -3,16 +3,9 @@
 #![allow(clippy::unwrap_used)]
 
 use polyvoice::der::compute_der;
-use polyvoice::types::{SpeakerId, SpeakerTurn};
 
-fn turn(start: f64, end: f64, speaker: u32) -> SpeakerTurn {
-    SpeakerTurn {
-        time: polyvoice::types::TimeRange { start, end },
-        speaker: SpeakerId(speaker),
-        text: None,
-        stable: true,
-    }
-}
+mod common;
+use common::turn;
 
 #[test]
 fn snapshot_der_perfect_match() {

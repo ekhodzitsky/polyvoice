@@ -70,12 +70,12 @@ surface:
       kind: unit-test
       target: src/clusterer::mod::tests
       command: cargo test --lib clusterer --features clusterer
-  - name: KMeansClusterer
+  - name: KmeansClusterer
     kind: struct
     visibility: public
     contract: >
-      K-means++ / auto-k clusterer. Selectable via pipeline_v2
-      ClustererKind::KMeans and crate-root re-export.
+      K-means++ / auto-k clusterer. Reachable via the crate-root re-export;
+      deprecated alias `KMeansClusterer` kept for one cycle.
     proof:
       kind: unit-test
       target: src/clusterer::mod::tests
@@ -136,7 +136,7 @@ dependencies:
       reason: AhcClusterer wraps free agglomerative functions.
     - module: kmeans
       scope: algorithm
-      reason: KMeansClusterer and NME-SC final assignment.
+      reason: KmeansClusterer and NME-SC final assignment.
     - module: spectral
       scope: algorithm
       reason: Shared eigengap helpers for NmeScClusterer.

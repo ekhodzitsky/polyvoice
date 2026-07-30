@@ -35,6 +35,7 @@ surface:
     visibility: public
     contract: >
       Configuration for filterbank extraction (sample rate, n_mels, etc.).
+      `validate()` reports field violations as FbankError::InvalidConfig.
     proof:
       kind: unit-test
       target: src/features::mod::tests
@@ -43,7 +44,9 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Extracts mel-filterbank features from audio samples.
+      Extracts mel-filterbank features from audio samples. `try_new`
+      validates the config (FbankError::InvalidConfig); `new` is a panicking
+      convenience over it.
     proof:
       kind: unit-test
       target: src/features::mod::tests

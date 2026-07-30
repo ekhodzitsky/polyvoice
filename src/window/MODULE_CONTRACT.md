@@ -34,7 +34,8 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Iterator over overlapping fixed-size audio windows.
+      Iterator over overlapping fixed-size audio windows. `new` panics on
+      invalid geometry; `try_new` validates and returns WindowError.
     proof:
       kind: unit-test
       target: src/window::mod::tests
@@ -43,7 +44,18 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Ring buffer for streaming audio window management.
+      Ring buffer for streaming audio window management. `new` panics on
+      invalid geometry; `try_new` validates and returns WindowError.
+    proof:
+      kind: unit-test
+      target: src/window::mod::tests
+      command: cargo test --lib window
+  - name: WindowError
+    kind: enum
+    visibility: public
+    contract: >
+      Window geometry violation reported by the fallible `try_new`
+      constructors (zero window, zero hop, or hop larger than window).
     proof:
       kind: unit-test
       target: src/window::mod::tests

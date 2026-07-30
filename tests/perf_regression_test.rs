@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 #![allow(clippy::unwrap_used)]
 //! Performance regression test for the legacy v0.5 pipeline.
 //!
@@ -11,8 +10,10 @@
 
 #![cfg(all(feature = "onnx", feature = "download"))]
 
+mod common;
+
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::Pipeline;
+use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::types::{DiarizationConfig, Profile};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
@@ -20,25 +21,32 @@ use polyvoice::{FbankOnnxExtractor, SileroVad};
 use std::path::Path;
 use std::time::Instant;
 
-/// Return the first 5 WAV files (alphabetically) from VoxConverse-test.
+/// Fixed 5-file VoxConverse-test corpus for perf tracking.
+///
+/// An explicit list rather than "first N alphabetically": adding files to the
+/// dataset must never silently change what the perf gate measures.
+const PERF_CORPUS: &[&str] = &["aepyx", "aggyz", "aiqwk", "aorju", "auzru"];
+
+/// Resolve the perf corpus under VoxConverse-test. Returns `None` when the
+/// dataset is not downloaded at all (the caller then skips via
+/// `common::require_wav`); a present-but-incomplete directory is a broken
+/// checkout and panics.
 fn fixed_voxconverse_subset() -> Option<Vec<std::path::PathBuf>> {
     let dir = Path::new("data/voxconverse-test/audio");
     if !dir.is_dir() {
         return None;
     }
-    let mut entries: Vec<_> = std::fs::read_dir(dir)
-        .ok()?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "wav"))
-        .map(|e| e.path())
+    let paths: Vec<_> = PERF_CORPUS
+        .iter()
+        .map(|stem| dir.join(format!("{stem}.wav")))
         .collect();
-    entries.sort();
-    let subset: Vec<_> = entries.into_iter().take(5).collect();
-    if subset.is_empty() {
-        None
-    } else {
-        Some(subset)
+    if paths.iter().all(|p| p.is_file()) {
+        return Some(paths);
     }
+    panic!(
+        "data/voxconverse-test/audio/ is missing perf corpus files — \
+         run scripts/download-voxconverse-test.sh first"
+    );
 }
 
 /// Read peak resident set size in megabytes.
@@ -84,14 +92,17 @@ struct PerfReport {
     max_rss_mb: f64,
 }
 
-#[ignore = "requires ONNX models + dataset"]
+#[ignore = "requires downloaded models and dataset"]
 #[test]
 fn perf_regression_legacy_pipeline() {
     let wav_paths = match fixed_voxconverse_subset() {
         Some(p) => p,
-        None => panic!(
-            "data/voxconverse-test/audio/ is empty — run scripts/download-voxconverse-test.sh first"
-        ),
+        None => {
+            // Dataset not downloaded: soft-skip locally, hard-fail under the
+            // release gate (POLYVOICE_REQUIRE_DATA=1).
+            common::require_wav(Path::new("data/voxconverse-test/audio"));
+            return;
+        }
     };
 
     let registry = ModelRegistry::default()
@@ -114,7 +125,7 @@ fn perf_regression_legacy_pipeline() {
 
     let config = DiarizationConfig::default();
     let vad_config = VadConfig::default();
-    let pipeline = Pipeline::new(config, vad_config);
+    let pipeline = LegacyPipeline::new(config, vad_config);
 
     let mut file_results = Vec::with_capacity(wav_paths.len());
 
@@ -163,13 +174,26 @@ fn perf_regression_legacy_pipeline() {
     println!("{}", serde_json::to_string_pretty(&report).unwrap());
 
     // Thresholds.
+    //
+    // Timing gate: the RTF budget is env-tunable via POLYVOICE_PERF_MAX_RTF
+    // (default 0.25, the historical bound). Shared CI runners vary enough in
+    // CPU speed and noise that a hard-coded threshold made this gate flaky
+    // there; local and dedicated-runner runs keep the strict default.
+    let max_rtf = std::env::var("POLYVOICE_PERF_MAX_RTF")
+        .ok()
+        .map(|v| {
+            v.parse::<f64>()
+                .expect("POLYVOICE_PERF_MAX_RTF must be a number")
+        })
+        .unwrap_or(0.25);
     assert!(
-        avg_rtf < 0.25,
-        "average RTF too high: {:.3} (threshold 0.25)",
-        avg_rtf
+        avg_rtf < max_rtf,
+        "average RTF too high: {avg_rtf:.3} (threshold {max_rtf})",
     );
 
-    // Only assert memory on Linux where we have an accurate reading.
+    // Memory gate is Linux-only: peak RSS reads VmHWM from /proc/self/status,
+    // and macOS has no dependency-free equivalent (peak_rss_mb returns 0.0
+    // there), so asserting on other platforms would be meaningless.
     #[cfg(target_os = "linux")]
     assert!(
         max_rss_mb < 500.0,

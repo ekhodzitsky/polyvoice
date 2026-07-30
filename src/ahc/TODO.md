@@ -10,7 +10,7 @@
 ## Known Gaps
 
 - No benchmark for AHC runtime scaling with embedding count.
-- Elbow heuristic is not configurable from the public API.
+- Automatic threshold selection (largest-gap heuristic) is not configurable from the public API.
 
 ## Deferred
 

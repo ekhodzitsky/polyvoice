@@ -13,38 +13,14 @@
     feature = "download",
 ))]
 
+mod common;
+
 use polyvoice::der::{DerDecomposition, compute_der_decomposition};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline_v2::{Pipeline, PipelineConfig};
-use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
 use polyvoice::types::{Profile, SampleRate};
 use polyvoice::wav::read_wav;
-use serde::Deserialize;
 use std::path::Path;
-
-const SUBSET_10: &[&str] = &[
-    "aepyx", "aggyz", "aiqwk", "aorju", "auzru", "bgvvt", "bidnq", "bjruf", "bmsyn", "bpzsc",
-];
-
-/// v2-family AMI baseline entry; hosts the overlap-excluded long-form floor.
-#[derive(Deserialize)]
-struct Baseline {
-    #[serde(rename = "hybrid_ami_test_single")]
-    ami_v2: AmiBaseline,
-}
-
-#[derive(Deserialize)]
-struct AmiBaseline {
-    /// Overlap-excluded DER floor. `None` (JSON null) = not yet measured → gate inactive.
-    der_single_speaker: Option<f64>,
-    der_single_speaker_tolerance: Option<f64>,
-}
-
-fn load_baseline() -> Baseline {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/der_baseline.json");
-    let raw = std::fs::read_to_string(&path).expect("read der_baseline.json");
-    serde_json::from_str(&raw).expect("parse der_baseline.json")
-}
 
 /// Returns (DER decomposition, num_speakers, ref_speakers).
 fn run_v2_pipeline_on_file(
@@ -88,16 +64,7 @@ fn run_v2_pipeline_on_file(
         .run(&samples, SampleRate::new(16000).unwrap())
         .expect("pipeline.run should succeed");
 
-    let ref_turns = {
-        let raw = parse_rttm_file(&rttm_path).expect("parse rttm");
-        let grouped = group_by_file(&raw);
-        let segs: Vec<_> = grouped
-            .get(stem)
-            .map(|v| v.iter().map(|s| (*s).clone()).collect())
-            .unwrap_or_default();
-        let (turns, _map) = to_speaker_turns(&segs);
-        turns
-    };
+    let ref_turns = common::load_ref_turns(&rttm_path, stem);
 
     let decomp = compute_der_decomposition(&ref_turns, &result.turns, 0.25);
     (
@@ -112,13 +79,15 @@ fn run_v2_pipeline_on_file(
 }
 
 #[test]
-#[ignore = "requires cached ONNX bundle + wav/rttm files"]
+#[ignore = "requires downloaded models"]
 fn v2_der_e2e_smoke() {
-    let (decomp, num_speakers, ref_speakers) = run_v2_pipeline_on_file(
-        "fuzfh",
-        Path::new("tests/data/e2e-smoke/audio"),
-        Path::new("tests/data/e2e-smoke/rttm"),
-    );
+    let audio_dir = Path::new("tests/data/e2e-smoke/audio");
+    let rttm_dir = Path::new("tests/data/e2e-smoke/rttm");
+    if !common::require_wav(&audio_dir.join("fuzfh.wav")) {
+        return;
+    }
+    let (decomp, num_speakers, ref_speakers) =
+        run_v2_pipeline_on_file("fuzfh", audio_dir, rttm_dir);
     println!(
         "e2e_smoke: DER={:.2}% speakers={} ref_speakers={}",
         decomp.total.der * 100.0,
@@ -128,15 +97,18 @@ fn v2_der_e2e_smoke() {
 }
 
 #[test]
-#[ignore = "requires cached ONNX bundle + wav/rttm files under data/voxconverse-test/"]
+#[ignore = "requires downloaded models and dataset"]
 fn v2_der_voxconverse_10_file_subset() {
     let audio_dir = Path::new("data/voxconverse-test/audio");
     let rttm_dir = Path::new("data/voxconverse-test/rttm");
+    if !common::require_wav(audio_dir) {
+        return;
+    }
 
     let mut total_der = 0.0_f64;
     let mut count = 0_usize;
 
-    for stem in SUBSET_10 {
+    for stem in common::VOXCONVERSE_SUBSET_10 {
         let (decomp, num_speakers, ref_speakers) =
             run_v2_pipeline_on_file(stem, audio_dir, rttm_dir);
         println!(
@@ -155,13 +127,15 @@ fn v2_der_voxconverse_10_file_subset() {
 }
 
 #[test]
-#[ignore = "requires cached ONNX bundle + wav/rttm files under data/ami-test-single/"]
+#[ignore = "requires downloaded models and dataset"]
 fn v2_der_ami_test_single() {
-    let (decomp, num_speakers, ref_speakers) = run_v2_pipeline_on_file(
-        "EN2002a",
-        Path::new("data/ami-test-single/audio"),
-        Path::new("data/ami-test-single/rttm"),
-    );
+    let audio_dir = Path::new("data/ami-test-single/audio");
+    let rttm_dir = Path::new("data/ami-test-single/rttm");
+    if !common::require_wav(audio_dir) {
+        return;
+    }
+    let (decomp, num_speakers, ref_speakers) =
+        run_v2_pipeline_on_file("EN2002a", audio_dir, rttm_dir);
     let single_der = decomp.single_speaker.der;
     let confusion = decomp.total.confusion_rate;
     // Overlap-aware decomposition: the AMI gate references the split so a
@@ -184,46 +158,13 @@ fn v2_der_ami_test_single() {
             r.ref_frames
         );
     }
-    // The NaN-embedding collapse manifested as num_speakers=1 — every segment merged
-    // into a single cluster. Total DER is deliberately NOT gated here: AMI EN2002a is
-    // ~79% overlapping speech, and with single-speaker-per-frame output the miss term
-    // alone holds DER near 88% whether the bug is present or fixed, so a DER ceiling
-    // cannot tell the two apart. Gate instead on the signals that actually move when
-    // the bug regresses: the speaker count must not collapse, and clustering confusion
-    // must stay low (post-fix it is ~11%).
-    assert!(
-        num_speakers >= 2,
-        "pipeline_v2 collapsed to {num_speakers} speaker(s) on EN2002a (NaN-embedding regression?)"
+    // Shared AMI long-form gate (speaker-count collapse + clustering confusion
+    // + overlap-excluded DER floor); mirrors cli_der_regression_test::cli_der_regression_v2_ami_single.
+    let baseline = common::load_baseline(&common::der_baseline_path());
+    common::gate_ami_longform(
+        num_speakers,
+        confusion,
+        single_der,
+        &baseline.hybrid_ami_test_single,
     );
-    assert!(
-        confusion < 0.25,
-        "pipeline_v2 clustering regressed on EN2002a: confusion={:.1}% exceeds 25%",
-        confusion * 100.0
-    );
-    // Numeric long-form floor: the overlap-excluded DER DOES discriminate
-    // healthy vs collapsed diarization on high-overlap audio, unlike total DER. The gate
-    // activates only once a baseline is measured and recorded in tests/der_baseline.json
-    // (hybrid_ami_test_single.der_single_speaker); until then the printed value is the
-    // measurement to record.
-    let baseline = load_baseline();
-    match (
-        baseline.ami_v2.der_single_speaker,
-        baseline.ami_v2.der_single_speaker_tolerance,
-    ) {
-        (Some(floor), Some(tol)) => {
-            let ceiling = (floor + tol) / 100.0;
-            assert!(
-                single_der <= ceiling,
-                "long-form floor regressed: overlap-excluded DER={:.2}% exceeds {:.2}% (baseline {:.2}% + tol {:.2}%)",
-                single_der * 100.0,
-                ceiling * 100.0,
-                floor,
-                tol,
-            );
-        }
-        _ => println!(
-            "  overlap-excluded DER baseline not yet measured — record {:.2}% in tests/der_baseline.json to activate the long-form floor",
-            single_der * 100.0
-        ),
-    }
 }

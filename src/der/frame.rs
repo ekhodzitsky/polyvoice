@@ -3,7 +3,7 @@ use crate::types::{SpeakerTurn, TimeRange};
 use std::collections::HashMap;
 
 /// DER evaluation result.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct DerResult {
     pub der: f64,
     pub miss_rate: f64,
@@ -132,35 +132,12 @@ pub(crate) fn der_core(
     uem: Option<&[TimeRange]>,
 ) -> DerResult {
     if reference.is_empty() {
-        return DerResult {
-            der: 0.0,
-            miss_rate: 0.0,
-            false_alarm_rate: 0.0,
-            confusion_rate: 0.0,
-            total_speech: 0.0,
-            total_ref_frames: 0,
-            missed_frames: 0,
-            false_alarm_frames: 0,
-            confusion_frames: 0,
-        };
+        return DerResult::default();
     }
 
     if !collar.is_finite() || collar < 0.0 {
-        return DerResult {
-            der: 0.0,
-            miss_rate: 0.0,
-            false_alarm_rate: 0.0,
-            confusion_rate: 0.0,
-            total_speech: 0.0,
-            total_ref_frames: 0,
-            missed_frames: 0,
-            false_alarm_frames: 0,
-            confusion_frames: 0,
-        };
+        return DerResult::default();
     }
-
-    let resolution = 0.01; // 10ms frames
-    const MAX_FRAMES: usize = 24 * 3600 * 100; // 24 hours at 10ms resolution
 
     let max_time = reference
         .iter()
@@ -169,27 +146,17 @@ pub(crate) fn der_core(
         .fold(0.0f64, f64::max);
 
     if !max_time.is_finite() || max_time < 0.0 {
-        return DerResult {
-            der: 0.0,
-            miss_rate: 0.0,
-            false_alarm_rate: 0.0,
-            confusion_rate: 0.0,
-            total_speech: 0.0,
-            total_ref_frames: 0,
-            missed_frames: 0,
-            false_alarm_frames: 0,
-            confusion_frames: 0,
-        };
+        return DerResult::default();
     }
 
-    let n_frames = ((max_time / resolution).ceil() as usize + 1).min(MAX_FRAMES);
+    let n_frames = TimeRange::grid_frame_count(max_time);
 
     // Frames to ignore: always those inside the forgiveness collar.
-    let mut ignore_mask = build_collar_mask(reference, collar, resolution, n_frames);
+    let mut ignore_mask = build_collar_mask(reference, collar, n_frames);
 
     // Build frame-level speaker labels.
-    let ref_frames = build_speaker_frames(reference, resolution, n_frames);
-    let hyp_frames = build_speaker_frames(hypothesis, resolution, n_frames);
+    let ref_frames = build_speaker_frames(reference, n_frames);
+    let hyp_frames = build_speaker_frames(hypothesis, n_frames);
 
     // Restrict the scored subset by region. SingleSpeaker drops overlap frames
     // (removing the overlap-miss term); Overlap drops single/zero-speaker frames
@@ -223,7 +190,7 @@ pub(crate) fn der_core(
             if *slot {
                 continue;
             }
-            let center = (i as f64 + 0.5) * resolution;
+            let center = (i as f64 + 0.5) * TimeRange::FRAME_GRID_RESOLUTION_SECS;
             let in_scope = scored.iter().any(|r| center >= r.start && center < r.end);
             if !in_scope {
                 *slot = true;
@@ -270,20 +237,10 @@ pub(crate) fn der_core(
 
     let total_ref_f = total_ref as f64;
     if total_ref == 0 {
-        return DerResult {
-            der: 0.0,
-            miss_rate: 0.0,
-            false_alarm_rate: 0.0,
-            confusion_rate: 0.0,
-            total_speech: 0.0,
-            total_ref_frames: 0,
-            missed_frames: 0,
-            false_alarm_frames: 0,
-            confusion_frames: 0,
-        };
+        return DerResult::default();
     }
 
-    let total_speech_secs = total_ref as f64 * resolution;
+    let total_speech_secs = total_ref as f64 * TimeRange::FRAME_GRID_RESOLUTION_SECS;
 
     DerResult {
         der: (missed + false_alarm + confusion) as f64 / total_ref_f,
@@ -301,7 +258,6 @@ pub(crate) fn der_core(
 pub(crate) fn build_collar_mask(
     reference: &[SpeakerTurn],
     collar: f64,
-    resolution: f64,
     n_frames: usize,
 ) -> Vec<bool> {
     let mut mask = vec![false; n_frames];
@@ -309,6 +265,7 @@ pub(crate) fn build_collar_mask(
         return mask;
     }
 
+    let resolution = TimeRange::FRAME_GRID_RESOLUTION_SECS;
     for turn in reference {
         for boundary in [turn.time.start, turn.time.end] {
             let start_frame = ((boundary - collar).max(0.0) / resolution) as usize;
@@ -326,15 +283,10 @@ pub(crate) fn build_collar_mask(
     mask
 }
 
-pub(crate) fn build_speaker_frames(
-    turns: &[SpeakerTurn],
-    resolution: f64,
-    n_frames: usize,
-) -> Vec<Vec<u32>> {
+pub(crate) fn build_speaker_frames(turns: &[SpeakerTurn], n_frames: usize) -> Vec<Vec<u32>> {
     let mut frames: Vec<Vec<u32>> = vec![Vec::new(); n_frames];
     for turn in turns {
-        let start_frame = (turn.time.start / resolution) as usize;
-        let end_frame = (turn.time.end / resolution).ceil() as usize;
+        let (start_frame, end_frame) = turn.time.grid_frame_range();
         for frame in frames
             .iter_mut()
             .take(end_frame.min(n_frames))
@@ -350,11 +302,12 @@ pub(crate) fn build_speaker_frames(
 
 /// Optimal 1-to-1 mapping from hypothesis speaker IDs to reference speaker IDs.
 ///
-/// Maximizes total frame co-occurrence via Kuhn-Munkres (Hungarian) assignment,
-/// matching pyannote.metrics semantics. Greedy 1-to-1 assignment is provably
-/// suboptimal — e.g. co-occurrence (X,A)=10,(X,B)=9,(Y,A)=8 yields 10 correct
-/// frames greedily vs 17 optimally (X→B, Y→A) — which inflated confusion/DER on
-/// cross-talk and fragmented files.
+/// Counts per-frame hyp/ref co-occurrence (skipping collar-masked frames), then
+/// delegates to [`crate::hungarian::map_max_cooccurrence`] for the Kuhn-Munkres
+/// (Hungarian) assignment, matching pyannote.metrics semantics. Greedy 1-to-1
+/// assignment is provably suboptimal — e.g. co-occurrence (X,A)=10,(X,B)=9,(Y,A)=8
+/// yields 10 correct frames greedily vs 17 optimally (X→B, Y→A) — which inflated
+/// confusion/DER on cross-talk and fragmented files.
 pub(crate) fn optimal_speaker_mapping(
     ref_frames: &[Vec<u32>],
     hyp_frames: &[Vec<u32>],
@@ -373,47 +326,7 @@ pub(crate) fn optimal_speaker_mapping(
         }
     }
 
-    if cooccurrence.is_empty() {
-        return HashMap::new();
-    }
-
-    // Distinct hyp ids (rows) and ref ids (cols), sorted for deterministic output.
-    let mut hyp_ids: Vec<u32> = cooccurrence.keys().map(|&(h, _)| h).collect();
-    hyp_ids.sort_unstable();
-    hyp_ids.dedup();
-    let mut ref_ids: Vec<u32> = cooccurrence.keys().map(|&(_, r)| r).collect();
-    ref_ids.sort_unstable();
-    ref_ids.dedup();
-
-    // Square cost matrix: cost = -co-occurrence so minimizing cost maximizes
-    // agreement; padding cells stay 0.0. Counts cast to f32 are exact below
-    // ~16.7M frames (f32 has a 24-bit mantissa); 10ms frames capped at 24h
-    // (MAX_FRAMES) stay within that range.
-    let n = hyp_ids.len().max(ref_ids.len());
-    let mut cost = vec![vec![0.0_f32; n]; n];
-    for (&(h, r), &count) in &cooccurrence {
-        if let (Ok(i), Ok(j)) = (hyp_ids.binary_search(&h), ref_ids.binary_search(&r)) {
-            cost[i][j] = -(count as f32);
-        }
-    }
-
-    let assignment = match crate::hungarian::solve(&cost) {
-        Some(a) => a,
-        None => return HashMap::new(),
-    };
-
-    let mut mapping: HashMap<u32, u32> = HashMap::new();
-    for (row, &col) in assignment.iter().enumerate() {
-        // Map only real (non-padding) speakers that actually co-occur — the
-        // solver may pair leftover rows/cols through zero-cost padding cells.
-        if let (Some(&h), Some(&r)) = (hyp_ids.get(row), ref_ids.get(col))
-            && cooccurrence.get(&(h, r)).copied().unwrap_or(0) > 0
-        {
-            mapping.insert(h, r);
-        }
-    }
-
-    mapping
+    crate::hungarian::map_max_cooccurrence(&cooccurrence)
 }
 
 /// { collar >= 0.0 }

@@ -44,7 +44,8 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Simple energy-threshold VAD implementation.
+      Simple energy-threshold VAD implementation. `new` panics on
+      `frame_size == 0`; `try_new` returns VadError::InvalidChunkSize instead.
     proof:
       kind: unit-test
       target: src/vad::mod::tests
@@ -54,6 +55,20 @@ surface:
     visibility: public
     contract: >
       Configuration for VAD parameters (thresholds, frame sizes).
+      `frame_geometry(sample_rate, min_speech_secs)` is the single derivation
+      of ms_per_frame / min_silence_frames / min_speech_frames used by both
+      segment_speech and the streaming pipeline; it rejects `frame_size == 0`
+      with VadError::InvalidChunkSize.
+    proof:
+      kind: unit-test
+      target: src/vad::mod::tests
+      command: cargo test --lib vad
+  - name: VadFrameGeometry
+    kind: struct
+    visibility: public
+    contract: >
+      Frame geometry (ms_per_frame, min_silence_frames, min_speech_frames)
+      returned by VadConfig::frame_geometry.
     proof:
       kind: unit-test
       target: src/vad::mod::tests
@@ -62,7 +77,9 @@ surface:
     kind: function
     visibility: public
     contract: >
-      Segments audio into speech regions using a VAD driver.
+      Segments audio into speech regions using a VAD driver. Frame durations
+      derive from the detector's own sample_rate(); the DiarizationConfig
+      supplies only the speech-filter duration.
     proof:
       kind: unit-test
       target: src/vad::mod::tests
@@ -71,7 +88,12 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Hysteresis state machine for VAD decision smoothing.
+      Hysteresis state machine for VAD decision smoothing, built on the
+      crate-internal scalar hysteresis core (`vad::hysteresis`: HysteresisGate
+      + RegionTracker, shared with powerset binarization). SpeechStart and
+      SpeechEnd events always alternate; short-region suppression is applied
+      by callers via `meets_min_speech_duration`, the single point for the
+      minimum speech-duration rule.
     proof:
       kind: unit-test
       target: src/vad::mod::tests
@@ -94,15 +116,19 @@ consumers:
       - VadConfig
       - VadEvent
       - VadStateMachine
+  - path: src/segmentation/binarize.rs
+    uses:
+      - vad::hysteresis (crate-internal HysteresisGate / RegionTracker)
   - path: src/silero_vad/mod.rs
     uses:
       - VoiceActivityDetector
   - path: src/ffi/mod.rs
     uses:
       - VadConfig
-  - path: tests/vad_test.rs
+  - path: tests/chaos_test.rs
     uses:
       - EnergyVad
+      - segment_speech
 invariants:
   - id: vad-monotonic
     rule: segment_speech returns non-overlapping, monotonically ordered segments.
@@ -115,7 +141,7 @@ verification:
     - cargo test --lib vad
   full:
     - cargo test --lib vad
-    - cargo test --test vad_test
+    - cargo test --test chaos_test
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:

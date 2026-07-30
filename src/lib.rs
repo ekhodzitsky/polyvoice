@@ -1,6 +1,10 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 #![cfg_attr(not(test), deny(clippy::expect_used))]
 #![cfg_attr(not(test), deny(clippy::panic))]
+// The generated test harness registers every #[test] fn from the crate root,
+// so tests living inside a deprecated module trip `deprecated` there; allow
+// it crate-wide in test builds only.
+#![cfg_attr(test, allow(deprecated))]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 //! # polyvoice
@@ -8,20 +12,23 @@
 //! Speaker diarization library for Rust — online (streaming) and offline
 //! (file-based), ecosystem-agnostic. The ONNX path is opt-in (`features =
 //! ["onnx", …]`); default features are empty so BYO-embedder consumers can
-//! use `Pipeline` / `StreamingPipeline` / `EnergyVad` without linking `ort`.
+//! use [`pipeline::LegacyPipeline`] / `StreamingPipeline` / `EnergyVad`
+//! without linking `ort`.
 //!
 //! Designed to be embedded into any Rust application that needs to answer
 //! the question **"who spoke when?"**.
 //!
 //! ## Quick start
 //!
-//! **ONNX production path:** `pipeline_v2::Pipeline` + `ModelRegistry`
-//! (features `onnx`, `download`, `segmentation`, `embedder`, `clusterer`,
-//! `resegmentation`; CLI also enables `vbx`). This is what CLI / FFI / Python /
-//! MCP run by default since **0.11** (v2 + VBx).
+//! **ONNX production path:** the crate-root `Pipeline` (re-exported from
+//! `pipeline_v2`) + `ModelRegistry`, gated on features `onnx`, `download`,
+//! `segmentation`, `embedder`, `clusterer`, `resegmentation` (CLI also
+//! enables `vbx`). This is what CLI / FFI / Python / MCP run by default
+//! since **0.11** (v2 + VBx). With the gate off there is deliberately no
+//! crate-root `Pipeline` — ort-free builds use [`pipeline::LegacyPipeline`].
 //!
 //! **Library mode (no ONNX):** `default-features = false`, implement
-//! [`Embedder`], pair with [`EnergyVad`] and the crate-root [`Pipeline`] /
+//! [`Embedder`], pair with [`EnergyVad`] and [`pipeline::LegacyPipeline`] /
 //! [`streaming::StreamingPipeline`] — see the crate README and
 //! `docs/library-mode.md`.
 //!
@@ -29,30 +36,38 @@
 //!
 //! Two intentional pipeline families share math and types:
 //!
-//! - **ONNX production (`pipeline_v2`):** trait-wired Segmenter → Embedder →
-//!   Clusterer → Resegmenter. CLI/FFI/Python/MCP default since 0.11 (VBx when
-//!   PLDA is available). See `docs/PIPELINE-ARCHITECTURE.md`.
-//! - **BYO / ort-free (crate-root `Pipeline` + `StreamingPipeline`):** inject
-//!   [`Embedder`] + [`VoiceActivityDetector`]. CLI `--legacy` uses this offline
-//!   path with Silero + AHC. Soft-deprecated [`embedding::EmbeddingExtractor`]
-//!   still bridges to [`Embedder`].
+//! - **ONNX production (`pipeline_v2`, crate-root `Pipeline`):** trait-wired
+//!   Segmenter → Embedder → Clusterer → Resegmenter. CLI/FFI/Python/MCP
+//!   default since 0.11 (VBx when PLDA is available). See
+//!   `docs/PIPELINE-ARCHITECTURE.md`.
+//! - **BYO / ort-free ([`pipeline::LegacyPipeline`] + `StreamingPipeline`):**
+//!   inject [`Embedder`] + [`VoiceActivityDetector`]. CLI `--legacy` uses
+//!   this offline path with Silero + AHC.
 //! - **Shared math:** `ahc`, `kmeans`, `spectral`, `features`, `der`, `utils`.
 //! - **Online centroids:** production streaming uses
-//!   `streaming::ArrivalOrderSpeakerCache`; `cluster::SpeakerCluster` remains a
-//!   public utility (not the default streaming backend).
+//!   `streaming::ArrivalOrderSpeakerCache`; `cluster::SpeakerCluster` is
+//!   deprecated (not on any production path).
 
 pub mod ahc;
 pub mod asr;
 pub use asr::{Asr, AsrError};
+/// Online incremental speaker centroids. Kept for the fuzz target and
+/// experiments; not on any production path (offline clustering is
+/// `clusterer::Clusterer`, streaming uses
+/// [`streaming::ArrivalOrderSpeakerCache`]).
+#[deprecated(
+    since = "0.12.0",
+    note = "not on the production offline or streaming path; use clusterer::Clusterer (offline) or streaming::StreamingPipeline / ArrivalOrderSpeakerCache (online)"
+)]
 pub mod cluster;
 pub mod der;
-pub mod embedding;
 pub mod features;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 /// Kuhn-Munkres assignment solver. Always compiled (pure Rust, wasm32-clean):
-/// shared by `der` (optimal speaker mapping) and `segmentation` (window
-/// permutation alignment).
+/// shared by `der` (optimal speaker mapping for DER and WDER via
+/// `map_max_cooccurrence`), `segmentation` (window permutation alignment in
+/// the aggregator), and `clusterer::assign` (local-to-global label mapping).
 pub(crate) mod hungarian;
 pub mod kmeans;
 #[cfg(feature = "spectral")]
@@ -87,7 +102,7 @@ pub use segmentation::{PowersetConfig, PowersetSegmenter};
 /// ONNX-backed adapters still require `features = ["onnx", "embedder"]`.
 pub mod embedder;
 
-pub use embedder::{Embedder, EmbedderError, EmbedderPool, apply_overlap_mask};
+pub use embedder::{DummyExtractor, Embedder, EmbedderError, apply_overlap_mask};
 
 #[cfg(all(feature = "onnx", feature = "embedder"))]
 pub use embedder::{CamPlusPlusExtractor, ResNet34Adapter};
@@ -95,16 +110,20 @@ pub use embedder::{CamPlusPlusExtractor, ResNet34Adapter};
 #[cfg(feature = "clusterer")]
 pub mod clusterer;
 
+/// Deprecated alias for the pre-rename name; use [`KmeansClusterer`].
+#[cfg(feature = "clusterer")]
+#[allow(deprecated)]
+pub use clusterer::KMeansClusterer;
 #[cfg(feature = "clusterer")]
 pub use clusterer::{
-    AhcClusterer, Clusterer, ClustererError, KMeansClusterer, MinClusterSizeClusterer,
+    AhcClusterer, Clusterer, ClustererError, KmeansClusterer, MinClusterSizeClusterer,
 };
 
 #[cfg(all(feature = "clusterer", feature = "spectral"))]
 pub use clusterer::NmeScClusterer;
 
 #[cfg(all(feature = "clusterer", feature = "vbx"))]
-pub use clusterer::vbx::VbxClusterer;
+pub use clusterer::vbx::{VbxClusterer, VbxClustererConfig};
 
 #[cfg(feature = "resegmentation")]
 pub mod resegmentation;
@@ -121,8 +140,7 @@ pub use resegmentation::extract_overlap_time_ranges;
 /// Midpoint word→speaker labeling for STT stacks (always-on, no models).
 pub mod labeling;
 pub use labeling::{
-    UncoveredPolicy, assign_speakers_by_midpoint, label_words, midpoint, speaker_at,
-    speaker_at_stable,
+    UncoveredPolicy, assign_speakers_by_midpoint, label_words, speaker_at, speaker_at_stable,
 };
 
 #[cfg(feature = "attribution")]
@@ -135,8 +153,10 @@ pub use attribution::{
     who_said_what, who_said_what_with_config,
 };
 
+/// BYO / ort-free legacy pipeline (v1). The crate-root `Pipeline` is the
+/// production v2 pipeline (below) when its feature gate is on; with default
+/// features there is no crate-root `Pipeline` at all.
 pub mod pipeline;
-pub use pipeline::{Pipeline, PipelineError};
 
 #[cfg(all(
     feature = "onnx",
@@ -147,6 +167,27 @@ pub use pipeline::{Pipeline, PipelineError};
     feature = "resegmentation",
 ))]
 pub mod pipeline_v2;
+
+/// Production ONNX pipeline, re-exported at the crate root under the same
+/// feature gate as [`pipeline_v2`]. Deliberately absent when the gate is off:
+/// ort-free consumers use [`pipeline::LegacyPipeline`].
+#[cfg(all(
+    feature = "onnx",
+    feature = "download",
+    feature = "segmentation",
+    feature = "embedder",
+    feature = "clusterer",
+    feature = "resegmentation",
+))]
+pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
+
+/// Shared wiring helpers for the CLI-family binaries (`polyvoice`,
+/// `polyvoice-bench`, `polyvoice-measure`, `polyvoice-mcp`): flag-to-config
+/// translation, pipeline construction, and bench-dataset walking, so each
+/// binary stays a thin wrapper. Compiled with `cli` or `mcp` — both imply the
+/// full ONNX pipeline stack this module builds on.
+#[cfg(any(feature = "cli", feature = "mcp"))]
+pub mod cli_common;
 
 pub mod vad;
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
@@ -167,12 +208,9 @@ pub use earshot_vad::{
 
 #[cfg(feature = "onnx")]
 pub mod onnx;
-#[cfg(feature = "onnx")]
-#[allow(deprecated)] // soft-deprecated; unused by production adapters
-pub use onnx::OnnxEmbeddingExtractor;
 
 #[cfg(feature = "onnx")]
-pub mod ecapa;
+pub mod fbank_onnx;
 
 /// Optional NVIDIA Streaming Sortformer v2 E2E diarizer (≤4 speakers).
 /// Opt-in via `--features sortformer`. See `docs/sortformer.md`.
@@ -180,24 +218,19 @@ pub mod ecapa;
 pub mod sortformer;
 
 // Public re-exports for ergonomic use.
-#[allow(deprecated)] // soft-deprecated online utility; see cluster module docs
-pub use cluster::SpeakerCluster;
 pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
-// DummyExtractor is the supported test/mock embedder (also bridges to Embedder).
-// EmbeddingExtractor / EmbeddingError remain soft-deprecated at the definition site.
-#[allow(deprecated)]
-pub use embedding::{DummyExtractor, EmbeddingError, EmbeddingExtractor};
 #[cfg(feature = "download")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
-pub use overlap::{OverlapRegion, detect_overlaps};
+pub use overlap::OverlapRegion;
 pub use types::ClusterConfig;
 pub use types::{
-    Confidence, DiarizationConfig, DiarizationResult, Profile, SampleRate, Seconds, Segment,
-    SpeakerId, SpeakerIdRemap, SpeakerSummary, SpeakerTurn, TimeRange, Transcript, Word,
-    WordAlignment, confidence_from_distance, confidence_from_similarity, exclusive_turns,
-    mean_speaker_embeddings, remap_segments, remap_turns, segment_confidences_from_embeddings,
+    Confidence, ConfigError, DEFAULT_AHC_THRESHOLD, DiarizationConfig, DiarizationResult, Profile,
+    SampleRate, Segment, SpeakerId, SpeakerIdRemap, SpeakerSummary, SpeakerTurn, TimeRange,
+    Transcript, Word, WordAlignment, confidence_from_distance, confidence_from_similarity,
+    exclusive_turns, mean_speaker_embeddings, remap_segments, remap_turns,
+    segment_confidences_from_embeddings,
 };
 pub use window::{WindowBuffer, WindowIter};
 
 #[cfg(feature = "onnx")]
-pub use ecapa::FbankOnnxExtractor;
+pub use fbank_onnx::FbankOnnxExtractor;

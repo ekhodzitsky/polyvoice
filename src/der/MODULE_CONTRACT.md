@@ -142,7 +142,10 @@ dependencies:
   internal:
     - module: types
       scope: data-shape
-      reason: SpeakerTurn, TimeRange, SpeakerId are the input/output data shapes.
+      reason: SpeakerTurn, TimeRange, SpeakerId are the input/output data shapes; the shared 10ms frame grid lives on TimeRange (types::result).
+    - module: hungarian
+      scope: algorithm
+      reason: Optimal speaker mapping delegates to hungarian::map_max_cooccurrence (shared with WDER).
   external: []
 consumers:
   - path: .

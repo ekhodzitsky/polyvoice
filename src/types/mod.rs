@@ -15,9 +15,12 @@ pub use confidence::{
     confidence_from_similarity, confidence_from_similarity_params, mean_speaker_embeddings,
     segment_confidences_from_embeddings,
 };
-pub use config::{ClusterConfig, DiarizationConfig, SpeechFilterConfig, WindowConfig};
+pub use config::{
+    ClusterConfig, ConfigError, DEFAULT_AHC_THRESHOLD, DiarizationConfig, SpeechFilterConfig,
+    WindowConfig,
+};
 pub use ids::{SpeakerId, SpeakerIdRemap};
-pub use measures::{Confidence, SampleRate, Seconds, TimeRange};
+pub use measures::{Confidence, SampleRate, TimeRange};
 pub use profile::{Profile, ProfileParseError};
 pub use result::{
     AudioMeta, DiarizationResult, Provenance, Segment, SpeakerSummary, SpeakerTurn, Transcript,
@@ -76,7 +79,7 @@ mod profile_tests {
 
     #[test]
     fn default_thresholds_match_spec() {
-        // §5.1 of v1.0 design spec
+        // Profile default thresholds are part of the public contract.
         assert!((Profile::Mobile.default_threshold() - 0.55).abs() < 1e-6);
         assert!((Profile::Balanced.default_threshold() - 0.45).abs() < 1e-6);
         assert!((Profile::Custom.default_threshold() - 0.5).abs() < 1e-6);

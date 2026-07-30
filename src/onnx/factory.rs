@@ -5,6 +5,7 @@
 //! [`InferenceBackend`] / env `POLYVOICE_INFERENCE_BACKEND=tract`.
 
 use super::ExecutionProvider;
+use super::OnnxError;
 use super::ort_session::OrtSession;
 use super::runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor};
 use std::cell::Cell;
@@ -113,7 +114,7 @@ impl RuntimeSession {
         model_path: &Path,
         ep: ExecutionProvider,
         intra_threads: Option<usize>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, OnnxError> {
         match InferenceBackend::resolve() {
             InferenceBackend::Ort => Ok(Self::Ort(OrtSession::from_path(
                 model_path,

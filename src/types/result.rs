@@ -304,8 +304,42 @@ fn speaker_summaries(turns: &[SpeakerTurn]) -> Vec<SpeakerSummary> {
         .collect()
 }
 
-/// Frame resolution (seconds) used by exclusive-mode conversion — matches DER.
-pub(crate) const EXCLUSIVE_FRAME_SECS: f64 = 0.01;
+/// Frame-grid evaluation support: a uniform 10 ms grid over the timeline,
+/// shared by DER scoring and the exclusive-timeline projection below.
+///
+/// The associated items live next to the grid's heaviest consumer
+/// ([`exclusive_turns`]); `TimeRange` itself is defined in `super::measures`.
+impl TimeRange {
+    /// Frame-grid resolution in seconds (10 ms).
+    pub(crate) const FRAME_GRID_RESOLUTION_SECS: f64 = 0.01;
+
+    /// Hard cap on grid frames: 24 hours at [`Self::FRAME_GRID_RESOLUTION_SECS`],
+    /// guarding against unbounded allocation on malformed or huge timelines.
+    pub(crate) const MAX_GRID_FRAMES: usize = 24 * 3600 * 100;
+
+    /// Number of grid frames covering `max_time` seconds:
+    /// `ceil(max_time / resolution) + 1`, capped at [`Self::MAX_GRID_FRAMES`].
+    /// Callers must validate `max_time` (finite, non-negative) beforehand.
+    pub(crate) fn grid_frame_count(max_time: f64) -> usize {
+        ((max_time / Self::FRAME_GRID_RESOLUTION_SECS).ceil() as usize + 1)
+            .min(Self::MAX_GRID_FRAMES)
+    }
+
+    /// Frame-index range `[start, end)` this range covers on the grid. The end
+    /// index is ceiled so the range covers every frame its end timestamp
+    /// touches. Negative or NaN coordinates saturate to frame 0 (Rust
+    /// float→int cast semantics), matching the historical behavior.
+    pub(crate) fn grid_frame_range(&self) -> (usize, usize) {
+        (
+            (self.start / Self::FRAME_GRID_RESOLUTION_SECS) as usize,
+            (self.end / Self::FRAME_GRID_RESOLUTION_SECS).ceil() as usize,
+        )
+    }
+}
+
+/// Frame resolution (seconds) used by exclusive-mode conversion — alias for
+/// the shared evaluation-grid resolution ([`TimeRange::FRAME_GRID_RESOLUTION_SECS`]).
+pub(crate) const EXCLUSIVE_FRAME_SECS: f64 = TimeRange::FRAME_GRID_RESOLUTION_SECS;
 
 /// Derive a single-speaker (exclusive) timeline from overlap-aware turns.
 ///
@@ -328,9 +362,8 @@ pub fn exclusive_turns(turns: &[SpeakerTurn]) -> Vec<SpeakerTurn> {
     if !max_time.is_finite() || max_time <= 0.0 {
         return Vec::new();
     }
-    // Cap at 24 h of frames (same guard as DER) to avoid unbounded allocation.
-    const MAX_FRAMES: usize = 24 * 3600 * 100;
-    let n_frames = ((max_time / EXCLUSIVE_FRAME_SECS).ceil() as usize + 1).min(MAX_FRAMES);
+    // Capped at 24 h of frames (same guard as DER) to avoid unbounded allocation.
+    let n_frames = TimeRange::grid_frame_count(max_time);
 
     // Per frame: best (speaker, covering_turn_duration). None = silence.
     let mut best: Vec<Option<(u32, f64)>> = vec![None; n_frames];
@@ -342,8 +375,7 @@ pub fn exclusive_turns(turns: &[SpeakerTurn]) -> Vec<SpeakerTurn> {
             continue;
         }
         let dur = turn.time.duration();
-        let start_f = (turn.time.start / EXCLUSIVE_FRAME_SECS).max(0.0) as usize;
-        let end_f = (turn.time.end / EXCLUSIVE_FRAME_SECS).ceil().max(0.0) as usize;
+        let (start_f, end_f) = turn.time.grid_frame_range();
         for frame in best.iter_mut().take(end_f.min(n_frames)).skip(start_f) {
             match frame {
                 None => *frame = Some((turn.speaker.0, dur)),

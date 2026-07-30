@@ -15,42 +15,32 @@
     feature = "download",
 ))]
 
+mod common;
+
 use polyvoice::der::compute_der;
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline_v2::{Pipeline, PipelineConfig};
-use polyvoice::rttm::{group_by_file, parse_rttm_file, to_speaker_turns};
 use polyvoice::types::{Profile, SampleRate};
 use std::path::Path;
 
-fn load_test_audio() -> Vec<f32> {
-    let wav_path = Path::new("tests/data/e2e-smoke/audio/fuzfh.wav");
-    if !wav_path.exists() {
-        panic!(
-            "Test WAV not found at {} — run scripts/download-ami-test-single.sh",
-            wav_path.display()
-        );
-    }
+fn load_test_audio(wav_path: &Path) -> Vec<f32> {
     let (samples, sr) = polyvoice::wav::read_wav(wav_path).expect("read wav");
     assert_eq!(sr, 16000, "expected 16kHz mono");
     samples
 }
 
 fn load_ground_truth() -> Vec<polyvoice::types::SpeakerTurn> {
-    let rttm_path = Path::new("tests/data/e2e-smoke/rttm/fuzfh.rttm");
-    let raw = parse_rttm_file(rttm_path).expect("parse rttm");
-    let grouped = group_by_file(&raw);
-    let segs: Vec<_> = grouped
-        .get("fuzfh")
-        .map(|v| v.iter().map(|s| (*s).clone()).collect())
-        .unwrap_or_default();
-    let (turns, _map) = to_speaker_turns(&segs);
-    turns
+    common::load_ref_turns(Path::new("tests/data/e2e-smoke/rttm/fuzfh.rttm"), "fuzfh")
 }
 
 #[test]
-#[ignore = "requires ONNX models (~300 MB download)"]
+#[ignore = "requires downloaded models"]
 fn pipeline_v2_balanced_resnet34_ahc_der_under_10_percent() {
-    let samples = load_test_audio();
+    let wav_path = Path::new("tests/data/e2e-smoke/audio/fuzfh.wav");
+    if !common::require_wav(wav_path) {
+        return;
+    }
+    let samples = load_test_audio(wav_path);
     let ground_truth = load_ground_truth();
 
     let registry = ModelRegistry::default().expect("model registry");
@@ -90,9 +80,13 @@ fn pipeline_v2_balanced_resnet34_ahc_der_under_10_percent() {
 }
 
 #[test]
-#[ignore = "requires ONNX models (~300 MB download)"]
+#[ignore = "requires downloaded models"]
 fn pipeline_v2_mobile_resnet34_ahc_der_under_10_percent() {
-    let samples = load_test_audio();
+    let wav_path = Path::new("tests/data/e2e-smoke/audio/fuzfh.wav");
+    if !common::require_wav(wav_path) {
+        return;
+    }
+    let samples = load_test_audio(wav_path);
     let ground_truth = load_ground_truth();
 
     let registry = ModelRegistry::default().expect("model registry");

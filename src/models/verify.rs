@@ -19,6 +19,12 @@ pub enum SignatureError {
     BadSignature(String),
     #[error("signature verification failed: {0}")]
     VerificationFailed(String),
+    #[error("io error reading {path}: {source}")]
+    Io {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 /// { !sig_text.is_empty() }
@@ -38,15 +44,18 @@ pub fn verify_minisign(path: &Path, sig_text: &str) -> Result<(), SignatureError
         .verify_stream(&signature)
         .map_err(|e| SignatureError::VerificationFailed(format!("{e:?}")))?;
 
-    let file = std::fs::File::open(path)
-        .map_err(|e| SignatureError::VerificationFailed(format!("io open: {e}")))?;
+    let file = std::fs::File::open(path).map_err(|source| SignatureError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
     let mut reader = BufReader::new(file);
     let mut buf = [0u8; 64 * 1024];
 
     loop {
-        let n = reader
-            .read(&mut buf)
-            .map_err(|e| SignatureError::VerificationFailed(format!("io read: {e}")))?;
+        let n = reader.read(&mut buf).map_err(|source| SignatureError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
         if n == 0 {
             break;
         }
