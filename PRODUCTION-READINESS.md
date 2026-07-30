@@ -142,19 +142,19 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | e2e smoke (legacy) | 1 | 14.52% | 6.62% | Yes |
 | AMI test Mix-Headset (legacy) | 16 | **32.87%** | 25.20% | Full split tracked; long-form floor via single-meeting gate |
 | AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
-| pipeline v2 + VBx | subset (e.g. 60-file) | ~17% no-collar (CI-wide) | — | Experimental; not the default path |
+| pipeline v2 + VBx (Vox / AMI, **default**) | 232 / 16 | **15.37%** / **25.17%** | 11.12% / 17.66% | Default since 0.11; full-split numbers release-canonical |
 | CALLHOME | — | — | — | **Not measured / not gated** |
 | DIHARD | — | — | — | **Not measured / not gated** |
 
-**Gap:** Strong conversational (VoxConverse) and meeting (AMI) numbers exist for
-**legacy**. cVBx / v2 clustering work has landed algorithmically, but **full
-multi-corpus DER remains thin** (subset experiments + missing corpora). No
-CALLHOME/DIHARD release gate. Accuracy still trails pyannote-class systems by
-roughly ~7 pp no-collar on VoxConverse (see benchmarks).
+**Gap:** The default v2+VBx path now has full-split VoxConverse (15.37%) and
+AMI (25.17%) numbers next to the legacy baselines above, but **multi-corpus DER
+beyond Vox/AMI remains absent**: no CALLHOME/DIHARD release gate. Accuracy
+still trails pyannote-class systems by roughly ~4 pp no-collar on VoxConverse
+(see benchmarks).
 
 **Remediation:**
-- Keep legacy as the honesty baseline until a single default pipeline wins on
-  both VoxConverse **and** AMI under documented gates.
+- Keep legacy published as the honesty baseline alongside the v2+VBx default
+  (the 0.11 full-split gate already flipped the default).
 - Add at least one additional corpus (CALLHOME and/or DIHARD subset) to the
   release DER matrix.
 - Re-measure full Vox + AMI after clustering upgrades land on the default path.
@@ -163,15 +163,15 @@ roughly ~7 pp no-collar on VoxConverse (see benchmarks).
 
 ### 6. Pipeline story (honest dual path) ⚠️
 
-| Path | How to run | Role in 0.10.x |
+| Path | How to run | Role in 0.12.x |
 |------|------------|----------------|
-| **Legacy (default)** | CLI without `--v2`; validated Python/FFI defaults for production claims | Ship path; DER gates and README claims |
-| **Pipeline v2** | CLI `--v2` | Experimental; powerset segmentation + denser embeddings |
-| **v2 + VBx** | default CLI path (hidden `--v2` no-op); PLDA dir/env/registry | Production accuracy path after full-split DER gate; PLDA minisign still deferred |
+| **v2 + VBx (default)** | CLI default (`--v2` is a hidden no-op kept for old scripts); PLDA dir/env/registry | Production accuracy path; won the full-split Vox + AMI DER gate |
+| **Legacy** | CLI `--legacy` / `--clusterer ahc` | Supported escape hatch; former default (Silero + AHC) |
 
-**Gap:** Dual pipelines tax docs, gates, and bindings. 1.0 should not ship with
-two first-class defaults. Flip to a **single** default only after v2 (or its
-successor) is ≤ legacy on the documented Vox **and** AMI gates.
+**Gap:** The default flip landed at 0.11, but legacy still ships as an escape
+hatch, so dual pipelines continue to tax docs, gates, and bindings. 1.0 should
+not ship with two first-class paths; retire or clearly demote legacy once
+v2+VBx has broader multi-corpus proof.
 
 ---
 
@@ -221,8 +221,8 @@ audit remain active.
 
 ## Go/No-Go Matrix
 
-_As of 0.10.x — `ort` remains `2.0.0-rc.12`, the default path is still dual with
-legacy preferred, and multi-corpus DER is incomplete. Public unattended stays
+_As of 0.11.x — `ort` remains `2.0.0-rc.12`, v2+VBx is the default with legacy
+as an escape hatch, and multi-corpus DER is incomplete. Public unattended stays
 NO-GO._
 
 | Scenario | Verdict | Rationale |
@@ -272,23 +272,25 @@ Until every box is checked, the honest status remains:
 | `ort` RC-only + single backend | Supply-chain and upgrade risk |
 | Thin multi-corpus DER | Unknown behavior outside Vox/AMI |
 | Pre-1.0 API | Breaking changes without major bump |
-| Accuracy gap vs leaders | ~7 pp no-collar on VoxConverse; speaker counting still dominant error |
+| Accuracy gap vs leaders | ~4 pp no-collar on VoxConverse; speaker counting still dominant error |
 
 ---
 
-## Metrics (snapshot, 0.10.x)
+## Metrics (snapshot, 0.12.x)
 
 | Metric | Value |
 |--------|-------|
-| Crate version | 0.10.0 |
+| Crate version | 0.12.0 |
 | Deployable footprint | ~30 MB class |
 | Speed (CPU, legacy steady-state) | ~10× realtime (RTF ~0.10) |
-| VoxConverse-test DER (legacy, 232, collar 0) | **18.54%** |
-| VoxConverse-test DER (legacy, 232, collar 0.25) | 12.91% |
-| AMI-test DER (legacy, 16, collar 0) | **32.87%** |
-| AMI-test DER (legacy, 16, collar 0.25) | 25.20% |
-| Default pipeline | Legacy |
-| Experimental pipeline | v2 (`--v2`); VBx opt-in |
+| VoxConverse-test DER (v2+VBx default, 232, collar 0) | **15.37%** |
+| VoxConverse-test DER (v2+VBx default, 232, collar 0.25) | 11.12% |
+| VoxConverse-test DER (legacy, 232, collar 0) | 18.54% |
+| AMI-test DER (v2+VBx default, 16, collar 0) | **25.17%** |
+| AMI-test DER (v2+VBx default, 16, collar 0.25) | 17.66% |
+| AMI-test DER (legacy, 16, collar 0) | 32.87% |
+| Default pipeline | v2 + VBx |
+| Escape hatch | legacy (`--legacy` / `--clusterer ahc`) |
 | Inference backends | ort only (via `InferenceRuntime` → `OrtSession`) |
 | Model authenticity | Minisign; required on release profile resolution |
 | Security audit (cargo audit on green main) | 0 HIGH, 0 MEDIUM expected |

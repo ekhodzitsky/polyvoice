@@ -9,19 +9,17 @@ For the **development process** checklist (spec → types → verify), see
 
 ```
                     ┌─────────────────────────────────────┐
-  no onnx / BYO     │  pipeline::Pipeline                 │
+  no onnx / BYO     │  pipeline::LegacyPipeline           │
   + streaming       │  streaming::StreamingPipeline       │── Embedder + VAD
-                    │  (crate-root polyvoice::Pipeline)   │
+                    │  (always compiled, default features)│
                     └─────────────────────────────────────┘
 
                     ┌─────────────────────────────────────┐
   onnx production   │  pipeline_v2::Pipeline (+ Builder)  │── Segmenter/Embedder/
   CLI/FFI/Python/MCP│  seg → embed → cluster → reseg      │   Clusterer/Resegmenter
   default since 0.11│  default clusterer: VBx             │
-                    └─────────────────────────────────────┘
-                                      │
-                    ┌─────────────────┴───────────────────┐
-  research only     │  pipeline_v2::hybrid::HybridPipeline│
+                    │  re-exported at crate root as       │
+                    │  `Pipeline` (full feature gate)     │
                     └─────────────────────────────────────┘
 ```
 
@@ -32,7 +30,7 @@ For the **development process** checklist (spec → types → verify), see
 | Python | v2 (VBx when PLDA configured) |
 | MCP `polyvoice-mcp` | v2 + VBx default (`clusterer=ahc` opt-out) |
 | `polyvoice-bench` | **v2 + VBx** default; `--pipeline legacy` for comparison |
-| Library, no features | crate-root `Pipeline` + `StreamingPipeline` only |
+| Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |
 
 ## Stage graphs
 
@@ -54,21 +52,18 @@ samples → Segmenter::segment
        → optional Resegmenter → merge → DiarizationResult
 ```
 
-### Hybrid (ablation)
-
-Powerset times as speech regions only (labels discarded) → fixed hop windows →
-`Clusterer`. Prefer main v2 + `embed_window_secs` instead.
-
 ## Name collision note
 
-Crate root re-exports **only** the BYO types:
+Crate root re-exports the **production v2** types under the full ONNX feature
+gate:
 
 ```rust
-pub use pipeline::{Pipeline, PipelineError};
+pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
 ```
 
-Production ONNX types live under `polyvoice::pipeline_v2::…`. Prefer explicit
-paths in application code (`pipeline_v2::Pipeline` vs crate-root `Pipeline`).
+With default (ort-free) features there is no crate-root `Pipeline` at all — the
+BYO entry point is `pipeline::LegacyPipeline`. Prefer explicit paths in
+application code (`pipeline::LegacyPipeline` vs crate-root `Pipeline`).
 
 ## Related docs
 
