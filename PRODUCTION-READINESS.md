@@ -282,7 +282,7 @@ Until every box is checked, the honest status remains:
 |--------|-------|
 | Crate version | 0.12.0 |
 | Deployable footprint | ~30 MB class |
-| Speed (CPU, legacy steady-state) | ~10× realtime (RTF ~0.10) |
+| Speed (CPU, legacy steady-state) | ~33× realtime (RTF ~0.03, multi-core intra-op) |
 | VoxConverse-test DER (v2+VBx default, 232, collar 0) | **15.37%** |
 | VoxConverse-test DER (v2+VBx default, 232, collar 0.25) | 11.12% |
 | VoxConverse-test DER (legacy, 232, collar 0) | 18.54% |
