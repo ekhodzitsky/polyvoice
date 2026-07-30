@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Performance
+
+- **~3.6× faster embedding extraction on CPU.** `FbankOnnxExtractor` pool
+  sessions previously pinned `intra_threads(1)`, leaving every core but one
+  idle on single-file runs. Sessions now get a fair share of the machine
+  (`available_parallelism / pool_size`, gigastt-style): the legacy path
+  measures RTF ~0.03 instead of ~0.107 (~33× realtime) with unchanged DER
+  (baseline gates green).
+
 ## [0.13.0] - 2026-07-30
 
 Pipeline-v2 consolidation release. The crate-root `Pipeline` is now the v2
