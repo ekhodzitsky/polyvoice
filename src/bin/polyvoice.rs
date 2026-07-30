@@ -264,6 +264,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
             profile,
             &registry,
             threshold,
+            max_clusters,
             &clusterer,
             vbx_plda_dir,
             // Streaming latency presets map onto v2 dense embed windows when the
@@ -408,12 +409,24 @@ fn run_legacy_pipeline(
     Ok(result)
 }
 
+/// Convert a user-provided speaker ceiling to the v2 config's u8, rejecting
+/// values that cannot be honored exactly (0 or > 255) instead of silently
+/// clamping them.
+fn max_speakers_u8(n: usize) -> Result<u8> {
+    let v = u8::try_from(n)
+        .ok()
+        .filter(|&v| v >= 1)
+        .ok_or_else(|| anyhow::anyhow!("max_speakers must be in 1..=255, got {n}"))?;
+    Ok(v)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_v2_pipeline(
     wav: &Path,
     profile: Profile,
     registry: &ModelRegistry,
     threshold: f32,
+    max_clusters: Option<usize>,
     clusterer: &str,
     vbx_plda_dir: Option<PathBuf>,
     embed_window: Option<f32>,
@@ -436,7 +449,7 @@ fn run_v2_pipeline(
             "unknown --execution-provider '{other}' (expected auto|cpu|coreml|nnapi|cuda|xnnpack)"
         ),
     };
-    let config = PipelineConfig {
+    let mut config = PipelineConfig {
         profile,
         clusterer: clusterer_kind,
         vbx_plda_dir,
@@ -444,6 +457,9 @@ fn run_v2_pipeline(
         execution_provider: ep,
         ..PipelineConfig::default()
     };
+    if let Some(n) = max_clusters {
+        config.max_speakers = max_speakers_u8(n)?;
+    }
     let pipeline = V2Pipeline::builder()
         .config(config)
         .with_models_from(registry.clone())
@@ -624,6 +640,19 @@ mod prop_tests {
         assert!(cli.command.is_none());
         assert_eq!(cli.diarize.wav.as_deref(), Some(Path::new("meeting.wav")));
         assert_eq!(cli.diarize.format, OutputFormat::Srt);
+    }
+
+    #[test]
+    fn max_speakers_u8_accepts_valid_range() {
+        assert_eq!(max_speakers_u8(1).unwrap(), 1);
+        assert_eq!(max_speakers_u8(255).unwrap(), 255);
+    }
+
+    #[test]
+    fn max_speakers_u8_rejects_out_of_range() {
+        assert!(max_speakers_u8(0).is_err());
+        assert!(max_speakers_u8(256).is_err());
+        assert!(max_speakers_u8(usize::MAX).is_err());
     }
 
     #[test]

@@ -145,6 +145,9 @@ jobs:
       - name: Single shared ort across the workspace
         run: bash scripts/check-ort-version.sh
       - run: cargo clippy -p polyvoice-asr --all-targets --locked -- -D warnings
+      # The transcribe binary sits behind required-features = ["cli"], so the
+      # default-feature pass above never compiles it — check it explicitly.
+      - run: cargo clippy -p polyvoice-asr --all-targets --features cli --locked -- -D warnings
       - run: cargo test -p polyvoice-asr --locked
 
   doc:
