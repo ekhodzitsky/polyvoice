@@ -21,7 +21,7 @@ collar.
 |--|--|--|--|--|
 | **VoxConverse-test DER** | **15.4 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
 | **Model size** | **~30 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
-| **Runtime** | **CPU / CoreML, ~8–10× realtime** | CPU/GPU (PyTorch) | GPU recommended | GPU |
+| **Runtime** | **CPU / CoreML, ~33× realtime** | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
 | **Dependencies** | **pure Rust, no Python** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
