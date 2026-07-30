@@ -15,14 +15,22 @@
 //! # Frame contract
 //!
 //! earshot scores mono PCM at 16 kHz in fixed **256-sample** windows (16 ms).
-//! [`EarshotVad`] buffers arbitrary caller chunk sizes and emits one speech
-//! probability in `[0, 1]` per complete frame. Leftover samples are held until
-//! the next [`VoiceActivityDetector::process`] call or cleared by [`reset`](VoiceActivityDetector::reset).
+//! [`EarshotVad`] follows the crate-wide
+//! [frame contract](crate::vad::VoiceActivityDetector#frame-contract):
+//! [`VoiceActivityDetector::process`] accepts only multiples of
+//! [`FRAME_SIZE`](crate::earshot_vad::FRAME_SIZE) samples and emits exactly
+//! one speech probability in `[0, 1]` per complete frame. Partial chunks are
+//! rejected with [`VadError::InvalidChunkSize`] — there is no hidden buffering
+//! inside `process`, so frame indices always line up with the caller's input.
+//! Callers with arbitrary chunk sizes must accumulate samples themselves
+//! (both [`crate::vad::segment_speech`] and the streaming pipeline already
+//! frame audio before calling `process`).
 //!
 //! The upstream score is continuous in `[0, 1]` (not a hard binary label);
 //! thresholding is left to the caller (e.g. [`crate::vad::VadConfig::threshold`]).
-//! Prefer [`crate::vad::VadConfig::frame_size`] = 256 when pairing with
-//! [`crate::vad::segment_speech`] so sample indices align with model frames.
+//! Set [`crate::vad::VadConfig::frame_size`] = 256 when pairing with
+//! [`crate::vad::segment_speech`] or a streaming pipeline so pipeline frame
+//! indices align with model frames.
 //!
 //! # Watch list (not implemented here)
 //!
@@ -46,28 +54,20 @@ pub const SAMPLE_RATE: u32 = 16_000;
 /// (~8 KiB state) so construction does not blow small stacks.
 pub struct EarshotVad {
     detector: Box<earshot::Detector>,
-    /// Samples not yet filled to a complete [`FRAME_SIZE`] window.
-    pending: Vec<f32>,
 }
 
 impl EarshotVad {
-    /// Create a detector with a fresh earshot state and empty frame buffer.
+    /// Create a detector with a fresh earshot state.
     pub fn new() -> Self {
         Self {
             // Prefer heap construction: Detector is ~8 KiB of state.
             detector: earshot::Detector::default_boxed(),
-            pending: Vec::with_capacity(FRAME_SIZE),
         }
     }
 
     /// Native frame length in samples (always 256).
     pub fn frame_size(&self) -> usize {
         FRAME_SIZE
-    }
-
-    /// Number of samples buffered and not yet scored.
-    pub fn pending_samples(&self) -> usize {
-        self.pending.len()
     }
 
     fn score_frame(&mut self, frame: &[f32]) -> Result<f32, VadError> {
@@ -92,29 +92,22 @@ impl Default for EarshotVad {
 impl VoiceActivityDetector for EarshotVad {
     fn reset(&mut self) {
         self.detector.reset();
-        self.pending.clear();
     }
 
     fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, VadError> {
-        // Buffer arbitrary chunk sizes into fixed 256-sample frames.
-        // Unlike SileroVad / EnergyVad, incomplete tails are retained rather
-        // than rejected with InvalidChunkSize — streaming-friendly.
-        self.pending.extend_from_slice(samples);
-        let n_frames = self.pending.len() / FRAME_SIZE;
-        let mut probs = Vec::with_capacity(n_frames);
-
-        let mut consumed = 0usize;
-        while consumed + FRAME_SIZE <= self.pending.len() {
-            let mut frame = [0.0f32; FRAME_SIZE];
-            frame.copy_from_slice(&self.pending[consumed..consumed + FRAME_SIZE]);
-            probs.push(self.score_frame(&frame)?);
-            consumed += FRAME_SIZE;
+        // Same reject contract as EnergyVad / SileroVad: input must be a
+        // multiple of the native 256-sample frame; incomplete chunks are an
+        // error, never buffered across calls.
+        if !samples.len().is_multiple_of(FRAME_SIZE) {
+            return Err(VadError::InvalidChunkSize {
+                expected: FRAME_SIZE,
+                got: samples.len(),
+            });
         }
-        if consumed > 0 {
-            self.pending.drain(..consumed);
+        let mut probs = Vec::with_capacity(samples.len() / FRAME_SIZE);
+        for frame in samples.chunks_exact(FRAME_SIZE) {
+            probs.push(self.score_frame(frame)?);
         }
-        debug_assert!(self.pending.len() < FRAME_SIZE);
-
         Ok(probs)
     }
 
@@ -171,7 +164,6 @@ mod tests {
         let vad = EarshotVad::new();
         assert_eq!(vad.sample_rate(), 16_000);
         assert_eq!(vad.frame_size(), 256);
-        assert_eq!(vad.pending_samples(), 0);
         assert_eq!(ADAPTER_TYPE, "earshot");
     }
 
@@ -212,43 +204,60 @@ mod tests {
     }
 
     #[test]
-    fn reset_clears_pending_and_state() {
+    fn reset_restores_initial_state() {
         let mut vad = EarshotVad::new();
-        // Partial frame left in the buffer.
+        // Partial chunks are rejected outright; nothing is buffered.
         let odd = vec![0.1f32; 100];
-        let probs = vad.process(&odd).expect("partial");
-        assert!(probs.is_empty());
-        assert_eq!(vad.pending_samples(), 100);
+        let err = vad
+            .process(&odd)
+            .expect_err("partial chunk must be rejected");
+        assert!(matches!(
+            err,
+            VadError::InvalidChunkSize {
+                expected: FRAME_SIZE,
+                got: 100
+            }
+        ));
 
-        vad.reset();
-        assert_eq!(vad.pending_samples(), 0);
-
-        // After reset, a fresh silence sequence must score low again (state gone).
+        // After reset, the same input must score exactly as on a fresh
+        // detector (internal model state is gone).
         let silence = vec![0.0f32; FRAME_SIZE * 8];
-        let probs = vad.process(&silence).expect("post-reset silence");
-        assert_eq!(probs.len(), 8);
-        let mean = probs.iter().sum::<f32>() / probs.len() as f32;
-        assert!(mean < 0.5, "post-reset silence mean {mean}");
+        let first = vad.process(&silence).expect("silence");
+        vad.reset();
+        let second = vad.process(&silence).expect("post-reset silence");
+        assert_eq!(first, second, "reset must restore initial detector state");
     }
 
     #[test]
-    fn odd_chunk_sizes_do_not_crash() {
+    fn partial_chunks_are_rejected() {
         let mut vad = EarshotVad::new();
-        // Mix of sizes that are not multiples of 256, including 1 and empty.
-        let sizes = [0usize, 1, 17, 100, 255, 256, 257, 511, 512, 1000, 3];
-        let mut total_in = 0usize;
-        let mut total_out = 0usize;
-        for &n in &sizes {
+        // Any length that is not a multiple of FRAME_SIZE is an error, and a
+        // rejected chunk leaves no residue that could affect the next call.
+        for &n in &[1usize, 17, 100, 255, 257, 511, 1000] {
             let chunk = speechish(n);
-            total_in += n;
-            let probs = vad.process(&chunk).expect("odd chunk");
-            total_out += probs.len();
+            let err = vad.process(&chunk).expect_err("partial chunk");
+            assert!(matches!(
+                err,
+                VadError::InvalidChunkSize {
+                    expected: FRAME_SIZE,
+                    got
+                } if got == n
+            ));
+        }
+        let full = speechish(FRAME_SIZE * 3);
+        let probs = vad.process(&full).expect("aligned chunk");
+        assert_eq!(probs.len(), 3);
+    }
+
+    #[test]
+    fn aligned_input_yields_one_prob_per_frame() {
+        let mut vad = EarshotVad::new();
+        for frames in [1usize, 2, 5] {
+            let audio = speechish(FRAME_SIZE * frames);
+            let probs = vad.process(&audio).expect("aligned");
+            assert_eq!(probs.len(), frames);
             assert!(probs.iter().all(|&p| (0.0..=1.0).contains(&p)));
         }
-        let expected_frames = total_in / FRAME_SIZE;
-        // Pending holds the remainder; completed frames must match floor division.
-        assert_eq!(total_out, expected_frames);
-        assert_eq!(vad.pending_samples(), total_in % FRAME_SIZE);
     }
 
     #[test]
@@ -260,13 +269,14 @@ mod tests {
 
     #[test]
     fn multi_chunk_equals_single_pass() {
-        let audio = speechish(FRAME_SIZE * 10 + 50);
+        let audio = speechish(FRAME_SIZE * 10);
         let mut a = EarshotVad::new();
         let mut b = EarshotVad::new();
 
         let once = a.process(&audio).expect("once");
 
-        let mid = audio.len() / 3;
+        // Split on a frame boundary: chunked scoring must match single-pass.
+        let mid = FRAME_SIZE * 4;
         let mut streamed = b.process(&audio[..mid]).expect("part1");
         streamed.extend(b.process(&audio[mid..]).expect("part2"));
 
@@ -277,7 +287,6 @@ mod tests {
                 "frame {i}: single-pass {x} vs streamed {y}"
             );
         }
-        assert_eq!(a.pending_samples(), b.pending_samples());
     }
 
     #[cfg(feature = "download")]

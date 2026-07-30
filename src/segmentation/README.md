@@ -17,6 +17,8 @@ Hungarian assignment, and segmenter trait.
 ## Dependencies
 
 - `types` — Confidence, TimeRange
+- `vad` — crate-internal scalar hysteresis core (`vad::hysteresis`:
+  `HysteresisGate` + `RegionTracker`) used by calibrated binarization
 
 ## Invariants
 
@@ -38,6 +40,19 @@ cargo test --test chaos_test --features onnx,download
 
 - Pure-Rust core (decoder, aggregator, Hungarian) compiles to wasm32.
 - ONNX-backed PowersetSegmenter requires `onnx` feature.
+- The softmax is computed exactly once per frame: `PowersetDecoder` returns the
+  full probability vector on `FrameLabel.probs`, and the `Aggregator` averages
+  and permutes those probabilities directly. The powerset class table is
+  defined once (`PowersetDecoder::class_for_index`) with the checked inverse
+  `PowersetClass::from_speakers` / `PowersetClass::index` (crate-visible) used
+  by the permutation remap and the calibrated binarization.
+- `PowersetSegmenter::segment()` validates the `PowersetConfig` window
+  geometry up front (`0 < hop_secs <= window_secs`, positive sample rate, at
+  least one sample per window/hop) and returns
+  `SegmentationError::InvalidGeometry` on violations.
+  `PowersetConfig::with_model_meta` silently keeps the current geometry when
+  overlaid model metadata would be inconsistent, so bad manifests cannot
+  panic the window iterator.
 
 ## Calibrated binarization (opt-in)
 
@@ -46,7 +61,10 @@ per-frame argmax with pyannote-style calibrated binarization: each speaker's
 activity probability (sum of the powerset classes containing the speaker) is
 thresholded with onset/offset hysteresis, then short blips are dropped
 (`min_duration_on`) and short gaps bridged (`min_duration_off`). `None`
-(default) keeps the historical argmax.
+(default) keeps the historical argmax. The smoothing runs on the shared
+`vad::hysteresis` core (`HysteresisGate` + `RegionTracker` with the `Trim`
+closing policy); coverage holes (`has_data == false`) hard-close a region
+instead of being bridged.
 
 Thresholds are dataset-sensitive — calibrate offline per domain with
 `scripts/calibrate-binarization.sh` (grid-search over onset/offset against

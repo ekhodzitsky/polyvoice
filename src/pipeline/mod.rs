@@ -1,17 +1,18 @@
-//! High-level offline diarization pipeline.
+//! High-level offline diarization pipeline (legacy v1).
 //!
 //! Wires together VAD, embedding extraction, and AHC clustering into a
 //! single `run()` call that takes audio and returns `DiarizationResult`.
+//! This is the BYO / ort-free path; the production ONNX pipeline is
+//! `pipeline_v2::Pipeline` (feature-gated, re-exported at the crate root).
 //!
 //! # Bring-your-own embedder
 //!
-//! `Pipeline` is generic over [`crate::Embedder`]. Implement that trait on an
+//! `LegacyPipeline` is generic over [`crate::Embedder`]. Implement that trait on an
 //! external encoder (Candle, tract, custom) — no `onnx` feature required:
 //!
 //! ```rust
-//! use polyvoice::{
-//!     DiarizationConfig, Embedder, EmbedderError, EnergyVad, Pipeline, VadConfig,
-//! };
+//! use polyvoice::pipeline::LegacyPipeline;
+//! use polyvoice::{DiarizationConfig, Embedder, EmbedderError, EnergyVad, VadConfig};
 //!
 //! struct FixedEmbedder;
 //!
@@ -22,7 +23,7 @@
 //!     }
 //! }
 //!
-//! let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
+//! let pipeline = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default());
 //! let mut vad = EnergyVad::new(-40.0, 16_000, 512);
 //! // Silence → no speech; exercise the type bounds only.
 //! let _ = pipeline.run(&vec![0.0f32; 16_000], &FixedEmbedder, &mut vad);
@@ -30,14 +31,16 @@
 
 use crate::embedder::{Embedder, EmbedderError};
 use crate::types::{
-    DiarizationConfig, DiarizationResult, Segment, SpeakerId, SpeakerTurn, TimeRange,
+    ConfigError, DiarizationConfig, DiarizationResult, Segment, SpeakerId, SpeakerTurn, TimeRange,
 };
 use crate::vad::{VadConfig, VadError, VoiceActivityDetector, segment_speech};
 use crate::wav;
 use std::path::Path;
 
 #[derive(thiserror::Error, Debug)]
-pub enum PipelineError {
+pub enum LegacyPipelineError {
+    #[error("invalid configuration: {0}")]
+    InvalidConfig(#[from] ConfigError),
     #[error("VAD error: {0}")]
     Vad(#[from] VadError),
     #[error("embedding error: {0}")]
@@ -46,20 +49,21 @@ pub enum PipelineError {
     Wav(#[from] wav::WavError),
     #[error("unsupported WAV sample rate: {actual}, expected: {expected}")]
     UnsupportedSampleRate { expected: u32, actual: u32 },
-    #[error("no speech detected in audio")]
-    NoSpeech,
     #[error("audio too long: {actual_secs:.1}s > max {max_secs:.1}s")]
     AudioTooLong { actual_secs: f32, max_secs: f32 },
-    /// Pluggable [`crate::clusterer::Clusterer`] failure (`run_with_clusterer`).
+    /// Pluggable [`crate::clusterer::Clusterer`] failure
+    /// ([`LegacyPipeline::run_with_clusterer`], VBx loading, or the internal
+    /// `AhcClusterer` path of [`LegacyPipeline::run`]).
     ///
-    /// Always present so match arms do not depend on feature flags; only
-    /// produced when the `clusterer` feature is enabled and a clusterer is
-    /// injected.
-    #[error("clustering failed: {detail}")]
-    Clustering { detail: String },
+    /// Gated on the `clusterer` feature because
+    /// [`crate::clusterer::ClustererError`] only exists behind it; without the
+    /// feature no code path produces this variant.
+    #[cfg(feature = "clusterer")]
+    #[error("clustering failed: {0}")]
+    Clustering(#[from] crate::clusterer::ClustererError),
 }
 
-impl PipelineError {
+impl LegacyPipelineError {
     /// True when the failure is encoder resource exhaustion (pool / back-pressure).
     ///
     /// Walks the typed [`EmbedderError`] payload so metrics code can avoid
@@ -72,12 +76,24 @@ impl PipelineError {
     }
 }
 
-pub struct Pipeline {
+/// Backwards-compatible alias for the pre-rename v1 pipeline. Not used by
+/// in-crate code; new code should name [`LegacyPipeline`] explicitly (or the
+/// crate-root `Pipeline` from `pipeline_v2` when the ONNX features are on).
+#[deprecated(note = "renamed to LegacyPipeline; the crate-root `Pipeline` is now pipeline v2")]
+pub type Pipeline = LegacyPipeline;
+
+/// Backwards-compatible alias for the pre-rename v1 pipeline error.
+#[deprecated(
+    note = "renamed to LegacyPipelineError; the crate-root `PipelineError` is now pipeline v2"
+)]
+pub type PipelineError = LegacyPipelineError;
+
+pub struct LegacyPipeline {
     config: DiarizationConfig,
     vad_config: VadConfig,
 }
 
-impl Pipeline {
+impl LegacyPipeline {
     /// { true }
     /// pub fn new(config: DiarizationConfig, vad_config: VadConfig) -> Self
     /// { true }
@@ -86,26 +102,31 @@ impl Pipeline {
     }
 
     /// { true }
-    /// `pub fn run<E: Embedder, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
+    /// `pub fn run<E: Embedder, V: VoiceActivityDetector>( &self, samples: &[f32], extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, LegacyPipelineError>`
     /// { ret.as_ref().map_or(true, |r| r.num_speakers <= r.segments.len()) }
     /// Run the full diarization pipeline on raw f32 samples.
     ///
     /// `extractor` must implement [`Embedder`] (the supported BYO surface).
-    /// Legacy [`crate::embedding::EmbeddingExtractor`] types work through an
-    /// automatic bridge.
     ///
     /// Clustering defaults to free AHC (cosine threshold from
     /// [`DiarizationConfig::cluster`]). For a pluggable backend (VBx from a
-    /// local PLDA directory, NME-SC, …) use [`Self::run_with_clusterer`].
+    /// local PLDA directory, NME-SC, …) use `Self::run_with_clusterer`
+    /// (feature `clusterer`).
     ///
-    /// Returns [`PipelineError::AudioTooLong`] if the input exceeds
+    /// Returns [`LegacyPipelineError::InvalidConfig`] if
+    /// [`DiarizationConfig::validate`] rejects the configuration (a zero or
+    /// inverted window geometry previously panicked inside the window
+    /// iterator).
+    ///
+    /// Returns [`LegacyPipelineError::AudioTooLong`] if the input exceeds
     /// `config.max_duration_secs` (default 1 hour).
     pub fn run<E: Embedder, V: VoiceActivityDetector>(
         &self,
         samples: &[f32],
         extractor: &E,
         vad: &mut V,
-    ) -> Result<DiarizationResult, PipelineError> {
+    ) -> Result<DiarizationResult, LegacyPipelineError> {
+        self.config.validate()?;
         let (embeddings, time_ranges) = self.embed_windows(samples, extractor, vad)?;
         if embeddings.is_empty() {
             return Ok(self.empty_result(samples.len()));
@@ -113,21 +134,15 @@ impl Pipeline {
 
         // Same free-AHC semantics as before: fixed threshold, no cluster
         // ceiling (`max_clusters = 0`). Routed through `AhcClusterer` so the
-        // BYO path shares the Clusterer surface with pipeline_v2.
+        // BYO path shares the Clusterer surface with pipeline_v2. A dim
+        // mismatch between windows surfaces as a typed clustering error
+        // instead of silently degrading into one cluster per window.
         let labels = {
             #[cfg(feature = "clusterer")]
             {
                 use crate::clusterer::{AhcClusterer, Clusterer};
-                match AhcClusterer::with_threshold(0, self.config.cluster.threshold)
-                    .cluster(&embeddings)
-                {
-                    Ok(l) => l,
-                    // Dim mismatch / empty already filtered; fall back to free AHC.
-                    Err(_) => crate::ahc::agglomerative_cluster(
-                        &embeddings,
-                        self.config.cluster.threshold,
-                    ),
-                }
+                AhcClusterer::with_threshold(0, self.config.cluster.threshold)
+                    .cluster(&embeddings)?
             }
             #[cfg(not(feature = "clusterer"))]
             {
@@ -144,8 +159,9 @@ impl Pipeline {
     ///
     /// ```rust,ignore
     /// use polyvoice::{
-    ///     EnergyVad, Pipeline, VadConfig, DiarizationConfig,
+    ///     EnergyVad, VadConfig, DiarizationConfig,
     ///     clusterer::vbx::VbxClusterer,
+    ///     pipeline::LegacyPipeline,
     /// };
     ///
     /// let vbx = VbxClusterer::from_dir(std::path::Path::new("plda/"), 20)?;
@@ -160,6 +176,9 @@ impl Pipeline {
     /// Durations for each embedding window are passed to
     /// [`crate::clusterer::Clusterer::cluster_with_durations`] so short-segment
     /// filtering works.
+    ///
+    /// Validates the configuration first, like [`Self::run`]
+    /// ([`LegacyPipelineError::InvalidConfig`]).
     #[cfg(feature = "clusterer")]
     pub fn run_with_clusterer<E, V, C>(
         &self,
@@ -167,23 +186,20 @@ impl Pipeline {
         extractor: &E,
         vad: &mut V,
         clusterer: &C,
-    ) -> Result<DiarizationResult, PipelineError>
+    ) -> Result<DiarizationResult, LegacyPipelineError>
     where
         E: Embedder,
         V: VoiceActivityDetector,
         C: crate::clusterer::Clusterer + ?Sized,
     {
+        self.config.validate()?;
         let (embeddings, time_ranges) = self.embed_windows(samples, extractor, vad)?;
         if embeddings.is_empty() {
             return Ok(self.empty_result(samples.len()));
         }
 
         let durations: Vec<f64> = time_ranges.iter().map(|t| t.duration()).collect();
-        let labels = clusterer
-            .cluster_with_durations(&embeddings, &durations)
-            .map_err(|e| PipelineError::Clustering {
-                detail: e.to_string(),
-            })?;
+        let labels = clusterer.cluster_with_durations(&embeddings, &durations)?;
         self.assemble_result(samples.len(), embeddings, time_ranges, labels)
     }
 
@@ -200,17 +216,12 @@ impl Pipeline {
         vad: &mut V,
         plda_dir: &Path,
         max_speakers: usize,
-    ) -> Result<DiarizationResult, PipelineError>
+    ) -> Result<DiarizationResult, LegacyPipelineError>
     where
         E: Embedder,
         V: VoiceActivityDetector,
     {
-        let vbx =
-            crate::clusterer::vbx::VbxClusterer::from_dir(plda_dir, max_speakers).map_err(|e| {
-                PipelineError::Clustering {
-                    detail: e.to_string(),
-                }
-            })?;
+        let vbx = crate::clusterer::vbx::VbxClusterer::from_dir(plda_dir, max_speakers)?;
         self.run_with_clusterer(samples, extractor, vad, &vbx)
     }
 
@@ -220,10 +231,10 @@ impl Pipeline {
         samples: &[f32],
         extractor: &E,
         vad: &mut V,
-    ) -> Result<(Vec<Vec<f32>>, Vec<TimeRange>), PipelineError> {
+    ) -> Result<(Vec<Vec<f32>>, Vec<TimeRange>), LegacyPipelineError> {
         let actual_secs = samples.len() as f32 / self.config.window.sample_rate.get() as f32;
         if actual_secs > self.config.max_duration_secs {
-            return Err(PipelineError::AudioTooLong {
+            return Err(LegacyPipelineError::AudioTooLong {
                 actual_secs,
                 max_secs: self.config.max_duration_secs,
             });
@@ -281,7 +292,7 @@ impl Pipeline {
         embeddings: Vec<Vec<f32>>,
         time_ranges: Vec<TimeRange>,
         labels: Vec<usize>,
-    ) -> Result<DiarizationResult, PipelineError> {
+    ) -> Result<DiarizationResult, LegacyPipelineError> {
         // Dissolve spurious tiny clusters into the nearest large speaker — the
         // over-clustering fix. Duration pruning (length-invariant) takes
         // precedence when configured; otherwise the member-count rule applies.
@@ -340,11 +351,11 @@ impl Pipeline {
     }
 
     /// { true }
-    /// `pub fn run_from_wav<E: Embedder, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, PipelineError>`
+    /// `pub fn run_from_wav<E: Embedder, V: VoiceActivityDetector>( &self, path: &Path, extractor: &E, vad: &mut V, ) -> Result<DiarizationResult, LegacyPipelineError>`
     /// { ret.as_ref().map_or(true, |r| r.num_speakers <= r.segments.len()) }
     /// Run the pipeline from a WAV file path.
     ///
-    /// Returns [`PipelineError::UnsupportedSampleRate`] if the WAV sample rate
+    /// Returns [`LegacyPipelineError::UnsupportedSampleRate`] if the WAV sample rate
     /// does not match [`crate::types::WindowConfig::sample_rate`] in
     /// [`DiarizationConfig::window`].
     pub fn run_from_wav<E: Embedder, V: VoiceActivityDetector>(
@@ -352,11 +363,11 @@ impl Pipeline {
         path: &Path,
         extractor: &E,
         vad: &mut V,
-    ) -> Result<DiarizationResult, PipelineError> {
+    ) -> Result<DiarizationResult, LegacyPipelineError> {
         let (samples, sample_rate) = wav::read_wav(path)?;
         let expected = self.config.window.sample_rate.get();
         if sample_rate != expected {
-            return Err(PipelineError::UnsupportedSampleRate {
+            return Err(LegacyPipelineError::UnsupportedSampleRate {
                 expected,
                 actual: sample_rate,
             });
@@ -376,8 +387,8 @@ mod tests {
     fn pipeline_new_with_defaults() {
         let config = DiarizationConfig::default();
         let vad_config = VadConfig::default();
-        let pipeline = Pipeline::new(config, vad_config);
-        // Pipeline exists; basic sanity check via debug print would require
+        let pipeline = LegacyPipeline::new(config, vad_config);
+        // LegacyPipeline exists; basic sanity check via debug print would require
         // accessing private fields, so we just verify construction succeeds.
         assert!(std::mem::size_of_val(&pipeline) > 0);
     }
@@ -389,15 +400,15 @@ mod tests {
             ..Default::default()
         };
         let vad_config = VadConfig::default();
-        let pipeline = Pipeline::new(config, vad_config);
+        let pipeline = LegacyPipeline::new(config, vad_config);
 
         // Create 2 seconds of silence at 16kHz
         let samples = vec![0.0f32; 32000];
-        let extractor = crate::embedding::DummyExtractor::new(256);
+        let extractor = crate::embedder::DummyExtractor::new(256);
         let mut vad = crate::vad::EnergyVad::new(-40.0, 16000, 512);
         let result = pipeline.run(&samples, &extractor, &mut vad);
         assert!(
-            matches!(result, Err(PipelineError::AudioTooLong { .. })),
+            matches!(result, Err(LegacyPipelineError::AudioTooLong { .. })),
             "expected AudioTooLong error, got {:?}",
             result
         );
@@ -427,14 +438,14 @@ mod tests {
         std::fs::write(tmp.path(), &buf).unwrap();
 
         let config = DiarizationConfig::default();
-        let pipeline = Pipeline::new(config, VadConfig::default());
-        let extractor = crate::embedding::DummyExtractor::new(256);
+        let pipeline = LegacyPipeline::new(config, VadConfig::default());
+        let extractor = crate::embedder::DummyExtractor::new(256);
         let mut vad = crate::vad::EnergyVad::new(-40.0, 16000, 512);
         let result = pipeline.run_from_wav(tmp.path(), &extractor, &mut vad);
         assert!(
             matches!(
                 result,
-                Err(PipelineError::UnsupportedSampleRate {
+                Err(LegacyPipelineError::UnsupportedSampleRate {
                     expected: 16000,
                     actual: 22050,
                 })
@@ -495,7 +506,7 @@ mod tests {
         config.cluster.min_cluster_size = 1;
         config.cluster.min_cluster_secs = 0.0;
 
-        let pipeline = Pipeline::new(config, VadConfig::default());
+        let pipeline = LegacyPipeline::new(config, VadConfig::default());
         let embedder = TwoSpeakerEmbedder;
         let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
         let result = pipeline.run(&samples, &embedder, &mut vad).unwrap();
@@ -523,7 +534,7 @@ mod tests {
         config.cluster.min_cluster_size = 1;
         config.cluster.min_cluster_secs = 0.0;
 
-        let pipeline = Pipeline::new(config, VadConfig::default());
+        let pipeline = LegacyPipeline::new(config, VadConfig::default());
         let embedder = TwoSpeakerEmbedder;
         let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
         let ahc = AhcClusterer::with_threshold(0, config.cluster.threshold);
@@ -561,9 +572,9 @@ mod tests {
         config.window.window_secs = 1.5;
         config.window.hop_secs = 0.75;
 
-        let pipeline = Pipeline::new(config, VadConfig::default());
+        let pipeline = LegacyPipeline::new(config, VadConfig::default());
         // 256-d matches WeSpeaker / PLDA fixture dimensionality.
-        let embedder = crate::embedding::DummyExtractor::new(256);
+        let embedder = crate::embedder::DummyExtractor::new(256);
         let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
         let result = pipeline
             .run_with_vbx_from_dir(&samples, &embedder, &mut vad, &plda, 8)
@@ -575,8 +586,8 @@ mod tests {
     #[cfg(feature = "vbx")]
     #[test]
     fn run_with_vbx_missing_dir_errors() {
-        let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
-        let embedder = crate::embedding::DummyExtractor::new(256);
+        let pipeline = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default());
+        let embedder = crate::embedder::DummyExtractor::new(256);
         let mut vad = crate::vad::EnergyVad::new(-40.0, 16_000, 512);
         let err = pipeline
             .run_with_vbx_from_dir(
@@ -588,7 +599,85 @@ mod tests {
             )
             .expect_err("missing PLDA dir");
         assert!(
-            matches!(err, PipelineError::Clustering { .. }),
+            matches!(err, LegacyPipelineError::Clustering(_)),
+            "got {err:?}"
+        );
+    }
+
+    #[test]
+    fn run_rejects_invalid_window_geometry() {
+        // Zero-length windows used to panic inside WindowIter once speech was
+        // found; the config guard must turn that into a typed error.
+        for (window_secs, hop_secs) in [(0.0f32, 0.75), (1.5, 0.0), (1.0, 1.5)] {
+            let mut config = DiarizationConfig::default();
+            config.window.window_secs = window_secs;
+            config.window.hop_secs = hop_secs;
+            let pipeline = LegacyPipeline::new(config, VadConfig::default());
+            let extractor = crate::embedder::DummyExtractor::new(256);
+            let mut vad = crate::vad::EnergyVad::new(-40.0, 16_000, 512);
+            let result = pipeline.run(&sine_wave(440.0, 1.0, 16_000), &extractor, &mut vad);
+            assert!(
+                matches!(result, Err(LegacyPipelineError::InvalidConfig(_))),
+                "window={window_secs} hop={hop_secs}: expected InvalidConfig, got {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn run_rejects_out_of_range_threshold() {
+        let mut config = DiarizationConfig::default();
+        config.cluster.threshold = 1.5;
+        let pipeline = LegacyPipeline::new(config, VadConfig::default());
+        let extractor = crate::embedder::DummyExtractor::new(256);
+        let mut vad = crate::vad::EnergyVad::new(-40.0, 16_000, 512);
+        let result = pipeline.run(&sine_wave(440.0, 1.0, 16_000), &extractor, &mut vad);
+        assert!(
+            matches!(
+                result,
+                Err(LegacyPipelineError::InvalidConfig(
+                    crate::types::ConfigError::InvalidThreshold(_)
+                ))
+            ),
+            "got {result:?}"
+        );
+    }
+
+    #[cfg(feature = "clusterer")]
+    #[test]
+    fn run_surfaces_dim_mismatch_as_clustering_error() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        /// Returns a longer vector on every call — a buggy BYO embedder whose
+        /// inconsistent dims previously degraded silently into one cluster per
+        /// window via the free-AHC fallback.
+        struct InconsistentDimEmbedder(AtomicUsize);
+
+        impl Embedder for InconsistentDimEmbedder {
+            fn dim(&self) -> usize {
+                4
+            }
+
+            fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+                let n = self.0.fetch_add(1, Ordering::Relaxed);
+                Ok(vec![1.0; 4 + n])
+            }
+        }
+
+        let sr = 16_000u32;
+        let samples = sine_wave(300.0, 4.0, sr);
+        let pipeline = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default());
+        let embedder = InconsistentDimEmbedder(AtomicUsize::new(0));
+        let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
+        let err = pipeline
+            .run(&samples, &embedder, &mut vad)
+            .expect_err("inconsistent embedding dims must fail");
+        assert!(
+            matches!(
+                err,
+                LegacyPipelineError::Clustering(
+                    crate::clusterer::ClustererError::DimMismatch { .. }
+                )
+            ),
             "got {err:?}"
         );
     }

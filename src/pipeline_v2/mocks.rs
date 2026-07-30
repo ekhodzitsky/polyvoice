@@ -1,6 +1,6 @@
-//! M6a — test-only `Mock{Segmenter,Embedder,Clusterer}` for the
-//! `pipeline_v2` builder validation tests and the synthetic integration
-//! test in `tests/pipeline_v2_synthetic_test.rs`.
+//! Test-only `Mock{Segmenter,Embedder,Clusterer}` implementations used by the
+//! `pipeline_v2` builder validation and pipeline unit tests. They return fixed
+//! canned outputs so pipeline wiring can be exercised without ONNX models.
 
 use crate::clusterer::{Clusterer, ClustererError};
 use crate::embedder::{Embedder, EmbedderError};

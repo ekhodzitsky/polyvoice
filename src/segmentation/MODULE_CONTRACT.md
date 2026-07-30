@@ -45,6 +45,8 @@ surface:
     visibility: public
     contract: >
       ONNX-backed powerset speaker segmenter (sherpa-onnx-pyannote).
+      `segment()` validates PowersetConfig window geometry first and reports
+      violations as SegmentationError::InvalidGeometry instead of panicking.
     proof:
       kind: unit-test
       target: src/segmentation::mod::tests
@@ -53,7 +55,10 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Decodes powerset class logits → (speaker_set, is_overlap).
+      Decodes powerset class logits → FrameLabel: argmax class (speaker_set,
+      is_overlap), max-softmax confidence, and the full 7-class softmax vector.
+      The class table's inverse lives on PowersetClass (index / from_speakers,
+      crate-visible), shared with the calibrated binarization path.
     proof:
       kind: unit-test
       target: src/segmentation::decoder::tests
@@ -72,7 +77,9 @@ surface:
     kind: struct
     visibility: public
     contract: >
-      Per-frame speaker set and overlap flag.
+      Per-frame speaker set and overlap flag (argmax class), its max-softmax
+      confidence, and the full 7-class softmax vector (`probs`) so the
+      aggregator reuses the decoded probabilities instead of recomputing them.
     proof:
       kind: unit-test
       target: src/segmentation::mod::tests
@@ -91,6 +98,11 @@ dependencies:
     - module: types
       scope: data-shape
       reason: Confidence, TimeRange for segment timestamps.
+    - module: vad
+      scope: utility
+      reason: >
+        binarize.rs smooths speaker activity on the crate-internal
+        vad::hysteresis core (HysteresisGate + RegionTracker, Trim policy).
     - module: onnx
       scope: inference
       reason: >

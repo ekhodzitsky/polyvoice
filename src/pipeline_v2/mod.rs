@@ -1,4 +1,4 @@
-//! M6a — additive `polyvoice::pipeline_v2` module.
+//! `polyvoice::pipeline_v2` — trait-wired production ONNX diarization pipeline.
 
 #[cfg(not(all(
     feature = "onnx",
@@ -14,7 +14,6 @@ compile_error!(
 
 pub mod builder;
 pub mod config;
-pub mod hybrid;
 
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
@@ -89,6 +88,65 @@ fn expand_embed_units(
     out
 }
 
+/// Zip each surviving source segment with its cluster label into a turn.
+/// Sources, not primary segments: dropped segments produced no embedding and
+/// have no label, so the zip must stay parallel to the embeddings.
+fn primary_turns_from_labels(
+    sources: &[crate::segmentation::RawSegment],
+    labels: &[usize],
+) -> Vec<SpeakerTurn> {
+    sources
+        .iter()
+        .zip(labels.iter())
+        .map(|(seg, &lbl)| SpeakerTurn {
+            speaker: SpeakerId(lbl as u32),
+            time: seg.time,
+            text: None,
+            stable: true,
+        })
+        .collect()
+}
+
+/// Sum and count of the window confidences contributing to one turn: windows
+/// labeled as the turn's speaker whose midpoint falls in
+/// `[turn.start, turn.end)`. Contributions accumulate in ascending window
+/// order, so the f32 sum is identical whether the candidate range is located
+/// by binary search (`mids_sorted = true`) or by scanning every window.
+fn window_confidence_sum(
+    turn: &SpeakerTurn,
+    speaker_ids: &[SpeakerId],
+    window_conf: &[f32],
+    mids: &[f64],
+    mids_sorted: bool,
+) -> (f32, u32) {
+    let candidates = if mids_sorted {
+        // Non-decreasing midpoints: the windows that can match the midpoint
+        // predicate form one contiguous range — binary-search its bounds
+        // instead of scanning every window. The per-window predicate below is
+        // still evaluated, keeping one code path for both modes.
+        let lo = mids.partition_point(|&m| m < turn.time.start);
+        let hi = mids.partition_point(|&m| m < turn.time.end);
+        lo..hi
+    } else {
+        0..mids.len()
+    };
+    let mut sum = 0.0f32;
+    let mut n = 0u32;
+    for i in candidates {
+        if speaker_ids.get(i).copied() != Some(turn.speaker) {
+            continue;
+        }
+        if mids[i] >= turn.time.start
+            && mids[i] < turn.time.end
+            && let Some(&c) = window_conf.get(i)
+        {
+            sum += c;
+            n += 1;
+        }
+    }
+    (sum, n)
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum PipelineError {
     #[error("audio sample rate {actual} unsupported, expected 16000")]
@@ -105,8 +163,6 @@ pub enum PipelineError {
     Config(#[from] ConfigError),
     #[error("model registry error: {0}")]
     Registry(#[from] RegistryError),
-    #[error("model load error: {detail}")]
-    ModelLoad { detail: String },
 }
 
 pub struct Pipeline {
@@ -173,20 +229,89 @@ impl Pipeline {
             .cloned()
             .collect();
 
+        let t = std::time::Instant::now();
+        let (embeddings, sources) =
+            self.embed_primary_segments(&primary_segments, &overlap_ranges, samples)?;
+        timings.embedding_secs = t.elapsed().as_secs_f64();
+        if embeddings.is_empty() {
+            return Ok((DiarizationResult::new(Vec::new(), Vec::new(), 0), timings));
+        }
+
+        let t = std::time::Instant::now();
+        let labels = self.cluster_embeddings(&embeddings, &sources)?;
+        timings.clustering_secs = t.elapsed().as_secs_f64();
+
+        let primary_turns = primary_turns_from_labels(&sources, &labels);
+        let centroids: Vec<SpeakerCentroid> = compute_centroids(&embeddings, &labels);
+
+        // Bridge the powerset segmenter's file-consistent local speaker indices
+        // to global clusters via Hungarian assignment on co-occurrence duration,
+        // with cannot-link constraints from overlap pairs (two locals that share
+        // an overlap must not collapse onto one global).
+        let cannot_link: Vec<(u8, u8)> = overlap_ranges
+            .iter()
+            .map(|(_, lo, hi)| (*lo.min(hi), *lo.max(hi)))
+            .collect();
+        let local_to_global = self.map_local_to_global(&sources, &labels, &cannot_link);
+
+        let t = std::time::Instant::now();
+        let mut all_turns = self.resegment_turns(
+            &overlap_ranges,
+            &centroids,
+            &primary_turns,
+            &local_to_global,
+            samples,
+        )?;
+        timings.resegmentation_secs = t.elapsed().as_secs_f64();
+
+        // Guarantee sorted-by-start output regardless of which Resegmenter impl ran.
+        all_turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
+
+        let min_secs = self.config.min_speech_secs as f64;
+        all_turns.retain(|t| t.time.duration() >= min_secs);
+
+        let (merged_segments, merged_turns) =
+            self.merge_with_confidence(&all_turns, &sources, &labels, &embeddings);
+
+        let num_speakers = merged_turns
+            .iter()
+            .map(|t| t.speaker.0)
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+
+        let result = DiarizationResult::new(merged_segments, merged_turns, num_speakers)
+            .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
+            .with_provenance(crate::types::Provenance {
+                profile: self.config.profile.manifest_id().to_owned(),
+                ..Default::default()
+            });
+        Ok((result, timings))
+    }
+
+    /// Embedding stage: expand primary segments into embedding units, mask
+    /// overlap audio out of each unit, and embed. Units that are empty, below
+    /// MIN_EMBED_SECS, or yield a non-finite embedding are dropped, so the
+    /// returned source segments (parallel to the embeddings) may be fewer than
+    /// `primary_segments`.
+    fn embed_primary_segments(
+        &self,
+        primary_segments: &[crate::segmentation::RawSegment],
+        overlap_ranges: &[(TimeRange, u8, u8)],
+        samples: &[f32],
+    ) -> Result<(Vec<Vec<f32>>, Vec<crate::segmentation::RawSegment>), PipelineError> {
         let sample_rate = self.config.sample_rate.get() as f64;
         // Optional dense embedding: split each primary segment into overlapping
         // sub-windows so a speaker run yields several embeddings (legacy-style
         // dense windows) for more robust centroids. `None` keeps one embedding
         // per segment. Each unit carries its parent's local speaker index.
-        let embed_units = expand_embed_units(&primary_segments, self.config.embed_window_secs);
+        let embed_units = expand_embed_units(primary_segments, self.config.embed_window_secs);
         // PLDA backends (VBx) need the raw embedding scale for mean-centering;
         // cosine backends are scale-invariant and get the L2-normalized vectors.
         let raw_embeddings = self.clusterer.wants_raw_embeddings();
-        let t = std::time::Instant::now();
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(embed_units.len());
-        let mut valid_segments: Vec<&crate::segmentation::RawSegment> =
+        let mut sources: Vec<crate::segmentation::RawSegment> =
             Vec::with_capacity(embed_units.len());
-        for seg in &embed_units {
+        for seg in embed_units {
             let start_idx = (seg.time.start * sample_rate) as usize;
             let end_idx = ((seg.time.end * sample_rate) as usize).min(samples.len());
             if end_idx <= start_idx {
@@ -197,7 +322,8 @@ impl Pipeline {
                 continue;
             }
             let chunk = &samples[start_idx..end_idx];
-            // Fix 2: zero-fill any overlap regions inside this primary chunk before embedding.
+            // Zero-fill any overlap regions inside this primary chunk before
+            // embedding, so two-speaker audio cannot bias the embedding.
             let seg_start = seg.time.start;
             let seg_end = seg.time.end;
             let local_overlaps: Vec<(f32, f32)> = overlap_ranges
@@ -227,103 +353,81 @@ impl Pipeline {
                 l2_normalize(&mut emb);
             }
             embeddings.push(emb);
-            valid_segments.push(seg);
+            sources.push(seg);
         }
+        Ok((embeddings, sources))
+    }
 
-        timings.embedding_secs = t.elapsed().as_secs_f64();
-
-        if embeddings.is_empty() {
-            return Ok((DiarizationResult::new(Vec::new(), Vec::new(), 0), timings));
-        }
-
-        let t = std::time::Instant::now();
-        // Per-embedding durations enable cVBx short-segment filtering inside
-        // clusterers that opt in (VBx); others ignore the slice.
-        let durations: Vec<f64> = valid_segments.iter().map(|s| s.time.duration()).collect();
-        let labels = self
+    /// Clustering stage. Per-embedding durations enable cVBx short-segment
+    /// filtering inside clusterers that opt in (VBx); others ignore the slice.
+    fn cluster_embeddings(
+        &self,
+        embeddings: &[Vec<f32>],
+        sources: &[crate::segmentation::RawSegment],
+    ) -> Result<Vec<usize>, PipelineError> {
+        let durations: Vec<f64> = sources.iter().map(|s| s.time.duration()).collect();
+        Ok(self
             .clusterer
-            .cluster_with_durations(&embeddings, &durations)?;
-        timings.clustering_secs = t.elapsed().as_secs_f64();
+            .cluster_with_durations(embeddings, &durations)?)
+    }
 
-        // Fix 1: zip valid_segments (survivors only) with labels — not primary_segments.
-        let mut primary_turns: Vec<SpeakerTurn> = valid_segments
-            .iter()
-            .zip(labels.iter())
-            .map(|(seg, &lbl)| SpeakerTurn {
-                speaker: SpeakerId(lbl as u32),
-                time: seg.time,
-                text: None,
-                stable: true,
-            })
-            .collect();
-
-        let centroids: Vec<SpeakerCentroid> = compute_centroids(&embeddings, &labels);
-
-        // Bridge the powerset segmenter's file-consistent local speaker indices
-        // to global clusters via Hungarian assignment on co-occurrence duration,
-        // with cannot-link constraints from overlap pairs (two locals that share
-        // an overlap must not collapse onto one global).
-        let cannot_link: Vec<(u8, u8)> = overlap_ranges
-            .iter()
-            .map(|(_, lo, hi)| (*lo.min(hi), *lo.max(hi)))
-            .collect();
-        let local_to_global = Self::map_local_to_global(&valid_segments, &labels, &cannot_link);
-
-        let t = std::time::Instant::now();
-        let mut all_turns: Vec<SpeakerTurn> = if self.config.resegment_overlap
-            && !overlap_ranges.is_empty()
-            && centroids.len() >= 2
-        {
-            let overlap_inputs = self.build_overlap_inputs(
-                &overlap_ranges,
-                &primary_turns,
-                &local_to_global,
-                samples,
-            )?;
-            self.resegmenter.resegment(ResegmentInputs {
-                primary_turns: &primary_turns,
-                speaker_centroids: &centroids,
+    /// Resegmentation stage: when overlap resegmentation is enabled and there
+    /// are overlaps plus at least two centroids, reassign overlap regions to
+    /// two speakers; otherwise the primary turns pass through, sorted by start.
+    fn resegment_turns(
+        &self,
+        overlap_ranges: &[(TimeRange, u8, u8)],
+        centroids: &[SpeakerCentroid],
+        primary_turns: &[SpeakerTurn],
+        local_to_global: &std::collections::HashMap<u8, SpeakerId>,
+        samples: &[f32],
+    ) -> Result<Vec<SpeakerTurn>, PipelineError> {
+        if self.config.resegment_overlap && !overlap_ranges.is_empty() && centroids.len() >= 2 {
+            let overlap_inputs =
+                self.build_overlap_inputs(overlap_ranges, primary_turns, local_to_global, samples)?;
+            Ok(self.resegmenter.resegment(ResegmentInputs {
+                primary_turns,
+                speaker_centroids: centroids,
                 overlap_regions: &overlap_inputs,
-            })?
+            })?)
         } else {
-            primary_turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
-            primary_turns
-        };
+            let mut turns = primary_turns.to_vec();
+            turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
+            Ok(turns)
+        }
+    }
 
-        timings.resegmentation_secs = t.elapsed().as_secs_f64();
-
-        // Fix 4: guarantee sorted order regardless of which Resegmenter impl ran.
-        all_turns.sort_by(|a, b| a.time.start.total_cmp(&b.time.start));
-
-        let min_secs = self.config.min_speech_secs as f64;
-        all_turns.retain(|t| t.time.duration() >= min_secs);
-
+    /// Confidence + merge stage: score each turn by averaging the window
+    /// confidences (embedding↔centroid cosine, logistic map) whose midpoint
+    /// falls inside the turn (fallback: None), then merge adjacent same-speaker
+    /// segments within `max_gap`. After merge_segments the per-run confidence
+    /// is the mean of present values.
+    fn merge_with_confidence(
+        &self,
+        turns: &[SpeakerTurn],
+        sources: &[crate::segmentation::RawSegment],
+        labels: &[usize],
+        embeddings: &[Vec<f32>],
+    ) -> (Vec<Segment>, Vec<SpeakerTurn>) {
         let max_gap = self.config.max_gap_secs as f64;
-        // Window-level confidence from embedding↔centroid cosine (logistic map).
-        // After merge_segments the per-run confidence is the mean of present values.
         let speaker_ids: Vec<SpeakerId> = labels.iter().map(|&l| SpeakerId(l as u32)).collect();
         let window_conf =
-            crate::types::segment_confidences_from_embeddings(&speaker_ids, &embeddings);
-        // Map each merged turn's speaker/time back to a confidence by averaging
-        // window confidences whose midpoint falls inside the turn (fallback: None).
-        let merged_segments: Vec<Segment> = all_turns
+            crate::types::segment_confidences_from_embeddings(&speaker_ids, embeddings);
+        // Window midpoints. Primary segments are disjoint and time-ordered in
+        // production, so `mids` is non-decreasing and the per-turn confidence
+        // lookup can binary-search its candidate range instead of scanning
+        // every window (O(turns × windows) → O(turns × log windows));
+        // unordered (mock/adversarial) input takes the exact full-scan path.
+        let mids: Vec<f64> = sources
+            .iter()
+            .map(|s| (s.time.start + s.time.end) / 2.0)
+            .collect();
+        let mids_sorted = mids.windows(2).all(|w| w[0] <= w[1]);
+        let merged_segments: Vec<Segment> = turns
             .iter()
             .map(|t| {
-                let mut sum = 0.0f32;
-                let mut n = 0u32;
-                for (i, seg) in valid_segments.iter().enumerate() {
-                    if speaker_ids.get(i).copied() != Some(t.speaker) {
-                        continue;
-                    }
-                    let mid = (seg.time.start + seg.time.end) / 2.0;
-                    if mid >= t.time.start
-                        && mid < t.time.end
-                        && let Some(&c) = window_conf.get(i)
-                    {
-                        sum += c;
-                        n += 1;
-                    }
-                }
+                let (sum, n) =
+                    window_confidence_sum(t, &speaker_ids, &window_conf, &mids, mids_sorted);
                 Segment {
                     time: t.time,
                     speaker: Some(t.speaker),
@@ -343,20 +447,7 @@ impl Pipeline {
                 })
             })
             .collect();
-
-        let num_speakers = merged_turns
-            .iter()
-            .map(|t| t.speaker.0)
-            .collect::<std::collections::HashSet<_>>()
-            .len();
-
-        let result = DiarizationResult::new(merged_segments, merged_turns, num_speakers)
-            .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
-            .with_provenance(crate::types::Provenance {
-                profile: self.config.profile.manifest_id().to_owned(),
-                ..Default::default()
-            });
-        Ok((result, timings))
+        (merged_segments, merged_turns)
     }
 
     /// Hungarian co-occurrence map from each file-consistent local speaker
@@ -365,21 +456,24 @@ impl Pipeline {
     /// "inactive speakers in the similarity matrix" anti-pattern). Cannot-link
     /// pairs from overlap regions are forced onto distinct globals.
     fn map_local_to_global(
-        valid_segments: &[&crate::segmentation::RawSegment],
+        &self,
+        sources: &[crate::segmentation::RawSegment],
         labels: &[usize],
         cannot_link: &[(u8, u8)],
     ) -> std::collections::HashMap<u8, SpeakerId> {
-        // Ablation toggle: when set, return an empty map so every overlap region
-        // takes the mixed-embedding fallback. Lets the segmentation-derived
-        // overlap path be A/B-measured against the legacy path in one binary.
-        if std::env::var_os("POLYVOICE_V2_DISABLE_SEG_OVERLAP").is_some() {
+        // Ablation toggle (PipelineConfig::disable_seg_overlap): return an
+        // empty map so every overlap region takes the mixed-embedding fallback.
+        // Lets the segmentation-derived overlap path be A/B-measured against
+        // the legacy path in one binary.
+        if self.config.disable_seg_overlap {
             return std::collections::HashMap::new();
         }
-        let local_idx: Vec<u8> = valid_segments.iter().map(|s| s.local_speaker_idx).collect();
-        let durations: Vec<f64> = valid_segments.iter().map(|s| s.time.duration()).collect();
+        let local_idx: Vec<u8> = sources.iter().map(|s| s.local_speaker_idx).collect();
+        let durations: Vec<f64> = sources.iter().map(|s| s.time.duration()).collect();
         let cooc = crate::clusterer::build_cooccurrence(&local_idx, labels, &durations);
-        // Ablation: majority vote instead of Hungarian.
-        if std::env::var_os("POLYVOICE_V2_MAJORITY_LOCAL_MAP").is_some() {
+        // Ablation (PipelineConfig::majority_local_map): majority vote instead
+        // of Hungarian.
+        if self.config.majority_local_map {
             return crate::clusterer::majority_local_to_global(&cooc);
         }
         crate::clusterer::hungarian_local_to_global(&cooc, cannot_link)
@@ -671,6 +765,100 @@ mod tests {
             .unwrap();
         assert!(result.turns.is_empty());
         assert_eq!(result.num_speakers, 0);
+    }
+
+    /// The binary-search fast path (sorted mids) and the full-scan fallback
+    /// must both agree with a naive per-turn scan — same contributing windows,
+    /// same accumulation order, bit-identical sums.
+    #[test]
+    fn window_confidence_sum_matches_naive_scan() {
+        fn naive(
+            turn: &SpeakerTurn,
+            speaker_ids: &[SpeakerId],
+            window_conf: &[f32],
+            mids: &[f64],
+        ) -> (f32, u32) {
+            let mut sum = 0.0f32;
+            let mut n = 0u32;
+            for (i, &mid) in mids.iter().enumerate() {
+                if speaker_ids.get(i).copied() != Some(turn.speaker) {
+                    continue;
+                }
+                if mid >= turn.time.start
+                    && mid < turn.time.end
+                    && let Some(&c) = window_conf.get(i)
+                {
+                    sum += c;
+                    n += 1;
+                }
+            }
+            (sum, n)
+        }
+
+        let speaker_ids = vec![
+            SpeakerId(0),
+            SpeakerId(1),
+            SpeakerId(0),
+            SpeakerId(0),
+            SpeakerId(1),
+        ];
+        let window_conf = vec![0.9, 0.8, 0.7, 0.6, 0.5];
+        let sorted_mids = vec![0.5, 1.0, 1.5, 2.5, 3.5];
+        // Same values, shuffled: not non-decreasing, fallback path only.
+        let unsorted_mids = vec![1.5, 0.5, 3.5, 1.0, 2.5];
+
+        let cases = [
+            // Boundaries: mid == start is included, mid == end is excluded.
+            SpeakerTurn {
+                speaker: SpeakerId(0),
+                time: TimeRange {
+                    start: 0.5,
+                    end: 2.5,
+                },
+                text: None,
+                stable: true,
+            },
+            // No window of the right speaker in range → (0.0, 0).
+            SpeakerTurn {
+                speaker: SpeakerId(1),
+                time: TimeRange {
+                    start: 1.6,
+                    end: 2.4,
+                },
+                text: None,
+                stable: true,
+            },
+            // Range outside every midpoint.
+            SpeakerTurn {
+                speaker: SpeakerId(0),
+                time: TimeRange {
+                    start: 10.0,
+                    end: 11.0,
+                },
+                text: None,
+                stable: true,
+            },
+        ];
+
+        for turn in &cases {
+            let expected = naive(turn, &speaker_ids, &window_conf, &sorted_mids);
+            assert_eq!(
+                window_confidence_sum(turn, &speaker_ids, &window_conf, &sorted_mids, true),
+                expected,
+                "sorted fast path disagrees with naive scan"
+            );
+            assert_eq!(
+                window_confidence_sum(turn, &speaker_ids, &window_conf, &sorted_mids, false),
+                expected,
+                "full-scan path disagrees with naive scan"
+            );
+            let expected_unsorted = naive(turn, &speaker_ids, &window_conf, &unsorted_mids);
+            assert_eq!(
+                window_confidence_sum(turn, &speaker_ids, &window_conf, &unsorted_mids, false),
+                expected_unsorted,
+                "unsorted full-scan path disagrees with naive scan"
+            );
+        }
     }
 
     // Pipeline output turns must be monotonically ordered by start time

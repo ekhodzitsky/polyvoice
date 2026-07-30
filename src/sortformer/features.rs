@@ -117,8 +117,7 @@ fn stft_power(audio: &[f32], window: &[f32]) -> Result<Vec<f32>, SortformerError
         for i in 0..N_FFT {
             input[i] = padded[start + i] * window[i];
         }
-        r2c.process_with_scratch(&mut input, &mut output, &mut scratch)
-            .map_err(|e| SortformerError::Features(format!("FFT failed: {e}")))?;
+        r2c.process_with_scratch(&mut input, &mut output, &mut scratch)?;
         let base = frame_idx * freq_bins;
         for k in 0..freq_bins {
             spectrogram[base + k] = output[k].norm_sqr();

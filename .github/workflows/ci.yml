@@ -415,38 +415,6 @@ jobs:
             polyvoice:ci diarize /audio/fuzfh.wav --output /audio/out.rttm
           test -s tests/data/e2e-smoke/audio/out.rttm
 
-  e2e-smoke:
-    runs-on: ubuntu-latest
-    needs: [test]
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # Cache the hash-pinned native ONNX Runtime that ort-sys downloads
-      # (verified against the SHA-256 embedded in the crate; see
-      # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
-      # an ort bump re-pins the binary. A cache miss makes any cold network
-      # fetch observable in the log.
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/ort.pyke.io
-            ~/Library/Caches/ort.pyke.io
-            ~/AppData/Local/ort.pyke.io
-          key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/polyvoice/models
-          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
-      - name: Download ONNX models
-        run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-      - name: Run E2E smoke test
-        run: cargo nextest run --profile ci --run-ignored only --test e2e_smoke_test --features "onnx download" --nocapture
-
   e2e-der-regression:
     runs-on: ubuntu-latest
     needs: [test]

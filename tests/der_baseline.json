@@ -183,7 +183,7 @@
       "embedder": "wespeaker_resnet34"
     },
     "_status": "v2-family AMI entry (read as ami_v2 by cli_der_regression_test); hosts the overlap-excluded long-form floor. The original hybrid experiment is retired (superseded by pipeline v2), so der_collar_0_25/der_no_collar here are historical, ungated, and intentionally not re-measured. Legacy DER on the same file: 36.30%.",
-    "_filled_by": "cargo test --release --test pipeline_v2_hybrid_test -- hybrid_ami_test_single --ignored --nocapture"
+    "_filled_by": "cargo test --release --test cli_der_regression_test --features \"onnx,download,segmentation,embedder,clusterer,resegmentation,vbx,cli\" -- cli_der_regression_v2_ami_single --ignored --nocapture"
   },
   "voxconverse_test_legacy": {
     "files": 232,

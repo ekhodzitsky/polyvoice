@@ -175,7 +175,7 @@ verification:
     - cargo test --lib models --features download
   full:
     - cargo test --lib models --features download
-    - cargo test --test m5_manifest_smoke_test --features download
+    - cargo test --test manifest_smoke_test --features download
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:

@@ -1,0 +1,230 @@
+//! Shared wiring helpers for the CLI-family binaries (`polyvoice`,
+//! `polyvoice-bench`, `polyvoice-measure`, `polyvoice-mcp`).
+//!
+//! Everything here is flag-to-config translation, pipeline construction, or
+//! bench-dataset walking — the pieces every binary used to carry its own copy
+//! of. Keeping them here holds the binaries to thin wrappers and stops the
+//! copies from drifting apart (defaults, error wording, AMI id fallback).
+
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+
+use crate::models::ModelRegistry;
+use crate::onnx::ExecutionProvider;
+use crate::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
+use crate::rttm::{RttmSegment, group_by_file, parse_rttm_file, to_speaker_turns};
+use crate::types::{ClusterConfig, DiarizationConfig, SpeakerTurn};
+use crate::{FbankOnnxExtractor, SileroVad};
+
+/// Parse a `--clusterer`-style selector into the v2 clusterer kind. `threshold`
+/// is used only for `ahc`.
+pub fn parse_clusterer_kind(name: &str, threshold: f32) -> Result<ClustererKind> {
+    match name {
+        "ahc" => Ok(ClustererKind::Ahc { threshold }),
+        "vbx" => Ok(ClustererKind::Vbx),
+        other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
+    }
+}
+
+/// Parse an `--execution-provider`-style selector. `auto` resolves to the best
+/// provider for the current target; providers not compiled into the build warn
+/// and fall back to CPU at session-build time.
+pub fn parse_execution_provider(s: &str) -> Result<ExecutionProvider> {
+    Ok(match s {
+        "auto" => ExecutionProvider::auto(),
+        "cpu" => ExecutionProvider::Cpu,
+        "coreml" => ExecutionProvider::CoreMl,
+        "nnapi" => ExecutionProvider::Nnapi,
+        "cuda" => ExecutionProvider::Cuda,
+        "xnnpack" => ExecutionProvider::XnnPack,
+        other => anyhow::bail!(
+            "unknown --execution-provider '{other}' (expected auto|cpu|coreml|nnapi|cuda|xnnpack)"
+        ),
+    })
+}
+
+/// Convert a `--speakers`/`--max-speakers`-style value into the v2 config's
+/// `u8` ceiling. Out-of-range input is rejected outright rather than silently
+/// clamped, so the caller learns the value was invalid.
+pub fn max_speakers_u8(n: usize) -> Result<u8> {
+    u8::try_from(n)
+        .ok()
+        .filter(|&v| v > 0)
+        .ok_or_else(|| anyhow::anyhow!("max_speakers must be in 1..=255, got {n}"))
+}
+
+/// Legacy (v1) diarization config: crate defaults with the caller's AHC
+/// cosine-similarity threshold.
+pub fn legacy_diarization_config(threshold: f32) -> DiarizationConfig {
+    DiarizationConfig {
+        cluster: ClusterConfig {
+            threshold,
+            ..Default::default()
+        },
+        ..DiarizationConfig::default()
+    }
+}
+
+/// ONNX sessions for the legacy (v1) pipeline: the profile embedder plus a
+/// Silero VAD. Sessions are file-independent, so callers processing many files
+/// build one stack and reuse it — `LegacyPipeline::run` resets the VAD state
+/// at the start of every run, keeping reused sessions numerically identical
+/// to per-file construction.
+pub struct LegacyStack {
+    pub extractor: FbankOnnxExtractor,
+    pub vad: SileroVad,
+}
+
+/// Load the legacy-pipeline ONNX sessions: embedder (on `embedder_ep`) and
+/// Silero VAD (always CPU, its validated configuration).
+pub fn load_legacy_stack(
+    embedder_path: &Path,
+    embedding_dim: usize,
+    embedder_ep: ExecutionProvider,
+    vad_path: &Path,
+    vad_frame_size: usize,
+) -> Result<LegacyStack> {
+    let extractor = FbankOnnxExtractor::new(embedder_path, embedding_dim, 1, embedder_ep)
+        .context("load embedder")?;
+    let vad = SileroVad::new(vad_path, vad_frame_size).context("load vad")?;
+    Ok(LegacyStack { extractor, vad })
+}
+
+/// Build the v2 pipeline from a model registry. When the VBx clusterer is
+/// selected and its PLDA params cannot be resolved, the error names the
+/// remedies (explicit dir, env var, registry download, AHC fallback) instead
+/// of surfacing a bare build failure.
+pub fn build_v2_pipeline(config: PipelineConfig, registry: ModelRegistry) -> Result<Pipeline> {
+    let vbx = matches!(config.clusterer, ClustererKind::Vbx);
+    Pipeline::builder()
+        .config(config)
+        .with_models_from(registry)
+        .build()
+        .with_context(|| {
+            if vbx {
+                "build pipeline v2 (clusterer=vbx): set vbx_plda_dir / POLYVOICE_VBX_PLDA_DIR \
+                 (CLI flag: --vbx-plda-dir), allow registry PLDA download, or select the ahc \
+                 clusterer (CLI: --clusterer ahc)"
+                    .to_string()
+            } else {
+                "build pipeline v2".to_string()
+            }
+        })
+}
+
+/// Sorted `audio/*.wav` listing of a bench dataset directory (`{audio,rttm}`
+/// layout), truncated to `max_files` when set.
+pub fn list_wavs(dataset: &Path, max_files: Option<usize>) -> Result<Vec<PathBuf>> {
+    let audio_dir = dataset.join("audio");
+    let mut wavs: Vec<PathBuf> = std::fs::read_dir(&audio_dir)
+        .with_context(|| format!("read_dir {}", audio_dir.display()))?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "wav"))
+        .map(|e| e.path())
+        .collect();
+    wavs.sort();
+    if let Some(n) = max_files {
+        wavs.truncate(n);
+    }
+    Ok(wavs)
+}
+
+/// Reference RTTM segments for `stem` from `rttm_dir`, with the AMI-style id
+/// fallback (`EN2002a.Mix-Headset.wav` → `EN2002a`). Empty when neither the
+/// full stem nor the fallback prefix names a file in the RTTM.
+pub fn load_rttm_segments(rttm_dir: &Path, stem: &str) -> Result<Vec<RttmSegment>> {
+    let rttm = rttm_dir.join(format!("{stem}.rttm"));
+    let raw = parse_rttm_file(&rttm).with_context(|| format!("parse {}", rttm.display()))?;
+    let grouped = group_by_file(&raw);
+    let segs: Vec<RttmSegment> = grouped
+        .get(stem)
+        .or_else(|| stem.split('.').next().and_then(|s| grouped.get(s)))
+        .map(|v| v.iter().map(|s| (*s).clone()).collect())
+        .unwrap_or_default();
+    Ok(segs)
+}
+
+/// Reference speaker turns for `stem` — [`load_rttm_segments`] projected onto
+/// the canonical turn type.
+pub fn load_ref_turns(rttm_dir: &Path, stem: &str) -> Result<Vec<SpeakerTurn>> {
+    let (turns, _) = to_speaker_turns(&load_rttm_segments(rttm_dir, stem)?);
+    Ok(turns)
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clusterer_kind_parses_known_names() {
+        assert!(matches!(
+            parse_clusterer_kind("vbx", 0.7).unwrap(),
+            ClustererKind::Vbx
+        ));
+        match parse_clusterer_kind("ahc", 0.7).unwrap() {
+            ClustererKind::Ahc { threshold } => assert_eq!(threshold, 0.7),
+            other => panic!("expected Ahc, got {other:?}"),
+        }
+        assert!(parse_clusterer_kind("nope", 0.7).is_err());
+    }
+
+    #[test]
+    fn execution_provider_parses_known_names() {
+        for name in ["auto", "cpu", "coreml", "nnapi", "cuda", "xnnpack"] {
+            assert!(parse_execution_provider(name).is_ok(), "{name}");
+        }
+        assert!(parse_execution_provider("tpu").is_err());
+    }
+
+    #[test]
+    fn max_speakers_u8_accepts_valid_range() {
+        assert_eq!(max_speakers_u8(1).unwrap(), 1);
+        assert_eq!(max_speakers_u8(255).unwrap(), 255);
+    }
+
+    #[test]
+    fn max_speakers_u8_rejects_out_of_range() {
+        assert!(max_speakers_u8(0).is_err());
+        assert!(max_speakers_u8(256).is_err());
+    }
+
+    #[test]
+    fn rttm_segments_fall_back_to_ami_style_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let rttm_dir = dir.path();
+        // Exact stem match: the RTTM file id column is used directly.
+        std::fs::write(
+            rttm_dir.join("plain.rttm"),
+            "SPEAKER plain 1 0.0 1.0 <NA> <NA> B <NA> <NA>\n",
+        )
+        .unwrap();
+        let exact = load_rttm_segments(rttm_dir, "plain").unwrap();
+        assert_eq!(exact.len(), 1);
+        assert_eq!(exact[0].speaker, "B");
+        // Full filename stem falls back to the prefix before the first dot.
+        std::fs::write(
+            rttm_dir.join("EN2002a.Mix-Headset.rttm"),
+            "SPEAKER EN2002a 1 0.0 1.0 <NA> <NA> A <NA> <NA>\n",
+        )
+        .unwrap();
+        let fallback = load_rttm_segments(rttm_dir, "EN2002a.Mix-Headset").unwrap();
+        assert_eq!(fallback.len(), 1);
+        assert_eq!(fallback[0].speaker, "A");
+    }
+
+    #[test]
+    fn list_wavs_sorts_and_truncates() {
+        let dir = tempfile::tempdir().unwrap();
+        let audio = dir.path().join("audio");
+        std::fs::create_dir(&audio).unwrap();
+        for name in ["b.wav", "a.wav", "c.txt"] {
+            std::fs::write(audio.join(name), []).unwrap();
+        }
+        let all = list_wavs(dir.path(), None).unwrap();
+        assert_eq!(all.len(), 2);
+        assert!(all[0].ends_with("a.wav"));
+        let one = list_wavs(dir.path(), Some(1)).unwrap();
+        assert_eq!(one.len(), 1);
+    }
+}

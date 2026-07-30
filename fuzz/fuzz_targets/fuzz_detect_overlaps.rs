@@ -1,7 +1,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use polyvoice::{detect_overlaps, Segment, SpeakerId, TimeRange};
+use polyvoice::overlap::detect_overlaps;
+use polyvoice::{Segment, SpeakerId, TimeRange};
 
 fuzz_target!(|data: &[u8]| {
     // Each segment is encoded as 24 bytes: start(f64), end(f64), speaker_id(u32, padded).

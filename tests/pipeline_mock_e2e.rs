@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 #![allow(clippy::unwrap_used)]
 //! Mock-based E2E integration tests for the pipeline.
 //!
@@ -10,8 +9,8 @@
 //! not duplicated here.
 
 use polyvoice::{
-    embedding::DummyExtractor,
-    pipeline::Pipeline,
+    embedder::DummyExtractor,
+    pipeline::LegacyPipeline,
     types::DiarizationConfig,
     vad::{EnergyVad, VadConfig, segment_speech},
 };
@@ -60,7 +59,7 @@ fn pipeline_mock_multi_region_synthetic_audio() {
     samples.extend_from_slice(&gap);
     samples.extend_from_slice(&speaker_b);
 
-    let pipeline = Pipeline::new(default_config(), default_vad_config());
+    let pipeline = LegacyPipeline::new(default_config(), default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, sr, 512);
 
@@ -96,7 +95,7 @@ fn pipeline_mock_single_speaker_sustained() {
     let sr = 16000;
     let samples = sine_wave(400.0, 5.0, sr);
 
-    let pipeline = Pipeline::new(default_config(), default_vad_config());
+    let pipeline = LegacyPipeline::new(default_config(), default_vad_config());
     let extractor = DummyExtractor::new(256);
     let mut vad = EnergyVad::new(-40.0, sr, 512);
 

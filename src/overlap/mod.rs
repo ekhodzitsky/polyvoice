@@ -1,4 +1,7 @@
 //! Overlap detection: identify frames where multiple speakers may be active.
+//!
+//! Post-hoc analysis helper, not used by the pipelines (pipeline v2 derives
+//! overlap regions from the segmenter; see `resegmentation`).
 
 use crate::types::{Segment, SpeakerId, TimeRange};
 
@@ -10,7 +13,8 @@ use crate::types::{Segment, SpeakerId, TimeRange};
 /// Zero-length segments and segments without a speaker label are ignored.
 ///
 /// ```rust
-/// use polyvoice::{detect_overlaps, Segment, SpeakerId, TimeRange};
+/// use polyvoice::overlap::detect_overlaps;
+/// use polyvoice::{Segment, SpeakerId, TimeRange};
 /// let segments = vec![
 ///     Segment { time: TimeRange { start: 0.0, end: 3.0 }, speaker: Some(SpeakerId(0)), confidence: None },
 ///     Segment { time: TimeRange { start: 2.0, end: 5.0 }, speaker: Some(SpeakerId(1)), confidence: None },

@@ -1,4 +1,3 @@
-#![allow(deprecated)] // streaming rides the legacy extractor API; see polyvoice::embedder
 //! Integration test for the streaming pipeline: drives feed()/flush() over a
 //! many-small-chunk stream (microphone-style) and asserts the cumulative
 //! turns() contract end-to-end. This is the integration target referenced by
@@ -7,6 +6,8 @@
 //! Regression guard: on the pre-fix streaming bug (turns() stayed empty while
 //! per-call returns were non-empty), the `turns() == concatenation` assertion
 //! below fails — this test would have caught it.
+
+mod common;
 
 use polyvoice::streaming::StreamingPipeline;
 use polyvoice::types::SpeakerTurn;
@@ -72,23 +73,9 @@ fn feed_flush_round_trip_over_small_chunks() {
 /// Same contract through the real ONNX embedder (higher fidelity, model-gated).
 #[cfg(all(feature = "onnx", feature = "download"))]
 #[test]
-#[ignore = "requires cached Balanced ONNX bundle"]
+#[ignore = "requires downloaded models"]
 fn feed_flush_round_trip_with_real_embedder() {
-    use polyvoice::FbankOnnxExtractor;
-    use polyvoice::models::ModelRegistry;
-    use polyvoice::types::Profile;
-
-    let registry = ModelRegistry::default().expect("registry");
-    let models = registry
-        .ensure_for_profile(Profile::Balanced)
-        .expect("models");
-    let extractor = FbankOnnxExtractor::new(
-        &models.embedder_path,
-        Profile::Balanced.embedding_dim(),
-        1,
-        polyvoice::onnx::ExecutionProvider::Cpu,
-    )
-    .expect("embedder");
+    let extractor = common::balanced_onnx_extractor();
 
     let vad = EnergyVad::new(-40.0, 16000, 512);
     let mut pipeline = StreamingPipeline::new(

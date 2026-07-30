@@ -1,4 +1,4 @@
-"""M6b — smoke test for new pyo3 bindings."""
+"""Smoke tests for the pyo3 bindings."""
 
 import polyvoice
 

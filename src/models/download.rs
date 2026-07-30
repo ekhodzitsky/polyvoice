@@ -39,15 +39,6 @@ pub enum DownloadError {
     TooLarge { path: PathBuf, max_bytes: u64 },
 }
 
-impl From<SignatureError> for DownloadError {
-    fn from(source: SignatureError) -> Self {
-        DownloadError::SignatureInvalid {
-            path: PathBuf::from("(unknown)"),
-            source,
-        }
-    }
-}
-
 /// { !url.is_empty() && expected_sha256.len() == 64 }
 /// `pub fn download_with_checksum( url: &str, expected_sha256: &str, dest: &Path, ) -> Result<bool, DownloadError>`
 /// { ret.as_ref().map_or(true, |&downloaded| if downloaded { dest.exists() } else { true }) }
@@ -116,20 +107,67 @@ pub(crate) fn download_with_checksum_signature_and_cap(
     dest: &Path,
     max_bytes: u64,
 ) -> Result<bool, DownloadError> {
-    // Cache hit: verify SHA-256, then signature if present. No network here, so
-    // the URL scheme is irrelevant.
-    if dest.exists() && verify_sha256(dest, expected_sha256).is_ok() {
-        if let Some(sig) = signature {
-            verify_minisign(dest, sig).map_err(|e| DownloadError::SignatureInvalid {
-                path: dest.to_path_buf(),
-                source: e,
-            })?;
-        }
+    // Stage 1 — cache hit: verify SHA-256, then the signature if present. No
+    // network here, so the URL scheme is irrelevant.
+    if serve_cache_hit(dest, expected_sha256, signature)? {
         return Ok(false);
     }
 
-    // A real fetch will happen: require https:// so weights are never pulled in
-    // cleartext (integrity must not rest on the same-manifest hash alone).
+    // Stage 2 — a real fetch will happen: require https:// so weights are
+    // never pulled in cleartext (integrity must not rest on the same-manifest
+    // hash alone).
+    require_https(url)?;
+
+    // Stage 3 — prepare the destination directory and the sibling `.partial`
+    // path the download streams into.
+    let tmp = prepare_partial_path(dest)?;
+
+    // Stage 4 — pre-parse the Minisign public key and signature so malformed
+    // input fails fast, before any network access.
+    let prepared = signature
+        .map(|sig_text| PreparedSignature::new(dest, sig_text))
+        .transpose()?;
+    let mut verifier = DownloadVerifier::new(dest, prepared.as_ref())?;
+
+    // Stage 5 — stream the body into the `.partial` file, hashing and
+    // signature-verifying each chunk; aborts past `max_bytes`.
+    fetch_into_partial(url, &tmp, max_bytes, &mut verifier)?;
+
+    // Stage 6 — verify the checksum, then the signature (both delete the
+    // `.partial` on failure).
+    verifier.finish(&tmp, dest, expected_sha256)?;
+
+    // Stage 7 — atomic rename, so a partial file is never seen as cached.
+    fs::rename(&tmp, dest).map_err(|e| DownloadError::Io {
+        path: tmp.clone(),
+        source: e,
+    })?;
+    Ok(true)
+}
+
+/// Cache-hit short-circuit: `dest` already exists with the expected SHA-256.
+/// When a signature is present it is verified on the hit as well. Returns
+/// `Ok(true)` if the cached file serves the request (no network needed).
+fn serve_cache_hit(
+    dest: &Path,
+    expected_sha256: &str,
+    signature: Option<&str>,
+) -> Result<bool, DownloadError> {
+    if !(dest.exists() && verify_sha256(dest, expected_sha256).is_ok()) {
+        return Ok(false);
+    }
+    if let Some(sig) = signature {
+        verify_minisign(dest, sig).map_err(|e| DownloadError::SignatureInvalid {
+            path: dest.to_path_buf(),
+            source: e,
+        })?;
+    }
+    Ok(true)
+}
+
+/// Reject any non-`https://` URL before opening the network. Cache hits
+/// transmit nothing and never reach this check.
+fn require_https(url: &str) -> Result<(), DownloadError> {
     if !url
         .get(..8)
         .is_some_and(|s| s.eq_ignore_ascii_case("https://"))
@@ -138,108 +176,141 @@ pub(crate) fn download_with_checksum_signature_and_cap(
             url: url.to_owned(),
         });
     }
+    Ok(())
+}
 
+/// Create `dest`'s parent directory if needed and return the sibling
+/// `.partial` path the download is staged through.
+fn prepare_partial_path(dest: &Path) -> Result<PathBuf, DownloadError> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| DownloadError::Io {
             path: parent.to_path_buf(),
             source: e,
         })?;
     }
-
-    // Download to a sibling .partial file, then rename — gives atomic on-success
-    // semantics so a partial file is never seen as cached.
     let mut tmp = dest.to_path_buf();
     let original_name = dest.file_name().and_then(|s| s.to_str()).unwrap_or("model");
     tmp.set_file_name(format!(".{original_name}.partial"));
+    Ok(tmp)
+}
 
-    // Pre-parse Minisign public key and signature so we fail fast before the network.
-    let public_key = if signature.is_some() {
-        Some(
+/// Minisign public key + signature parsed up front; owns the values the
+/// streaming verifier borrows.
+struct PreparedSignature {
+    public_key: minisign_verify::PublicKey,
+    signature: minisign_verify::Signature,
+}
+
+impl PreparedSignature {
+    fn new(dest: &Path, sig_text: &str) -> Result<Self, DownloadError> {
+        let public_key =
             minisign_verify::PublicKey::from_base64(crate::models::verify::SIGNING_PUBKEY_BASE64)
                 .map_err(|e| DownloadError::SignatureInvalid {
                 path: dest.to_path_buf(),
                 source: SignatureError::BadPublicKey(format!("{e:?}")),
-            })?,
-        )
-    } else {
-        None
-    };
-    let sig = if let Some(sig_text) = signature {
-        Some(minisign_verify::Signature::decode(sig_text).map_err(|e| {
+            })?;
+        let signature = minisign_verify::Signature::decode(sig_text).map_err(|e| {
             DownloadError::SignatureInvalid {
                 path: dest.to_path_buf(),
                 source: SignatureError::BadSignature(format!("{e:?}")),
             }
-        })?)
-    } else {
-        None
-    };
-    let mut verifier = if let (Some(pk), Some(s)) = (&public_key, &sig) {
-        Some(
-            pk.verify_stream(s)
-                .map_err(|e| DownloadError::SignatureInvalid {
+        })?;
+        Ok(Self {
+            public_key,
+            signature,
+        })
+    }
+
+    fn stream_verifier(
+        &self,
+        dest: &Path,
+    ) -> Result<minisign_verify::StreamVerifier<'_>, DownloadError> {
+        self.public_key.verify_stream(&self.signature).map_err(|e| {
+            DownloadError::SignatureInvalid {
+                path: dest.to_path_buf(),
+                source: SignatureError::VerificationFailed(format!("{e:?}")),
+            }
+        })
+    }
+}
+
+/// Streaming integrity state fed chunk-by-chunk while the download is
+/// written: a SHA-256 hasher plus, when the manifest carries a signature, a
+/// Minisign stream verifier.
+struct DownloadVerifier<'a> {
+    hasher: Sha256,
+    minisign: Option<minisign_verify::StreamVerifier<'a>>,
+}
+
+impl<'a> DownloadVerifier<'a> {
+    fn new(dest: &Path, prepared: Option<&'a PreparedSignature>) -> Result<Self, DownloadError> {
+        let minisign = match prepared {
+            Some(p) => Some(p.stream_verifier(dest)?),
+            None => None,
+        };
+        Ok(Self {
+            hasher: Sha256::new(),
+            minisign,
+        })
+    }
+
+    fn update(&mut self, chunk: &[u8]) {
+        self.hasher.update(chunk);
+        if let Some(v) = self.minisign.as_mut() {
+            v.update(chunk);
+        }
+    }
+
+    /// Compare the streamed SHA-256 against `expected_sha256`, then finalize
+    /// the Minisign verifier — in that order. Deletes `tmp` on failure.
+    fn finish(self, tmp: &Path, dest: &Path, expected_sha256: &str) -> Result<(), DownloadError> {
+        let actual = format!("{:x}", self.hasher.finalize());
+        if actual != expected_sha256 {
+            let _ = fs::remove_file(tmp);
+            return Err(DownloadError::ChecksumMismatch {
+                path: dest.to_path_buf(),
+                expected: expected_sha256.to_owned(),
+                actual,
+            });
+        }
+        if let Some(mut v) = self.minisign {
+            v.finalize().map_err(|e| {
+                let _ = fs::remove_file(tmp);
+                DownloadError::SignatureInvalid {
                     path: dest.to_path_buf(),
                     source: SignatureError::VerificationFailed(format!("{e:?}")),
-                })?,
-        )
-    } else {
-        None
-    };
+                }
+            })?;
+        }
+        Ok(())
+    }
+}
 
+/// Stream `url` into `tmp`, feeding each chunk to `verifier` and enforcing
+/// the `max_bytes` cap (see [`write_capped`]).
+fn fetch_into_partial(
+    url: &str,
+    tmp: &Path,
+    max_bytes: u64,
+    verifier: &mut DownloadVerifier<'_>,
+) -> Result<(), DownloadError> {
     let resp = ureq::get(url).call().map_err(|e| DownloadError::Network {
         url: url.to_owned(),
         source: Box::new(e),
     })?;
     let reader = BufReader::new(resp.into_body().into_reader());
-    let mut file = fs::File::create(&tmp).map_err(|e| DownloadError::Io {
-        path: tmp.clone(),
+    let mut file = fs::File::create(tmp).map_err(|e| DownloadError::Io {
+        path: tmp.to_path_buf(),
         source: e,
     })?;
-    let mut hasher = Sha256::new();
-
-    {
-        // Hash + (optionally) signature-verify each chunk as it streams; the
-        // helper enforces the byte cap and deletes the .partial on overflow.
-        let mut on_chunk = |chunk: &[u8]| {
-            hasher.update(chunk);
-            if let Some(v) = verifier.as_mut() {
-                v.update(chunk);
-            }
-        };
-        write_capped(reader, &mut file, &tmp, max_bytes, &mut on_chunk)?;
-    }
-
+    write_capped(reader, &mut file, tmp, max_bytes, &mut |chunk| {
+        verifier.update(chunk);
+    })?;
     file.flush().map_err(|e| DownloadError::Io {
-        path: tmp.clone(),
+        path: tmp.to_path_buf(),
         source: e,
     })?;
-    drop(file);
-
-    let actual = format!("{:x}", hasher.finalize());
-    if actual != expected_sha256 {
-        let _ = fs::remove_file(&tmp);
-        return Err(DownloadError::ChecksumMismatch {
-            path: dest.to_path_buf(),
-            expected: expected_sha256.to_owned(),
-            actual,
-        });
-    }
-
-    if let Some(mut v) = verifier {
-        v.finalize().map_err(|e| {
-            let _ = fs::remove_file(&tmp);
-            DownloadError::SignatureInvalid {
-                path: dest.to_path_buf(),
-                source: SignatureError::VerificationFailed(format!("{e:?}")),
-            }
-        })?;
-    }
-
-    fs::rename(&tmp, dest).map_err(|e| DownloadError::Io {
-        path: tmp.clone(),
-        source: e,
-    })?;
-    Ok(true)
+    Ok(())
 }
 
 /// Stream `reader` into `file` in 64 KiB chunks, calling `on_chunk` for each

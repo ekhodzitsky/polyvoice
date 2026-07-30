@@ -45,7 +45,9 @@ surface:
     kind: enum
     visibility: public
     contract: >
-      Error type for streaming pipeline failures.
+      Error type for streaming pipeline failures. `InvalidParams` reports
+      invalid window geometry rejected at construction (non-positive or
+      non-finite durations, hop larger than window, sub-sample windows).
     proof:
       kind: unit-test
       target: src/streaming::mod::tests
@@ -64,6 +66,7 @@ surface:
     visibility: public
     contract: >
       Bounded arrival-order speaker cache; len never exceeds cap.
+      `cap == 0` is clamped to 1 at construction.
     proof:
       kind: unit-test
       target: src/streaming::cache::tests
@@ -79,9 +82,9 @@ dependencies:
     - module: window
       scope: utility
       reason: WindowBuffer for audio framing.
-    - module: embedding
+    - module: embedder
       scope: trait
-      reason: EmbeddingExtractor for window embeddings (legacy path).
+      reason: Embedder for window embeddings.
     - module: utils
       scope: utility
       reason: cosine similarity and L2 normalize for cache matching.

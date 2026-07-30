@@ -36,6 +36,9 @@ surface:
     visibility: public
     contract: >
       C-visible constructor for Pipeline wrapper. Caller owns returned handle.
+      models_cache_dir is validated before use: paths containing parent-dir
+      ("..") components are rejected with InvalidArg; absolute and relative
+      paths are both accepted.
     proof:
       kind: integration-test
       target: tests/ffi_smoke_test.rs
@@ -153,4 +156,4 @@ agent_policy:
 
 # src/ffi
 
-C FFI bindings for polyvoice (ABI v2).
+C FFI bindings for polyvoice (ABI v3).

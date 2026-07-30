@@ -87,19 +87,16 @@ pub struct ArrivalOrderSpeakerCache {
 impl ArrivalOrderSpeakerCache {
     /// Create an empty cache.
     ///
-    /// # Panics
-    ///
-    /// Panics if `cap == 0`.
-    #[allow(clippy::panic)] // Intentional precondition panic.
+    /// `cap` is clamped to at least 1 — a zero-capacity cache could never hold
+    /// a speaker, so it is treated as a request for the smallest usable cache
+    /// (same policy as the `min_hits_to_stable` clamp below).
     pub fn new(
         cap: usize,
         match_threshold: f32,
         min_hits_to_stable: usize,
         prefer_current_margin: f32,
     ) -> Self {
-        if cap == 0 {
-            panic!("ArrivalOrderSpeakerCache::new: cap must be > 0");
-        }
+        let cap = cap.max(1);
         Self {
             entries: Vec::with_capacity(cap.min(16)),
             cap,
@@ -199,25 +196,11 @@ impl ArrivalOrderSpeakerCache {
             };
         }
 
-        // No adequate match and room remains → new arrival-order speaker.
-        if self.entries.len() < self.cap {
-            let result = self.create_entry(embedding, now);
-            self.current_speaker = Some(result.speaker);
-            return result;
-        }
-
-        // Cap full, no match (best was None — empty cache can't reach here with cap>0
-        // empty handled by create; if empty and cap>0 we create above). Force-merge
-        // into closest if any; else create (unreachable when cap>0 and empty).
-        if let Some((id, sim)) = best {
-            let result = self.update_entry(id, embedding, sim, now);
-            self.current_speaker = Some(result.speaker);
-            return AssignResult {
-                overflow_merged: true,
-                ..result
-            };
-        }
-
+        // No adequate match → new arrival-order speaker. Room always remains
+        // here: falling through the branch above means either no candidate
+        // (empty cache) or a below-threshold match with the cache not yet
+        // full — and cap >= 1 by construction.
+        debug_assert!(self.entries.len() < self.cap);
         let result = self.create_entry(embedding, now);
         self.current_speaker = Some(result.speaker);
         result
@@ -280,26 +263,17 @@ impl ArrivalOrderSpeakerCache {
         now: u64,
     ) -> AssignResult {
         let min_hits = self.min_hits_to_stable;
-        let Some(idx) = self.entries.iter().position(|e| e.id == id) else {
-            // Caller invariant: id comes from this cache's candidate list.
-            // If the entry vanished (e.g. concurrent eviction), merge into closest
-            // or create only when under cap — never grow past cap.
-            if let Some((fallback_id, sim2)) = self
-                .entries
-                .iter()
-                .map(|e| (e.id, cosine_similarity(embedding, &e.centroid)))
-                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-            {
-                return self.update_entry(fallback_id, embedding, sim2, now);
-            }
-            if self.entries.len() < self.cap {
-                return self.create_entry(embedding, now);
-            }
+        // Caller invariant: `id` comes from this cache's candidate list, built
+        // from `self.entries` earlier in the same `&mut self` call, so the
+        // entry always exists — concurrent eviction is impossible.
+        let idx = self.entries.iter().position(|e| e.id == id);
+        debug_assert!(idx.is_some());
+        let Some(idx) = idx else {
             return AssignResult {
                 speaker: id,
                 confidence: sim,
                 stable: false,
-                overflow_merged: true,
+                overflow_merged: false,
             };
         };
         let entry = &mut self.entries[idx];
@@ -441,8 +415,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "cap must be > 0")]
-    fn rejects_zero_cap() {
-        let _ = ArrivalOrderSpeakerCache::new(0, 0.5, 2, 0.0);
+    fn zero_cap_is_clamped_to_one() {
+        let mut cache = ArrivalOrderSpeakerCache::new(0, 0.5, 2, 0.0);
+        assert_eq!(cache.cap(), 1);
+        cache.assign(&unit(4, 0));
+        assert_eq!(cache.len(), 1);
+        // A second distinct speaker cannot grow the cache: overflow force-merge.
+        let r = cache.assign(&unit(4, 1));
+        assert_eq!(cache.len(), 1);
+        assert!(r.overflow_merged);
     }
 }

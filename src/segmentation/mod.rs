@@ -1,6 +1,6 @@
 //! Speaker segmentation: powerset-classifier + sliding-window aggregator.
 //!
-//! Added in v0.6 (M1).
+//! Added in v0.6.
 
 mod aggregator;
 mod binarize;
@@ -22,7 +22,7 @@ use crate::types::{Confidence, TimeRange};
 ///
 /// "Local" means consistent within a single `segment()` call's output (same person ↔
 /// same `local_speaker_idx` across all frames of the file). Cross-file global IDs
-/// are assigned later by the clusterer (see M3).
+/// are assigned later by the clusterer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawSegment {
     /// The temporal span of this segment in seconds, audio-relative.
@@ -87,6 +87,9 @@ pub enum SegmentationError {
         path: std::path::PathBuf,
         detail: String,
     },
+
+    #[error("invalid window geometry: {detail}")]
+    InvalidGeometry { detail: String },
 }
 
 #[allow(clippy::unwrap_used)]

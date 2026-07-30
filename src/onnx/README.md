@@ -2,8 +2,8 @@
 
 ## Purpose
 
-ONNX model validation, the pluggable `InferenceRuntime` trait, the default
-`OrtSession` backend, and the legacy `OnnxEmbeddingExtractor`.
+ONNX model validation, the pluggable `InferenceRuntime` trait, and the
+default `OrtSession` backend.
 
 ## Surfaces
 
@@ -12,15 +12,14 @@ ONNX model validation, the pluggable `InferenceRuntime` trait, the default
 - `InferenceTensor` / `NamedTensor` / `InferenceError` — runtime-agnostic I/O
 - `validate_onnx_header(path)`
 - `OnnxValidationError`
+- `OnnxError` — typed session-construction / metadata-read failures
+  (`Validation` / `SessionBuild` / `Metadata`)
 - `ExecutionProvider` — **ort-specific** EP selector (re-exported by `pipeline_v2::config`)
 - `build_session_with_ep(path, ep, intra_threads)` — the ONE session constructor
   (validate-before-build, EP registration, warn + CPU fallback)
-- `OnnxEmbeddingExtractor` — legacy wrapper
 
 ## Dependencies
 
-- `embedding` — EmbeddingExtractor trait
-- `types` — DiarizationConfig
 - `ort` — confined to `ort_session.rs`
 
 ## Invariants
@@ -38,5 +37,4 @@ rg 'ort::' src --type rust   # production imports only in ort_session.rs
 
 ## Notes
 
-- OnnxEmbeddingExtractor is legacy; prefer adapters in embedder.rs.
 - A pure-Rust backend can implement `InferenceRuntime` without touching stages.

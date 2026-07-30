@@ -5,7 +5,194 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.13.0] - 2026-07-30
+
+Pipeline-v2 consolidation release. The crate-root `Pipeline` is now the v2
+pipeline, the v1 pipeline is explicitly `LegacyPipeline`, and the experimental
+surfaces from the v2 bring-up (the hybrid pipeline, the legacy `embedding`
+module, the ECAPA-named module, dead config fields, implicit env toggles) are
+gone. Most entries below are breaking API changes; on 0.x this lands as a
+minor bump.
+
+### Changed
+
+- **Crate-root `Pipeline` is pipeline v2.** `polyvoice::{Pipeline,
+  PipelineConfig, PipelineError}` now re-export the `pipeline_v2` types under
+  the same feature gate (`onnx` + `download` + `segmentation` + `embedder` +
+  `clusterer` + `resegmentation`); with default features there is no
+  crate-root `Pipeline` at all. The v1 pipeline remains as
+  `pipeline::LegacyPipeline` / `pipeline::LegacyPipelineError` (always
+  available, ort-free); see Deprecated for the compatibility aliases.
+- **`ecapa` module renamed to `fbank_onnx`** (no compatibility alias): the
+  module hosts the log-mel + ONNX embedding engine behind
+  `FbankOnnxExtractor`, not an ECAPA-specific API. Shipped model *files*
+  (`ecapa_tdnn*.onnx`) keep their names.
+- **`KMeansClusterer` renamed to `KmeansClusterer`** per Rust naming
+  conventions; the old spelling remains as a deprecated alias in `clusterer`
+  and at the crate root.
+- **`EmbedderPool` is crate-private.** Session pooling is an internal detail
+  of the ONNX extractors (`FbankOnnxExtractor::new(..., pool_size, ...)`).
+- **`PipelineConfig` pruned and made explicit.** Removed the dead fields
+  `seg_window_secs`, `seg_hop_secs`, and `resegment_min_overlap_secs`; added
+  the `disable_seg_overlap` / `majority_local_map` ablation toggles, which
+  replace the `POLYVOICE_V2_DISABLE_SEG_OVERLAP` /
+  `POLYVOICE_V2_MAJORITY_LOCAL_MAP` env vars (no longer read, see below).
+- **No implicit env configuration.** The library never reads
+  `POLYVOICE_V2_*` / `POLYVOICE_VBX_*` on its own: VBx tuning is explicit via
+  `VbxClustererConfig` (opt-in `VbxClustererConfig::from_env()`) passed to
+  `VbxClusterer::from_dir_with_config`; `VbxClusterer::from_env` is removed.
+  `POLYVOICE_VBX_PLDA_DIR` is read at exactly one point — the pipeline
+  builder's PLDA resolution (explicit dir → env var → registry download).
+- **Typed error surface.** `LegacyPipelineError::Clustering` carries a typed
+  `ClustererError` (was `detail: String`; gated on the `clusterer` feature).
+  `SortformerError` sources are typed (`realfft::FftError`,
+  `onnx::InferenceError`, `onnx::OnnxError`). `anyhow` / `Result<_, String>`
+  are gone from public constructors: `SileroVad::new` / `with_ep` return
+  `SileroVadError`, the ONNX runtime helpers return `OnnxError` (with
+  `OnnxValidationError` for header validation), and
+  `FbankOnnxExtractor::new` returns `FbankExtractorError`. `SignatureError`
+  gained an `Io { path, source }` variant; the blanket
+  `From<SignatureError> for DownloadError` is removed —
+  `DownloadError::SignatureInvalid` now carries the failing path.
+- **Error-enum churn (breaking for exhaustive matches).** Removed variants:
+  `pipeline_v2::PipelineError::ModelLoad` (superseded by the builder's
+  `ConfigError::Load`), `LegacyPipelineError::NoSpeech`, and
+  `SortformerError::UnsupportedSampleRate`. New variants:
+  `StreamingError::{InvalidParams, VadFrameMismatch}`,
+  `SegmentationError::InvalidGeometry`, `FbankError::InvalidConfig`,
+  `ClustererError::Plda`, `EmbedderError::SessionBuild`, and
+  `pipeline_v2::ConfigError::Load`.
+- **Cargo features.** Removed `profile-mobile` / `profile-balanced` /
+  `profile-all`. New internal meta-feature `pipeline-full` bundles the full
+  ONNX diarization stack (half-wired combinations are rejected by a
+  `compile_error!` gate in `pipeline_v2`); the consumer-facing front doors
+  `ffi` / `cli` / `mcp` build on it, and `ffi` now also enables `vbx`,
+  matching the `cli` / `mcp` feature sets.
+
+### Removed
+
+- **`pipeline_v2::hybrid::HybridPipeline`** together with the `hybrid`
+  module, the `hybrid_benchmark` example, and the hybrid test suite. Use
+  `Pipeline` (with `embed_window_secs` for dense embeddings).
+- **The `embedding` module** (`EmbeddingExtractor` / `EmbeddingError`) and
+  `onnx::OnnxEmbeddingExtractor`. `Embedder` is the only embedder trait;
+  `DummyExtractor` implements it directly.
+- **`spectral::spectral_cluster`** (the `NmeScClusterer` eigengap path
+  remains), **`ahc::agglomerative_cluster_auto`**
+  (`agglomerative_cluster_auto_max_clusters` remains),
+  **`kmeans::KmeansResult`**, and the **`Seconds`** type.
+- **Crate-root re-exports of `overlap::detect_overlaps` and
+  `cluster::SpeakerCluster`** (the `cluster` module itself stays public and
+  deprecated), and the free function **`labeling::midpoint`**
+  (`TimeRange::midpoint` remains).
+- **`EarshotVad::pending_samples`** — partial chunks are rejected, nothing is
+  buffered (see Fixed).
+
+### Deprecated
+
+- **`pipeline::Pipeline` / `pipeline::PipelineError`** are deprecated aliases
+  for `pipeline::LegacyPipeline` / `pipeline::LegacyPipelineError`; new code
+  should name the legacy types explicitly or use the crate-root (v2)
+  `Pipeline`.
+- **`KMeansClusterer`** is a deprecated alias for `KmeansClusterer`.
+
+### Added
+
+- **`DiarizationConfig::validate`** and a typed **`ConfigError`**, both
+  re-exported at the crate root: window geometry, threshold range,
+  speech-filter durations, and `max_duration_secs` are checked up front
+  instead of panicking deeper in the pipeline.
+- **Fallible constructors** replacing panics on invalid geometry:
+  `WindowIter::try_new` / `WindowBuffer::try_new` (`WindowError`),
+  `FbankExtractor::try_new` (`FbankError`), and `EnergyVad::try_new`
+  (`VadError`).
+- **`FromStr` for `LatencyPreset` and `AdapterStage`** with typed errors
+  (`LatencyPresetParseError`, `AdapterError::InvalidStage`).
+- **`VbxClustererConfig` on the crate-root surface** (with the opt-in
+  `from_env`) and **`VbxClusterer::from_dir_with_config`** for explicit VBx
+  tuning; **`DEFAULT_AHC_THRESHOLD`** re-exported at the root.
+- **`cli_common` module** (features `cli` / `mcp`): shared flag→config
+  translation, pipeline construction, and bench-dataset walking for the
+  CLI-family binaries, including the validated `max_speakers_u8` (1..=255)
+  and `parse_clusterer_kind` helpers.
+
+### Fixed
+
+- **`polyvoice-transcribe` (polyvoice-asr) compiles again** and is now
+  covered by CI: the asr-companion job clippy-gates it with
+  `--features cli`, matching the binary's `required-features`.
+- **CLI `--speakers` / `--max-speakers` reach the v2 pipeline** (previously
+  accepted but never applied on the default path) and are validated — values
+  outside 1..=255 are an error.
+- **`polyvoice-bench --skip-overlap` now affects scoring**: the headline DER
+  (per-file and in all aggregates) is computed over single-speaker reference
+  regions only (md-eval skip-overlap semantics), the combination with
+  `--uem` is rejected, and the report records `skip_overlap`.
+- **MCP error mapping.** Model-load / inference failures return JSON-RPC
+  `internal_error` (was `invalid_params`); `max_speakers` is validated and
+  out-of-range values are rejected as invalid arguments.
+- **VAD partial-chunk contract unified.** The streaming `process` contract of
+  `EnergyVad`, `SileroVad`, and `EarshotVad` rejects input that is not a
+  whole number of frames (`VadError::InvalidChunkSize`) — no hidden
+  buffering. `StreamingPipeline` rejects a VAD that returns the wrong number
+  of probabilities (`StreamingError::VadFrameMismatch`) on the first frame
+  instead of silently shifting every derived timestamp.
+- **Panics from user-supplied configs are typed errors now** (the `try_new`
+  constructors, `DiarizationConfig::validate`, and
+  `StreamingError::InvalidParams` above); the streaming
+  `ArrivalOrderSpeakerCache` clamps a zero capacity to 1.
+- **v1 pipeline: inconsistent embedding dimensions fail loudly** as a
+  clustering error instead of silently degrading into one cluster per
+  embedding.
+- **Segmentation binarization no longer falls through to `Silence`**: speaker
+  sets the powerset scheme cannot express yield `None` (uncovered) instead of
+  a silent relabel.
+- **FFI accepts absolute `models_cache_dir` paths** (only `..` traversal is
+  rejected), and the builder's `ConfigError::Load` maps to
+  `PolyvoiceStatus::ModelLoad`.
+
+### Performance
+
+- **Auto-threshold AHC builds the pairwise cosine-similarity matrix once** —
+  the threshold estimate and the clustering pass share it (was computed
+  twice).
+- **Segmentation softmax computed once per window**: the decoder carries the
+  full probability vector in `FrameLabel`, so the aggregator averages and
+  remaps probabilities without recomputing the softmax from logits.
+- **v2 confidence transfer uses binary search** over segment midpoints when
+  mapping per-window confidence onto turns.
+- **Sortformer streaming hot path**: no per-chunk clones of the speaker
+  cache / FIFO state and no per-frame allocations in median filtering.
+- **`polyvoice-measure` builds ONNX sessions once** and reuses them across
+  files (sessions are file-independent).
+
+### Internal
+
+- **`tests/common` shared integration-test layer**: RTTM loading, data
+  gates, the typed `der_baseline.json` view, and the DER gates live in one
+  place. `POLYVOICE_REQUIRE_DATA=1` turns missing-data skips into hard
+  failures, so a partial cache can never green-light the release gate.
+- **Test-suite cleanup**: the v2 bring-up debug/hybrid integration tests and
+  the duplicate `der_ami_baseline_test` are deleted; `m5_manifest_smoke_test`
+  is renamed `manifest_smoke_test`; `tests/ffi_memory.py` moved to
+  `scripts/ffi_memory.py`, rewritten against the C ABI v3.
+- **Perf gate pinned down**: the perf regression test runs on a fixed 5-file
+  VoxConverse-test corpus, and the RTF budget is env-tunable via
+  `POLYVOICE_PERF_MAX_RTF`. `#[ignore]` reasons are standardized to a small
+  vocabulary (`requires downloaded models`, `requires downloaded models and
+  dataset`, `requires network`).
+- **CI**: a new `standalone-lockfiles` gate proves the python / fuzz / sherpa
+  lockfiles cannot drift from their manifests, the asr-companion job runs
+  clippy with `--features cli`, and the `e2e-smoke` job (with its test) is
+  removed.
+- **`scripts/bump-version.sh` regenerates every lockfile** that pins the path
+  dependency on the core crate.
+- **MSRV and lints aligned**: `rust-version = "1.88"` is declared across the
+  workspace (the python crate gained the declaration; polyvoice-asr-sherpa
+  aligned from 1.85), and the workspace clippy lint set
+  (`unwrap_used = "deny"`) now covers the python and fuzz crates.
+- **docs.rs builds the API docs with `vbx`, `attribution`, and `sortformer`
+  enabled**, so the production surface is documented.
 
 ## [0.12.0] - 2026-07-27
 

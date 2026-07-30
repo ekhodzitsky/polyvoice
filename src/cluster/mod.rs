@@ -1,7 +1,7 @@
-//! Online incremental speaker centroids ([`SpeakerCluster`]).
+//! Online incremental speaker centroids (`SpeakerCluster`).
 //!
 //! **Not used by production paths:** offline clustering is
-//! [`crate::clusterer::Clusterer`]; streaming uses
+//! `crate::clusterer::Clusterer` (feature `clusterer`); streaming uses
 //! [`crate::streaming::ArrivalOrderSpeakerCache`]. Prefer those for new
 //! code. This module remains available for experiments and the fuzz target.
 
@@ -28,7 +28,8 @@ struct Centroid {
 /// Otherwise creates a new speaker identity.
 ///
 /// Prefer [`crate::streaming::StreamingPipeline`] (AOSC cache) for online
-/// diarization and [`crate::clusterer::Clusterer`] for offline batch clustering.
+/// diarization and `crate::clusterer::Clusterer` (feature `clusterer`) for
+/// offline batch clustering.
 #[deprecated(
     since = "0.12.0",
     note = "not on the production offline or streaming path; use clusterer::Clusterer (offline) or streaming::StreamingPipeline / ArrivalOrderSpeakerCache (online)"
@@ -45,7 +46,8 @@ impl SpeakerCluster {
     /// Create a new empty speaker clusterer.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, ClusterConfig};
+    /// use polyvoice::cluster::SpeakerCluster;
+    /// use polyvoice::ClusterConfig;
     /// let cluster = SpeakerCluster::new(ClusterConfig::default());
     /// assert_eq!(cluster.num_speakers(), 0);
     /// ```
@@ -74,7 +76,8 @@ impl SpeakerCluster {
     /// been reached, a new speaker is created.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, ClusterConfig};
+    /// use polyvoice::cluster::SpeakerCluster;
+    /// use polyvoice::ClusterConfig;
     /// let mut cluster = SpeakerCluster::new(ClusterConfig::default());
     /// let mut emb = vec![0.0f32; 256];
     /// emb[0] = 1.0;
@@ -124,7 +127,8 @@ impl SpeakerCluster {
     /// Return the current number of speaker centroids.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, ClusterConfig};
+    /// use polyvoice::cluster::SpeakerCluster;
+    /// use polyvoice::ClusterConfig;
     /// let cluster = SpeakerCluster::new(ClusterConfig::default());
     /// assert_eq!(cluster.num_speakers(), 0);
     /// ```
@@ -140,7 +144,8 @@ impl SpeakerCluster {
     /// Each tuple contains `(SpeakerId, centroid_vector, average_confidence)`.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, ClusterConfig};
+    /// use polyvoice::cluster::SpeakerCluster;
+    /// use polyvoice::ClusterConfig;
     /// let mut cluster = SpeakerCluster::new(ClusterConfig::default());
     /// let mut emb = vec![0.0f32; 128];
     /// emb[0] = 1.0;
@@ -170,7 +175,8 @@ impl SpeakerCluster {
     /// if the indices are invalid or equal.
     ///
     /// ```rust
-    /// use polyvoice::{SpeakerCluster, ClusterConfig, SpeakerId};
+    /// use polyvoice::cluster::SpeakerCluster;
+    /// use polyvoice::{ClusterConfig, SpeakerId};
     /// let mut cluster = SpeakerCluster::new(ClusterConfig::default());
     /// let mut e0 = vec![0.0f32; 128]; e0[0] = 1.0;
     /// let mut e1 = vec![0.0f32; 128]; e1[1] = 1.0;
