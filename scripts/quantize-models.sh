@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Orchestrate INT8 static quantization of the three v1.0 models for M5.
+# Orchestrate INT8 static quantization of the three v1.0 models.
 #
 # Reads FP32 models from models/, calibrates with VoxConverse-dev random
 # 500-sample (seed 42), writes models/int8/<name>_int8.onnx for each.

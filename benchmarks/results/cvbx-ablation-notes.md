@@ -3,6 +3,12 @@
 Date: 2026-07-24  
 Branch work: clustering-layer port of arXiv:2510.19572 ideas (no DiariZen weights).
 
+> **Note (2026-07-30):** the `POLYVOICE_VBX_*` / `POLYVOICE_V2_*` environment
+> toggles referenced below have since been removed from the library's implicit
+> paths. Tuning now lives in `VbxClustererConfig` (opt-in `from_env()`) and the
+> `PipelineConfig` fields `disable_seg_overlap` / `majority_local_map`; the
+> measurements and analysis remain as recorded at the time.
+
 ## Environment
 
 - Full VoxConverse-test / AMI DER re-measurement **not run** in this worktree:

@@ -2,7 +2,7 @@
 
 ## Core Terms
 
-**Invariant** — A condition that is always true at a given point in the code. Example: `SpeakerCluster.centroids.len() <= config.max_speakers`.
+**Invariant** — A condition that is always true at a given point in the code. Example: `TimeRange.start <= TimeRange.end`.
 
 **Precondition** — A requirement that must hold before a function is called. Example: `!samples.is_empty()` for `extract()`.
 

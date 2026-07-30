@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Download VoxConverse dev set for M5 INT8 calibration + DER hold-out validation.
+# Download VoxConverse dev set for INT8 model calibration + DER hold-out validation.
 #
 # Mirrors the shape of `download-voxconverse-test.sh`:
 #   1. RTTM ground truth from github.com/joonson/voxconverse (dev/ folder)
