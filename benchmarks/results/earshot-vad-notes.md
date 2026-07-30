@@ -1,5 +1,14 @@
 # earshot VAD backend — notes & parity gate
 
+> **Historical note (2026-07-30):** these measurement notes describe the
+> original adapter contract, where `EarshotVad` buffered arbitrary chunk
+> sizes into 256-sample windows. The adapter now uses a reject contract:
+> a partial (non-multiple-of-256) chunk fails with
+> `VadError::InvalidChunkSize` and no hidden buffering occurs. The
+> measurements and verdict below were taken under the old contract and are
+> kept as recorded; re-run the parity gate before citing them against the
+> current adapter.
+
 **Date:** 2026-07-24  
 **Branch:** `feat/earshot-vad`  
 **earshot:** `1.2.x` (pykeio, MIT OR Apache-2.0)  

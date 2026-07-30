@@ -1,4 +1,4 @@
-"""M5 — INT8 static quantization for polyvoice ONNX models.
+"""INT8 static quantization for polyvoice ONNX models.
 
 Usage:
     python quantize_models.py \

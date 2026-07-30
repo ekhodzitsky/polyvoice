@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Download a VoxCeleb1 subset for M5 INT8 EER validation.
+# Download a VoxCeleb1 subset for INT8 EER validation.
 #
 # Strategy:
 #   1. Trial pairs file (canonical "veri_test2.txt", small) — always download.
@@ -23,7 +23,7 @@ mkdir -p "$WAV_DIR" "$LIST_DIR"
 TRIAL_URL="https://mm.kaist.ac.kr/datasets/voxceleb/meta/veri_test2.txt"
 TEST_AUDIO_URL="https://mm.kaist.ac.kr/datasets/voxceleb/data/vox1_test_wav.zip"
 
-echo "=== VoxCeleb1 Subset Download (M5 EER validation) ==="
+echo "=== VoxCeleb1 Subset Download (INT8 EER validation) ==="
 echo "Output: ${DATA_DIR}"
 echo ""
 

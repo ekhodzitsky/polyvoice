@@ -7,8 +7,8 @@
 **Speaker diarization for Python — who spoke when.**
 
 Rust-powered, ONNX-based speaker diarization that runs on CPU, fits in 30 MB,
-and requires zero Python runtime overhead. Pipeline v2 with K-means auto-k
-clustering and overlap detection.
+and requires zero Python runtime overhead. Pipeline v2 with VBx clustering
+and overlap detection.
 
 ## Install
 
@@ -35,8 +35,11 @@ for turn in result["turns"]:
 
 ## API
 
-- `polyvoice.Pipeline.balanced(models_cache=None)` — balanced accuracy / speed.
-- `polyvoice.Pipeline.mobile(models_cache=None)` — smaller, faster model.
+- `polyvoice.Pipeline.balanced(models_cache=None, clusterer=None, vbx_plda_dir=None)` — balanced accuracy / speed.
+- `polyvoice.Pipeline.mobile(models_cache=None, clusterer=None, vbx_plda_dir=None)` — smaller, faster model.
+  `clusterer` is `"vbx"` (default, matching the CLI) or `"ahc"`. VBx resolves
+  its PLDA params via `vbx_plda_dir`, then the `POLYVOICE_VBX_PLDA_DIR` env
+  var, then a registry download.
 - `pipeline.run(samples, sample_rate)` → `dict` with `num_speakers` and `turns`.
 - `pipeline.run_result(samples, sample_rate)` → typed `DiarizationResult` with
   `.to_json()` / `.to_rttm()` / `.to_srt()` / `.to_vtt()` / `.to_txt()` projections.
