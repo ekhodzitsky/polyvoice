@@ -7,7 +7,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use polyvoice::der::{
-    DerResult, compute_der, compute_der_decomposition, compute_der_with_uem, parse_uem,
+    DerResult, compute_der, compute_der_decomposition, compute_der_single_speaker_regions,
+    compute_der_with_uem, parse_uem,
 };
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::Pipeline;
@@ -35,6 +36,9 @@ struct Args {
     output: Option<PathBuf>,
     #[arg(long, default_value = "0.25")]
     collar: f64,
+    /// Score DER over single-speaker reference regions only (md-eval
+    /// --skip-overlap semantics): overlapped speech frames are excluded from
+    /// scoring. Cannot be combined with --uem.
     #[arg(long, default_value = "false")]
     skip_overlap: bool,
     #[arg(long)]
@@ -154,6 +158,9 @@ struct BenchReport {
     der_collar_micro: f64,
     der_no_collar_micro: f64,
     collar_secs: f64,
+    /// Headline DER was scored over single-speaker reference regions only
+    /// (md-eval --skip-overlap semantics).
+    skip_overlap: bool,
     averaging_policy: &'static str,
     /// Debug-formatted resolved execution provider (e.g. "CoreMl", "Cpu") —
     /// labels every report for per-backend RTFx comparison.
@@ -308,6 +315,12 @@ fn parse_execution_provider(s: &str) -> Result<polyvoice::onnx::ExecutionProvide
 
 fn main() -> Result<()> {
     let args = Args::parse();
+    if args.skip_overlap && args.uem.is_some() {
+        anyhow::bail!("--skip-overlap cannot be combined with --uem");
+    }
+    if args.skip_overlap {
+        eprintln!("skip-overlap: scoring DER over single-speaker reference regions only");
+    }
     let profile = parse_profile(&args.profile)?;
     let registry = ModelRegistry::default().context("registry")?;
     let models = registry
@@ -502,15 +515,22 @@ fn main() -> Result<()> {
                 .or_else(|| stem.split('.').next().and_then(|s| m.get(s)))
                 .map(|v| v.as_slice())
         });
-        let (der, der_no_collar) = match scored {
-            Some(s) => (
-                compute_der_with_uem(&ref_turns, &result.turns, args.collar, s),
-                compute_der_with_uem(&ref_turns, &result.turns, 0.0, s),
-            ),
-            None => (
-                compute_der(&ref_turns, &result.turns, args.collar),
-                compute_der(&ref_turns, &result.turns, 0.0),
-            ),
+        let (der, der_no_collar) = if args.skip_overlap {
+            (
+                compute_der_single_speaker_regions(&ref_turns, &result.turns, args.collar),
+                compute_der_single_speaker_regions(&ref_turns, &result.turns, 0.0),
+            )
+        } else {
+            match scored {
+                Some(s) => (
+                    compute_der_with_uem(&ref_turns, &result.turns, args.collar, s),
+                    compute_der_with_uem(&ref_turns, &result.turns, 0.0, s),
+                ),
+                None => (
+                    compute_der(&ref_turns, &result.turns, args.collar),
+                    compute_der(&ref_turns, &result.turns, 0.0),
+                ),
+            }
         };
         let decomp = compute_der_decomposition(&ref_turns, &result.turns, args.collar);
 
@@ -591,6 +611,9 @@ fn main() -> Result<()> {
         "\n=== Aggregate DER over {} files (collar={:.2}s) ===",
         totals.count, args.collar
     );
+    if args.skip_overlap {
+        println!("  skip-overlap  : ON (single-speaker reference regions only)");
+    }
     println!("  der_collar    : macro={der_collar_macro:.2}%  micro={der_collar_micro:.2}%");
     println!("  der_no_collar : macro={der_no_collar_macro:.2}%  micro={der_no_collar_micro:.2}%");
 
@@ -610,6 +633,7 @@ fn main() -> Result<()> {
         der_collar_micro,
         der_no_collar_micro,
         collar_secs: args.collar,
+        skip_overlap: args.skip_overlap,
         averaging_policy: "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
         resolved_execution_provider: format!("{resolved_ep:?}"),
         host_cpus: std::thread::available_parallelism()
