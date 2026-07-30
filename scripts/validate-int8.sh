@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# Validate the three M5 INT8 artifacts against §9.4 acceptance gates.
+# Validate the three INT8 artifacts against §9.4 acceptance gates.
 # Exit non-zero on first failure; print per-model report path on success.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -69,7 +69,7 @@ validate_one "embedder" \
     --embed-input-shape "1,300,80"
 
 {
-    echo "# M5 INT8 validation aggregate"
+    echo "# INT8 validation aggregate"
     echo ""
     echo "Date: $DATE"
     echo ""

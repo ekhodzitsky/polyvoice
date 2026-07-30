@@ -1,4 +1,4 @@
-"""M5 — validate INT8 artifacts against acceptance gates from spec §9.4.
+"""Validate INT8 artifacts against acceptance gates from spec §9.4.
 
 Runs three checks per model:
 

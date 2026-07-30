@@ -1,5 +1,5 @@
-# Quantization + validation tooling for M5.
-# Pinned versions match what's installed in the M5 plan reference environment
+# Quantization + validation tooling for the INT8 model pipeline.
+# Pinned versions match the reference environment
 # (Python 3.11+, macOS aarch64). Bump as needed when re-running.
 
 onnxruntime>=1.20.0,<2.0

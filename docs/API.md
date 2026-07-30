@@ -10,9 +10,8 @@ The crate exposes two intentional pipeline layers (see
 
 | Layer | Entry point | Status | Best for |
 |-------|-------------|--------|----------|
-| **BYO / ort-free** (`polyvoice::Pipeline`) | `Pipeline::new(DiarizationConfig, VadConfig)` + inject `Embedder` | Stable library surface; CLI `--legacy` | No ONNX; custom embedders; streaming sibling |
-| **ONNX production** (`polyvoice::pipeline_v2::Pipeline`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/Python/MCP default since 0.11** (v2 + VBx) | Shipped accuracy path |
-| **Hybrid** (`pipeline_v2::hybrid`) | `HybridPipeline::new(...)` | Research/ablation only | Dense-window experiments |
+| **BYO / ort-free** (`polyvoice::pipeline::LegacyPipeline`) | `LegacyPipeline::new(DiarizationConfig, VadConfig)` + inject `Embedder` | Stable library surface; CLI `--legacy` | No ONNX; custom embedders; streaming sibling |
+| **ONNX production** (`polyvoice::Pipeline`, re-exported from `polyvoice::pipeline_v2`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/Python/MCP default since 0.11** (v2 + VBx) | Shipped accuracy path |
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -26,7 +25,7 @@ The crate exposes two intentional pipeline layers (see
 | Mode | Use case | Latency | Accuracy |
 |------|----------|---------|----------|
 | **Online** (`StreamingPipeline`) | Real-time streaming (WebSocket, microphone) | Tunable via `LatencyPreset` | Lower (no future context) |
-| **Offline** (`Pipeline` / `pipeline_v2`) | File transcription, post-processing | High (full file) | Higher (two-pass + merge) |
+| **Offline** (`Pipeline` v2 / `LegacyPipeline`) | File transcription, post-processing | High (full file) | Higher (two-pass + merge) |
 
 ### Streaming latency presets
 
@@ -55,14 +54,22 @@ reported separately). CLI: `--latency-preset realtime|balanced|accurate`.
 Opaque `u32` wrapper identifying a speaker cluster.
 
 ### `DiarizationConfig`
-Central configuration struct for the legacy pipeline:
-- `threshold: f32` — cosine similarity threshold for matching to existing speaker.
-- `max_speakers: usize` — hard limit on concurrent speakers.
-- `window_secs: f32` — analysis window size.
-- `hop_secs: f32` — step between consecutive windows.
-- `min_speech_secs: f32` — minimum segment duration (post-processing).
-- `max_gap_secs: f32` — merge same-speaker segments with gaps ≤ this value.
-- `sample_rate: SampleRate` — validated sample rate (8000–192000 Hz).
+Central configuration struct for the legacy pipeline, composed of three nested
+config groups plus a DoS guard:
+- `cluster: ClusterConfig` — `threshold: f32` (cosine similarity threshold for
+  merging clusters; `DEFAULT_AHC_THRESHOLD` = 0.45 is the shipped default),
+  `max_speakers: usize` (clustering ceiling), and `min_cluster_size` /
+  `min_cluster_secs` pruning controls.
+- `window: WindowConfig` — `window_secs: f32` (analysis window size),
+  `hop_secs: f32` (step between consecutive windows), `sample_rate: SampleRate`
+  (validated, 8000–192000 Hz).
+- `speech_filter: SpeechFilterConfig` — `min_speech_secs: f32` (minimum segment
+  duration, post-processing), `max_gap_secs: f32` (merge same-speaker segments
+  with gaps ≤ this value).
+- `max_duration_secs: f32` — maximum input length (DoS guard).
+
+`DiarizationConfig::validate()` checks the field ranges up front and returns a
+typed `ConfigError` on bad input.
 
 ### `DiarizationResult`
 ```rust
@@ -73,19 +80,18 @@ pub struct DiarizationResult {
 }
 ```
 
-## Library injection pipeline (`Pipeline` / `StreamingPipeline`)
+## Library injection pipeline (`LegacyPipeline` / `StreamingPipeline`)
 
 ### Bring-your-own embedder (`Embedder`)
 
-`Pipeline` and `StreamingPipeline` accept **`E: Embedder`** — the supported,
+`LegacyPipeline` and `StreamingPipeline` accept **`E: Embedder`** — the supported,
 non-deprecated library injection surface. No `onnx` feature is required; an
 external Candle/tract/custom encoder implements `Embedder` and pairs with
 `EnergyVad` (or another `VoiceActivityDetector`).
 
 ```rust
-use polyvoice::{
-    DiarizationConfig, Embedder, EmbedderError, EnergyVad, Pipeline, VadConfig,
-};
+use polyvoice::pipeline::LegacyPipeline;
+use polyvoice::{DiarizationConfig, Embedder, EmbedderError, EnergyVad, VadConfig};
 
 struct MyEmbedder;
 
@@ -100,31 +106,31 @@ impl Embedder for MyEmbedder {
     }
 }
 
-let pipeline = Pipeline::new(DiarizationConfig::default(), VadConfig::default());
+let pipeline = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default());
 let mut vad = EnergyVad::new(-40.0, 16_000, 512);
 let result = pipeline.run(&samples, &MyEmbedder, &mut vad)?;
 ```
 
 Shared encoders behind `Arc` are fine as long as `Embedder` is `Send + Sync`
-(the trait requires it). Legacy `EmbeddingExtractor` implementors still compile
-against these pipelines through an automatic bridge.
+(the trait requires it).
 
-### `Pipeline::new(config, vad_config)`
+### `LegacyPipeline::new(config, vad_config)`
 Stable offline entry point. CLI/Python ONNX paths use `pipeline_v2` by default;
 library consumers keep this generic surface for BYO embedders.
 
 ```rust
-use polyvoice::{Pipeline, DiarizationConfig, VadConfig, DummyExtractor, EnergyVad};
+use polyvoice::pipeline::LegacyPipeline;
+use polyvoice::{DiarizationConfig, VadConfig, DummyExtractor, EnergyVad};
 
 let extractor = DummyExtractor::new(256);
 let mut vad = EnergyVad::new(-40.0, 16_000, 512);
-let result = Pipeline::new(DiarizationConfig::default(), VadConfig::default())
+let result = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default())
     .run(&samples, &extractor, &mut vad)?;
 ```
 
-With feature `onnx`, the same `Pipeline::run` accepts ONNX wrappers that
-implement the legacy extractor trait (bridged to `Embedder`), e.g.
-`FbankOnnxExtractor` (or architecture adapters).
+With feature `onnx`, ONNX extractors such as `FbankOnnxExtractor` (or the
+architecture adapters) implement `Embedder` directly and plug into the same
+`LegacyPipeline::run`.
 
 ### Embedders and test doubles
 
@@ -156,42 +162,15 @@ let segments = segment_speech(&mut vad, &samples, &config, &vad_config)?;
 ONNX-based VAD used by the CLI `--legacy` path and BYO pipelines when ONNX is
 enabled. Production v2 path segments with powerset (no separate Silero stage).
 
-## Pipeline v2 (production ONNX) & Hybrid (ablation)
+`VadConfig::frame_geometry(sample_rate, min_speech_secs)` derives the frame
+geometry (ms per frame, silence/speech duration limits in whole frames) from
+the sample rate — the single derivation point, so callers do not re-implement
+the conversion.
+
+## Pipeline v2 (production ONNX)
 
 > **Since 0.11:** CLI, FFI, Python, and MCP default to `pipeline_v2` with the
 > **VBx** clusterer. Escape hatches: CLI `--legacy` / `--clusterer ahc`.
-
-### `HybridPipeline`
-
-Research sibling: `PowersetSegmenter` as speech-region detector only, then
-dense sliding-window embeddings + a `Clusterer`. Prefer main
-`pipeline_v2::Pipeline` with optional `embed_window_secs` for production.
-
-```rust
-use polyvoice::pipeline_v2::hybrid::HybridPipeline;
-use polyvoice::segmentation::PowersetSegmenter;
-use polyvoice::embedder::ResNet34Adapter;
-use polyvoice::clusterer::KMeansClusterer;
-use polyvoice::types::SampleRate;
-
-let segmenter = PowersetSegmenter::new("models/powerset_fp32.onnx")?;
-let embedder = ResNet34Adapter::new("models/wespeaker_resnet34.onnx", 4)?;
-let clusterer = KMeansClusterer::new(20);
-
-let pipeline = HybridPipeline::new(
-    Box::new(segmenter),
-    Box::new(embedder),
-    Box::new(clusterer),
-);
-let sr = SampleRate::new(16000).unwrap();
-let result = pipeline.run(&samples, sr)?;
-```
-
-Key parameters:
-- `window_samples`: 2 seconds of audio (default).
-- `hop_samples`: 1.5 seconds (default, reduced from 0.5 s to cut embeddings ~3×).
-- `max_gap_secs`: 0.5 — merge same-speaker gaps.
-- `min_speech_secs`: 0.25 — filter short segments.
 
 ### `PipelineBuilder` (v2 — production)
 
@@ -199,8 +178,9 @@ Profile-based builder for the full v2 pipeline (segmenter → embedder → clust
 
 ```rust
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
+use polyvoice::pipeline_v2::ClustererKind;
 use polyvoice::types::{Profile, SampleRate};
+use polyvoice::{Pipeline, PipelineConfig};
 
 let mut cfg = PipelineConfig {
     profile: Profile::Balanced,
@@ -217,9 +197,26 @@ let result = pipeline.run(&samples, sr)?;
 
 See the `PipelineBuilder` rustdoc for the full builder API.
 
+### VBx tuning (`VbxClustererConfig`)
+
+With feature `vbx`, `polyvoice::VbxClustererConfig` exposes the VBx hyperparameters
+(variational-inference `VbxConfig`, AHC seed threshold, embedding scale,
+minimum embedding duration) for library consumers that drive
+`polyvoice::VbxClusterer` directly; the v2 `Pipeline` wires the shipped
+defaults itself.
+
+### Shared CLI wiring (`cli_common`)
+
+With features `cli` / `mcp`, `polyvoice::cli_common` holds the flag-to-config
+translation, pipeline construction, and bench-dataset walking shared by the
+`polyvoice` / `polyvoice-bench` / `polyvoice-measure` / `polyvoice-mcp`
+binaries, so each binary stays a thin wrapper.
+
 ## Overlap Detection
 
 ```rust
+use polyvoice::overlap::detect_overlaps;
+
 let overlaps = detect_overlaps(&result.segments);
 for ov in overlaps {
     println!("Overlap at {:.2}s - {:.2}s: {:?}",
@@ -241,7 +238,7 @@ See `include/polyvoice.h` and `examples/ffi_usage.c` for usage.
 
 `default = []` is intentional. With no features (or pure-Rust features such as
 `clusterer` / `vbx` only), polyvoice never depends on `ort`. Use this path when
-you bring your own embedder and want Energy VAD + `Pipeline` /
+you bring your own embedder and want Energy VAD + `LegacyPipeline` /
 `StreamingPipeline` without a native ONNX Runtime dylib.
 
 Inventory of always-on vs feature-gated pure-Rust vs `onnx`-gated APIs:
@@ -262,9 +259,9 @@ platform. The CI job `wasm32-smoke` verifies this build on every push.
 
 ## Performance Tuning
 
-1. **Use `FbankExtractor`** instead of `compute_fbank` to avoid per-call FFT allocation.
+1. **Reuse `FbankExtractor`** instead of re-creating it per call — it holds the FFT planner, so per-call allocation is avoided.
 2. **Increase pool size** for ONNX extractors if you have many concurrent requests.
-3. **Use `HybridPipeline`** with `embed_batch` for long recordings — parallel extraction across CPU cores.
+3. **Use `embed_window_secs`** on the v2 `PipelineConfig` for long recordings — dense-window embeddings give more robust speaker centroids at the cost of more embedder calls.
 4. **Tune `threshold`** — lower values merge more aggressively; higher values split more.
 5. **Tune `max_gap_secs`** — larger gaps mean fewer turns but may miss real speaker changes.
 6. **K-means `max_clusters`** — set a ceiling (e.g. 20) to prevent over-clustering on noisy embeddings. K-means auto-k uses silhouette-based selection; single-speaker files are auto-detected.

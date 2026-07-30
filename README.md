@@ -46,8 +46,12 @@ sudo mv polyvoice /usr/local/bin/
 
 ### Docker
 
+No pre-built image is published — build locally from the repo root (the same
+image CI smoke-tests):
+
 ```bash
-docker run --rm -v "$(pwd):/work" ghcr.io/ekhodzitsky/polyvoice:latest diarize /work/meeting.wav --output /work/meeting.rttm
+docker build -t polyvoice .
+docker run --rm -v "$(pwd):/work" polyvoice diarize /work/meeting.wav --output /work/meeting.rttm
 ```
 
 ### Rust library
@@ -67,7 +71,7 @@ cargo add polyvoice --no-default-features
 # optional pure-Rust extras: --features clusterer,vbx
 ```
 
-You get `Pipeline`, `StreamingPipeline`, `EnergyVad`, the `Embedder` trait
+You get `LegacyPipeline`, `StreamingPipeline`, `EnergyVad`, the `Embedder` trait
 (implement it with Candle, tract, or any other backend), and pure clustering
 math — no ONNX Runtime dylib. Runnable mock: `cargo run --no-default-features
 --example byo_embedder`. Surface inventory and the CI gate that keeps this path
@@ -87,19 +91,23 @@ cargo install polyvoice --features cli
 
 # CLI + any-format audio (mp3/flac/ogg/m4a/aac, any sample rate → 16 kHz mono)
 cargo install polyvoice --features "cli,audio-io"
+
+# C FFI shared library (ABI v3). Feature `ffi` includes VBx as well.
+cargo build --release --features ffi
 ```
 
 ## Usage
 
 ```rust,no_run
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::{ClustererKind, Pipeline, PipelineConfig};
+use polyvoice::pipeline_v2::ClustererKind;
 use polyvoice::types::{Profile, SampleRate};
+use polyvoice::{Pipeline, PipelineConfig};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cfg = PipelineConfig {
         profile: Profile::Balanced,
-        clusterer: ClustererKind::Vbx, // or Ahc { threshold: 0.45 }
+        clusterer: ClustererKind::Vbx, // or Ahc { threshold: polyvoice::DEFAULT_AHC_THRESHOLD }
         ..PipelineConfig::default()
     };
     // VBx PLDA: optional cfg.vbx_plda_dir / POLYVOICE_VBX_PLDA_DIR; otherwise
@@ -153,11 +161,12 @@ four bindings and streaming.
 audio (f32 PCM)
   → VAD / Powerset segmentation
   → WeSpeaker embeddings
-  → clustering (AHC / K-means / NME-SC, automatic speaker count)
+  → clustering (VBx default; AHC / K-means / NME-SC alternatives, automatic speaker count)
   → speaker turns
 ```
 
-Streaming (`OnlineDiarizer`) and batch (`OfflineDiarizer`), with a single-speaker
+Streaming (`streaming::StreamingPipeline`) and batch (crate-root `Pipeline`;
+`pipeline::LegacyPipeline` on the ort-free BYO path), with a single-speaker
 guard so quiet or single-voice audio does not hallucinate clusters.
 
 ## Documentation
