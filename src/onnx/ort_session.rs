@@ -6,7 +6,7 @@
 //! `backend-tract`.
 
 use super::runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
-use super::{ExecutionProvider, validate_onnx_header};
+use super::{ExecutionProvider, OnnxError, validate_onnx_header};
 use std::path::Path;
 
 /// Thin wrapper around `ort::session::Session` implementing [`InferenceRuntime`].
@@ -27,15 +27,19 @@ impl OrtSession {
         model_path: &Path,
         ep: ExecutionProvider,
         intra_threads: Option<usize>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, OnnxError> {
         validate_onnx_header(model_path)?;
-        // ort::Error is not Send+Sync, so it cannot ride `?` into anyhow — stringify.
-        let mut builder = ort::session::Session::builder()
-            .map_err(|e| anyhow::anyhow!("session builder: {e}"))?;
+        // ort::Error is not Send+Sync, so it cannot ride a typed source — stringify.
+        let build = |detail: String| OnnxError::SessionBuild {
+            path: model_path.to_path_buf(),
+            detail,
+        };
+        let mut builder =
+            ort::session::Session::builder().map_err(|e| build(format!("session builder: {e}")))?;
         if let Some(n) = intra_threads {
             builder = builder
                 .with_intra_threads(n)
-                .map_err(|e| anyhow::anyhow!("intra threads: {e}"))?;
+                .map_err(|e| build(format!("intra threads: {e}")))?;
         }
         match ep {
             ExecutionProvider::Cpu => {}
@@ -45,7 +49,7 @@ impl OrtSession {
                     let coreml = ort::execution_providers::CoreMLExecutionProvider::default();
                     builder = builder
                         .with_execution_providers([coreml.build()])
-                        .map_err(|e| anyhow::anyhow!("coreml ep: {e}"))?;
+                        .map_err(|e| build(format!("coreml ep: {e}")))?;
                 }
                 #[cfg(not(all(feature = "coreml", target_os = "macos", target_arch = "aarch64")))]
                 tracing::warn!(
@@ -59,7 +63,7 @@ impl OrtSession {
                     let xnnpack = ort::execution_providers::XNNPACKExecutionProvider::default();
                     builder = builder
                         .with_execution_providers([xnnpack.build()])
-                        .map_err(|e| anyhow::anyhow!("xnnpack ep: {e}"))?;
+                        .map_err(|e| build(format!("xnnpack ep: {e}")))?;
                 }
                 #[cfg(not(feature = "xnnpack"))]
                 tracing::warn!(
@@ -72,7 +76,7 @@ impl OrtSession {
         }
         let session = builder
             .commit_from_file(model_path)
-            .map_err(|e| anyhow::anyhow!("commit_from_file: {e}"))?;
+            .map_err(|e| build(format!("commit_from_file: {e}")))?;
         let input_names = session
             .inputs()
             .iter()
@@ -96,14 +100,13 @@ impl OrtSession {
     /// self-describing model config loader (`models::metadata`).
     pub fn custom_metadata_props(
         &self,
-    ) -> Result<std::collections::HashMap<String, String>, String> {
-        let meta = self
-            .session
-            .metadata()
-            .map_err(|e| format!("session metadata: {e}"))?;
-        let keys = meta
-            .custom_keys()
-            .map_err(|e| format!("custom metadata keys: {e}"))?;
+    ) -> Result<std::collections::HashMap<String, String>, OnnxError> {
+        let meta = self.session.metadata().map_err(|e| OnnxError::Metadata {
+            detail: format!("session metadata: {e}"),
+        })?;
+        let keys = meta.custom_keys().map_err(|e| OnnxError::Metadata {
+            detail: format!("custom metadata keys: {e}"),
+        })?;
         let mut out = std::collections::HashMap::with_capacity(keys.len());
         for key in keys {
             if let Some(value) = meta.custom(&key) {

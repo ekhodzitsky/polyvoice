@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! ONNX-based speaker embedding extractor with a session pool.
 //!
 //! # Runtime boundary
@@ -12,9 +11,6 @@
 //! `POLYVOICE_INFERENCE_BACKEND=tract` (requires `backend-tract`) or
 //! [`InferenceBackend::force`].
 
-use crate::embedding::{EmbeddingError, EmbeddingExtractor};
-use crate::types::DiarizationConfig;
-use crate::utils::l2_normalize;
 use std::path::Path;
 
 mod factory;
@@ -92,7 +88,7 @@ pub fn build_session_with_ep(
     model_path: &Path,
     ep: ExecutionProvider,
     intra_threads: Option<usize>,
-) -> anyhow::Result<RuntimeSession> {
+) -> Result<RuntimeSession, OnnxError> {
     RuntimeSession::from_path(model_path, ep, intra_threads)
 }
 
@@ -105,14 +101,38 @@ pub fn build_session_with_ep(
 /// Returns an empty map when the model has no custom props (not an error).
 pub fn read_model_metadata_props(
     path: &Path,
-) -> Result<std::collections::HashMap<String, String>, String> {
-    let session = OrtSession::from_path(path, ExecutionProvider::Cpu, Some(1))
-        .map_err(|e| format!("open for metadata: {e}"))?;
+) -> Result<std::collections::HashMap<String, String>, OnnxError> {
+    let session = OrtSession::from_path(path, ExecutionProvider::Cpu, Some(1))?;
     session.custom_metadata_props()
 }
 
+/// Errors from ONNX session construction and model metadata reads.
+///
+/// Replaces `anyhow::Error` in this module's public constructors so callers
+/// can classify load failures without substring matching. Backend error types
+/// (`ort::Error`) are not `Send + Sync`, so their details are carried as
+/// strings.
+#[derive(Clone, thiserror::Error, Debug)]
+pub enum OnnxError {
+    /// Structural header validation failed before the backend parsed the file.
+    #[error(transparent)]
+    Validation(#[from] OnnxValidationError),
+
+    /// The backend failed to build an inference session from the model file
+    /// (protobuf parse, graph optimization, or EP wiring).
+    #[error("failed to build inference session for {path}: {detail}")]
+    SessionBuild {
+        path: std::path::PathBuf,
+        detail: String,
+    },
+
+    /// Reading custom `metadata_props` from the model failed.
+    #[error("failed to read ONNX metadata_props: {detail}")]
+    Metadata { detail: String },
+}
+
 /// Error raised when an ONNX file fails structural header validation.
-#[derive(thiserror::Error, Debug)]
+#[derive(Clone, thiserror::Error, Debug)]
 #[error("ONNX header validation failed for {path}: {detail}")]
 pub struct OnnxValidationError {
     pub path: std::path::PathBuf,
@@ -184,96 +204,6 @@ pub fn validate_onnx_header(path: &Path) -> Result<(), OnnxValidationError> {
     }
 
     Ok(())
-}
-
-/// A pooled ONNX session for speaker embedding extraction.
-///
-/// Wraps [`RuntimeSession`] in a blocking object pool so concurrent extractors
-/// can reuse sessions (checkout waits; Drop returns).
-/// Raw-waveform pooled ONNX embedder (no fbank). **Unused** by production
-/// adapters — prefer [`crate::ecapa::FbankOnnxExtractor`] or
-/// [`crate::embedder::ResNet34Adapter`].
-#[deprecated(
-    since = "0.7.0",
-    note = "unused by production paths; use embedder::ResNet34Adapter / ecapa::FbankOnnxExtractor (Embedder)"
-)]
-pub struct OnnxEmbeddingExtractor {
-    pool: crate::utils::ObjectPool<RuntimeSession>,
-    embedding_dim: usize,
-    window_samples: usize,
-}
-
-impl OnnxEmbeddingExtractor {
-    /// { pool_size > 0 }
-    /// `fn new(model_path: &Path, embedding_dim: usize, window_samples: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
-    /// { true }
-    pub fn new(
-        model_path: &Path,
-        embedding_dim: usize,
-        window_samples: usize,
-        pool_size: usize,
-        ep: ExecutionProvider,
-    ) -> anyhow::Result<Self> {
-        if pool_size == 0 {
-            anyhow::bail!("pool_size must be > 0");
-        }
-        let mut sessions = Vec::with_capacity(pool_size);
-        for i in 0..pool_size {
-            let session = build_session_with_ep(model_path, ep, None)
-                .map_err(|e| EmbeddingError::InferenceFailed(format!("session {i}: {e}")))?;
-            sessions.push(session);
-        }
-        Ok(Self {
-            pool: crate::utils::ObjectPool::new(sessions),
-            embedding_dim,
-            window_samples,
-        })
-    }
-}
-
-impl EmbeddingExtractor for OnnxEmbeddingExtractor {
-    fn extract(
-        &self,
-        samples: &[f32],
-        _config: &DiarizationConfig,
-    ) -> Result<Vec<f32>, EmbeddingError> {
-        let mut session = self.pool.checkout();
-
-        if samples.len() != self.window_samples {
-            return Err(EmbeddingError::InvalidInput {
-                expected: self.window_samples,
-                got: samples.len(),
-            });
-        }
-
-        let input = InferenceTensor::f32(vec![1, self.window_samples], samples.to_vec());
-        let outputs = session
-            .run_ordered(&[&input])
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
-
-        let first = outputs.into_iter().next().ok_or_else(|| {
-            EmbeddingError::InferenceFailed("ONNX model produced no outputs".to_string())
-        })?;
-        let data = first
-            .into_f32()
-            .map_err(|e| EmbeddingError::InferenceFailed(e.to_string()))?;
-
-        let data_len = data.len();
-        if data_len != self.embedding_dim {
-            return Err(EmbeddingError::InferenceFailed(format!(
-                "expected embedding dim {}, got {}",
-                self.embedding_dim, data_len
-            )));
-        }
-        let mut embedding = data;
-        l2_normalize(&mut embedding);
-
-        Ok(embedding)
-    }
-
-    fn embedding_dim(&self) -> usize {
-        self.embedding_dim
-    }
 }
 
 #[allow(clippy::unwrap_used)]

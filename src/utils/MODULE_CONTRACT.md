@@ -6,8 +6,9 @@ level: subsystem
 layer: utility
 purpose: >
   Owns shared mathematical and segment utilities: cosine similarity,
-  L2 normalization, mean vector, segment merging. Does NOT own any algorithm
-  specific to a single module.
+  L2 normalization, mean vector, pairwise similarity matrices, mean
+  centroids, segment merging. Does NOT own any algorithm specific to a
+  single module.
 status: stable
 owners:
   - polyvoice-core
@@ -54,6 +55,27 @@ surface:
     visibility: public
     contract: >
       Computes element-wise mean of a vector of vectors.
+    proof:
+      kind: unit-test
+      target: src/utils::mod::tests
+      command: cargo test --lib utils
+  - name: pairwise_cosine_similarity_matrix
+    kind: function
+    visibility: crate
+    contract: >
+      Full symmetric pairwise cosine-similarity matrix as a flat row-major
+      n*n buffer (f32, diagonal exactly 1.0). Single construction path shared
+      by ahc, kmeans, and spectral; consumers chunk or cast as needed.
+    proof:
+      kind: unit-test
+      target: src/utils::mod::tests
+      command: cargo test --lib utils
+  - name: normalized_mean_centroids
+    kind: function
+    visibility: crate
+    contract: >
+      Per-slot L2-normalized mean centroid over selected members
+      (embedding index + label pairs). Empty slots stay zero vectors.
     proof:
       kind: unit-test
       target: src/utils::mod::tests

@@ -154,8 +154,9 @@ pub struct Pipeline {
 impl Pipeline {
     /// Build a Mobile-profile Pipeline.
     ///
-    /// `clusterer` is `"vbx"` (default when PLDA is available via `vbx_plda_dir`
-    /// or `POLYVOICE_VBX_PLDA_DIR`) or `"ahc"`. Without PLDA, pass `clusterer="ahc"`.
+    /// `clusterer` is `"vbx"` (default, matching the CLI) or `"ahc"`. VBx
+    /// resolves its PLDA params via `vbx_plda_dir`, then the
+    /// `POLYVOICE_VBX_PLDA_DIR` env var, then a registry download.
     #[staticmethod]
     #[pyo3(signature = (models_cache=None, clusterer=None, vbx_plda_dir=None))]
     fn mobile(
@@ -168,8 +169,8 @@ impl Pipeline {
 
     /// Build a Balanced-profile Pipeline.
     ///
-    /// Same kwargs as [`Pipeline::mobile`]. Defaults to VBx when PLDA is
-    /// configured, else AHC.
+    /// Same kwargs as [`Pipeline::mobile`]. Defaults to VBx (matching the
+    /// CLI); pass `clusterer="ahc"` for the cosine-AHC backend.
     #[staticmethod]
     #[pyo3(signature = (models_cache=None, clusterer=None, vbx_plda_dir=None))]
     fn balanced(
@@ -234,32 +235,27 @@ impl Pipeline {
         }
         .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("model registry: {e}")))?;
 
-        let plda_dir = vbx_plda_dir
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("POLYVOICE_VBX_PLDA_DIR").map(PathBuf::from));
-        let want_vbx = match clusterer {
-            Some("vbx") => true,
-            Some("ahc") => false,
+        let mut cfg = PipelineConfig {
+            profile,
+            ..PipelineConfig::default()
+        };
+        match clusterer {
+            // VBx is the default (matches the CLI); the builder resolves PLDA
+            // via vbx_plda_dir → POLYVOICE_VBX_PLDA_DIR → registry download.
+            Some("vbx") | None => {
+                cfg.clusterer = ClustererKind::Vbx;
+                cfg.vbx_plda_dir = vbx_plda_dir.map(PathBuf::from);
+            }
+            Some("ahc") => {
+                cfg.clusterer = ClustererKind::Ahc {
+                    threshold: polyvoice::DEFAULT_AHC_THRESHOLD,
+                };
+            }
             Some(other) => {
                 return Err(pyo3::exceptions::PyValueError::new_err(format!(
                     "unknown clusterer '{other}' (expected 'vbx' or 'ahc')"
                 )));
             }
-            // Prefer VBx when PLDA is available (matches the CLI 0.11 default).
-            None => plda_dir.is_some(),
-        };
-
-        let mut cfg = PipelineConfig {
-            profile,
-            ..PipelineConfig::default()
-        };
-        if want_vbx {
-            cfg.clusterer = ClustererKind::Vbx;
-            cfg.vbx_plda_dir = plda_dir;
-        } else {
-            cfg.clusterer = ClustererKind::Ahc {
-                threshold: 0.45,
-            };
         }
 
         let pipeline = RustPipeline::builder()
@@ -293,7 +289,6 @@ impl Pipeline {
                     "unsupported sample rate {actual} (expected 16000)"
                 ))
             }
-            PipelineError::ModelLoad { .. } |
             PipelineError::Registry(_) |
             PipelineError::Segmentation(_) |
             PipelineError::Embedding(_) => {

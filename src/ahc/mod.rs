@@ -5,7 +5,9 @@
 //! the cosine similarity threshold.
 
 use crate::types::TimeRange;
-use crate::utils::{cosine_similarity, l2_normalize};
+use crate::utils::{
+    cosine_similarity, l2_normalize, normalized_mean_centroids, pairwise_cosine_similarity_matrix,
+};
 use std::collections::HashMap;
 
 /// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
@@ -200,30 +202,13 @@ fn finish_prune(
     let sidx: HashMap<usize, usize> = survivors.iter().enumerate().map(|(i, &l)| (l, i)).collect();
 
     // L2-normalized centroid per survivor (indexed by survivor position).
-    let dim = embeddings.first().map(Vec::len).unwrap_or(0);
-    let mut centroids: Vec<Vec<f32>> = vec![vec![0.0f32; dim]; survivors.len()];
-    let mut counts: Vec<usize> = vec![0; survivors.len()];
-    for (i, &l) in labels.iter().enumerate() {
-        if let Some(&si) = sidx.get(&l) {
-            for (a, &x) in centroids[si].iter_mut().zip(embeddings[i].iter()) {
-                *a += x;
-            }
-            counts[si] += 1;
-        }
-    }
-    for (c, &n) in centroids.iter_mut().zip(counts.iter()) {
-        if n > 0 {
-            for v in c.iter_mut() {
-                *v /= n as f32;
-            }
-        }
-        let norm = c.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 1e-12 {
-            for v in c.iter_mut() {
-                *v /= norm;
-            }
-        }
-    }
+    // Non-survivor labels map to an out-of-range slot and are skipped.
+    let indices: Vec<usize> = (0..labels.len()).collect();
+    let slots: Vec<usize> = labels
+        .iter()
+        .map(|l| sidx.get(l).copied().unwrap_or(survivors.len()))
+        .collect();
+    let centroids = normalized_mean_centroids(embeddings, &indices, &slots, survivors.len());
 
     // Survivors keep their compact index; others go to the nearest survivor
     // centroid. Result is compact 0..survivors.len() by construction.
@@ -249,17 +234,10 @@ fn finish_prune(
 }
 
 /// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
-/// `pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32)`
+/// `pub fn agglomerative_cluster_auto_max_clusters(embeddings: &[Vec<f32>], max_clusters: usize) -> (Vec<usize>, f32)`
 /// { ret.0.len() == embeddings.len() && ret.0.iter().all(|&l| l < embeddings.len()) && ret.1 >= 0.0 }
-/// Run AHC with automatic threshold selection via largest-merge-gap heuristic.
-///
-/// Returns labels and the automatically selected threshold.
-pub fn agglomerative_cluster_auto(embeddings: &[Vec<f32>]) -> (Vec<usize>, f32) {
-    agglomerative_cluster_auto_max_clusters(embeddings, 0)
-}
-
-/// Run AHC with automatic threshold selection and a hard ceiling on the number
-/// of clusters.
+/// Run AHC with automatic threshold selection via largest-gap heuristic on the
+/// sorted pairwise similarities, and a hard ceiling on the number of clusters.
 pub fn agglomerative_cluster_auto_max_clusters(
     embeddings: &[Vec<f32>],
     max_clusters: usize,
@@ -268,8 +246,32 @@ pub fn agglomerative_cluster_auto_max_clusters(
     if n == 0 {
         return (Vec::new(), 0.0);
     }
-    let threshold = estimate_threshold_from_similarities(embeddings);
-    ahc_impl(embeddings, threshold, max_clusters, AscStop::Off)
+    // Build the pairwise matrix once: the threshold estimate reads its upper
+    // triangle and the clustering core reuses it verbatim.
+    let sim_matrix = similarity_matrix(embeddings);
+    let threshold = estimate_threshold_from_matrix(&sim_matrix);
+    let dim = embeddings[0].len();
+    if !embeddings.iter().all(|e| e.len() == dim) {
+        // Defensive fallback: mixed dimensions would break similarity math.
+        // Return a single cluster rather than panicking.
+        return (vec![0; n], 0.0);
+    }
+    ahc_impl_with_matrix(
+        embeddings,
+        threshold,
+        max_clusters,
+        AscStop::Off,
+        None,
+        sim_matrix,
+    )
+}
+
+/// Nested (row-per-embedding) cosine-similarity matrix over `embeddings`:
+/// diagonal `1.0`, off-diagonal pairs from the shared flat pairwise matrix.
+fn similarity_matrix(embeddings: &[Vec<f32>]) -> Vec<Vec<f32>> {
+    let n = embeddings.len();
+    let flat = pairwise_cosine_similarity_matrix(embeddings);
+    flat.chunks(n).map(<[f32]>::to_vec).collect()
 }
 
 fn ahc_impl(
@@ -281,7 +283,6 @@ fn ahc_impl(
     ahc_impl_with_times(embeddings, threshold, max_clusters, stop, None)
 }
 
-#[allow(clippy::needless_range_loop)]
 fn ahc_impl_with_times(
     embeddings: &[Vec<f32>],
     threshold: f32,
@@ -299,6 +300,28 @@ fn ahc_impl_with_times(
         // Return a single cluster rather than panicking.
         return (vec![0; n], 0.0);
     }
+    let sim_matrix = similarity_matrix(embeddings);
+    ahc_impl_with_matrix(
+        embeddings,
+        threshold,
+        max_clusters,
+        stop,
+        time_ranges,
+        sim_matrix,
+    )
+}
+
+#[allow(clippy::needless_range_loop)]
+fn ahc_impl_with_matrix(
+    embeddings: &[Vec<f32>],
+    threshold: f32,
+    max_clusters: usize,
+    stop: AscStop,
+    time_ranges: Option<&[TimeRange]>,
+    mut sim_matrix: Vec<Vec<f32>>,
+) -> (Vec<usize>, f32) {
+    // Callers guarantee n >= 1 and uniform embedding dimensions.
+    let n = embeddings.len();
 
     let mut labels: Vec<usize> = (0..n).collect();
     let mut centroids: Vec<Vec<f32>> = embeddings.to_vec();
@@ -312,18 +335,10 @@ fn ahc_impl_with_times(
     };
     let mut active: Vec<bool> = vec![true; n];
 
-    // Precompute similarity matrix. sim_matrix[i][j] holds the similarity
-    // between centroids i and j. Inactive rows/columns are kept at NEG_INFINITY.
+    // sim_matrix[i][j] holds the similarity between centroids i and j
+    // (precomputed by the caller). Inactive rows/columns are kept at
+    // NEG_INFINITY.
     let neg_inf = f32::NEG_INFINITY;
-    let mut sim_matrix: Vec<Vec<f32>> = vec![vec![neg_inf; n]; n];
-    for i in 0..n {
-        sim_matrix[i][i] = 1.0;
-        for j in (i + 1)..n {
-            let sim = cosine_similarity(&centroids[i], &centroids[j]);
-            sim_matrix[i][j] = sim;
-            sim_matrix[j][i] = sim;
-        }
-    }
 
     loop {
         let mut best_sim = neg_inf;
@@ -452,22 +467,21 @@ fn both_established(stop: AscStop, size_i: usize, size_j: usize, dur_i: f64, dur
     }
 }
 
-/// Estimate a good AHC threshold from the distribution of pairwise similarities.
+/// Estimate a good AHC threshold from the precomputed pairwise similarity
+/// matrix.
 ///
-/// Computes all pairwise cosine similarities, sorts them, and finds the largest
-/// gap in the lower half of the distribution (between 0.0 and median).
-/// This tends to separate within-speaker from between-speaker pairs.
-fn estimate_threshold_from_similarities(embeddings: &[Vec<f32>]) -> f32 {
-    let n = embeddings.len();
+/// Collects the upper triangle, sorts it, and finds the largest gap in the
+/// lower half of the distribution (between 0.0 and median). This tends to
+/// separate within-speaker from between-speaker pairs.
+fn estimate_threshold_from_matrix(sim_matrix: &[Vec<f32>]) -> f32 {
+    let n = sim_matrix.len();
     if n < 2 {
         return 0.5;
     }
 
     let mut sims: Vec<f32> = Vec::with_capacity(n * (n - 1) / 2);
-    for i in 0..n {
-        for j in (i + 1)..n {
-            sims.push(cosine_similarity(&embeddings[i], &embeddings[j]));
-        }
+    for (i, row) in sim_matrix.iter().enumerate() {
+        sims.extend_from_slice(&row[i + 1..]);
     }
     sims.sort_by(|a, b| a.total_cmp(b));
 
@@ -613,19 +627,6 @@ mod tests {
         let embeddings = vec![vec![1.0, 0.0, 0.0]];
         let labels = agglomerative_cluster(&embeddings, 0.5);
         assert_eq!(labels, vec![0]);
-    }
-
-    #[test]
-    fn test_agglomerative_cluster_auto_basic() {
-        let embeddings = vec![
-            vec![1.0, 0.0, 0.0],
-            vec![0.9, 0.1, 0.0],
-            vec![0.0, 1.0, 0.0],
-            vec![0.1, 0.9, 0.0],
-        ];
-        let (labels, th) = agglomerative_cluster_auto(&embeddings);
-        assert_eq!(labels.len(), 4);
-        assert!((0.2..=0.7).contains(&th), "threshold {} out of range", th);
     }
 
     #[test]

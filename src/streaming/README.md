@@ -18,7 +18,7 @@ arrival-order speaker cache, named latency presets, and provisional labels.
 - `types` — DiarizationConfig, SpeakerTurn (`stable` flag), ClusterConfig
 - `vad` — VoiceActivityDetector, VadConfig
 - `window` — WindowBuffer
-- `embedding` — EmbeddingExtractor (legacy; see embedder migration)
+- `embedder` — Embedder trait
 - `utils` — cosine similarity, L2 normalize
 
 ## Invariants
@@ -30,6 +30,16 @@ arrival-order speaker cache, named latency presets, and provisional labels.
 - Arrival-order IDs are stable across chunks (no global recluster / Hungarian).
 - `SpeakerTurn.stable == false` means provisional; once true for a cache entry,
   that speaker ID is immutable (history is not rewritten).
+
+## Construction-time validation
+
+- Window geometry is validated by every constructor (`new`, `with_params`,
+  `with_latency_preset`): `0 < hop_secs <= window_secs`, finite, and large
+  enough to yield at least one sample per window/hop — violations return
+  `StreamingError::InvalidParams` instead of panicking in `WindowBuffer`.
+- `speaker_cache_cap == 0` is clamped to 1 (same policy as
+  `ArrivalOrderSpeakerCache::new` and `DiarizationConfig::max_speakers.max(1)`
+  in `StreamingPipeline::new`).
 
 ## Latency presets
 

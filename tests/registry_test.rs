@@ -14,7 +14,7 @@ use polyvoice::types::Profile;
 use tempfile::TempDir;
 
 #[test]
-#[ignore = "real network — run with --ignored"]
+#[ignore = "requires network"]
 fn ensure_for_profile_mobile_downloads_and_verifies() {
     let tmp = TempDir::new().unwrap();
     let r = ModelRegistry::with_cache_dir(tmp.path()).unwrap();
@@ -37,7 +37,7 @@ fn ensure_for_profile_mobile_downloads_and_verifies() {
 }
 
 #[test]
-#[ignore = "real network — run with --ignored"]
+#[ignore = "requires network"]
 fn ensure_for_profile_custom_returns_explicit_error() {
     let tmp = TempDir::new().unwrap();
     let r = ModelRegistry::with_cache_dir(tmp.path()).unwrap();

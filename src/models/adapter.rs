@@ -40,15 +40,26 @@ impl AdapterStage {
 
     /// Parse a stage name (case-insensitive). Accepts both short and long forms
     /// (`"vad"` / `"segmentation"`).
+    ///
+    /// Thin compatibility wrapper over [`FromStr`](std::str::FromStr); new code
+    /// should prefer `s.parse()` or `AdapterStage::from_str` for a typed error.
     pub fn parse(s: &str) -> Option<Self> {
+        s.parse().ok()
+    }
+}
+
+impl std::str::FromStr for AdapterStage {
+    type Err = AdapterError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
-            "segmentation" | "segmenter" => Some(Self::Segmentation),
-            "embedder" | "embedding" => Some(Self::Embedder),
-            "clusterer" | "clustering" => Some(Self::Clusterer),
-            "scoring" | "score" => Some(Self::Scoring),
-            "vad" => Some(Self::Vad),
-            "diarizer" | "e2e" | "e2e-diarizer" => Some(Self::Diarizer),
-            _ => None,
+            "segmentation" | "segmenter" => Ok(Self::Segmentation),
+            "embedder" | "embedding" => Ok(Self::Embedder),
+            "clusterer" | "clustering" => Ok(Self::Clusterer),
+            "scoring" | "score" => Ok(Self::Scoring),
+            "vad" => Ok(Self::Vad),
+            "diarizer" | "e2e" | "e2e-diarizer" => Ok(Self::Diarizer),
+            _ => Err(AdapterError::InvalidStage(s.to_owned())),
         }
     }
 }
@@ -416,6 +427,10 @@ mod tests {
             AdapterStage::Diarizer,
         ] {
             assert_eq!(AdapterStage::parse(stage.as_str()), Some(stage));
+            assert_eq!(
+                stage.as_str().parse::<AdapterStage>().expect("roundtrip"),
+                stage
+            );
         }
         assert_eq!(
             AdapterStage::parse("segmenter"),
@@ -423,6 +438,10 @@ mod tests {
         );
         assert_eq!(AdapterStage::parse("e2e"), Some(AdapterStage::Diarizer));
         assert!(AdapterStage::parse("nope").is_none());
+        assert!(matches!(
+            "nope".parse::<AdapterStage>(),
+            Err(AdapterError::InvalidStage(_))
+        ));
     }
 
     #[cfg(feature = "sortformer")]

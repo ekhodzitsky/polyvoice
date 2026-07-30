@@ -1,14 +1,14 @@
 # src/clusterer
 
 Offline **`Clusterer`** trait and adapter implementations used by
-`pipeline_v2` (and hybrid ablation).
+`pipeline_v2`.
 
 ## Surfaces
 
 - `Clusterer` / `ClustererError`
 - `AhcClusterer`
 - `MinClusterSizeClusterer`
-- `KMeansClusterer` (also `ClustererKind::KMeans` on pipeline_v2)
+- `KmeansClusterer` (deprecated alias `KMeansClusterer` kept for one cycle)
 - `NmeScClusterer` (feature `spectral`)
 - `VbxClusterer` / `PldaModel` (feature `vbx`)
 - `assign::*` — local→global co-occurrence mapping

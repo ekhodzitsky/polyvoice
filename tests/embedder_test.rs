@@ -1,4 +1,3 @@
-#![allow(deprecated)] // legacy embedding API; see polyvoice::embedder
 //! Integration test for `CamPlusPlusExtractor` and `ResNet34Adapter` against
 //! real upstream ONNX models.
 //!
@@ -27,7 +26,7 @@ fn synthetic_audio_1s() -> Vec<f32> {
 }
 
 #[test]
-#[ignore = "real network — run with --ignored"]
+#[ignore = "requires network"]
 fn cam_plus_plus_extractor_produces_512d_normalized_embedding() {
     let tmp = TempDir::new().expect("temp dir");
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
@@ -50,7 +49,7 @@ fn cam_plus_plus_extractor_produces_512d_normalized_embedding() {
 }
 
 #[test]
-#[ignore = "real network — run with --ignored"]
+#[ignore = "requires network"]
 fn resnet34_adapter_produces_256d_normalized_embedding() {
     let tmp = TempDir::new().expect("temp dir");
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");

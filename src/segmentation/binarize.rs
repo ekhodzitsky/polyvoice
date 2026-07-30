@@ -1,6 +1,9 @@
 //! Calibrated binarization of powerset posteriors (pyannote-style hysteresis).
 
-use crate::segmentation::decoder::{PowersetClass, PowersetDecoder};
+use crate::segmentation::decoder::{
+    MAX_LOCAL_SPEAKERS, NUM_POWERSET_CLASSES, PowersetClass, PowersetDecoder,
+};
+use crate::vad::hysteresis::{HysteresisGate, RegionEvent, RegionTracker, TailPolicy};
 
 /// Calibrated binarization of segmentation posteriors, pyannote-style: each
 /// speaker's activity probability (sum of the powerset classes containing the
@@ -38,22 +41,22 @@ impl Default for BinarizationConfig {
 /// Returns per-frame classes + confidences with the same conventions as the
 /// argmax path (`None` = uncovered, `Empty` = silence).
 // Index loops are deliberate: three parallel per-frame arrays are read and
-// written by frame/speaker index, including range writes for gap bridging.
+// written by frame/speaker index, including range writes for region marking.
 #[allow(clippy::needless_range_loop)]
 pub fn binarize_frames(
-    avg_probs: &[[f32; 7]],
+    avg_probs: &[[f32; NUM_POWERSET_CLASSES]],
     has_data: &[bool],
     stride: f32,
     cfg: &BinarizationConfig,
 ) -> (Vec<Option<PowersetClass>>, Vec<f32>) {
     let n = avg_probs.len();
     // Per-speaker activity probability: sum of classes containing the speaker.
-    let mut speaker_probs = vec![[0.0_f32; 3]; n];
+    let mut speaker_probs = vec![[0.0_f32; MAX_LOCAL_SPEAKERS]; n];
     for g in 0..n {
         if !has_data[g] {
             continue;
         }
-        for c in 0..7 {
+        for c in 0..NUM_POWERSET_CLASSES {
             if let Some(class) = PowersetDecoder::class_for_index(c) {
                 for s in class.speakers() {
                     speaker_probs[g][s as usize] += avg_probs[g][c];
@@ -62,68 +65,37 @@ pub fn binarize_frames(
         }
     }
 
-    // Hysteresis per speaker: ON at prob >= onset, OFF only below offset.
-    let mut active = vec![[false; 3]; n];
-    for s in 0..3 {
-        let mut on = false;
-        for g in 0..n {
-            if !has_data[g] {
-                on = false;
-                continue;
-            }
-            let prob = speaker_probs[g][s];
-            if on {
-                on = prob >= cfg.offset;
-            } else {
-                on = prob >= cfg.onset;
-            }
-            active[g][s] = on;
-        }
-    }
-
-    // Duration smoothing, pyannote order: bridge short gaps first, then drop
-    // short blips. Frame counts round to the nearest whole frame.
+    // Hysteresis + duration smoothing per speaker, pyannote order: short gaps
+    // bridge first, then short active blips drop. The region tracker bridges
+    // inactive runs shorter than `min_off` frames while the region is open,
+    // `keeps` drops closed regions shorter than `min_on` frames, and a
+    // coverage hole (`has_data == false`) hard-closes the region and resets
+    // the gate instead of being bridged. Frame counts round to the nearest
+    // whole frame.
     let min_on = (cfg.min_duration_on / stride).round() as usize;
     let min_off = (cfg.min_duration_off / stride).round() as usize;
-    for s in 0..3 {
-        if min_off > 1 {
-            let mut last_on: Option<usize> = None;
-            for g in 0..n {
-                if active[g][s] {
-                    if let Some(prev) = last_on {
-                        let gap = g - prev - 1;
-                        if gap > 0 && gap < min_off && (prev + 1..g).all(|k| has_data[k]) {
-                            for k in prev + 1..g {
-                                active[k][s] = true;
-                            }
-                        }
-                    }
-                    last_on = Some(g);
-                }
+    let mut active = vec![[false; MAX_LOCAL_SPEAKERS]; n];
+    for s in 0..MAX_LOCAL_SPEAKERS {
+        let mut gate = HysteresisGate::new(cfg.onset, cfg.offset);
+        let mut tracker = RegionTracker::new(min_off, min_on, TailPolicy::Trim);
+        for g in 0..n {
+            if !has_data[g] {
+                gate.reset();
+                let event = tracker.reset();
+                mark_region(&mut active, s, &tracker, event);
+                continue;
             }
+            let on = gate.update(speaker_probs[g][s]);
+            let event = tracker.advance(on, g);
+            mark_region(&mut active, s, &tracker, event);
         }
-        if min_on > 1 {
-            let mut run_start: Option<usize> = None;
-            for g in 0..=n {
-                let is_on = g < n && active[g][s];
-                match (run_start, is_on) {
-                    (None, true) => run_start = Some(g),
-                    (Some(start), false) => {
-                        if g - start < min_on {
-                            for k in start..g {
-                                active[k][s] = false;
-                            }
-                        }
-                        run_start = None;
-                    }
-                    _ => {}
-                }
-            }
-        }
+        let event = tracker.flush(n);
+        mark_region(&mut active, s, &tracker, event);
     }
 
-    // Rebuild per-frame classes: 0 active -> Empty, 1 -> solo, 2 -> pair,
-    // 3 -> top-2 by probability (powerset expresses at most two speakers).
+    // Rebuild per-frame classes: 0 active -> Silence, 1 -> solo speaker,
+    // 2 -> pair, 3 -> top-2 by probability (powerset expresses at most two
+    // speakers).
     let mut classes = Vec::with_capacity(n);
     let mut confidences = Vec::with_capacity(n);
     for g in 0..n {
@@ -132,7 +104,9 @@ pub fn binarize_frames(
             confidences.push(0.0);
             continue;
         }
-        let mut on: Vec<u8> = (0..3u8).filter(|&s| active[g][s as usize]).collect();
+        let mut on: Vec<u8> = (0..MAX_LOCAL_SPEAKERS as u8)
+            .filter(|&s| active[g][s as usize])
+            .collect();
         if on.len() > 2 {
             on.sort_by(|a, b| {
                 speaker_probs[g][*b as usize].total_cmp(&speaker_probs[g][*a as usize])
@@ -140,17 +114,15 @@ pub fn binarize_frames(
             on.truncate(2);
             on.sort_unstable();
         }
-        let idx = match on.as_slice() {
-            [] => 0,
-            [s] => 1 + *s as usize,
-            [a, b] => match (*a, *b) {
-                (0, 1) => 4,
-                (0, 2) => 5,
-                _ => 6,
-            },
-            _ => 0,
-        };
-        classes.push(PowersetDecoder::class_for_index(idx));
+        debug_assert!(
+            matches!(on.as_slice(), [] | [_] | [_, _]),
+            "at most two speakers survive the top-2 truncation"
+        );
+        // Checked reverse mapping (speakers -> class): sets the powerset
+        // scheme cannot express yield `None` instead of being silently
+        // relabeled Silence (they cannot occur after the top-2 truncation).
+        let class = PowersetClass::from_speakers(&on);
+        classes.push(class);
         let conf = if on.is_empty() {
             avg_probs[g][0]
         } else {
@@ -162,4 +134,24 @@ pub fn binarize_frames(
         confidences.push(conf.clamp(0.0, 1.0));
     }
     (classes, confidences)
+}
+
+/// Rasterize a closed region that survives the minimum-duration filter into
+/// the per-speaker activity track.
+fn mark_region(
+    active: &mut [[bool; MAX_LOCAL_SPEAKERS]],
+    speaker: usize,
+    tracker: &RegionTracker,
+    event: Option<RegionEvent>,
+) {
+    if let Some(RegionEvent::End {
+        start_frame,
+        end_frame,
+    }) = event
+        && tracker.keeps(start_frame, end_frame)
+    {
+        for frame in active.iter_mut().take(end_frame).skip(start_frame) {
+            frame[speaker] = true;
+        }
+    }
 }

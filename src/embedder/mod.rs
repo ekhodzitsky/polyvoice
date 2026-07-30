@@ -1,23 +1,23 @@
-#![allow(deprecated)] // blanket bridge keeps EmbeddingExtractor → Embedder working
-//! v1.0 `Embedder` trait + concrete extractors (CAM++, ResNet34) + pool +
+//! v1.0 `Embedder` trait + concrete extractors (CAM++, ResNet34, ERes2NetV2) +
 //! overlap-mask helper.
 //!
 //! `Embedder` is the supported bring-your-own embedder contract for offline
-//! [`crate::Pipeline`] and online [`crate::streaming::StreamingPipeline`].
-//! The pure-Rust trait, pool, and overlap mask are always available (no
-//! `onnx` required). ONNX-backed adapters still need `features = ["onnx", "embedder"]`.
+//! [`crate::pipeline::LegacyPipeline`] and online
+//! [`crate::streaming::StreamingPipeline`]. The pure-Rust trait and overlap
+//! mask are always available (no `onnx` required). ONNX-backed adapters still
+//! need `features = ["onnx", "embedder"]`. The generic `EmbedderPool` is a
+//! test-only helper, not public API.
 //!
-//! Shared fbank+ONNX engine: [`crate::ecapa::FbankOnnxExtractor`] (implements
-//! [`Embedder`] directly). Architecture adapters wrap it without the legacy
-//! `EmbeddingExtractor` path. External types that still implement
-//! [`crate::embedding::EmbeddingExtractor`] automatically satisfy [`Embedder`]
-//! via a blanket bridge.
+//! Shared fbank+ONNX engine: `crate::fbank_onnx::FbankOnnxExtractor` (feature
+//! `onnx`; implements [`Embedder`] directly). The architecture adapters share
+//! one generic wrapper with per-model named constructors.
 
 /// Speaker embedding extractor — turns a slice of 16 kHz mono audio into a
 /// fixed-dimension embedding vector. Implementations are expected to L2-normalize
 /// their output so cosine similarity is a meaningful metric downstream.
 ///
-/// This is the **supported library injection API** for [`crate::Pipeline`] and
+/// This is the **supported library injection API** for
+/// [`crate::pipeline::LegacyPipeline`] and
 /// [`crate::streaming::StreamingPipeline`]. Implement it on an external
 /// encoder (Candle, tract, custom) without enabling `onnx`:
 ///
@@ -84,6 +84,17 @@ pub enum EmbedderError {
         detail: String,
     },
 
+    /// An ONNX-backed extractor failed to construct: invalid pool size, an
+    /// unloadable model file, or a backend session-build failure. The typed
+    /// cause is preserved as the [`std::error::Error::source`].
+    #[cfg(feature = "onnx")]
+    #[error("failed to build embedder for {path}: {source}")]
+    SessionBuild {
+        path: std::path::PathBuf,
+        #[source]
+        source: crate::fbank_onnx::FbankExtractorError,
+    },
+
     #[error("legacy adapter error: {0}")]
     Legacy(String),
 }
@@ -111,39 +122,61 @@ fn detail_looks_exhausted(detail: &str) -> bool {
     detail.contains("pool exhausted")
 }
 
-/// Map a legacy [`crate::embedding::EmbeddingError`] into [`EmbedderError`],
-/// preserving exhaustion as a typed variant when possible.
-#[allow(deprecated)]
-fn from_legacy_embedding_error(err: crate::embedding::EmbeddingError) -> EmbedderError {
-    use crate::embedding::EmbeddingError as Legacy;
-    match err {
-        Legacy::ResourceExhausted(detail) => EmbedderError::ResourceExhausted { detail },
-        Legacy::InferenceFailed(detail) if detail_looks_exhausted(&detail) => {
-            EmbedderError::ResourceExhausted { detail }
+/// Deterministic pseudo-random unit-vector embedder for tests and benchmarks.
+///
+/// Implements [`Embedder`] directly — pass it to
+/// [`crate::pipeline::LegacyPipeline`] / [`crate::streaming::StreamingPipeline`].
+///
+/// ```rust
+/// use polyvoice::{DummyExtractor, Embedder};
+/// let extractor = DummyExtractor::new(256);
+/// assert_eq!(extractor.dim(), 256);
+/// ```
+pub struct DummyExtractor {
+    dim: usize,
+    seed: std::sync::atomic::AtomicU64,
+}
+
+impl DummyExtractor {
+    /// { true }
+    /// pub fn new(dim: usize) -> Self
+    /// { true }
+    /// Create a dummy extractor that returns deterministic pseudo-random embeddings.
+    ///
+    /// Useful for tests and benchmarks where a real ONNX model is not available.
+    ///
+    /// ```rust
+    /// use polyvoice::{DummyExtractor, Embedder};
+    /// let extractor = DummyExtractor::new(256);
+    /// assert_eq!(extractor.dim(), 256);
+    /// ```
+    pub fn new(dim: usize) -> Self {
+        Self {
+            dim,
+            seed: std::sync::atomic::AtomicU64::new(1),
         }
-        other => EmbedderError::Legacy(other.to_string()),
+    }
+
+    fn next_unit_vector(&self) -> Vec<f32> {
+        let mut seed = self.seed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let mut vec = vec![0.0f32; self.dim];
+        for v in &mut vec {
+            // Simple LCG for deterministic "randomness".
+            seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
+            *v = ((seed % 1000) as f32 / 1000.0) - 0.5;
+        }
+        crate::utils::l2_normalize(&mut vec);
+        vec
     }
 }
 
-/// Bridge: any legacy [`crate::embedding::EmbeddingExtractor`] is an [`Embedder`].
-///
-/// Pipeline-owned [`crate::types::DiarizationConfig`] is not part of the
-/// `Embedder` surface; the bridge supplies `DiarizationConfig::default()`.
-/// In-tree legacy extractors ignore that config (window length is enforced by
-/// the caller / model). External extractors that read config fields should
-/// implement [`Embedder`] directly.
-impl<T> Embedder for T
-where
-    T: crate::embedding::EmbeddingExtractor + ?Sized,
-{
+impl Embedder for DummyExtractor {
     fn dim(&self) -> usize {
-        self.embedding_dim()
+        self.dim
     }
 
-    fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-        let config = crate::types::DiarizationConfig::default();
-        self.extract(audio, &config)
-            .map_err(from_legacy_embedding_error)
+    fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        Ok(self.next_unit_vector())
     }
 }
 
@@ -187,25 +220,32 @@ pub fn apply_overlap_mask(
 
 /// Pool of `Embedder` instances for concurrent extraction.
 ///
+/// Test-only helper: production pipelines hold a `Box<dyn Embedder>` (and
+/// `FbankOnnxExtractor` pools ONNX sessions internally), so this type is
+/// compiled only for unit tests and is not part of the public API.
+///
 /// Generic over `E: Embedder` so the same pool implementation works for
 /// `CamPlusPlusExtractor`, `ResNet34Adapter`, or any user-provided embedder.
 /// All embedders in a pool must share the same output dimension.
 ///
 /// Backed by a blocking object pool (`Mutex<Vec<E>>`): checkout waits until an
 /// embedder is free; Drop returns it.
-pub struct EmbedderPool<E: Embedder> {
+#[cfg(test)]
+pub(crate) struct EmbedderPool<E: Embedder> {
     pool: crate::utils::ObjectPool<E>,
     dim: usize,
     capacity: usize,
 }
 
+#[cfg(test)]
 impl<E: Embedder> EmbedderPool<E> {
     /// { true }
     /// `pub fn new(embedders: Vec<E>) -> Result<Self, EmbedderError>`
     /// { ret.is_ok() => ret.as_ref().unwrap().dim() == embedders.first().map_or(0, |e| e.dim()) }
     /// Build a pool from a list of embedders. All must share the same `dim()`.
-    /// An empty list constructs a pool that fails on every call (returns
-    /// `EmbedderError::Legacy("empty pool")`).
+    /// An empty list is allowed and constructs an empty pool: [`Self::is_empty`]
+    /// is true and every [`Self::embed`] call fails with
+    /// `EmbedderError::ResourceExhausted`.
     pub fn new(embedders: Vec<E>) -> Result<Self, EmbedderError> {
         let dim = embedders.first().map(|e| e.dim()).unwrap_or(0);
         for e in embedders.iter().skip(1) {
@@ -217,7 +257,7 @@ impl<E: Embedder> EmbedderPool<E> {
                 });
             }
         }
-        let capacity = embedders.len().max(1);
+        let capacity = embedders.len();
         Ok(Self {
             pool: crate::utils::ObjectPool::new(embedders),
             dim,
@@ -231,11 +271,14 @@ impl<E: Embedder> EmbedderPool<E> {
     pub fn dim(&self) -> usize {
         self.dim
     }
+
     /// { true }
-    /// pub fn capacity(&self) -> usize
-    /// { ret == self.capacity }
-    pub fn capacity(&self) -> usize {
-        self.capacity
+    /// pub fn is_empty(&self) -> bool
+    /// { ret == (self.capacity == 0) }
+    /// True when the pool holds no embedders; every `embed` call then fails
+    /// instead of blocking forever on an empty pool.
+    pub fn is_empty(&self) -> bool {
+        self.capacity == 0
     }
 
     /// { true }
@@ -244,8 +287,7 @@ impl<E: Embedder> EmbedderPool<E> {
     /// Extract a single embedding using the next-available pooled embedder.
     /// Blocks until one is free.
     pub fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-        if self.dim == 0 {
-            // Empty-construction case (no items in the pool).
+        if self.is_empty() {
             return Err(EmbedderError::ResourceExhausted {
                 detail: "empty embedder pool".to_owned(),
             });
@@ -259,7 +301,8 @@ impl<E: Embedder> EmbedderPool<E> {
 /// Spawns up to `available_parallelism` threads, each processing a chunk
 /// of the input via `embedder.embed()`.
 ///
-/// Only referenced by ONNX-backed adapters (`ResNet34`, CAM++, ERes2NetV2).
+/// Only referenced by the shared ONNX adapter backing the per-model wrappers
+/// (`ResNet34`, CAM++, ERes2NetV2).
 #[cfg(all(feature = "onnx", feature = "embedder"))]
 fn parallel_embed_batch<E: Embedder>(
     embedder: &E,
@@ -304,37 +347,41 @@ fn parallel_embed_batch<E: Embedder>(
 #[cfg(all(feature = "onnx", feature = "embedder"))]
 mod onnx_adapters {
     use super::*;
-    use crate::ecapa::FbankOnnxExtractor;
+    use crate::fbank_onnx::FbankOnnxExtractor;
     use std::path::Path;
 
-    /// WeSpeaker ResNet34 embedder (256-d) via the shared fbank+ONNX engine.
-    pub struct ResNet34Adapter {
+    /// Generic fbank+ONNX embedder adapter: owns the shared engine and the
+    /// output dim, maps construction failures to [`EmbedderError::SessionBuild`]
+    /// with the model path attached, and forwards the [`Embedder`] contract
+    /// (batches fan out across threads via `parallel_embed_batch`). The public
+    /// per-model adapters below are thin named wrappers over this one
+    /// implementation.
+    struct FbankAdapter {
         inner: FbankOnnxExtractor,
         dim: usize,
     }
 
-    impl ResNet34Adapter {
-        /// { true }
-        /// `pub fn new(path: impl AsRef<Path>, pool_size: usize, ep: ExecutionProvider) -> Result<Self, EmbedderError>`
-        /// { ret.as_ref().map_or(true, |e| e.dim() == 256) }
-        /// Load the WeSpeaker ResNet34 ONNX model with the given execution provider.
-        pub fn new(
+    impl FbankAdapter {
+        /// Load an fbank+ONNX model with the given output dim, session pool
+        /// size, and execution provider.
+        fn new(
             path: impl AsRef<Path>,
+            dim: usize,
             pool_size: usize,
             ep: crate::onnx::ExecutionProvider,
         ) -> Result<Self, EmbedderError> {
             let inner =
-                FbankOnnxExtractor::new(path.as_ref(), 256, pool_size, ep).map_err(|e| {
-                    EmbedderError::ModelIo {
+                FbankOnnxExtractor::new(path.as_ref(), dim, pool_size, ep).map_err(|e| {
+                    EmbedderError::SessionBuild {
                         path: path.as_ref().to_path_buf(),
-                        detail: format!("{e}"),
+                        source: e,
                     }
                 })?;
-            Ok(Self { inner, dim: 256 })
+            Ok(Self { inner, dim })
         }
     }
 
-    impl Embedder for ResNet34Adapter {
+    impl Embedder for FbankAdapter {
         fn dim(&self) -> usize {
             self.dim
         }
@@ -348,13 +395,59 @@ mod onnx_adapters {
         }
     }
 
-    /// CAM++ embedder (Channel-Attentive Multi-scale Pooling). Dim is supplied
-    /// explicitly because WeSpeaker ships several CAM++ variants:
-    /// `voxceleb_CAM++.onnx` is 512-d; smaller variants exist at 192-d.
-    /// Uses the same 80-bin log-mel fbank pipeline as ResNet34.
-    pub struct CamPlusPlusExtractor {
-        inner: FbankOnnxExtractor,
-        dim: usize,
+    /// Declare a public per-model adapter as a named wrapper over
+    /// [`FbankAdapter`]: the tuple struct plus the delegating [`Embedder`]
+    /// impl. Constructor conventions differ per model and are written
+    /// explicitly next to each invocation.
+    macro_rules! named_fbank_adapter {
+        ($(#[$meta:meta])* $name:ident) => {
+            $(#[$meta])*
+            pub struct $name(FbankAdapter);
+
+            impl Embedder for $name {
+                fn dim(&self) -> usize {
+                    self.0.dim()
+                }
+
+                fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+                    self.0.embed(audio)
+                }
+
+                fn embed_batch(
+                    &self,
+                    audios: &[&[f32]],
+                ) -> Result<Vec<Vec<f32>>, EmbedderError> {
+                    self.0.embed_batch(audios)
+                }
+            }
+        };
+    }
+
+    named_fbank_adapter! {
+        /// WeSpeaker ResNet34 embedder (256-d) via the shared fbank+ONNX engine.
+        ResNet34Adapter
+    }
+
+    impl ResNet34Adapter {
+        /// { true }
+        /// `pub fn new(path: impl AsRef<Path>, pool_size: usize, ep: ExecutionProvider) -> Result<Self, EmbedderError>`
+        /// { ret.as_ref().map_or(true, |e| e.dim() == 256) }
+        /// Load the WeSpeaker ResNet34 ONNX model with the given execution provider.
+        pub fn new(
+            path: impl AsRef<Path>,
+            pool_size: usize,
+            ep: crate::onnx::ExecutionProvider,
+        ) -> Result<Self, EmbedderError> {
+            FbankAdapter::new(path, 256, pool_size, ep).map(Self)
+        }
+    }
+
+    named_fbank_adapter! {
+        /// CAM++ embedder (Channel-Attentive Multi-scale Pooling). Dim is supplied
+        /// explicitly because WeSpeaker ships several CAM++ variants:
+        /// `voxceleb_CAM++.onnx` is 512-d; smaller variants exist at 192-d.
+        /// Uses the same 80-bin log-mel fbank pipeline as ResNet34.
+        CamPlusPlusExtractor
     }
 
     impl CamPlusPlusExtractor {
@@ -371,37 +464,15 @@ mod onnx_adapters {
             pool_size: usize,
             ep: crate::onnx::ExecutionProvider,
         ) -> Result<Self, EmbedderError> {
-            let inner =
-                FbankOnnxExtractor::new(path.as_ref(), dim, pool_size, ep).map_err(|e| {
-                    EmbedderError::ModelIo {
-                        path: path.as_ref().to_path_buf(),
-                        detail: format!("{e}"),
-                    }
-                })?;
-            Ok(Self { inner, dim })
+            FbankAdapter::new(path, dim, pool_size, ep).map(Self)
         }
     }
 
-    impl Embedder for CamPlusPlusExtractor {
-        fn dim(&self) -> usize {
-            self.dim
-        }
-
-        fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-            self.inner.embed(audio)
-        }
-
-        fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {
-            parallel_embed_batch(self, audios)
-        }
-    }
-
-    /// ERes2NetV2 speaker embedder (Interspeech 2024): 192-d output, same
-    /// 80-bin log-mel fbank path as CAM++. Tuned for short (1–3 s) utterances.
-    /// Weights are optional downloads (Apache-2.0); never bundled or default.
-    pub struct ERes2NetV2Extractor {
-        inner: FbankOnnxExtractor,
-        dim: usize,
+    named_fbank_adapter! {
+        /// ERes2NetV2 speaker embedder (Interspeech 2024): 192-d output, same
+        /// 80-bin log-mel fbank path as CAM++. Tuned for short (1–3 s) utterances.
+        /// Weights are optional downloads (Apache-2.0); never bundled or default.
+        ERes2NetV2Extractor
     }
 
     impl ERes2NetV2Extractor {
@@ -424,28 +495,7 @@ mod onnx_adapters {
             pool_size: usize,
             ep: crate::onnx::ExecutionProvider,
         ) -> Result<Self, EmbedderError> {
-            let inner =
-                FbankOnnxExtractor::new(path.as_ref(), dim, pool_size, ep).map_err(|e| {
-                    EmbedderError::ModelIo {
-                        path: path.as_ref().to_path_buf(),
-                        detail: format!("{e}"),
-                    }
-                })?;
-            Ok(Self { inner, dim })
-        }
-    }
-
-    impl Embedder for ERes2NetV2Extractor {
-        fn dim(&self) -> usize {
-            self.dim
-        }
-
-        fn embed(&self, audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
-            self.inner.embed(audio)
-        }
-
-        fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {
-            parallel_embed_batch(self, audios)
+            FbankAdapter::new(path, dim, pool_size, ep).map(Self)
         }
     }
 }
@@ -706,48 +756,21 @@ mod pool_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn legacy_bridge_preserves_resource_exhausted() {
-        use crate::embedding::{EmbeddingError, EmbeddingExtractor};
-        use crate::types::DiarizationConfig;
-
-        struct ExhaustedExtractor;
-        impl EmbeddingExtractor for ExhaustedExtractor {
-            fn extract(
-                &self,
-                _samples: &[f32],
-                _config: &DiarizationConfig,
-            ) -> Result<Vec<f32>, EmbeddingError> {
-                Err(EmbeddingError::ResourceExhausted("sessions busy".into()))
-            }
-            fn embedding_dim(&self) -> usize {
-                4
-            }
-        }
-
-        let err = ExhaustedExtractor.embed(&[0.0; 16]).expect_err("must fail");
-        assert!(
-            matches!(
-                err,
-                EmbedderError::ResourceExhausted { ref detail } if detail == "sessions busy"
-            ),
-            "bridge must not collapse exhaustion into Legacy, got {err}"
-        );
-        assert!(err.is_resource_exhausted());
-    }
-
-    #[test]
     fn pipeline_and_streaming_error_helpers() {
-        use crate::pipeline::PipelineError;
+        use crate::pipeline::LegacyPipelineError;
         use crate::streaming::StreamingError;
 
         let emb = EmbedderError::ResourceExhausted {
             detail: "busy".into(),
         };
-        let pe = PipelineError::Embedding(emb.clone());
+        let pe = LegacyPipelineError::Embedding(emb.clone());
         let se = StreamingError::Embedding(emb);
         assert!(pe.is_resource_exhausted());
         assert!(se.is_resource_exhausted());
-        assert!(!PipelineError::NoSpeech.is_resource_exhausted());
+        let non_embedding = LegacyPipelineError::AudioTooLong {
+            actual_secs: 2.0,
+            max_secs: 1.0,
+        };
+        assert!(!non_embedding.is_resource_exhausted());
     }
 }

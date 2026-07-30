@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-//! Miri-friendly subset of M4 resegmenter tests. Covers no-overlap pass-through,
+//! Miri-friendly subset of the resegmenter tests. Covers no-overlap pass-through,
 //! single-overlap cosine matching, and centroid math. ONNX-free, deterministic.
 
 #![cfg(feature = "resegmentation")]
@@ -10,11 +10,8 @@ use polyvoice::resegmentation::{
 };
 use polyvoice::types::{SpeakerId, SpeakerTurn, TimeRange};
 
-fn unit(dim: usize, axis: usize) -> Vec<f32> {
-    let mut v = vec![0.0_f32; dim];
-    v[axis] = 1.0;
-    v
-}
+mod common;
+use common::unit_vec;
 
 #[test]
 fn miri_resegment_no_overlap() {
@@ -29,7 +26,7 @@ fn miri_resegment_no_overlap() {
     }];
     let centroids = vec![SpeakerCentroid {
         speaker: SpeakerId(0),
-        embedding: unit(4, 0),
+        embedding: unit_vec(4, 0),
     }];
     let r = OverlapResegmenter::default();
     let out = r
@@ -56,11 +53,11 @@ fn miri_resegment_single_overlap() {
     let centroids = vec![
         SpeakerCentroid {
             speaker: SpeakerId(0),
-            embedding: unit(4, 0),
+            embedding: unit_vec(4, 0),
         },
         SpeakerCentroid {
             speaker: SpeakerId(1),
-            embedding: unit(4, 1),
+            embedding: unit_vec(4, 1),
         },
     ];
     let regions = vec![OverlapRegionInput {
@@ -70,7 +67,7 @@ fn miri_resegment_single_overlap() {
         },
         primary_speaker: SpeakerId(0),
         secondary_speaker: None,
-        embedding: unit(4, 1),
+        embedding: unit_vec(4, 1),
     }];
     let r = OverlapResegmenter::default();
     let out = r
@@ -92,7 +89,12 @@ fn miri_resegment_single_overlap() {
 
 #[test]
 fn miri_compute_centroids() {
-    let embeddings = vec![unit(4, 0), unit(4, 0), unit(4, 1), unit(4, 1)];
+    let embeddings = vec![
+        unit_vec(4, 0),
+        unit_vec(4, 0),
+        unit_vec(4, 1),
+        unit_vec(4, 1),
+    ];
     let labels = vec![0, 0, 1, 1];
     let centroids = compute_centroids(&embeddings, &labels);
     assert_eq!(centroids.len(), 2);

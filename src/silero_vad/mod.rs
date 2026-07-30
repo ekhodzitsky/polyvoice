@@ -17,12 +17,28 @@ use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, RuntimeSession
 #[cfg(feature = "onnx")]
 use crate::vad::{VadError, VoiceActivityDetector};
 
+/// Errors from [`SileroVad`] construction.
+///
+/// Load-time failures are kept separate from the runtime [`VadError`] surface:
+/// a model that never loads is a deployment problem, not a per-frame one.
+#[cfg(feature = "onnx")]
+#[derive(thiserror::Error, Debug)]
+pub enum SileroVadError {
+    /// `chunk_size` was 0 — the model scores fixed-size frames.
+    #[error("SileroVad: chunk_size must be > 0")]
+    ZeroChunkSize,
+
+    /// The inference session failed to load (missing/invalid model file or
+    /// backend build failure).
+    #[error("failed to load Silero VAD model: {0}")]
+    Session(#[from] crate::onnx::OnnxError),
+}
+
 #[cfg(feature = "onnx")]
 pub struct SileroVad {
     session: RuntimeSession,
     state: Vec<f32>,
     context: Vec<f32>,
-    sample_rate: u32,
     chunk_size: usize,
     context_size: usize,
 }
@@ -30,17 +46,19 @@ pub struct SileroVad {
 #[cfg(feature = "onnx")]
 impl SileroVad {
     const STATE_SIZE: usize = 2 * 128;
+    /// Silero VAD weights are trained for 16 kHz mono audio only.
+    const SAMPLE_RATE: u32 = 16_000;
 
     /// { true }
-    /// `pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error>`
+    /// `pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, SileroVadError>`
     /// { true }
     /// Load with the historical default (no execution provider — plain CPU).
-    pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, anyhow::Error> {
+    pub fn new(model_path: &std::path::Path, chunk_size: usize) -> Result<Self, SileroVadError> {
         Self::with_ep(model_path, chunk_size, crate::onnx::ExecutionProvider::Cpu)
     }
 
     /// { true }
-    /// `pub fn with_ep(model_path: &std::path::Path, chunk_size: usize, ep: ExecutionProvider) -> Result<Self, anyhow::Error>`
+    /// `pub fn with_ep(model_path: &std::path::Path, chunk_size: usize, ep: ExecutionProvider) -> Result<Self, SileroVadError>`
     /// { true }
     /// Load with an explicit execution provider. The session goes through the
     /// shared EP-aware builder, so header validation and warn-and-CPU-fallback
@@ -49,9 +67,9 @@ impl SileroVad {
         model_path: &std::path::Path,
         chunk_size: usize,
         ep: crate::onnx::ExecutionProvider,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<Self, SileroVadError> {
         if chunk_size == 0 {
-            anyhow::bail!("SileroVad::new: chunk_size must be > 0");
+            return Err(SileroVadError::ZeroChunkSize);
         }
         let session = crate::onnx::build_session_with_ep(model_path, ep, None)?;
 
@@ -61,7 +79,6 @@ impl SileroVad {
             session,
             state: vec![0.0f32; Self::STATE_SIZE],
             context: vec![0.0f32; context_size],
-            sample_rate: 16000,
             chunk_size,
             context_size,
         })
@@ -74,7 +91,7 @@ impl SileroVad {
 
         let input_len = input.len();
         let input_tensor = InferenceTensor::f32(vec![1, input_len], input);
-        let sr_tensor = InferenceTensor::i64_scalar(self.sample_rate as i64);
+        let sr_tensor = InferenceTensor::i64_scalar(Self::SAMPLE_RATE as i64);
         let state_tensor = InferenceTensor::f32(vec![2, 1, 128], self.state.clone());
 
         let outputs = self
@@ -138,33 +155,6 @@ impl VoiceActivityDetector for SileroVad {
     }
 
     fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-}
-
-/// Stub when the `onnx` feature is disabled.
-#[cfg(not(feature = "onnx"))]
-pub struct SileroVad;
-
-#[cfg(not(feature = "onnx"))]
-impl SileroVad {
-    /// { true }
-    /// `pub fn new(_model_path: &std::path::Path, _chunk_size: usize) -> Result<Self, anyhow::Error>`
-    /// { true }
-    pub fn new(_model_path: &std::path::Path, _chunk_size: usize) -> Result<Self, anyhow::Error> {
-        anyhow::bail!("the `onnx` feature is not enabled")
-    }
-}
-
-#[allow(clippy::unwrap_used)]
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_silero_vad_stub_without_onnx() {
-        #[cfg(not(feature = "onnx"))]
-        {
-            let result = super::SileroVad::new(std::path::Path::new("model.onnx"), 512);
-            assert!(result.is_err());
-        }
+        Self::SAMPLE_RATE
     }
 }

@@ -18,15 +18,15 @@
 
 use anyhow::{Context, Result};
 use clap::{Args, CommandFactory, Parser, Subcommand};
+use polyvoice::cli_common;
 use polyvoice::format::{write_srt, write_txt, write_vtt};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::Pipeline as LegacyPipeline;
-use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig};
+use polyvoice::pipeline::LegacyPipeline;
+use polyvoice::pipeline_v2::PipelineConfig;
 use polyvoice::rttm::write_rttm;
-use polyvoice::types::{ClusterConfig, DiarizationConfig, DiarizationResult, Profile, SampleRate};
+use polyvoice::types::{DiarizationResult, Profile, SampleRate};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::load_audio;
-use polyvoice::{FbankOnnxExtractor, SileroVad};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -66,7 +66,7 @@ struct DiarizeArgs {
     format: OutputFormat,
     #[arg(long)]
     models_cache: Option<PathBuf>,
-    #[arg(long, default_value = "0.45")]
+    #[arg(long, default_value_t = polyvoice::DEFAULT_AHC_THRESHOLD)]
     threshold: f32,
     /// Target speaker count (caps clustering at N speakers).
     #[arg(long)]
@@ -171,14 +171,6 @@ enum OutputFormat {
     Txt,
 }
 
-fn parse_profile(name: &str) -> Result<Profile> {
-    match name {
-        "mobile" => Ok(Profile::Mobile),
-        "balanced" => Ok(Profile::Balanced),
-        other => anyhow::bail!("invalid profile: {other} (expected mobile|balanced)"),
-    }
-}
-
 fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     let DiarizeArgs {
         wav,
@@ -213,7 +205,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     let format = if json { OutputFormat::Json } else { format };
     let quiet = quiet || json;
 
-    let profile = parse_profile(&profile)?;
+    let profile: Profile = profile.parse()?;
     if !wav.is_file() {
         anyhow::bail!("No such file: {}", wav.display());
     }
@@ -346,28 +338,19 @@ fn run_legacy_pipeline(
     let models = registry
         .ensure_for_profile(profile)
         .context("ensure models")?;
-    let embedding_dim = profile.embedding_dim();
-    let extractor = FbankOnnxExtractor::new(
-        &models.embedder_path,
-        embedding_dim,
-        1,
-        polyvoice::onnx::ExecutionProvider::Cpu,
-    )
-    .context("load embedder")?;
     let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
-    let mut vad = SileroVad::new(&vad_path, 512).context("load vad")?;
+    let mut stack = cli_common::load_legacy_stack(
+        &models.embedder_path,
+        profile.embedding_dim(),
+        polyvoice::onnx::ExecutionProvider::Cpu,
+        &vad_path,
+        512,
+    )?;
 
-    let mut cluster = ClusterConfig {
-        threshold,
-        ..Default::default()
-    };
+    let mut config = cli_common::legacy_diarization_config(threshold);
     if let Some(n) = max_clusters {
-        cluster.max_speakers = n;
+        config.cluster.max_speakers = n;
     }
-    let mut config = DiarizationConfig {
-        cluster,
-        ..DiarizationConfig::default()
-    };
     if let Some(preset) = latency {
         // Apply window/hop/cap from the streaming latency preset; keep the
         // CLI --threshold / --max-speakers overrides when the user set them.
@@ -379,8 +362,7 @@ fn run_legacy_pipeline(
             config.cluster.max_speakers = n;
         }
     }
-    let vad_config = VadConfig::default();
-    let pipeline = LegacyPipeline::new(config, vad_config);
+    let pipeline = LegacyPipeline::new(config, VadConfig::default());
 
     if !quiet {
         eprintln!("Reading {}...", wav.display());
@@ -397,7 +379,7 @@ fn run_legacy_pipeline(
         );
     }
     let result = pipeline
-        .run(&samples, &extractor, &mut vad)
+        .run(&samples, &stack.extractor, &mut stack.vad)
         .context("pipeline.run failed")?;
     if !quiet {
         eprintln!(
@@ -407,17 +389,6 @@ fn run_legacy_pipeline(
         );
     }
     Ok(result)
-}
-
-/// Convert a user-provided speaker ceiling to the v2 config's u8, rejecting
-/// values that cannot be honored exactly (0 or > 255) instead of silently
-/// clamping them.
-fn max_speakers_u8(n: usize) -> Result<u8> {
-    let v = u8::try_from(n)
-        .ok()
-        .filter(|&v| v >= 1)
-        .ok_or_else(|| anyhow::anyhow!("max_speakers must be in 1..=255, got {n}"))?;
-    Ok(v)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -433,22 +404,8 @@ fn run_v2_pipeline(
     execution_provider: &str,
     quiet: bool,
 ) -> Result<DiarizationResult> {
-    let clusterer_kind = match clusterer {
-        "ahc" => ClustererKind::Ahc { threshold },
-        "vbx" => ClustererKind::Vbx,
-        other => anyhow::bail!("unknown --clusterer '{other}' (expected 'ahc' or 'vbx')"),
-    };
-    let ep = match execution_provider {
-        "auto" => polyvoice::onnx::ExecutionProvider::auto(),
-        "cpu" => polyvoice::onnx::ExecutionProvider::Cpu,
-        "coreml" => polyvoice::onnx::ExecutionProvider::CoreMl,
-        "nnapi" => polyvoice::onnx::ExecutionProvider::Nnapi,
-        "cuda" => polyvoice::onnx::ExecutionProvider::Cuda,
-        "xnnpack" => polyvoice::onnx::ExecutionProvider::XnnPack,
-        other => anyhow::bail!(
-            "unknown --execution-provider '{other}' (expected auto|cpu|coreml|nnapi|cuda|xnnpack)"
-        ),
-    };
+    let clusterer_kind = cli_common::parse_clusterer_kind(clusterer, threshold)?;
+    let ep = cli_common::parse_execution_provider(execution_provider)?;
     let mut config = PipelineConfig {
         profile,
         clusterer: clusterer_kind,
@@ -458,19 +415,9 @@ fn run_v2_pipeline(
         ..PipelineConfig::default()
     };
     if let Some(n) = max_clusters {
-        config.max_speakers = max_speakers_u8(n)?;
+        config.max_speakers = cli_common::max_speakers_u8(n)?;
     }
-    let pipeline = V2Pipeline::builder()
-        .config(config)
-        .with_models_from(registry.clone())
-        .build()
-        .with_context(|| {
-            if matches!(clusterer_kind, ClustererKind::Vbx) {
-                "build pipeline v2 (clusterer=vbx): set --vbx-plda-dir or POLYVOICE_VBX_PLDA_DIR, ensure network access for registry PLDA download, or pass --clusterer ahc / --legacy".to_string()
-            } else {
-                "build pipeline v2".to_string()
-            }
-        })?;
+    let pipeline = cli_common::build_v2_pipeline(config, registry.clone())?;
 
     if !quiet {
         eprintln!("Reading {}...", wav.display());
@@ -521,7 +468,7 @@ fn cmd_download_models(profile: String) -> Result<()> {
             let _ = registry.ensure_for_profile(Profile::Balanced)?;
         }
         other => {
-            let p = parse_profile(other)?;
+            let p: Profile = other.parse()?;
             let _ = registry.ensure_for_profile(p)?;
         }
     }
@@ -643,19 +590,6 @@ mod prop_tests {
     }
 
     #[test]
-    fn max_speakers_u8_accepts_valid_range() {
-        assert_eq!(max_speakers_u8(1).unwrap(), 1);
-        assert_eq!(max_speakers_u8(255).unwrap(), 255);
-    }
-
-    #[test]
-    fn max_speakers_u8_rejects_out_of_range() {
-        assert!(max_speakers_u8(0).is_err());
-        assert!(max_speakers_u8(256).is_err());
-        assert!(max_speakers_u8(usize::MAX).is_err());
-    }
-
-    #[test]
     fn subcommands_are_not_shadowed_by_default_diarize() {
         assert!(matches!(
             Cli::try_parse_from(["polyvoice", "models", "list"])
@@ -685,9 +619,10 @@ mod prop_tests {
 
     proptest! {
         #[test]
-        fn parse_profile_accepts_only_valid(s in "[a-zA-Z0-9_-]{1,20}") {
-            let result = parse_profile(&s);
-            if s == "mobile" || s == "balanced" {
+        fn profile_from_str_accepts_only_known_names(s in "[a-zA-Z0-9_-]{1,20}") {
+            let result = s.parse::<Profile>();
+            let lower = s.to_ascii_lowercase();
+            if lower == "mobile" || lower == "balanced" || lower == "custom" {
                 prop_assert!(result.is_ok());
             } else {
                 prop_assert!(result.is_err());

@@ -11,8 +11,7 @@ purpose: >
   (v2 + VBx after a full VoxConverse-test + AMI-test DER gate). The ort-free
   BYO surface remains the separate always-on `pipeline` module. Does NOT own
   the component implementations (segmentation, embedder, clusterer,
-  resegmentation) — it only wires them. The sibling `hybrid` path is
-  research/ablation only and is not wired to CLI/FFI/Python.
+  resegmentation) — it only wires them.
 status: stable
 owners:
   - polyvoice-core
@@ -80,7 +79,7 @@ surface:
       Selects the clustering backend (Ahc { threshold } | NmeSc | Vbx).
       NmeSc falls back to AHC when the `spectral` feature is absent. VBx
       requires the `vbx` feature and PLDA params (dir, env, or registry).
-      KMeansClusterer remains available for Custom profile injection.
+      KmeansClusterer remains available for Custom profile injection.
     proof:
       kind: unit-test
       target: src/pipeline_v2::config::tests
@@ -101,7 +100,7 @@ surface:
     visibility: public
     contract: >
       Error type for build/run: UnsupportedSampleRate, Segmentation, Embedding,
-      Clustering, Resegment, Config, Registry, ModelLoad.
+      Clustering, Resegment, Config, Registry.
     proof:
       kind: unit-test
       target: src/pipeline_v2::mod::tests::pipeline_run_unsupported_sample_rate_returns_err
@@ -111,21 +110,11 @@ surface:
     visibility: public
     contract: >
       Builder validation errors (missing registry, custom component in profile,
-      registry in custom profile, missing custom component, unknown model).
+      registry in custom profile, missing custom component, unknown model,
+      model load failure with typed source).
     proof:
       kind: unit-test
       target: src/pipeline_v2::builder::tests
-      command: cargo nextest run --lib pipeline_v2 --features "onnx,download,segmentation,embedder,clusterer,resegmentation"
-  - name: HybridPipeline
-    kind: struct
-    visibility: public
-    contract: >
-      Research/ablation sibling: powerset used only as speech-region detector,
-      then dense sliding-window embeddings + Clusterer. Not the CLI/FFI/Python
-      default; prefer main Pipeline with optional embed_window_secs.
-    proof:
-      kind: unit-test
-      target: src/pipeline_v2::hybrid::tests
       command: cargo nextest run --lib pipeline_v2 --features "onnx,download,segmentation,embedder,clusterer,resegmentation"
 dependencies:
   internal:
@@ -179,9 +168,10 @@ consumers:
 invariants:
   - id: feature-completeness-gate
     rule: >
-      The module fails to compile (compile_error!) unless ALL of onnx, download,
-      segmentation, embedder, clusterer, resegmentation features are enabled —
-      half-wired feature combos cannot ship.
+      The module is only compiled when ALL of onnx, download, segmentation,
+      embedder, clusterer, resegmentation features are enabled (cfg-gated in
+      lib.rs, with a compile_error! backstop) — half-wired feature combos
+      exclude it entirely.
     proof:
       kind: compile-time
       target: src/pipeline_v2::mod (compile_error!)
@@ -228,7 +218,6 @@ agent_policy:
     - Wiring additional execution providers (NNAPI/XNNPACK/CUDA) into the pipeline.
     - Adding scoring/resegmentation stages behind the existing trait seams.
     - Improving the builder validation messages.
-    - Deprecating or folding HybridPipeline into main Pipeline config knobs.
   forbidden_mutations:
     - Changing the CLI/FFI/Python default away from this module without a
       migration lease and proven DER evidence on VoxConverse-test + AMI-test.

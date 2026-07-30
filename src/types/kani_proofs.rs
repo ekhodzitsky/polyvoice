@@ -2,7 +2,7 @@
 //!
 //! Run with: `cargo kani`
 
-use super::{Confidence, SampleRate, Seconds, TimeRange};
+use super::{Confidence, SampleRate, TimeRange};
 
 #[kani::proof]
 fn confidence_new_invariant() {
@@ -22,16 +22,6 @@ fn sample_rate_new_invariant() {
     if let Some(sr) = SampleRate::new(value) {
         assert!(sr.get() >= 8000);
         assert!(sr.get() <= 192000);
-    }
-}
-
-#[kani::proof]
-fn seconds_new_invariant() {
-    let value: f32 = kani::any();
-    kani::assume(value.is_finite());
-
-    if let Some(s) = Seconds::new(value) {
-        assert!(s.get() >= 0.0);
     }
 }
 

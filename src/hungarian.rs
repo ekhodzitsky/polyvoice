@@ -1,7 +1,11 @@
 //! Kuhn-Munkres minimum-cost assignment for square cost matrices.
 //!
-//! Pure Rust, wasm32-clean. Used by the segmentation aggregator to
-//! align local speaker indices between overlapping windows.
+//! Pure Rust, wasm32-clean. Consumers: `der` (optimal speaker mapping for
+//! frame DER and WDER, both via [`map_max_cooccurrence`]), the `segmentation`
+//! aggregator (aligning local speaker indices between overlapping windows),
+//! and `clusterer::assign` (local-to-global speaker id assignment).
+
+use std::collections::HashMap;
 
 /// { true }
 /// `pub fn solve(cost: &[Vec<f32>]) -> Option<Vec<usize>>`
@@ -92,6 +96,62 @@ pub fn solve(cost: &[Vec<f32>]) -> Option<Vec<usize>> {
     Some(result)
 }
 
+/// { true }
+/// `pub(crate) fn map_max_cooccurrence(cooccurrence: &HashMap<(u32, u32), u64>) -> HashMap<u32, u32>`
+/// { ret.len() <= cooccurrence.len() }
+/// Optimal 1-to-1 mapping from hypothesis speaker IDs to reference speaker IDs,
+/// maximizing total co-occurrence.
+///
+/// `cooccurrence` maps `(hyp_id, ref_id)` pairs to their co-occurrence count
+/// (frames for DER, scored words for WDER). Distinct ids are sorted for
+/// deterministic output, the square cost matrix uses `-count` costs (padding
+/// cells stay 0.0), and the assignment is filtered to real pairs: the solver
+/// may route leftover rows/columns through zero-cost padding cells, so pairs
+/// with no actual co-occurrence are dropped. Counts cast to f32 are exact
+/// below ~16.7M (f32 has a 24-bit mantissa); callers cap their grids well
+/// under that. An empty map yields an empty mapping.
+pub(crate) fn map_max_cooccurrence(cooccurrence: &HashMap<(u32, u32), u64>) -> HashMap<u32, u32> {
+    if cooccurrence.is_empty() {
+        return HashMap::new();
+    }
+
+    // Distinct hyp ids (rows) and ref ids (cols), sorted for deterministic output.
+    let mut hyp_ids: Vec<u32> = cooccurrence.keys().map(|&(h, _)| h).collect();
+    hyp_ids.sort_unstable();
+    hyp_ids.dedup();
+    let mut ref_ids: Vec<u32> = cooccurrence.keys().map(|&(_, r)| r).collect();
+    ref_ids.sort_unstable();
+    ref_ids.dedup();
+
+    // Square cost matrix: cost = -co-occurrence so minimizing cost maximizes
+    // agreement; padding cells stay 0.0.
+    let n = hyp_ids.len().max(ref_ids.len());
+    let mut cost = vec![vec![0.0_f32; n]; n];
+    for (&(h, r), &count) in cooccurrence {
+        if let (Ok(i), Ok(j)) = (hyp_ids.binary_search(&h), ref_ids.binary_search(&r)) {
+            cost[i][j] = -(count as f32);
+        }
+    }
+
+    let assignment = match solve(&cost) {
+        Some(a) => a,
+        None => return HashMap::new(),
+    };
+
+    let mut mapping: HashMap<u32, u32> = HashMap::new();
+    for (row, &col) in assignment.iter().enumerate() {
+        // Map only real (non-padding) speakers that actually co-occur — the
+        // solver may pair leftover rows/cols through zero-cost padding cells.
+        if let (Some(&h), Some(&r)) = (hyp_ids.get(row), ref_ids.get(col))
+            && cooccurrence.get(&(h, r)).copied().unwrap_or(0) > 0
+        {
+            mapping.insert(h, r);
+        }
+    }
+
+    mapping
+}
+
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
@@ -169,5 +229,37 @@ mod tests {
         let mut sorted = assignment.clone();
         sorted.sort();
         assert_eq!(sorted, vec![0, 1, 2], "must be a permutation");
+    }
+
+    #[test]
+    fn map_max_cooccurrence_empty_input_maps_to_empty() {
+        let cooccurrence: HashMap<(u32, u32), u64> = HashMap::new();
+        assert!(map_max_cooccurrence(&cooccurrence).is_empty());
+    }
+
+    #[test]
+    fn map_max_cooccurrence_prefers_optimal_over_greedy() {
+        // (hyp 0, ref 0)=10, (hyp 0, ref 1)=9, (hyp 1, ref 0)=8.
+        // Greedy would take 0->0 (10); optimal takes 0->1 (9) + 1->0 (8) = 17.
+        let mut cooccurrence: HashMap<(u32, u32), u64> = HashMap::new();
+        cooccurrence.insert((0, 0), 10);
+        cooccurrence.insert((0, 1), 9);
+        cooccurrence.insert((1, 0), 8);
+        let mapping = map_max_cooccurrence(&cooccurrence);
+        assert_eq!(mapping.get(&0), Some(&1));
+        assert_eq!(mapping.get(&1), Some(&0));
+    }
+
+    #[test]
+    fn map_max_cooccurrence_drops_padding_only_pairs() {
+        // Three hyp ids but a single ref id: only one hyp can win the ref
+        // column; the other two must not be mapped through padding cells.
+        let mut cooccurrence: HashMap<(u32, u32), u64> = HashMap::new();
+        cooccurrence.insert((0, 7), 5);
+        cooccurrence.insert((1, 7), 3);
+        cooccurrence.insert((2, 7), 1);
+        let mapping = map_max_cooccurrence(&cooccurrence);
+        assert_eq!(mapping.len(), 1);
+        assert_eq!(mapping.get(&0), Some(&7));
     }
 }

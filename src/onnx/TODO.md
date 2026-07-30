@@ -8,6 +8,5 @@
 
 ## Deferred
 
-- [x] OnnxEmbeddingExtractor soft-deprecated and unused by production adapters
-      (fbank path is `ecapa::FbankOnnxExtractor` / `embedder::*Adapter`).
-- [ ] Remove `OnnxEmbeddingExtractor` in a major release after the deprecation window.
+- [x] OnnxEmbeddingExtractor removed (was deprecated, unused by production
+      adapters; fbank path is `fbank_onnx::FbankOnnxExtractor` / `embedder::*Adapter`).

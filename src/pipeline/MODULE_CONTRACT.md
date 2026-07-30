@@ -33,28 +33,32 @@ authority:
     - cross-workcell write
     - public surface migration
 surface:
-  - name: Pipeline
+  - name: LegacyPipeline
     kind: struct
     visibility: public
     contract: >
       Offline BYO diarization pipeline. Holds DiarizationConfig and VadConfig.
       run(samples, embedder, vad) orchestrates VAD -> window embed -> AHC ->
-      merge. Re-exported at crate root as polyvoice::Pipeline.
+      merge. Deprecated alias `pipeline::Pipeline` kept for downstream
+      compatibility; the crate-root `Pipeline` re-export is pipeline v2.
     proof:
       kind: unit-test
       target: src/pipeline::mod::tests::pipeline_new_with_defaults
       command: cargo test --lib pipeline
-  - name: PipelineError
+  - name: LegacyPipelineError
     kind: enum
     visibility: public
     contract: >
-      Error type for pipeline failures (VAD, embedding, clustering, WAV I/O,
-      sample-rate mismatch, no speech, audio too long). Distinct from
-      pipeline_v2::PipelineError.
+      Error type for pipeline failures (invalid config via
+      DiarizationConfig::validate, VAD, embedding, clustering, WAV I/O,
+      sample-rate mismatch, no speech, audio too long). Clustering carries a
+      typed clusterer::ClustererError and exists only under feature clusterer
+      (no producer without it). Distinct from pipeline_v2::PipelineError (the
+      crate-root `PipelineError`).
     proof:
       kind: integration-test
-      target: tests/e2e_smoke_test.rs
-      command: cargo test --test e2e_smoke_test --features onnx,download
+      target: tests/der_regression_test.rs
+      command: cargo test --test der_regression_test --features onnx,download
 dependencies:
   internal:
     - module: types
@@ -79,36 +83,45 @@ dependencies:
 consumers:
   - path: src/bin/polyvoice.rs
     uses:
-      - Pipeline
-      - PipelineError
+      - LegacyPipeline
+      - LegacyPipelineError
   - path: src/bin/polyvoice-bench.rs
     uses:
-      - Pipeline
-  - path: tests/e2e_smoke_test.rs
-    uses:
-      - Pipeline
+      - LegacyPipeline
   - path: tests/der_regression_test.rs
     uses:
-      - Pipeline
-  - path: tests/der_ami_baseline_test.rs
-    uses:
-      - Pipeline
+      - LegacyPipeline
   - path: docs/library-mode.md
     uses:
-      - Pipeline
+      - LegacyPipeline
 invariants:
   - id: pipeline-construction
-    rule: Pipeline::new with default config constructs successfully.
+    rule: LegacyPipeline::new with default config constructs successfully.
     proof:
       kind: unit-test
       target: src/pipeline::mod::tests::pipeline_new_with_defaults
       command: cargo test --lib pipeline
   - id: audio-too-long-guard
-    rule: Pipeline rejects audio longer than config.max_duration_secs.
+    rule: LegacyPipeline rejects audio longer than config.max_duration_secs.
     proof:
       kind: unit-test
       target: src/pipeline::mod::tests::audio_too_long_error
       command: cargo test --lib pipeline
+  - id: config-validated-before-run
+    rule: run/run_with_clusterer reject an invalid DiarizationConfig
+      (zero/inverted window geometry, cosine threshold outside [-1, 1]) with
+      InvalidConfig instead of panicking in the window iterator.
+    proof:
+      kind: unit-test
+      target: src/pipeline::mod::tests::run_rejects_invalid_window_geometry
+      command: cargo test --lib pipeline
+  - id: clustering-errors-are-typed
+    rule: with feature clusterer, inconsistent embedding dimensions surface as
+      Clustering(ClustererError::DimMismatch); no silent free-AHC fallback.
+    proof:
+      kind: unit-test
+      target: src/pipeline::mod::tests::run_surfaces_dim_mismatch_as_clustering_error
+      command: cargo test --lib pipeline --features clusterer
   - id: wav-sample-rate-match
     rule: run_from_wav rejects WAV files whose sample rate differs from
       config.window.sample_rate.
@@ -117,17 +130,17 @@ invariants:
       target: src/pipeline::mod::tests::wav_sample_rate_mismatch_error
       command: cargo test --lib wav_sample_rate_mismatch_error
   - id: pipeline-result-valid
-    rule: Pipeline output turns are monotonically ordered and non-overlapping
-      (before overlap detection).
+    rule: LegacyPipeline output turns are monotonically ordered and
+      non-overlapping (before overlap detection).
     proof:
       kind: integration-test
-      target: tests/e2e_smoke_test.rs
-      command: cargo test --test e2e_smoke_test --features onnx,download
+      target: tests/der_regression_test.rs
+      command: cargo test --test der_regression_test --features onnx,download
 verification:
   pre_change:
     - cargo check --all-features
   full:
-    - cargo test --test e2e_smoke_test --features onnx,download
+    - cargo test --test der_regression_test --features onnx,download
     - cargo clippy --all-targets --all-features -- -D warnings
 agent_policy:
   allowed_mutations:
@@ -135,8 +148,8 @@ agent_policy:
     - Adding logging or telemetry.
     - Wiring Clusterer trait instead of free AHC (DER-gated).
   forbidden_mutations:
-    - Removing Pipeline::run() or changing its signature without updating
-      library-mode docs and integration tests.
+    - Removing LegacyPipeline::run() or changing its signature without
+      updating library-mode docs and integration tests.
     - Changing the output DiarizationResult shape without consumer updates.
   escalation:
     - Adding new pipeline stages that change output semantics.
@@ -145,5 +158,7 @@ agent_policy:
 
 # src/pipeline
 
-Always-on offline BYO diarization pipeline (crate-root `polyvoice::Pipeline`).
+Always-on offline BYO diarization pipeline
+(`polyvoice::pipeline::LegacyPipeline`; the crate root re-exports pipeline v2
+as `Pipeline` when its feature gate is on).
 Production ONNX default is [`pipeline_v2`](../pipeline_v2/).

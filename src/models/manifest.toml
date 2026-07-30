@@ -104,11 +104,11 @@ trusted comment: polyvoice v0.6.0-alpha.3 | cam_pp_fp32.onnx
 pnLedo8TIV+K14fAyL54r1d9mWm1rN18C50BA/QQclyfP01tOaJVbxcJB+GZ4+AA/fluvTDJewlPn1gMo33wBA==
 '''
 
-# v1.0 INT8 artifacts (M5). Hashes/sizes are real, taken from
+# v1.0 INT8 artifacts. Hashes/sizes are real, taken from
 # `bash scripts/publish-models.sh` output. Calibration set: VoxConverse-dev
 # random 500-sample (seed 42). See docs/calibration/<date>-int8-validation.md.
 #
-# NOTE (2026-05-07): hashes below are PROVISIONAL — produced from the M5
+# NOTE (2026-05-07): hashes below are PROVISIONAL — produced from a
 # preview calibration that used voxconverse-test as a stand-in calibration set
 # (because the dev split download was still in progress). They will be
 # overwritten by `publish-models.sh` after the full VoxConverse-dev calibration
