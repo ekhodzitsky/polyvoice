@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- **PowersetSegmenter default hop: 1.0s → 2.0s** — half as many overlapping
+  10-s windows per file, cutting segmentation time by 2.2–2.7× with no DER
+  regression. Measured on the CPU provider (pipeline v2 + VBx): AMI-test
+  16-meeting DER 17.66 → 15.71 (collar 0.25, micro) with segmentation
+  551 → 207 s and end-to-end RTFx 31 → 68; VoxConverse-dev 216-file DER
+  7.90 → 7.70 with segmentation 976 → 453 s and RTFx 38 → 56; AMI EN2002a
+  single-meeting DER 24.76 → 24.27. The shipped `manifest.toml` window
+  geometry follows the new default. No API change; existing
+  `PowersetConfig::default()` users automatically get the new hop.
+
 ## [0.13.1] - 2026-07-30
 
 ### Performance
