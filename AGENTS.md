@@ -26,14 +26,7 @@ external identifiers that aren't internal indices are fine where relevant
 
 ## Commit / PR trailers
 
-End commit messages with:
-
-```
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
-```
-
-End PR descriptions with:
-
-```
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-```
+Do not add AI-attribution trailers or footers anywhere: no `Co-Authored-By`
+lines for AI tools, no "Generated with …" footers in commit messages, PR
+descriptions, comments, or docs. Write commit messages and PR text as plain
+engineering prose.
