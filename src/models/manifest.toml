@@ -14,15 +14,23 @@ v1 = "wespeaker_resnet34"
 latest = "silero_vad"
 v1 = "silero_vad"
 
-# Shipping profiles. Both use the recalibrated INT8 pair (powerset dynamic
-# weights-only + ResNet34 static QDQ) — DER on ami-test-single is at or below
-# the FP32 baseline. The FP32 models stay available via their model ids for
+# Shipping profiles. Both default to the proven FP32 pair: the recalibrated
+# INT8 pair is much faster (~7x embedding stage, ~2x segmentation stage) but
+# regresses DER on AMI meetings (+2.0/+2.8 pp), so it ships as the opt-in
+# `fast` profile. The FP32 models stay available via their model ids for
 # direct ModelRegistry::ensure() callers.
 [profiles.mobile]
-segmenter = "powerset_int8"
-embedder  = "resnet34_int8"
+segmenter = "powerset_fp32"
+embedder  = "wespeaker_resnet34"
 
 [profiles.balanced]
+segmenter = "powerset_fp32"
+embedder  = "wespeaker_resnet34"
+
+# Opt-in speed profile: recalibrated INT8 pair (powerset weights-only dynamic
+# + ResNet34 static QDQ). At DER parity on VoxConverse-style audio (+0.2 pp
+# on the dev split); expect ~+2 pp DER on AMI-style meeting audio.
+[profiles.fast]
 segmenter = "powerset_int8"
 embedder  = "resnet34_int8"
 

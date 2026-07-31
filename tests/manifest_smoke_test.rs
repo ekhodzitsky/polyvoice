@@ -2,17 +2,11 @@
 //! Manifest smoke tests over the production `src/models/manifest.toml`.
 //!
 //! Verifies that after the model publish step:
-//!   - `[profiles.mobile]` resolves to INT8 entries.
-//!   - `[profiles.balanced]` resolves to INT8 entries.
+//!   - `[profiles.mobile]` / `[profiles.balanced]` resolve to the FP32 pair.
+//!   - `[profiles.fast]` resolves to the recalibrated INT8 pair.
 //!   - Every INT8 sha256 is a real 64-char hex digest (not a placeholder).
 //!   - Mobile profile total bundle is ≤ MOBILE_BUNDLE_BUDGET_BYTES.
 //!   - Balanced profile total bundle is ≤ 35 MB.
-//!
-//! Mobile bundle budget was relaxed from the original 10 MB target after the
-//! INT8 calibration discovered that powerset's SincNet rank-1 weights resist
-//! per-channel quantization (compression ratio ~1.04× instead of ~4×). The
-//! actual Mobile bundle lands around 14 MB; we cap at 15 MB to retain a hard
-//! ceiling without papering over the regression.
 
 #![cfg(feature = "download")]
 
@@ -56,33 +50,41 @@ fn int8_sha256_is_real_not_placeholder() {
 }
 
 #[test]
-fn mobile_profile_resolves_to_int8() {
-    // Mobile ships the recalibrated INT8 pair: dynamic-quant powerset +
-    // static-QDQ ResNet34 (DER at or below the fp32 baseline on AMI).
+fn mobile_profile_resolves_to_fp32() {
+    // Mobile defaults to the proven FP32 pair; the recalibrated INT8 pair
+    // is the opt-in `fast` profile (AMI DER regression, see manifest).
     let m = parse();
     let prof = m.profile("mobile").expect("mobile profile present");
-    assert_eq!(prof.segmenter, "powerset_int8");
-    assert_eq!(prof.embedder, "resnet34_int8");
+    assert_eq!(prof.segmenter, "powerset_fp32");
+    assert_eq!(prof.embedder, "wespeaker_resnet34");
 }
 
 #[test]
-fn balanced_profile_resolves_to_int8() {
-    // Balanced ships the same recalibrated INT8 pair as Mobile.
+fn balanced_profile_resolves_to_fp32() {
+    // Balanced ships the same FP32 pair as Mobile.
     let m = parse();
     let prof = m.profile("balanced").expect("balanced profile present");
+    assert_eq!(prof.segmenter, "powerset_fp32");
+    assert_eq!(prof.embedder, "wespeaker_resnet34");
+}
+
+#[test]
+fn fast_profile_resolves_to_int8() {
+    // The opt-in `fast` profile ships the recalibrated INT8 pair:
+    // dynamic-quant powerset + static-QDQ ResNet34.
+    let m = parse();
+    let prof = m.profile("fast").expect("fast profile present");
     assert_eq!(prof.segmenter, "powerset_int8");
     assert_eq!(prof.embedder, "resnet34_int8");
 }
 
 #[test]
-fn mobile_bundle_under_relaxed_15mb_budget() {
+fn mobile_bundle_under_35mb_budget() {
     let m = parse();
     let prof = m.profile("mobile").unwrap();
     let seg = m.model(&prof.segmenter).unwrap();
     let emb = m.model(&prof.embedder).unwrap();
     let total = seg.size.unwrap_or(0) + emb.size.unwrap_or(0);
-    // INT8 bundle (powerset dynamic + resnet34 static QDQ) is ~8.4 MB, far
-    // under the 35 MB budget kept from the fp32 era.
     assert!(
         total <= BUNDLE_BUDGET_BYTES,
         "mobile bundle {} bytes > {} budget",
