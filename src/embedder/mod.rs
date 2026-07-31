@@ -298,8 +298,10 @@ impl<E: Embedder> EmbedderPool<E> {
 }
 
 /// Parallel batch embedding using `std::thread::scope`.
-/// Spawns up to `available_parallelism` threads, each processing a chunk
-/// of the input via `embedder.embed()`.
+/// Spawns up to `max_threads` threads (capped by `available_parallelism`),
+/// each processing a chunk of the input via `embedder.embed()`. Callers pass
+/// their session-pool size as `max_threads`: extra threads would just spin in
+/// the pool's blocking checkout and compete with the workers for cores.
 ///
 /// Only referenced by the shared ONNX adapter backing the per-model wrappers
 /// (`ResNet34`, CAM++, ERes2NetV2).
@@ -307,6 +309,7 @@ impl<E: Embedder> EmbedderPool<E> {
 fn parallel_embed_batch<E: Embedder>(
     embedder: &E,
     audios: &[&[f32]],
+    max_threads: usize,
 ) -> Result<Vec<Vec<f32>>, EmbedderError> {
     let n = audios.len();
     if n == 0 {
@@ -315,6 +318,7 @@ fn parallel_embed_batch<E: Embedder>(
     let num_threads = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4)
+        .min(max_threads.max(1))
         .min(n);
 
     let chunk_size = n.div_ceil(num_threads);
@@ -391,7 +395,7 @@ mod onnx_adapters {
         }
 
         fn embed_batch(&self, audios: &[&[f32]]) -> Result<Vec<Vec<f32>>, EmbedderError> {
-            parallel_embed_batch(self, audios)
+            parallel_embed_batch(self, audios, self.inner.pool_size())
         }
     }
 
