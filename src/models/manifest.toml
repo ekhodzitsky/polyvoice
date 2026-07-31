@@ -76,7 +76,7 @@ adapter_type = "powerset-v1"
 version  = "3.0"
 sample_rate = 16000
 window_secs = 10.0
-hop_secs = 1.0
+hop_secs = 2.0
 num_speakers = 3
 signature = '''
 untrusted comment: signature from minisign secret key
@@ -127,7 +127,7 @@ adapter_type = "powerset-v1"
 version  = "3.0-int8"
 sample_rate = 16000
 window_secs = 10.0
-hop_secs = 1.0
+hop_secs = 2.0
 num_speakers = 3
 signature = '''
 untrusted comment: signature from minisign secret key
