@@ -805,7 +805,7 @@ mod prop_tests {
     proptest! {
         #[test]
         fn bench_args_parses_with_valid_args(
-            profile in "(mobile|balanced)",
+            profile in "(mobile|balanced|fast)",
             collar in 0.0f64..1.0f64,
             threshold in 0.0f32..1.0f32,
             max_files in 0usize..100usize,

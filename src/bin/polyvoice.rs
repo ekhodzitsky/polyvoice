@@ -631,7 +631,7 @@ mod prop_tests {
 
         #[test]
         fn cli_diarize_parses_all_formats(
-            profile in "(mobile|balanced)",
+            profile in "(mobile|balanced|fast)",
             format in "(rttm|json|srt|vtt|txt)",
             threshold in 0.0f32..2.0f32,
             v2 in prop::bool::ANY,
