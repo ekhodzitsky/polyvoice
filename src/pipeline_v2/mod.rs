@@ -308,9 +308,12 @@ impl Pipeline {
         // PLDA backends (VBx) need the raw embedding scale for mean-centering;
         // cosine backends are scale-invariant and get the L2-normalized vectors.
         let raw_embeddings = self.clusterer.wants_raw_embeddings();
-        let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(embed_units.len());
-        let mut sources: Vec<crate::segmentation::RawSegment> =
-            Vec::with_capacity(embed_units.len());
+        // First pass: slice each unit out of the waveform and zero-fill its
+        // overlap regions. Masking is cheap and pure, so doing it up front lets
+        // the embed stage below consume ready-made chunks in one batch while
+        // `kept` preserves the original unit order for result pairing.
+        let mut masked_chunks: Vec<Vec<f32>> = Vec::with_capacity(embed_units.len());
+        let mut kept: Vec<crate::segmentation::RawSegment> = Vec::with_capacity(embed_units.len());
         for seg in embed_units {
             let start_idx = (seg.time.start * sample_rate) as usize;
             let end_idx = ((seg.time.end * sample_rate) as usize).min(samples.len());
@@ -339,7 +342,19 @@ impl Pipeline {
                 })
                 .collect();
             let masked = apply_overlap_mask(chunk, &local_overlaps, self.config.sample_rate.get());
-            let mut emb = self.embedder.embed(&masked)?;
+            masked_chunks.push(masked);
+            kept.push(seg);
+        }
+        // Embed all units as one batch: ONNX-backed embedders fan this out
+        // across threads over their internal session pool, so units no longer
+        // serialize on a single session. `embed_batch` preserves input order,
+        // so the zip below restores the per-unit pairing deterministically and
+        // surfaces the first error in unit order, as the sequential loop did.
+        let chunk_refs: Vec<&[f32]> = masked_chunks.iter().map(Vec::as_slice).collect();
+        let batch = self.embedder.embed_batch(&chunk_refs)?;
+        let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(batch.len());
+        let mut sources: Vec<crate::segmentation::RawSegment> = Vec::with_capacity(batch.len());
+        for (seg, mut emb) in kept.into_iter().zip(batch) {
             // Defense in depth: never let a non-finite embedding reach the clusterer.
             if !emb.iter().all(|v| v.is_finite()) {
                 tracing::warn!(
