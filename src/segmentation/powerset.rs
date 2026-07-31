@@ -1,7 +1,7 @@
 //! `PowersetSegmenter` — ONNX-backed `Segmenter` wrapping
 //! `sherpa-onnx-pyannote-segmentation-3-0`.
 //!
-//! Slides a 10-second window across the audio with a 1.0s hop (90% overlap),
+//! Slides a 10-second window across the audio with a 2.0s hop (80% overlap),
 //! runs ONNX inference per window, and feeds outputs into `Aggregator`.
 //! Inference goes through [`crate::onnx::InferenceRuntime`]; this module does
 //! not import `ort::`.
@@ -44,7 +44,7 @@ impl Default for PowersetConfig {
         // self-describing models win when present.
         Self {
             window_secs: 10.0,
-            hop_secs: 1.0,
+            hop_secs: 2.0,
             sample_rate: 16000,
             aggregation: AggregationConfig::default(),
             pool_size: default_pool_size(),
