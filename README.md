@@ -16,7 +16,7 @@ Speaker_1: 14.1s - 28.7s
 Speaker_0: 31.2s - 45.0s
 ```
 
-## Numbers (v0.14.0, Apple M1 Pro, single meeting/file stream)
+## Numbers (v0.14.0, Apple M1 Pro, one file at a time)
 
 | Corpus | DER (collar 0.25) | DER (collar 0, strict) | Speed |
 |---|---:|---:|---:|
@@ -47,6 +47,8 @@ chmod +x polyvoice && sudo mv polyvoice /usr/local/bin/
 curl -L -o polyvoice https://github.com/ekhodzitsky/polyvoice/releases/latest/download/polyvoice-macos-arm64
 chmod +x polyvoice && sudo mv polyvoice /usr/local/bin/
 ```
+
+Windows: download [`polyvoice-windows-x86_64.exe`](https://github.com/ekhodzitsky/polyvoice/releases/latest/download/polyvoice-windows-x86_64.exe) from the [Releases](https://github.com/ekhodzitsky/polyvoice/releases) page.
 
 ### Rust library
 
