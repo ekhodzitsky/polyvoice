@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   single-meeting DER 24.76 → 24.27. The shipped `manifest.toml` window
   geometry follows the new default. No API change; existing
   `PowersetConfig::default()` users automatically get the new hop.
+- **New opt-in `fast` model profile with the recalibrated INT8 pair.** The
+  previous `models/int8/` artifacts were calibrated incorrectly (raw audio
+  fed into the fbank-shaped input), which destroyed embedder embeddings.
+  `resnet34_int8` is now static QDQ calibrated on 1819 real fbank+CMVN
+  speech windows from VoxConverse-dev (statistics-pooling tail kept in
+  fp32); `powerset_int8` is weights-only dynamic QInt8 (static QDQ is not
+  viable for the recurrent segmenter). The `fast` profile makes the
+  embedding stage ~7× faster and segmentation ~2× faster. DER is at parity
+  on VoxConverse-style audio (+0.2 pp on the dev split) but regresses ~+2 pp
+  on AMI-style meeting audio, so `mobile` / `balanced` keep the proven FP32
+  pair by default. The new artifacts are published in the `models-int8-v2`
+  release; FP32 models remain available by model id.
 
 ## [0.13.1] - 2026-07-30
 
