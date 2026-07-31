@@ -313,8 +313,7 @@ impl Pipeline {
         // the embed stage below consume ready-made chunks in one batch while
         // `kept` preserves the original unit order for result pairing.
         let mut masked_chunks: Vec<Vec<f32>> = Vec::with_capacity(embed_units.len());
-        let mut kept: Vec<crate::segmentation::RawSegment> =
-            Vec::with_capacity(embed_units.len());
+        let mut kept: Vec<crate::segmentation::RawSegment> = Vec::with_capacity(embed_units.len());
         for seg in embed_units {
             let start_idx = (seg.time.start * sample_rate) as usize;
             let end_idx = ((seg.time.end * sample_rate) as usize).min(samples.len());

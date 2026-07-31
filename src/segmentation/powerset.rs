@@ -184,7 +184,12 @@ impl PowersetSegmenter {
                     }
                 })?;
             if input_name.is_none() {
-                input_name = Some(session.primary_input_name().unwrap_or("waveform").to_owned());
+                input_name = Some(
+                    session
+                        .primary_input_name()
+                        .unwrap_or("waveform")
+                        .to_owned(),
+                );
             }
             sessions.push(session);
         }
@@ -314,8 +319,7 @@ impl Segmenter for PowersetSegmenter {
                                     [start_sample..(start_sample + win_samples).min(audio.len())];
                                 let (logits, num_frames) =
                                     self.infer_window(&mut session, slice, window_idx)?;
-                                let start_t =
-                                    start_sample as f32 / self.config.sample_rate as f32;
+                                let start_t = start_sample as f32 / self.config.sample_rate as f32;
                                 let end_t = (start_sample + win_samples) as f32
                                     / self.config.sample_rate as f32;
                                 WindowOutput::new(start_t, end_t, logits, num_frames)
