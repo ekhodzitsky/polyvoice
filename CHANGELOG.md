@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **README rewritten around the measured numbers** (DER per corpus, 53–68×
+  realtime default, ~83× with `--profile fast`), with details moved behind
+  links. `docs/BENCHMARKS.md` and `PRODUCTION-READINESS.md` updated to the
+  v0.14.0 full-split measurements (VoxConverse-test 15.24/10.52,
+  VoxConverse-dev 11.36/7.70, AMI-test 23.42/15.71 collar 0 / 0.25) and the
+  new speed table including the INT8 `fast` profile and its DER caveat.
+
 ## [0.14.0] - 2026-07-31
 
 ### Performance
