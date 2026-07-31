@@ -27,6 +27,10 @@ use std::path::Path;
 #[cfg(feature = "onnx")]
 pub struct FbankOnnxExtractor {
     pool: crate::utils::ObjectPool<RuntimeSession>,
+    // Read only by `pool_size()`, which is consumed solely by the `embedder`
+    // feature's batch path.
+    #[allow(dead_code)]
+    pool_size: usize,
     embedding_dim: usize,
     fbank: FbankExtractor,
 }
@@ -86,9 +90,19 @@ impl FbankOnnxExtractor {
         }
         Ok(Self {
             pool: crate::utils::ObjectPool::new(sessions),
+            pool_size,
             embedding_dim,
             fbank: FbankExtractor::new(crate::features::FbankConfig::default()),
         })
+    }
+
+    /// Number of sessions in the pool — the maximum useful concurrency for
+    /// batch embedding; spawning more threads than this just burns cores in
+    /// the pool's spin-checkout. Only consumed by the `embedder` feature's
+    /// batch path, so allow dead code in leaner feature combos.
+    #[allow(dead_code)]
+    pub(crate) fn pool_size(&self) -> usize {
+        self.pool_size
     }
 }
 
