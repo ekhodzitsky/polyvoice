@@ -56,13 +56,17 @@ fn main() -> anyhow::Result<()> {
         if total >= MAX_FILES * WINDOWS_PER_FILE {
             break;
         }
-        let stem = wav_path.file_stem().unwrap().to_string_lossy().to_string();
+        let stem = wav_path
+            .file_stem()
+            .expect("wav path has a file stem")
+            .to_string_lossy()
+            .to_string();
         let rttm_path = rttm_dir.join(format!("{stem}.rttm"));
         if !rttm_path.exists() {
             continue;
         }
         let segs = parse_rttm_file(&rttm_path)?;
-        let (samples, sr) = read_wav(&wav_path)?;
+        let (samples, sr) = read_wav(wav_path)?;
         assert_eq!(sr, 16000);
 
         let mut n = 0usize;
