@@ -1,10 +1,12 @@
-//! Model profile bundles (Mobile / Balanced / Custom).
+//! Model profile bundles (Mobile / Balanced / Fast / Custom).
 use serde::{Deserialize, Serialize};
 
 /// Pre-configured model bundles trading off accuracy and footprint.
 ///
 /// `Mobile` targets weak/embedded ARM CPUs (≤10 MB total models, ≤200 MB peak RAM).
 /// `Balanced` targets modern phone/laptop ARM CPUs (≤35 MB total models, ≤400 MB peak RAM).
+/// `Fast` is the opt-in INT8 pair: several times faster than `Balanced`, at DER
+/// parity on VoxConverse-style audio but ~+2 pp DER on AMI-style meetings.
 /// `Custom` defers all model selection to the caller and is used by `PipelineBuilder`
 /// when individual `Segmenter`/`Embedder`/`Clusterer` instances are supplied directly.
 ///
@@ -13,6 +15,7 @@ use serde::{Deserialize, Serialize};
 pub enum Profile {
     Mobile,
     Balanced,
+    Fast,
     Custom,
 }
 
@@ -23,6 +26,7 @@ impl Profile {
         match self {
             Profile::Mobile => 512,   // CAM++ output dim (voxceleb_CAM++.onnx)
             Profile::Balanced => 256, // WeSpeaker ResNet34 output dim
+            Profile::Fast => 256,     // INT8 ResNet34 output dim
             Profile::Custom => 0,
         }
     }
@@ -32,6 +36,7 @@ impl Profile {
         match self {
             Profile::Mobile => 0.55,
             Profile::Balanced => super::config::DEFAULT_AHC_THRESHOLD,
+            Profile::Fast => super::config::DEFAULT_AHC_THRESHOLD,
             Profile::Custom => 0.5,
         }
     }
@@ -41,6 +46,7 @@ impl Profile {
         match self {
             Profile::Mobile => "mobile",
             Profile::Balanced => "balanced",
+            Profile::Fast => "fast",
             Profile::Custom => "custom",
         }
     }
@@ -53,6 +59,7 @@ impl std::str::FromStr for Profile {
         match s.to_ascii_lowercase().as_str() {
             "mobile" => Ok(Profile::Mobile),
             "balanced" => Ok(Profile::Balanced),
+            "fast" => Ok(Profile::Fast),
             "custom" => Ok(Profile::Custom),
             other => Err(ProfileParseError(other.to_owned())),
         }
@@ -67,7 +74,7 @@ impl std::fmt::Display for ProfileParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "unknown profile '{}': expected mobile|balanced|custom",
+            "unknown profile '{}': expected mobile|balanced|fast|custom",
             self.0
         )
     }
