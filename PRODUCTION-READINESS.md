@@ -142,12 +142,12 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | e2e smoke (legacy) | 1 | 14.52% | 6.62% | Yes |
 | AMI test Mix-Headset (legacy) | 16 | **32.87%** | 25.20% | Full split tracked; long-form floor via single-meeting gate |
 | AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
-| pipeline v2 + VBx (Vox / AMI, **default**) | 232 / 16 | **15.37%** / **25.17%** | 11.12% / 17.66% | Default since 0.11; full-split numbers release-canonical |
+| pipeline v2 + VBx (Vox / AMI, **default**) | 232 / 16 | **15.24%** / **23.42%** | 10.52% / 15.71% | Default since 0.11; full-split numbers release-canonical |
 | CALLHOME | — | — | — | **Not measured / not gated** |
 | DIHARD | — | — | — | **Not measured / not gated** |
 
-**Gap:** The default v2+VBx path now has full-split VoxConverse (15.37%) and
-AMI (25.17%) numbers next to the legacy baselines above, but **multi-corpus DER
+**Gap:** The default v2+VBx path now has full-split VoxConverse (15.24%) and
+AMI (23.42%) numbers next to the legacy baselines above, but **multi-corpus DER
 beyond Vox/AMI remains absent**: no CALLHOME/DIHARD release gate. Accuracy
 still trails pyannote-class systems by roughly ~4 pp no-collar on VoxConverse
 (see benchmarks).
@@ -280,14 +280,14 @@ Until every box is checked, the honest status remains:
 
 | Metric | Value |
 |--------|-------|
-| Crate version | 0.12.0 |
-| Deployable footprint | ~30 MB class |
-| Speed (CPU, legacy steady-state) | ~33× realtime (RTF ~0.03, multi-core intra-op) |
-| VoxConverse-test DER (v2+VBx default, 232, collar 0) | **15.37%** |
-| VoxConverse-test DER (v2+VBx default, 232, collar 0.25) | 11.12% |
+| Crate version | 0.14.0 |
+| Deployable footprint | ~30 MB class (INT8 `fast` profile: ~8.4 MB) |
+| Speed (CPU, v2 default, M1 Pro) | 53–68× realtime (RTF 0.015–0.019; ~83× with `--profile fast`) |
+| VoxConverse-test DER (v2+VBx default, 232, collar 0) | **15.24%** |
+| VoxConverse-test DER (v2+VBx default, 232, collar 0.25) | 10.52% |
 | VoxConverse-test DER (legacy, 232, collar 0) | 18.54% |
-| AMI-test DER (v2+VBx default, 16, collar 0) | **25.17%** |
-| AMI-test DER (v2+VBx default, 16, collar 0.25) | 17.66% |
+| AMI-test DER (v2+VBx default, 16, collar 0) | **23.42%** |
+| AMI-test DER (v2+VBx default, 16, collar 0.25) | 15.71% |
 | AMI-test DER (legacy, 16, collar 0) | 32.87% |
 | Default pipeline | v2 + VBx |
 | Escape hatch | legacy (`--legacy` / `--clusterer ahc`) |
