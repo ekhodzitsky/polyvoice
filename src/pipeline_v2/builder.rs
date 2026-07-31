@@ -121,7 +121,7 @@ impl PipelineBuilder {
 
     pub fn validate(&self) -> Result<(), ConfigError> {
         match self.config.profile {
-            Profile::Mobile | Profile::Balanced => {
+            Profile::Mobile | Profile::Balanced | Profile::Fast => {
                 if self.custom_segmenter.is_some() {
                     return Err(ConfigError::CustomComponentInProfile {
                         profile: self.config.profile,
@@ -206,7 +206,7 @@ impl PipelineBuilder {
                     resegmenter,
                 ))
             }
-            Profile::Mobile | Profile::Balanced => {
+            Profile::Mobile | Profile::Balanced | Profile::Fast => {
                 let registry = self.registry.ok_or(ConfigError::MissingRegistry {
                     profile: self.config.profile,
                 })?;
