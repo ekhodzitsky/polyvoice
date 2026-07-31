@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-31
+
 ### Performance
 
 - **PowersetSegmenter default hop: 1.0s → 2.0s** — half as many overlapping
