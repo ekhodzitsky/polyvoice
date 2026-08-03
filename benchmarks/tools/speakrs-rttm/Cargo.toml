@@ -1,0 +1,20 @@
+[package]
+name = "speakrs-rttm"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Thin CLI: speakrs → RTTM for the polyvoice cross-engine harness"
+
+[dependencies]
+# Path to a local speakrs checkout (override with SPEAKRS_PATH or edit).
+# crates.io works too: speakrs = { version = "0.5", features = [...] }
+speakrs = { path = "../../../../speakrs", default-features = true, features = ["online"] }
+hound = "3.5"
+
+[features]
+default = []
+# Enable on macOS for CoreML modes (coreml / coreml-fast).
+coreml = ["speakrs/coreml"]
+
+# Isolate from polyvoice workspace root.
+[workspace]

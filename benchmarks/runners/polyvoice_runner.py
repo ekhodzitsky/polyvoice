@@ -1,13 +1,14 @@
 """polyvoice runner — drives the shipped `polyvoice` CLI to emit RTTM.
 
-Uses only the public CLI surface (`polyvoice diarize <wav> --format rttm`), so it
-measures exactly what a user gets. Two variants are exposed:
+Uses only the public CLI surface (`polyvoice diarize <wav> --format rttm`).
 
-- ``polyvoice`` — the shipped legacy default (Silero VAD + WeSpeaker + AHC).
-- ``polyvoice-v2`` — the powerset-segmentation pipeline (CLI ``--v2``).
+Variants:
+- ``default`` → name ``polyvoice`` — CLI default since 0.11 (**v2 + VBx**)
+- ``v2`` → name ``polyvoice-v2`` — same path (``--v2`` no-op for old scripts)
+- ``legacy`` → name ``polyvoice-legacy`` — ``--legacy``
+- ``ahc`` → name ``polyvoice-ahc`` — v2 + ``--clusterer ahc``
 
-The opt-in VBx clusterer is a library feature not exposed on the CLI; its numbers
-are produced by `polyvoice-bench` and reported separately in the docs.
+Harness RTF includes cold CLI load; warm RTF is `polyvoice-bench` separately.
 """
 
 from __future__ import annotations
@@ -18,14 +19,27 @@ import time
 
 from .base import Turn, find_executable, parse_rttm_text
 
+_NAME = {
+    "default": "polyvoice",
+    "v2": "polyvoice-v2",
+    "legacy": "polyvoice-legacy",
+    "ahc": "polyvoice-ahc",
+    "vbx": "polyvoice-vbx",
+}
+
 
 class PolyvoiceRunner:
-    def __init__(self, variant: str = "legacy", profile: str = "balanced",
-                 threshold: float | None = None, binary: str | None = None):
+    def __init__(
+        self,
+        variant: str = "default",
+        profile: str = "balanced",
+        threshold: float | None = None,
+        binary: str | None = None,
+    ):
         self.variant = variant
         self.profile = profile
         self.threshold = threshold
-        self.name = "polyvoice" if variant == "legacy" else f"polyvoice-{variant}"
+        self.name = _NAME.get(variant, f"polyvoice-{variant}")
         self.license = "MIT"
         self._binary = binary
 
@@ -41,15 +55,32 @@ class PolyvoiceRunner:
     def diarize(self, wav_path: str) -> tuple[list[Turn], float]:
         if not self._binary:
             raise RuntimeError("polyvoice binary not located; call is_available() first")
-        cmd = [self._binary, "diarize", wav_path, "--format", "rttm",
-               "--quiet", "--profile", self.profile]
-        if self.variant == "v2":
+        cmd = [
+            self._binary,
+            "diarize",
+            wav_path,
+            "--format",
+            "rttm",
+            "--quiet",
+            "--profile",
+            self.profile,
+        ]
+        if self.variant == "legacy":
+            cmd.append("--legacy")
+        elif self.variant == "ahc":
+            cmd.extend(["--clusterer", "ahc"])
+        elif self.variant == "v2":
             cmd.append("--v2")
+        elif self.variant in ("default", "vbx"):
+            cmd.extend(["--clusterer", "vbx"])
         if self.threshold is not None:
             cmd.append(f"--threshold={self.threshold}")
+
         start = time.perf_counter()
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
         elapsed = time.perf_counter() - start
         if proc.returncode != 0:
-            raise RuntimeError(f"polyvoice diarize failed ({proc.returncode}): {proc.stderr[-400:]}")
+            raise RuntimeError(
+                f"polyvoice diarize failed ({proc.returncode}): {proc.stderr[-400:]}"
+            )
         return parse_rttm_text(proc.stdout), elapsed
