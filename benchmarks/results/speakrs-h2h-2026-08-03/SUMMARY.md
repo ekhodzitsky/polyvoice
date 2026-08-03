@@ -46,3 +46,31 @@ polyvoice.
 speakrs **accuracy claim is directionally real** on a matched scorer/protocol:
 lower confusion than polyvoice default on the same hard files. Not yet full-232.
 Next: finish 10-file + coreml; then full test when budget allows.
+
+## Working tree note
+
+Agent could not write to `~/Documents/personal/polyvoice` (macOS TCC). All work
+is on:
+
+```text
+~/src/polyvoice-h2h          # branch feat/speakrs-h2h-harness @ 902e150
+~/src/speakrs                # speakrs 0.5 path dependency
+```
+
+Merge into the Documents worktree:
+
+```bash
+cd ~/Documents/personal/polyvoice
+git fetch /Users/ekhodzitsky/src/polyvoice-h2h feat/speakrs-h2h-harness
+git cherry-pick 902e150
+# or: git merge --ff-only FETCH_HEAD after fetch
+```
+
+Resume / finish smoke (after build):
+
+```bash
+cd ~/src/polyvoice-h2h
+export SPEAKRS_RTTM_BIN=$PWD/benchmarks/tools/speakrs-rttm/target/release/speakrs-rttm
+# continue with cache (already-done RTTMs reused unless --no-cache)
+./benchmarks/run_speakrs_h2h.sh 10
+```
