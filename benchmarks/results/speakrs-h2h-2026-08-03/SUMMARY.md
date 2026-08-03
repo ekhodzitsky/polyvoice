@@ -1,76 +1,90 @@
-# Speakrs H2H — interim summary
+# Speakrs H2H — smoke complete (10-file VoxConverse-test)
 
-**Status:** smoke in progress (10-file VoxConverse-test subset)  
-**Host:** Apple M1 Pro
-Darwin 25.1.0 arm64  
-**polyvoice:** `f2bf57f` (0.14.0)  
-**speakrs:** `b0756b1` (0.5.0)  
-**Scorer:** `benchmarks/der.py` (collar 0 primary; overlap scored)
+**Status:** complete  
+**Collected:** 2026-08-03T15:08Z  
+**Host:** Apple M1 Pro, Darwin arm64  
+**polyvoice:** `f2bf57f` base + harness branch (0.14.0), CLI default **v2 + VBx**, balanced fp32, ORT CPU  
+**speakrs:** local clone 0.5.0, modes `cpu` and `coreml`  
+**Scorer:** `benchmarks/der.py` (NIST 10 ms, Hungarian, overlap scored)  
+**Artifact:** `smoke-10file.json`
 
-## Matched 4-file slice (aepyx, aggyz, aiqwk, aorju)
+> **Subset caveat:** first 10 alphabetical VoxConverse-test files (includes hard
+> `aorju`). This is **not** the full-232 release baseline. Numbers are for
+> peer comparison under one scorer, not README headline claims.
 
-| Engine | DER collar 0 micro | collar 0.25 | miss | FA | conf |
-|---|---:|---:|---:|---:|---:|
-| **speakrs-cpu** | **10.15** | **6.40** | 1.80 | 4.29 | **4.06** |
-| polyvoice (v2+VBx default) | 13.30 | 9.31 | 1.70 | 4.29 | **7.31** |
+## Primary table (10 files, same audio + same scorer)
 
-**Gap:** ~**3.2 pp** no-collar micro on this 4-file set. Dominant delta is **confusion**
-(+3.25 pp), not miss/FA — consistent with speaker-count / clustering residual on
-polyvoice.
+| Engine | DER collar 0 micro | DER 0.25 micro | miss | FA | conf | spk exact / ±1 / ≥2 | RTF (cold CLI) | RTFx |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **speakrs-coreml** | **13.74** | **7.83** | 3.29 | 2.28 | **2.25** | 5 / 0 / 5 | 0.044 | 22.7× |
+| **speakrs-cpu** | **14.06** | **8.25** | 3.36 | 2.34 | **2.54** | 5 / 1 / 4 | 0.925 | 1.1× |
+| polyvoice (v2+VBx) | 17.72 | 11.02 | 3.04 | 2.21 | **5.77** | 3 / 2 / 5 | **0.019** | **52.5×** |
 
-## polyvoice alone — full 10-file smoke
+95% bootstrap CI (no-collar micro): polyvoice [10.6–27.1], speakrs-cpu [9.5–19.7], speakrs-coreml [8.9–19.5].
 
-| Metric | Value |
-|---|---:|
-| DER collar 0 micro / macro | 17.72 / 17.94 |
-| DER collar 0.25 micro / macro | 11.02 / 11.90 |
-| spk exact / ±1 / off≥2 | 3 / 2 / 5 |
+## Interpretation
 
-(10-file subset is harder than full-test average; not a release baseline.)
+1. **Accuracy gap is real on our scorer.** speakrs wins by **~3.7–4.0 pp** no-collar
+   micro on this 10-file smoke (17.72 → 13.74/14.06).
+2. **Almost all of the gap is confusion** (+3.2–3.5 pp). Miss and FA are
+   comparable. Same residual class as full-split analysis (speaker count /
+   clustering), not segmentation miss.
+3. **Speed story flips by backend.**
+   - polyvoice cold CLI: **~53×** realtime (already strong).
+   - speakrs CoreML: **~23×** here (cold per-file; their published 500×+ is
+     warm M4 Pro, different protocol).
+   - speakrs CPU (this openblas-static build): **~1.1×** — not a fair production
+     CPU path for them on this machine; treat as accuracy-only row.
+4. CoreML vs CPU for speakrs: **accuracy nearly tied** (13.74 vs 14.06); use
+   CoreML for speed, CPU only for EP-fairness experiments.
 
-## Timing notes (harness = cold process per file)
+## Earlier 4-file matched slice (aepyx, aggyz, aiqwk, aorju)
 
-- speakrs CPU on long files (aorju ~20 min audio) is slow on M1 Pro in this build
-  (openblas-static path) — tens of minutes wall per long file. CoreML not yet
-  scored in this interim dump.
-- polyvoice 10-file cold CLI completed first; RTF not yet locked in SUMMARY.
+| Engine | DER₀ micro | conf |
+|---|---:|---:|
+| speakrs-cpu | 10.15 | 4.06 |
+| polyvoice | 13.30 | 7.31 |
 
-## Artifacts
+Same pattern: ~3 pp gap, confusion-dominated.
 
-- RTTMs: `benchmarks/results_full/voxconverse_test/{polyvoice,speakrs-cpu}/`
-- Protocol: `PROTOCOL.md`
-- Final JSON (when smoke finishes): `smoke-10file.json`
+## Decision (smoke-level)
 
-## Provisional verdict
+| Question | Answer |
+|---|---|
+| Is speakrs README accuracy marketing? | **No** — they win on our harness |
+| Should polyvoice chase RTF vs speakrs CoreML? | **No** — already faster cold CLI on M1 Pro |
+| What to fix next? | **Confusion / speaker count** (VBx, PLDA, prune, embeddings) |
+| Full-232 needed? | **Yes** before README competitor row as “measured” — smoke is directional |
 
-speakrs **accuracy claim is directionally real** on a matched scorer/protocol:
-lower confusion than polyvoice default on the same hard files. Not yet full-232.
-Next: finish 10-file + coreml; then full test when budget allows.
+## Next steps
 
-## Working tree note
+1. Full VoxConverse-test 232 with `polyvoice` + `speakrs-coreml` (CPU optional).
+2. AMI-test 16 matched run.
+3. Accuracy sprint targeting confusion, not miss.
+4. After full-232: update `docs/BENCHMARKS.md` + `docs/COMPETITORS.md` with
+   **measured** speakrs row (collar 0, this scorer, this host).
 
-Agent could not write to `~/Documents/personal/polyvoice` (macOS TCC). All work
-is on:
+## Reproduce
 
-```text
-~/src/polyvoice-h2h          # branch feat/speakrs-h2h-harness @ 902e150
-~/src/speakrs                # speakrs 0.5 path dependency
+```bash
+cd ~/src/polyvoice-h2h   # or cherry-pick harness into Documents worktree
+export SPEAKRS_RTTM_BIN=$PWD/benchmarks/tools/speakrs-rttm/target/release/speakrs-rttm
+# build helper once: cargo build --release --manifest-path benchmarks/tools/speakrs-rttm/Cargo.toml --features coreml
+./benchmarks/run_speakrs_h2h.sh 10
 ```
 
-Merge into the Documents worktree:
+## Working tree
+
+Agent could not write `~/Documents/personal/polyvoice` (macOS TCC). Branch:
+
+```text
+~/src/polyvoice-h2h  feat/speakrs-h2h-harness
+```
+
+Merge:
 
 ```bash
 cd ~/Documents/personal/polyvoice
 git fetch /Users/ekhodzitsky/src/polyvoice-h2h feat/speakrs-h2h-harness
-git cherry-pick 902e150
-# or: git merge --ff-only FETCH_HEAD after fetch
-```
-
-Resume / finish smoke (after build):
-
-```bash
-cd ~/src/polyvoice-h2h
-export SPEAKRS_RTTM_BIN=$PWD/benchmarks/tools/speakrs-rttm/target/release/speakrs-rttm
-# continue with cache (already-done RTTMs reused unless --no-cache)
-./benchmarks/run_speakrs_h2h.sh 10
+git merge FETCH_HEAD   # or cherry-pick
 ```

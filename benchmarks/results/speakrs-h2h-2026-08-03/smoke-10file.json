@@ -1,0 +1,114 @@
+{
+  "schema": "polyvoice-diarization-benchmark-v1",
+  "collected_at": "2026-08-03T15:08:24.168852+00:00",
+  "host": {
+    "cpu": "arm",
+    "os": "Darwin-25.1.0-arm64-arm-64bit-Mach-O",
+    "python": "3.14.4"
+  },
+  "dataset": {
+    "dataset": "voxconverse_test",
+    "source": "https://github.com/joonson/voxconverse",
+    "license": "VoxConverse annotations CC-BY-4.0; audio from YouTube (not redistributed)",
+    "files": 232
+  },
+  "primary_collar": 0.25,
+  "runners": [
+    {
+      "name": "polyvoice",
+      "license": "MIT",
+      "files": 10,
+      "failures": 0,
+      "der_collar_micro": 11.02,
+      "der_collar_macro": 11.9,
+      "der_collar_ci95": [
+        6.96,
+        16.69
+      ],
+      "der_nocollar_micro": 17.72,
+      "der_nocollar_macro": 17.94,
+      "der_nocollar_ci95": [
+        10.59,
+        27.12
+      ],
+      "decomposition_collar": {
+        "miss": 3.04,
+        "false_alarm": 2.21,
+        "confusion": 5.77
+      },
+      "speaker_count": {
+        "exact": 3,
+        "plus_minus_1": 2,
+        "off_by_2_or_more": 5,
+        "files": 10
+      },
+      "rtf": 0.019,
+      "realtime_factor": 52.5,
+      "collar": 0.25
+    },
+    {
+      "name": "speakrs-cpu",
+      "license": "Apache-2.0",
+      "files": 10,
+      "failures": 0,
+      "der_collar_micro": 8.25,
+      "der_collar_macro": 8.1,
+      "der_collar_ci95": [
+        5.84,
+        10.89
+      ],
+      "der_nocollar_micro": 14.06,
+      "der_nocollar_macro": 13.61,
+      "der_nocollar_ci95": [
+        9.53,
+        19.73
+      ],
+      "decomposition_collar": {
+        "miss": 3.36,
+        "false_alarm": 2.34,
+        "confusion": 2.54
+      },
+      "speaker_count": {
+        "exact": 5,
+        "plus_minus_1": 1,
+        "off_by_2_or_more": 4,
+        "files": 10
+      },
+      "rtf": 0.9253,
+      "realtime_factor": 1.1,
+      "collar": 0.25
+    },
+    {
+      "name": "speakrs-coreml",
+      "license": "Apache-2.0",
+      "files": 10,
+      "failures": 0,
+      "der_collar_micro": 7.83,
+      "der_collar_macro": 8.09,
+      "der_collar_ci95": [
+        5.36,
+        10.69
+      ],
+      "der_nocollar_micro": 13.74,
+      "der_nocollar_macro": 13.68,
+      "der_nocollar_ci95": [
+        8.93,
+        19.5
+      ],
+      "decomposition_collar": {
+        "miss": 3.29,
+        "false_alarm": 2.28,
+        "confusion": 2.25
+      },
+      "speaker_count": {
+        "exact": 5,
+        "plus_minus_1": 0,
+        "off_by_2_or_more": 5,
+        "files": 10
+      },
+      "rtf": 0.0441,
+      "realtime_factor": 22.7,
+      "collar": 0.25
+    }
+  ]
+}
