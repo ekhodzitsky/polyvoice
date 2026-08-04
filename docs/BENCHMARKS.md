@@ -49,13 +49,28 @@ pyannote we use polyvoice's **no-collar** number.
 |---|---|---|---|---|---|---|
 | pyannote.audio 3.1 | **11.3** | 3.4 | 4.1 | 3.8 | 0 | model card ² |
 | pyannote community-1 | 11.2 | — | — | — | 0 | pyannote benchmark ⁷ |
-| speakrs (Rust + ONNX, Apache-2.0) | 11.1 | — | — | — | 0 | speakrs README ⁸ |
+| **speakrs CoreML (warm)** | **11.08** | 3.35 | 4.10 | 3.63 | 0 | this repo H2H ⁸ |
 | VBx (offline baseline) | 11.1 | 4.6 | 3.1 | 3.4 | 0 | diart paper ³ |
 | 3D-Speaker toolkit | 11.75 | — | — | — | unstated | repo ⁴ |
 | **polyvoice (v2+VBx, default)** | **15.24** | 2.14 | 1.73 | 7.16 | 0 | this repo ⁵ |
 | diart (online, 5 s latency) | 16.8 | 4.9 | 3.8 | 8.2 | 0 | diart paper ³ |
 | polyvoice (legacy, `--legacy`) | 18.54 | 4.49 | 3.19 | 4.99 | 0 | this repo ⁵ |
 | diart (online, 1 s latency) | 20.1 | 3.3 | 5.1 | 11.7 | 0 | diart paper ³ |
+
+### Head-to-head: polyvoice vs speakrs (measured, same scorer)
+
+VoxConverse-test 232, collar 0, overlap scored, `benchmarks/der.py`, Apple M1 Pro
+(2026-08-03/04). speakrs = warm CoreML batch; polyvoice = CLI default v2+VBx
+(cold process per file for RTF).
+
+| Engine | DER₀ micro | DER₀.₂₅ | conf | spk exact | RTFx |
+|---|---:|---:|---:|---:|---:|
+| **speakrs-coreml (warm)** | **11.08** | 6.70 | **3.63** | 115/232 | ~144× |
+| **polyvoice v2+VBx** | **15.22** | 10.47 | **8.04** | 84/232 | ~40× cold CLI |
+
+**Gap 4.14 pp** is almost entirely **confusion** (speaker assignment / count),
+not miss/FA. Full protocol and RTTMs:
+[`benchmarks/results/speakrs-h2h-2026-08-03/`](../benchmarks/results/speakrs-h2h-2026-08-03/).
 
 For reference, polyvoice (v2+VBx) at the **0.25 s collar** is **10.52 %** micro
 (macro 11.03). Legacy at collar 0.25 is **12.91 %** micro. No collar-0.25
@@ -88,6 +103,19 @@ dominates, and speaker mis-counting drives confusion.
 | VBx (offline baseline) | 24.1 | 17.2 | 3.1 | 3.8 | — | diart paper ³ |
 | diart (online, 5 s) | 27.5 | 10.0 | 5.0 | 12.4 | headset | diart paper ³ |
 | polyvoice (legacy, `--legacy`) | 32.87 | 17.09 | 2.44 | 5.21 | Mix-Headset | this repo ⁵ |
+
+### Head-to-head on AMI-test (measured, same scorer)
+
+AMI-test 16 Mix-Headset, collar 0, `benchmarks/der.py`, Apple M1 Pro (2026-08-04).
+
+| Engine | DER₀ micro | DER₀.₂₅ | conf | spk exact | RTFx |
+|---|---:|---:|---:|---:|---:|
+| **speakrs-coreml (warm)** | **17.43** | 10.96 | **4.33** | **11/16** | ~215× |
+| **polyvoice v2+VBx** | **23.40** | 15.65 | **8.47** | 2/16 | ~56× cold CLI |
+
+**Gap 5.97 pp**; speaker-count collapse is the polyvoice failure mode on AMI
+(exact 2/16 vs speakrs 11/16). Artifact:
+[`benchmarks/results/speakrs-h2h-2026-08-03/ami-16-matched-score.json`](../benchmarks/results/speakrs-h2h-2026-08-03/ami-16-matched-score.json).
 
 polyvoice (v2+VBx) at the 0.25 s collar: **15.71 %** micro (macro 15.24).
 Legacy at collar 0.25: **25.20 %** micro (macro 24.75).
@@ -259,7 +287,7 @@ python benchmark.py --dataset voxconverse_test --runners all
 - ⁵ polyvoice: [`tests/der_baseline.json`](../tests/der_baseline.json) (schema `polyvoice-der-baseline-v2`), full-split gate [`benchmarks/results/full-der-2026-07-25/`](../benchmarks/results/full-der-2026-07-25/), hop-2.0 re-measurement [`benchmarks/results/powerset-hop2-2026-07-30/`](../benchmarks/results/powerset-hop2-2026-07-30/) and [`benchmarks/results/voxconverse-test-232-2026-07-31.json`](../benchmarks/results/voxconverse-test-232-2026-07-31.json). Default (0.11+): pipeline v2 + VBx + WeSpeaker ResNet34; legacy numbers via `--legacy`
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
 - ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands
-- ⁸ speakrs (pure Rust + ONNX, Apache-2.0 code; VoxConverse-test 11.1 % at collar 0, CoreML): https://github.com/avencera/speakrs (retrieved 2026-07-13)
+- ⁸ speakrs CoreML warm on Apple M1 Pro, full VoxConverse-test 232, scored with `benchmarks/der.py` (collar 0, overlap scored): DER 11.08% micro (miss 3.35 / FA 4.10 / conf 3.63), RTFx ~144×. Artifact `benchmarks/results/speakrs-h2h-2026-08-03/full-232-matched-score.json` (2026-08-03/04). speakrs code Apache-2.0: https://github.com/avencera/speakrs. polyvoice on the **same** scorer/split: 15.22% no-collar micro (conf 8.04) — gap **4.14 pp**, confusion-dominated. speakrs' own README quotes 11.1% / 631× on M4 Pro; do not mix hardware for RTFx.
 - NeMo Sortformer (CC-BY-NC; DIHARD 16.28, CALLHOME): https://huggingface.co/nvidia/diar_sortformer_4spk-v1
 - WhisperX (bundles pyannote 3.1): https://github.com/m-bain/whisperX
 - sherpa-onnx (no DER published): https://k2-fsa.github.io/sherpa/onnx/speaker-diarization/index.html

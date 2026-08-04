@@ -25,7 +25,7 @@ import wave
 
 import der
 from runners import (DiartRunner, PolyvoiceRunner, PyannoteRunner,
-                     SherpaOnnxRunner, WhisperXRunner)
+                     SherpaOnnxRunner, SpeakrsRunner, WhisperXRunner)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MANIFESTS = os.path.join(HERE, "manifests")
@@ -35,8 +35,14 @@ HYP_ROOT = os.path.join(HERE, "results_full")
 
 def build_runners() -> dict:
     return {
-        "polyvoice": PolyvoiceRunner(variant="legacy"),
+        # CLI default since 0.11: pipeline v2 + VBx
+        "polyvoice": PolyvoiceRunner(variant="default"),
         "polyvoice-v2": PolyvoiceRunner(variant="v2"),
+        "polyvoice-legacy": PolyvoiceRunner(variant="legacy"),
+        "polyvoice-ahc": PolyvoiceRunner(variant="ahc"),
+        "speakrs-cpu": SpeakrsRunner(mode="cpu"),
+        "speakrs-coreml": SpeakrsRunner(mode="coreml"),
+        "speakrs-coreml-fast": SpeakrsRunner(mode="coreml-fast"),
         "pyannote": PyannoteRunner(),
         "whisperx": WhisperXRunner(),
         "sherpa-onnx": SherpaOnnxRunner(),

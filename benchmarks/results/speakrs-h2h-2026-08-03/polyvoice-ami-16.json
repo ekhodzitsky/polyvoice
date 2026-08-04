@@ -1,0 +1,50 @@
+{
+  "schema": "polyvoice-diarization-benchmark-v1",
+  "collected_at": "2026-08-04T07:08:54.292259+00:00",
+  "host": {
+    "cpu": "arm",
+    "os": "Darwin-25.1.0-arm64-arm-64bit-Mach-O",
+    "python": "3.14.4"
+  },
+  "dataset": {
+    "dataset": "ami_test",
+    "source": "https://groups.inf.ed.ac.uk/ami/corpus/",
+    "license": "AMI Meeting Corpus CC-BY-4.0",
+    "files": 16
+  },
+  "primary_collar": 0.25,
+  "runners": [
+    {
+      "name": "polyvoice",
+      "license": "MIT",
+      "files": 16,
+      "failures": 0,
+      "der_collar_micro": 15.65,
+      "der_collar_macro": 15.19,
+      "der_collar_ci95": [
+        11.3,
+        20.3
+      ],
+      "der_nocollar_micro": 23.4,
+      "der_nocollar_macro": 22.63,
+      "der_nocollar_ci95": [
+        19.02,
+        28.05
+      ],
+      "decomposition_collar": {
+        "miss": 7.81,
+        "false_alarm": 1.63,
+        "confusion": 6.21
+      },
+      "speaker_count": {
+        "exact": 2,
+        "plus_minus_1": 3,
+        "off_by_2_or_more": 11,
+        "files": 16
+      },
+      "rtf": 0.0179,
+      "realtime_factor": 55.9,
+      "collar": 0.25
+    }
+  ]
+}

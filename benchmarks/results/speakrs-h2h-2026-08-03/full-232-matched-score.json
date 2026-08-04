@@ -1,0 +1,54 @@
+{
+  "runners": [
+    {
+      "name": "polyvoice",
+      "files": 232,
+      "rttm_on_disk": 232,
+      "der_nocollar_micro": 15.22,
+      "der_nocollar_macro": 15.46,
+      "der_collar_micro": 10.47,
+      "der_collar_macro": 10.99,
+      "decomp_nocollar": {
+        "miss": 3.2,
+        "false_alarm": 3.98,
+        "confusion": 8.04
+      },
+      "decomp_collar": {
+        "miss": 1.81,
+        "false_alarm": 1.73,
+        "confusion": 6.94
+      },
+      "speaker_count": {
+        "exact": 84,
+        "plus_minus_1": 67,
+        "off_by_2_or_more": 81,
+        "files": 232
+      }
+    },
+    {
+      "name": "speakrs-coreml-warm",
+      "files": 232,
+      "rttm_on_disk": 232,
+      "der_nocollar_micro": 11.08,
+      "der_nocollar_macro": 11.55,
+      "der_collar_micro": 6.7,
+      "der_collar_macro": 7.26,
+      "decomp_nocollar": {
+        "miss": 3.35,
+        "false_alarm": 4.1,
+        "confusion": 3.63
+      },
+      "decomp_collar": {
+        "miss": 2.25,
+        "false_alarm": 1.84,
+        "confusion": 2.61
+      },
+      "speaker_count": {
+        "exact": 115,
+        "plus_minus_1": 58,
+        "off_by_2_or_more": 59,
+        "files": 232
+      }
+    }
+  ]
+}

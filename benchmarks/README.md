@@ -93,6 +93,7 @@ Enabling competitors (each skips until satisfied):
 |---|---|
 | `pyannote`, `whisperx`, `diart` | `pip install pyannote.audio torch` (+ `whisperx` / `diart`); `HF_TOKEN` with `speaker-diarization-3.1` access |
 | `sherpa-onnx` | `pip install sherpa-onnx soundfile`; `SHERPA_SEGMENTATION_MODEL` + `SHERPA_EMBEDDING_MODEL` |
+| `speakrs-cpu` / `speakrs-coreml` / `speakrs-coreml-fast` | build `benchmarks/tools/speakrs-rttm` (path dep on [speakrs](https://github.com/avencera/speakrs)); optional `SPEAKRS_MODELS_DIR` |
 
 ## Output
 
