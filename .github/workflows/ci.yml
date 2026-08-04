@@ -190,6 +190,14 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+      # The *.onnx blobs are gitignored; tests that exercise ONNX inference
+      # skip without them, which would under-measure coverage. Fetch the four
+      # FP32 models (cached across runs) so the instrumented run sees them.
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: coverage-models-${{ hashFiles('scripts/download-models.sh') }}
+      - run: bash scripts/download-models.sh
       - run: cargo llvm-cov nextest --profile ci --all-features --cobertura --output-path cobertura.xml --fail-under-lines 90
       - if: always()
         uses: actions/upload-artifact@v4
