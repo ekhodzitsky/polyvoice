@@ -104,6 +104,19 @@ dominates, and speaker mis-counting drives confusion.
 | diart (online, 5 s) | 27.5 | 10.0 | 5.0 | 12.4 | headset | diart paper ³ |
 | polyvoice (legacy, `--legacy`) | 32.87 | 17.09 | 2.44 | 5.21 | Mix-Headset | this repo ⁵ |
 
+### Head-to-head on AMI-test (measured, same scorer)
+
+AMI-test 16 Mix-Headset, collar 0, `benchmarks/der.py`, Apple M1 Pro (2026-08-04).
+
+| Engine | DER₀ micro | DER₀.₂₅ | conf | spk exact | RTFx |
+|---|---:|---:|---:|---:|---:|
+| **speakrs-coreml (warm)** | **17.43** | 10.96 | **4.33** | **11/16** | ~215× |
+| **polyvoice v2+VBx** | **23.40** | 15.65 | **8.47** | 2/16 | ~56× cold CLI |
+
+**Gap 5.97 pp**; speaker-count collapse is the polyvoice failure mode on AMI
+(exact 2/16 vs speakrs 11/16). Artifact:
+[`benchmarks/results/speakrs-h2h-2026-08-03/ami-16-matched-score.json`](../benchmarks/results/speakrs-h2h-2026-08-03/ami-16-matched-score.json).
+
 polyvoice (v2+VBx) at the 0.25 s collar: **15.71 %** micro (macro 15.24).
 Legacy at collar 0.25: **25.20 %** micro (macro 24.75).
 

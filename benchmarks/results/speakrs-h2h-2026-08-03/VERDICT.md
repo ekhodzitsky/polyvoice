@@ -44,8 +44,21 @@ Artifacts:
 - Confusion ≤ **6.0** (from 8.04)  
 - Cold CLI RTFx not below ~35× on M1 Pro  
 
+
+## Full AMI-test 16 Mix-Headset — matched, same scorer
+
+| Engine | DER₀ micro | DER₀.₂₅ | miss | FA | conf | spk exact / ±1 / ≥2 | RTFx |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **speakrs-coreml (warm)** | **17.43** | **10.96** | 9.50 | 3.60 | **4.33** | **11** / 4 / 1 | **~215×** warm |
+| **polyvoice v2+VBx** | **23.40** | **15.65** | 11.56 | 3.37 | **8.47** | 2 / 3 / 11 | **~56×** cold CLI |
+
+**Gap: 5.97 pp** no-collar. Again **confusion + speaker count** dominate
+(exact speakers 11 vs 2). polyvoice DER matches the release baseline (~23.42%).
+
+Artifact: `ami-16-matched-score.json`.
+
 ## Still open
 
-- [ ] AMI-test 16 matched H2H  
+- [x] AMI-test 16 matched H2H  
 - [ ] Ship docs PR (BENCHMARKS + COMPETITORS)  
 - [ ] Merge harness into main Documents worktree  
