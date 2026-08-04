@@ -1,79 +1,51 @@
-# VERDICT — speakrs × polyvoice H2H (updated)
+# VERDICT — speakrs × polyvoice H2H (final Vox 232)
 
-**Date:** 2026-08-03  
+**Date:** 2026-08-03/04  
 **Host:** Apple M1 Pro, macOS arm64  
 **Scorer:** `benchmarks/der.py` (NIST 10 ms, Hungarian, overlap scored)  
 **Worktree:** `~/src/polyvoice-h2h` branch `feat/speakrs-h2h-harness`
 
-## 1. Full VoxConverse-test 232 — speakrs CoreML (measured)
+## Full VoxConverse-test 232 — matched, same scorer
 
-Warm batch (`speakrs-rttm --mode coreml --hyp-dir …`), models loaded once:
+| Engine | DER₀ micro | DER₀.₂₅ micro | miss | FA | conf | spk exact / ±1 / ≥2 | RTFx |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **speakrs-coreml (warm)** | **11.08** | **6.70** | 3.35 | 4.10 | **3.63** | **115** / 58 / 59 | **~144×** warm |
+| **polyvoice v2+VBx** | **15.22** | **10.47** | 3.20 | 3.98 | **8.04** | 84 / 67 / 81 | **~40×** cold CLI |
 
-| Metric | Value |
-|---|---:|
-| **DER collar 0 micro** | **11.08%** |
-| DER collar 0 macro | 11.55% |
-| DER collar 0.25 micro | 6.70% |
-| miss / FA / conf (collar 0) | 3.35 / 4.10 / **3.63** |
-| spk exact / ±1 / off≥2 | **115** / 58 / 59 |
-| Wall / audio | 1044 s / 150029 s |
-| **Warm RTFx** | **143.7×** |
-| Failures | 0 / 232 |
+**Gap: 4.14 pp** no-collar micro (15.22 − 11.08).  
+**Dominant residual:** confusion (+4.41 pp). Miss and FA are essentially tied.
 
-**This reproduces speakrs’ published ~11.1% on Vox test** under *our* scorer.
-Their README 631× is M4 Pro; on M1 Pro warm CoreML we see ~144×.
+Artifacts:
+- `full-232-matched-score.json`
+- `polyvoice-232.json` (cold CLI harness)
+- `speakrs-coreml-232-score.json`
+- RTTMs: `results_full/voxconverse_test/{polyvoice,speakrs-coreml-warm}/`
 
-Artifact: `speakrs-coreml-232-score.json`, RTTMs under
-`results_full/voxconverse_test/speakrs-coreml-warm/`.
+## Interpretation
 
-## 2. polyvoice full-232 (status)
+1. **speakrs accuracy claim is real** — 11.08% on our scorer ≈ their published 11.1%.
+2. **polyvoice re-measure matches release baseline** (15.24% → 15.22%).
+3. **Accuracy gap is structural (speaker assignment)**, not VAD miss.
+4. **Speed:** polyvoice cold CLI ~40× remains strong; speakrs CoreML warm ~144× on M1 Pro
+   (their 631× is M4 Pro / different protocol). Do not race RTF as the product story.
+5. Speaker count: speakrs exact 115/232 vs polyvoice 84/232 — same weak axis.
 
-| Source | DER₀ micro | Notes |
-|---|---:|---|
-| polyvoice **release baseline** (`docs/BENCHMARKS.md`, hop-2, v2+VBx) | **15.24%** | in-repo polyvoice-bench, prior run |
-| CLI re-measure (this H2H, cold per file) | **in progress** | ~50–60/232 at verdict time |
+## Product decisions
 
-Gap vs speakrs full-232 (using release baseline): **~4.2 pp** (15.24 − 11.08).
-
-## 3. Matched subset (same files, same scorer) — **fair head-to-head**
-
-While polyvoice CLI re-measure runs, score both engines on the polyvoice-completed
-prefix (n≈57 alphabetical-first files; harder tail not yet fully included):
-
-| Engine | n | DER₀ micro | conf | spk exact |
-|---|---:|---:|---:|---:|
-| speakrs-coreml | 57 | **12.43%** | **3.79** | 30 |
-| polyvoice v2+VBx | 57 | 17.79% | **9.40** | 19 |
-
-**Δ ≈ 5.4 pp**, confusion **+5.6 pp** on polyvoice. Same story as 10-file smoke.
-
-## 4. 10-file smoke (complete earlier)
-
-| Engine | DER₀ | conf | cold RTFx |
-|---|---:|---:|---:|
-| speakrs-coreml | 13.74 | 2.25 | 22.7× |
-| speakrs-cpu | 14.06 | 2.54 | 1.1× |
-| polyvoice | 17.72 | 5.77 | **52.5×** |
-
-## 5. Final product verdict
-
-| Question | Answer |
+| Do | Don't |
 |---|---|
-| Is speakrs accuracy real? | **Yes** — 11.08% on full 232 with our scorer |
-| Is the polyvoice gap real? | **Yes** — ~4 pp full (baseline), ~5 pp on matched prefix; **confusion** |
-| Speed race? | polyvoice cold CLI still strong; speakrs CoreML **warm** ~144× on M1 Pro |
-| Next engineering priority | **Speaker confusion / count** (VBx/PLDA/embeddings/seg calibration), not RTF |
-| README competitor row | Can now say: *speakrs CoreML measured 11.1% on our scorer (M1 Pro warm, 2026-08-03)* |
+| Publish **measured** speakrs row in BENCHMARKS | Claim parity with community-1 ports |
+| Sprint on **confusion / speaker count** | Optimize RTF vs speakrs CoreML |
+| Keep MIT / ungated / multi-surface pitch | Train own EEND |
 
-## 6. Success criteria for accuracy sprint
+## Accuracy sprint gate
 
-- Full-232 polyvoice no-collar micro **≤14%** (half the gap) without RTF &lt; 40× cold CLI  
-- Confusion component cut by ≥2 pp  
-- Matched prefix DER gap vs speakrs shrinks to ≤2.5 pp  
+- Full-232 polyvoice no-collar micro **≤14.0%** (half the gap)  
+- Confusion ≤ **6.0** (from 8.04)  
+- Cold CLI RTFx not below ~35× on M1 Pro  
 
-## 7. Still open
+## Still open
 
-- [ ] polyvoice CLI 232 completion → `polyvoice-232.json`  
-- [ ] AMI-test 16 H2H (download incomplete: few WAVs)  
-- [ ] Docs PR: BENCHMARKS + COMPETITORS with measured speakrs  
-- [ ] Cherry-pick harness into Documents worktree when TCC allows  
+- [ ] AMI-test 16 matched H2H  
+- [ ] Ship docs PR (BENCHMARKS + COMPETITORS)  
+- [ ] Merge harness into main Documents worktree  

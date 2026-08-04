@@ -1,0 +1,50 @@
+{
+  "schema": "polyvoice-diarization-benchmark-v1",
+  "collected_at": "2026-08-03T21:32:35.988593+00:00",
+  "host": {
+    "cpu": "arm",
+    "os": "Darwin-25.1.0-arm64-arm-64bit-Mach-O",
+    "python": "3.14.4"
+  },
+  "dataset": {
+    "dataset": "voxconverse_test",
+    "source": "https://github.com/joonson/voxconverse",
+    "license": "VoxConverse annotations CC-BY-4.0; audio from YouTube (not redistributed)",
+    "files": 232
+  },
+  "primary_collar": 0.25,
+  "runners": [
+    {
+      "name": "polyvoice",
+      "license": "MIT",
+      "files": 232,
+      "failures": 0,
+      "der_collar_micro": 10.47,
+      "der_collar_macro": 10.99,
+      "der_collar_ci95": [
+        9.06,
+        12.07
+      ],
+      "der_nocollar_micro": 15.22,
+      "der_nocollar_macro": 15.46,
+      "der_nocollar_ci95": [
+        13.52,
+        17.16
+      ],
+      "decomposition_collar": {
+        "miss": 1.81,
+        "false_alarm": 1.73,
+        "confusion": 6.94
+      },
+      "speaker_count": {
+        "exact": 84,
+        "plus_minus_1": 67,
+        "off_by_2_or_more": 81,
+        "files": 232
+      },
+      "rtf": 0.025,
+      "realtime_factor": 40.0,
+      "collar": 0.25
+    }
+  ]
+}
