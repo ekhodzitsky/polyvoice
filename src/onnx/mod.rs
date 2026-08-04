@@ -303,7 +303,116 @@ mod tests {
         assert!(build_session_with_ep(path, ExecutionProvider::Cpu, Some(1)).is_ok());
         // Unwired providers warn and fall back to CPU — never panic or error.
         assert!(build_session_with_ep(path, ExecutionProvider::Cuda, None).is_ok());
+        assert!(build_session_with_ep(path, ExecutionProvider::Nnapi, None).is_ok());
         assert!(build_session_with_ep(path, ExecutionProvider::auto(), None).is_ok());
         InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn build_session_with_ep_optional_providers_build_ok() {
+        let path = std::path::Path::new("models/silero_vad.onnx");
+        if !path.exists() {
+            return;
+        }
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        // Register when compiled in on a supported target, else warn + CPU.
+        assert!(build_session_with_ep(path, ExecutionProvider::CoreMl, None).is_ok());
+        assert!(build_session_with_ep(path, ExecutionProvider::XnnPack, None).is_ok());
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    fn execution_provider_auto_matches_platform() {
+        let auto = ExecutionProvider::auto();
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        assert_eq!(auto, ExecutionProvider::CoreMl);
+        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+        assert_eq!(auto, ExecutionProvider::XnnPack);
+        #[cfg(not(any(
+            all(target_os = "macos", target_arch = "aarch64"),
+            all(target_os = "linux", target_arch = "aarch64"),
+        )))]
+        assert_eq!(auto, ExecutionProvider::Cpu);
+        // Copy / Clone / Debug derives.
+        let copied = auto;
+        assert_eq!(copied, auto);
+        assert!(!format!("{auto:?}").is_empty());
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn read_model_metadata_props_real_model() {
+        let path = std::path::Path::new("models/silero_vad.onnx");
+        if !path.exists() {
+            return;
+        }
+        // Silero carries no custom props; the read itself must succeed.
+        let props = read_model_metadata_props(path).unwrap();
+        assert!(props.keys().all(|k| !k.is_empty()));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn read_model_metadata_props_rejects_missing_file() {
+        let err =
+            read_model_metadata_props(std::path::Path::new("models/definitely_not_a_model.onnx"))
+                .expect_err("missing file must fail validation");
+        assert!(
+            matches!(err, OnnxError::Validation(_)),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn read_model_metadata_props_rejects_garbage() {
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(&[0xAB; 64]).unwrap();
+        let err =
+            read_model_metadata_props(tmp.path()).expect_err("garbage must fail header validation");
+        assert!(
+            matches!(err, OnnxError::Validation(_)),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn validate_onnx_header_missing_file() {
+        let err = validate_onnx_header(std::path::Path::new("models/no_such_file.onnx"))
+            .expect_err("missing file must fail");
+        assert!(err.detail.contains("cannot read metadata"));
+        assert!(err.to_string().contains("no_such_file.onnx"));
+    }
+
+    #[test]
+    fn onnx_error_display_variants() {
+        let build = OnnxError::SessionBuild {
+            path: std::path::PathBuf::from("m.onnx"),
+            detail: "parse failed".to_string(),
+        };
+        assert_eq!(
+            build.to_string(),
+            "failed to build inference session for m.onnx: parse failed"
+        );
+        let meta = OnnxError::Metadata {
+            detail: "no meta".to_string(),
+        };
+        assert_eq!(
+            meta.to_string(),
+            "failed to read ONNX metadata_props: no meta"
+        );
+        let validation = OnnxError::Validation(OnnxValidationError {
+            path: std::path::PathBuf::from("bad.onnx"),
+            detail: "too small".to_string(),
+        });
+        assert_eq!(
+            validation.to_string(),
+            "ONNX header validation failed for bad.onnx: too small"
+        );
+        // Clone derive round-trips.
+        let cloned = validation.clone();
+        assert_eq!(cloned.to_string(), validation.to_string());
     }
 }

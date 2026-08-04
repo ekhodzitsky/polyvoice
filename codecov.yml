@@ -5,13 +5,13 @@ coverage:
   status:
     project:
       default:
-        target: 70%
+        target: 90%
         threshold: 1%
         if_ci_failed: error
         only_pulls: false
     patch:
       default:
-        target: 70%
+        target: 90%
         threshold: 1%
 
 comment:

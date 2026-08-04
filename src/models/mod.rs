@@ -719,4 +719,151 @@ mod tests {
             assert!(dir.join(art.filename).is_file());
         }
     }
+
+    #[test]
+    fn ensure_serves_cache_hit_without_network() {
+        // The online `ensure` path short-circuits on a verified cache hit, so
+        // a pre-placed file with a matching hash resolves without any download.
+        let tmp = TempDir::new().unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_cache_dir(tmp.path())
+            .unwrap()
+            .with_manifest_override(manifest);
+
+        let cached = tmp.path().join("hello.bin");
+        std::fs::write(&cached, b"hello").unwrap();
+        let path = r.ensure("hello_model").expect("cache hit must succeed");
+        assert_eq!(path, cached);
+    }
+
+    #[test]
+    fn ensure_unknown_model_id_fails_before_any_download() {
+        let tmp = TempDir::new().unwrap();
+        let r = ModelRegistry::with_cache_dir(tmp.path()).unwrap();
+        let err = r.ensure("ghost").expect_err("unknown id must fail");
+        assert!(
+            matches!(err, RegistryError::ModelNotFound { ref model_id } if model_id == "ghost")
+        );
+        assert!(format!("{err}").contains("ghost"));
+    }
+
+    #[test]
+    fn ensure_in_cache_only_reports_missing_file() {
+        let tmp = TempDir::new().unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_cache_dir(tmp.path())
+            .unwrap()
+            .with_manifest_override(manifest);
+        let err = r
+            .ensure_in_cache_only("hello_model")
+            .expect_err("absent file must fail offline");
+        assert!(
+            matches!(err, RegistryError::OfflineMissing { ref model_id } if model_id == "hello_model")
+        );
+        assert!(format!("{err}").contains("offline"));
+    }
+
+    #[test]
+    fn profile_resolution_rejects_custom_profile() {
+        let tmp = TempDir::new().unwrap();
+        let r = ModelRegistry::with_cache_dir(tmp.path()).unwrap();
+        let err = r
+            .ensure_for_profile(Profile::Custom)
+            .expect_err("custom profile is caller-resolved");
+        assert!(matches!(err, RegistryError::CustomProfileUnresolvable));
+        assert!(format!("{err}").contains("custom"));
+        let err = r
+            .ensure_in_cache_only_for_profile(Profile::Custom)
+            .expect_err("custom profile is caller-resolved");
+        assert!(matches!(err, RegistryError::CustomProfileUnresolvable));
+    }
+
+    #[test]
+    fn profile_resolution_reports_unknown_profile() {
+        let tmp = TempDir::new().unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_cache_dir(tmp.path())
+            .unwrap()
+            .with_manifest_override(manifest);
+        // TINY_MANIFEST only defines mobile/balanced, not fast.
+        let err = r
+            .ensure_in_cache_only_for_profile(Profile::Fast)
+            .expect_err("missing profile must fail");
+        assert!(matches!(err, RegistryError::ProfileNotFound { ref profile } if profile == "fast"));
+        assert!(format!("{err}").contains("fast"));
+    }
+
+    #[test]
+    fn online_profile_resolution_uses_cache_hits() {
+        let tmp = TempDir::new().unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_cache_dir(tmp.path())
+            .unwrap()
+            .with_manifest_override(manifest)
+            .with_require_signatures(false);
+        std::fs::write(tmp.path().join("hello.bin"), b"hello").unwrap();
+        let bundle = r
+            .ensure_for_profile(Profile::Mobile)
+            .expect("cache-hit profile resolution must succeed offline");
+        assert_eq!(bundle.segmenter_path, tmp.path().join("hello.bin"));
+        assert_eq!(bundle.embedder_path, tmp.path().join("hello.bin"));
+        // ProfileModels stays Clone + Debug for pipeline wiring logs.
+        let cloned = bundle.clone();
+        assert!(format!("{cloned:?}").contains("hello.bin"));
+    }
+
+    #[test]
+    fn with_cache_dir_surfaces_io_error() {
+        let tmp = TempDir::new().unwrap();
+        let blocker = tmp.path().join("blocker");
+        std::fs::write(&blocker, b"not a dir").unwrap();
+        let err = ModelRegistry::with_cache_dir(blocker.join("models"))
+            .expect_err("cache dir under a file must fail");
+        match &err {
+            RegistryError::Io { path, .. } => {
+                assert!(path.ends_with("models"));
+                assert!(format!("{err}").contains("io error"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn with_manifest_constructs_registry_with_custom_manifest() {
+        let tmp = TempDir::new().unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_manifest(manifest, tmp.path().join("custom-cache")).unwrap();
+        assert!(r.cache_dir().exists());
+        assert!(r.manifest().model("hello_model").is_some());
+        assert!(r.manifest().model("powerset_fp32").is_none());
+    }
+
+    #[test]
+    fn registry_error_display_covers_remaining_variants() {
+        let err = RegistryError::UnsignedModel {
+            model_id: "m1".into(),
+        };
+        assert!(format!("{err}").contains("signature"));
+
+        let err = RegistryError::CacheNotWritable {
+            path: PathBuf::from("/nowhere"),
+        };
+        assert!(format!("{err}").contains("/nowhere"));
+
+        let manifest_err = Manifest::from_toml_str("schema = \"nope\"").expect_err("bad schema");
+        let err = RegistryError::from(manifest_err);
+        assert!(format!("{err}").contains("manifest error"));
+
+        let download_err = DownloadError::Io {
+            path: PathBuf::from("model.onnx"),
+            source: std::io::Error::other("boom"),
+        };
+        let err = RegistryError::from(download_err);
+        assert!(format!("{err}").contains("download error"));
+    }
 }

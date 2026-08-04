@@ -445,4 +445,109 @@ mod tests {
         assert!(m.resolve_model_ref("embedder", "nope").is_none());
         assert!(m.resolve_model_ref("vad", "latest").is_none());
     }
+
+    #[test]
+    fn rejects_malformed_toml() {
+        let err = Manifest::from_toml_str("schema = [not a string").expect_err("must fail");
+        assert!(matches!(err, ManifestError::Toml(_)));
+        assert!(format!("{err}").contains("toml parse error"));
+    }
+
+    #[test]
+    fn rejects_uppercase_sha256() {
+        let bad = SAMPLE_V1.replace(
+            "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+            "ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234",
+        );
+        let err = Manifest::from_toml_str(&bad).expect_err("uppercase must fail");
+        assert!(matches!(err, ManifestError::InvalidSha256 { .. }));
+    }
+
+    #[test]
+    fn rejects_non_hex_sha256() {
+        let bad = SAMPLE_V1.replace(
+            "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+            "gggg1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+        );
+        let err = Manifest::from_toml_str(&bad).expect_err("non-hex must fail");
+        assert!(matches!(err, ManifestError::InvalidSha256 { .. }));
+    }
+
+    #[test]
+    fn overlong_invalid_sha256_is_truncated_in_error_message() {
+        let long_sha = "z".repeat(200);
+        let bad = SAMPLE_V1.replace(
+            "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+            &long_sha,
+        );
+        let err = Manifest::from_toml_str(&bad).expect_err("must fail");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("more chars"),
+            "truncation marker missing: {msg}"
+        );
+        assert!(msg.len() < long_sha.len() + 100);
+    }
+
+    #[test]
+    fn rejects_dangling_embedder_reference() {
+        let bad = r#"
+            schema = "polyvoice-models-v1"
+            [profiles.mobile]
+            segmenter = "silero_vad"
+            embedder  = "ghost_embedder"
+            [models.silero_vad]
+            url = "https://example.com/x"
+            sha256 = "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234"
+            filename = "silero_vad.onnx"
+        "#;
+        let err = Manifest::from_toml_str(bad).expect_err("must fail");
+        match err {
+            ManifestError::DanglingModelRef { profile, model } => {
+                assert_eq!(profile, "mobile");
+                assert_eq!(model, "ghost_embedder");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn unsupported_schema_display_names_expected_versions() {
+        let bad = SAMPLE_V1.replace("polyvoice-models-v1", "polyvoice-models-v3");
+        let err = Manifest::from_toml_str(&bad).expect_err("must fail");
+        match &err {
+            ManifestError::UnsupportedSchema(s) => assert_eq!(s, "polyvoice-models-v3"),
+            other => panic!("unexpected error: {other}"),
+        }
+        let msg = format!("{err}");
+        assert!(msg.contains(SCHEMA_V1));
+        assert!(msg.contains(SCHEMA_V2));
+        assert!(!is_supported_schema("polyvoice-models-v3"));
+    }
+
+    #[test]
+    fn error_display_covers_dangling_alias_variant() {
+        let err = ManifestError::DanglingAliasRef {
+            stage: "embedder".into(),
+            alias: "latest".into(),
+            model: "ghost".into(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("embedder"));
+        assert!(msg.contains("latest"));
+        assert!(msg.contains("ghost"));
+    }
+
+    #[test]
+    fn alias_lookup_for_unknown_stage_returns_none() {
+        let m = Manifest::from_toml_str(SAMPLE_V2).unwrap();
+        assert!(m.alias("vad", "latest").is_none());
+        assert!(m.alias("segmenter", "v9").is_none());
+    }
+
+    #[test]
+    fn model_lookup_missing_returns_none() {
+        let m = Manifest::from_toml_str(SAMPLE_V1).unwrap();
+        assert!(m.model("ghost").is_none());
+    }
 }

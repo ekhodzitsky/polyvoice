@@ -222,11 +222,93 @@ mod tests {
     }
 
     #[test]
+    fn tensor_into_f32() {
+        let t = InferenceTensor::f32(vec![2], vec![1.0, 2.0]);
+        assert_eq!(t.into_f32().unwrap(), vec![1.0, 2.0]);
+        let i = InferenceTensor::i64_scalar(16_000);
+        let err = i.into_f32().unwrap_err();
+        assert!(err.to_string().contains("expected f32, got i64"));
+    }
+
+    #[test]
+    fn tensor_type_mismatch_display() {
+        let i = InferenceTensor::i64(vec![2], vec![1, 2]);
+        let err = i.as_f32_slice().unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "tensor type mismatch: expected f32, got i64"
+        );
+    }
+
+    #[test]
+    fn tensor_scalar_shape_is_empty() {
+        let s = InferenceTensor::i64_scalar(8_000);
+        assert!(s.shape.is_empty());
+        assert_eq!(s.data, TensorData::I64(vec![8_000]));
+    }
+
+    #[test]
     fn inference_error_display() {
         let e = InferenceError::MissingOutput {
             index: 1,
             available: 1,
         };
         assert!(e.to_string().contains("missing output"));
+    }
+
+    #[test]
+    fn inference_error_display_all_variants() {
+        let load = InferenceError::Load("bad path".to_string());
+        assert_eq!(load.to_string(), "inference session load failed: bad path");
+        let run = InferenceError::Run("boom".to_string());
+        assert_eq!(run.to_string(), "inference run failed: boom");
+        let tm = InferenceError::TypeMismatch {
+            expected: "f32",
+            actual: "i64",
+        };
+        assert_eq!(
+            tm.to_string(),
+            "tensor type mismatch: expected f32, got i64"
+        );
+        let missing = InferenceError::MissingOutput {
+            index: 2,
+            available: 1,
+        };
+        assert_eq!(
+            missing.to_string(),
+            "missing output index 2 (model produced 1 outputs)"
+        );
+        // All variants implement std::error::Error.
+        for e in [load, run, tm, missing] {
+            let _: &dyn std::error::Error = &e;
+            assert!(std::error::Error::source(&e).is_none());
+        }
+    }
+
+    #[test]
+    fn mock_runtime_round_trip_ordered() {
+        let out = InferenceTensor::f32(vec![1], vec![0.5]);
+        let mut rt = MockRuntime::new(&["feats"], vec![out.clone()]);
+        let inp = InferenceTensor::f32(vec![1, 80], vec![0.0; 80]);
+        let got = rt.run_ordered(&[&inp]).expect("mock run_ordered");
+        assert_eq!(got, vec![out]);
+        assert_eq!(rt.last_ordered.len(), 1);
+        assert_eq!(rt.last_ordered[0], inp);
+    }
+
+    #[test]
+    fn default_output_names_is_empty() {
+        // MockRuntime does not override `output_names`, so the trait default
+        // (empty slice) applies.
+        let rt = MockRuntime::new(&["input"], vec![]);
+        assert!(rt.output_names().is_empty());
+    }
+
+    #[test]
+    fn primary_input_name_first_or_none() {
+        let rt = MockRuntime::new(&["a", "b"], vec![]);
+        assert_eq!(rt.primary_input_name(), Some("a"));
+        let empty = MockRuntime::new(&[], vec![]);
+        assert_eq!(empty.primary_input_name(), None);
     }
 }

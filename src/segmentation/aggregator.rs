@@ -1120,4 +1120,218 @@ mod tests {
             assert!(s.confidence.get() <= 1.0);
         }
     }
+
+    #[test]
+    fn window_output_rejects_mismatched_logits_len() {
+        let err = WindowOutput::new(0.0, 1.0, vec![0.0; 8], 1).unwrap_err();
+        assert!(matches!(err, SegmentationError::InvalidOutputShape { .. }));
+    }
+
+    #[test]
+    fn frame_stride_and_time_handle_empty_window() {
+        let w = WindowOutput::new(0.0, 1.0, Vec::new(), 0).unwrap();
+        assert_eq!(w.frame_stride(), 0.0);
+        // With no frames the stride is 0, so every frame time is the start.
+        assert_eq!(w.frame_time(3), 0.0);
+    }
+
+    #[test]
+    fn config_getter_returns_the_config() {
+        let agg = Aggregator::new(AggregationConfig {
+            min_segment_secs: 0.5,
+            max_local_speakers: 2,
+            binarization: None,
+        });
+        assert_eq!(agg.config().min_segment_secs, 0.5);
+        assert_eq!(agg.config().max_local_speakers, 2);
+        assert!(agg.config().binarization.is_none());
+    }
+
+    /// Disjoint windows take the identity-permutation early return, and the
+    /// global-grid frames in the gap between them have no contributing window
+    /// (count 0), so they must decode as "no label" and emit no segment.
+    #[test]
+    fn disjoint_windows_leave_the_gap_empty() {
+        let a = synthetic_window(0.0, 1.0, 10, &[1; 10]);
+        let b = synthetic_window(2.0, 3.0, 10, &[2; 10]);
+        let agg = Aggregator::new(AggregationConfig::default());
+        let segs = agg.stitch(&[a, b]).unwrap();
+        assert_eq!(segs.len(), 2);
+        let first = segs
+            .iter()
+            .find(|s| s.local_speaker_idx == 0)
+            .expect("speaker 0 segment");
+        assert!(first.time.end <= 1.0 + 1e-3, "speaker 0 stays in window A");
+        let second = segs
+            .iter()
+            .find(|s| s.local_speaker_idx == 1)
+            .expect("speaker 1 segment");
+        assert!(
+            second.time.start >= 2.0 - 1e-3,
+            "speaker 1 stays in window B"
+        );
+    }
+
+    /// When fewer than two speakers are active on either side of an overlap,
+    /// the permutation cannot be determined reliably and must stay identity.
+    #[test]
+    fn single_active_speaker_per_side_keeps_identity_permutation() {
+        let a = synthetic_window(0.0, 2.0, 20, &[1; 20]);
+        let b = synthetic_window(1.0, 3.0, 20, &[2; 20]);
+        let agg = Aggregator::new(AggregationConfig::default());
+        let segs = agg.stitch(&[a, b]).unwrap();
+        let speakers: std::collections::HashSet<u8> =
+            segs.iter().map(|s| s.local_speaker_idx).collect();
+        assert_eq!(speakers, [0u8, 1u8].into_iter().collect());
+    }
+
+    /// `max_local_speakers = 0` disables alignment entirely: every adjacent
+    /// window pair takes the identity permutation without touching the masks.
+    #[test]
+    fn max_local_speakers_zero_disables_permutation() {
+        let a = synthetic_window(0.0, 2.0, 20, &[4; 20]);
+        let b = synthetic_window(1.0, 3.0, 20, &[4; 20]);
+        let agg = Aggregator::new(AggregationConfig {
+            max_local_speakers: 0,
+            ..AggregationConfig::default()
+        });
+        let segs = agg.stitch(&[a, b]).unwrap();
+        assert!(!segs.is_empty());
+        assert!(segs.iter().all(|s| s.local_speaker_idx < 2));
+    }
+
+    /// `WindowOutput` fields are public, so a window whose flat logits do not
+    /// match `num_frames * 7` can exist; `stitch` must surface the decode
+    /// error instead of panicking.
+    #[test]
+    fn stitch_propagates_window_decode_errors() {
+        let bad = WindowOutput {
+            start_time: 0.0,
+            end_time: 1.0,
+            logits: vec![1.0; 3],
+            num_frames: 1,
+        };
+        let agg = Aggregator::new(AggregationConfig::default());
+        assert!(matches!(
+            agg.stitch(&[bad]),
+            Err(SegmentationError::InvalidOutputShape { .. })
+        ));
+    }
+
+    /// The calibrated-binarization path of `classify_frames`: covered frames
+    /// are averaged and binarized, gap frames (no contributing window) are
+    /// marked `has_data = false` and stay inactive.
+    #[test]
+    fn binarization_config_stitches_across_gaps() {
+        let agg = Aggregator::new(AggregationConfig {
+            binarization: Some(BinarizationConfig {
+                onset: 0.5,
+                offset: 0.5,
+                min_duration_on: 0.0,
+                min_duration_off: 0.0,
+            }),
+            ..AggregationConfig::default()
+        });
+        let a = synthetic_window(0.0, 1.0, 10, &[1; 10]);
+        let b = synthetic_window(2.0, 3.0, 10, &[1; 10]);
+        let segs = agg.stitch(&[a, b]).unwrap();
+        assert_eq!(segs.len(), 2, "one segment per window, gap stays empty");
+        assert!(segs.iter().all(|s| s.local_speaker_idx == 0));
+        assert!(!segs.iter().any(|s| s.is_overlap));
+        assert!(
+            segs.iter()
+                .all(|s| s.time.end <= 1.0 + 1e-3 || s.time.start >= 2.0 - 1e-3),
+            "no segment may cover the gap"
+        );
+    }
+
+    #[test]
+    fn frame_index_at_rejects_out_of_span_and_degenerate_windows() {
+        let agg = Aggregator::new(AggregationConfig::default());
+        let w = synthetic_window(1.0, 2.0, 10, &[0; 10]);
+        assert_eq!(agg.frame_index_at(&w, 0.5), None, "before the window");
+        assert_eq!(agg.frame_index_at(&w, 2.5), None, "after the window");
+        assert_eq!(agg.frame_index_at(&w, 1.5), Some(5));
+        let empty = WindowOutput::new(1.0, 2.0, Vec::new(), 0).unwrap();
+        assert_eq!(agg.frame_index_at(&empty, 1.5), None, "no frames");
+        let zero_stride = synthetic_window(1.0, 1.0, 5, &[0; 5]);
+        assert_eq!(agg.frame_index_at(&zero_stride, 1.0), None, "zero stride");
+    }
+
+    /// The global grid takes its stride from window 0; a later window with a
+    /// much finer stride has trailing frame centers past the last global
+    /// frame, and those contributions must be skipped.
+    #[test]
+    fn finer_second_window_skips_frames_beyond_the_grid() {
+        let a = synthetic_window(0.0, 1.0, 10, &[1; 10]);
+        let b = synthetic_window(0.9, 2.0, 220, &[1; 220]);
+        let agg = Aggregator::new(AggregationConfig::default());
+        let segs = agg.stitch(&[a, b]).unwrap();
+        assert!(!segs.is_empty());
+        assert!(segs.iter().all(|s| s.local_speaker_idx == 0));
+    }
+
+    /// Three active speakers on side A but only two on side B: the square
+    /// cost matrix is padded, and the unmatched A row is optimally assigned to
+    /// the padding column. That assignment must be dropped, leaving B's local
+    /// speakers mapped onto their true global indices.
+    #[test]
+    fn permutation_drops_assignment_to_padding_column() {
+        // Fully overlapping windows. A alternates {0,2} / {1,2} halves so all
+        // three speakers are active; B plays spk0 then spk1, matching A's
+        // spk0/spk1 halves exactly (IoU 1), while A's spk2 matches nothing
+        // well (IoU 0.5 with either).
+        let mut a_classes = vec![5usize; 10]; // {0, 2}
+        a_classes.extend(std::iter::repeat_n(6usize, 10)); // {1, 2}
+        let a = synthetic_window(0.0, 2.0, 20, &a_classes);
+        let mut b_classes = vec![1usize; 10]; // spk0
+        b_classes.extend(std::iter::repeat_n(2usize, 10)); // spk1
+        let b = synthetic_window(0.0, 2.0, 20, &b_classes);
+
+        let agg = Aggregator::new(AggregationConfig::default());
+        let a_labels = PowersetDecoder::decode_window(&a.logits, a.num_frames).unwrap();
+        let b_labels = PowersetDecoder::decode_window(&b.logits, b.num_frames).unwrap();
+        let perm = agg
+            .window_permutation(&a, &a_labels, &b, &b_labels, &[0, 1, 2])
+            .unwrap();
+        assert_eq!(perm, [0, 1, 2], "identity mapping is already optimal");
+    }
+
+    #[test]
+    fn empty_window_yields_no_segments() {
+        let w = WindowOutput::new(0.0, 0.0, Vec::new(), 0).unwrap();
+        let agg = Aggregator::new(AggregationConfig::default());
+        assert!(agg.stitch(&[w]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn single_frame_window_emits_one_segment() {
+        let w = synthetic_window(0.0, 0.1, 1, &[1]);
+        let agg = Aggregator::new(AggregationConfig::default());
+        let segs = agg.stitch(&[w]).unwrap();
+        assert_eq!(segs.len(), 1);
+        assert_eq!(segs[0].local_speaker_idx, 0);
+        assert!((segs[0].time.end - segs[0].time.start - 0.1).abs() < 1e-3);
+    }
+
+    /// NaN window times make the overlap bounds NaN, which degenerates the
+    /// sampling grid to length 0; the permutation must fall back to identity
+    /// and stitching must not panic.
+    #[test]
+    fn nan_window_times_degenerate_safely() {
+        let nan_window = |classes: &[usize]| WindowOutput {
+            start_time: f32::NAN,
+            end_time: f32::NAN,
+            logits: classes
+                .iter()
+                .flat_map(|&c| (0..7).map(move |k| if k == c { 10.0 } else { 0.0 }))
+                .collect(),
+            num_frames: classes.len(),
+        };
+        let a = nan_window(&[1, 1]);
+        let b = nan_window(&[2, 2]);
+        let agg = Aggregator::new(AggregationConfig::default());
+        let segs = agg.stitch(&[a, b]).unwrap();
+        assert!(segs.is_empty());
+    }
 }

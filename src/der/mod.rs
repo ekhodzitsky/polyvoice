@@ -422,4 +422,276 @@ EN2002a 1 50.0 10.0
         assert_eq!(r.total_words, 1);
         assert_eq!(r.speaker_errors, 0);
     }
+
+    #[test]
+    fn der_result_display_shows_all_components() {
+        let reference = vec![turn(0, 0.0, 3.0), turn(1, 3.0, 6.0)];
+        let hypothesis = vec![turn(0, 0.0, 3.0)];
+        let r = compute_der(&reference, &hypothesis, 0.0);
+        let s = format!("{r}");
+        assert!(s.contains("DER="), "missing DER in {s}");
+        assert!(s.contains("miss="), "missing miss in {s}");
+        assert!(s.contains("fa="), "missing fa in {s}");
+        assert!(s.contains("conf="), "missing conf in {s}");
+        assert!(s.contains("speech="), "missing speech in {s}");
+    }
+
+    #[test]
+    fn wder_result_display_shows_counts() {
+        let r = WderResult {
+            wder: 0.25,
+            total_words: 4,
+            speaker_errors: 1,
+        };
+        assert_eq!(format!("{r}"), "WDER=25.0% (1/4 words)");
+    }
+
+    #[test]
+    fn negative_finite_collar_returns_zero() {
+        let reference = vec![turn(0, 0.0, 5.0)];
+        let hypothesis = vec![turn(0, 0.0, 5.0)];
+        let result = compute_der(&reference, &hypothesis, -0.25);
+        assert_eq!(result.der, 0.0);
+        assert_eq!(result.total_ref_frames, 0);
+    }
+
+    #[test]
+    fn non_finite_turn_end_returns_zero() {
+        let reference = vec![turn(0, 0.0, f64::INFINITY)];
+        let hypothesis = vec![turn(0, 0.0, 1.0)];
+        let result = compute_der(&reference, &hypothesis, 0.0);
+        assert_eq!(result.der, 0.0);
+        assert_eq!(result.total_ref_frames, 0);
+    }
+
+    #[test]
+    fn negative_max_time_returns_zero() {
+        // Every turn ends before t=0, so the grid has no valid extent.
+        let reference = vec![turn(0, -5.0, -1.0)];
+        let hypothesis: Vec<SpeakerTurn> = vec![];
+        let result = compute_der(&reference, &hypothesis, 0.0);
+        assert_eq!(result.der, 0.0);
+        assert_eq!(result.total_ref_frames, 0);
+    }
+
+    #[test]
+    fn collar_covering_everything_scores_nothing() {
+        // Collar wider than the file masks every frame → zero scored frames.
+        let reference = vec![turn(0, 1.0, 2.0)];
+        let hypothesis = vec![turn(0, 1.0, 2.0)];
+        let result = compute_der(&reference, &hypothesis, 60.0);
+        assert_eq!(result.total_ref_frames, 0);
+        assert_eq!(result.der, 0.0);
+        assert_eq!(result.total_speech, 0.0);
+    }
+
+    #[test]
+    fn miss_fa_confusion_hand_computed() {
+        // ref: spk0 [0,2), spk1 [2,4). hyp: spk5 [0,3), spk7 [3,5).
+        // Optimal mapping: 5→0, 7→1.
+        //   [0,2): correct
+        //   [2,3): ref spk1 labelled as mapped-to-0 → 100 confusion frames
+        //   [3,4): correct
+        //   [4,5): hyp speech with no ref → 100 false-alarm frames
+        let reference = vec![turn(0, 0.0, 2.0), turn(1, 2.0, 4.0)];
+        let hypothesis = vec![turn(5, 0.0, 3.0), turn(7, 3.0, 5.0)];
+        let r = compute_der(&reference, &hypothesis, 0.0);
+        assert_eq!(r.total_ref_frames, 400);
+        assert_eq!(r.missed_frames, 0);
+        assert_eq!(r.confusion_frames, 100);
+        assert_eq!(r.false_alarm_frames, 100);
+        assert!((r.der - 0.5).abs() < 1e-9, "got {r}");
+        assert!((r.miss_rate - 0.0).abs() < 1e-9);
+        assert!((r.confusion_rate - 0.25).abs() < 1e-9);
+        assert!((r.false_alarm_rate - 0.25).abs() < 1e-9);
+        assert!((r.total_speech - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn overlapping_hypothesis_counts_false_alarm_not_confusion() {
+        // One ref speaker, two concurrent hyp speakers over the same span:
+        // one maps correctly, the other is pure false alarm.
+        let reference = vec![turn(0, 0.0, 2.0)];
+        let hypothesis = vec![turn(0, 0.0, 2.0), turn(1, 0.0, 2.0)];
+        let r = compute_der(&reference, &hypothesis, 0.0);
+        assert_eq!(r.total_ref_frames, 200);
+        assert_eq!(r.missed_frames, 0);
+        assert_eq!(r.confusion_frames, 0);
+        assert_eq!(r.false_alarm_frames, 200);
+        assert!((r.der - 1.0).abs() < 1e-9, "got {r}");
+    }
+
+    #[test]
+    fn uem_with_collar_still_scores_interior_frames() {
+        // Collar masks the boundary frames; the UEM pass must skip those
+        // already-masked frames and still score the interior.
+        let reference = vec![turn(0, 0.0, 10.0)];
+        let hypothesis = vec![turn(0, 0.0, 10.0)];
+        let r = compute_der_with_uem(
+            &reference,
+            &hypothesis,
+            0.5,
+            &[TimeRange {
+                start: 0.0,
+                end: 10.0,
+            }],
+        );
+        assert!(r.der < 0.01, "interior frames are correct, got {r}");
+        assert!(
+            (850..=950).contains(&r.total_ref_frames),
+            "expected ~900 interior frames, got {}",
+            r.total_ref_frames
+        );
+    }
+
+    #[test]
+    fn der_from_rttm_maps_string_labels() {
+        // Same string label reused across segments must map to one ref id.
+        let reference: Vec<(f64, f64, &str)> =
+            vec![(0.0, 3.0, "alice"), (3.5, 6.0, "bob"), (6.5, 10.0, "alice")];
+        let hypothesis = vec![turn(0, 0.0, 3.0), turn(1, 3.5, 6.0), turn(0, 6.5, 10.0)];
+        let r = compute_der_from_rttm(&reference, &hypothesis, 0.0);
+        assert!(
+            r.der < 0.01,
+            "perfect RTTM match should be ~0, got DER={}",
+            r.der
+        );
+    }
+
+    #[test]
+    fn der_from_rttm_detects_confusion() {
+        let reference: Vec<(f64, f64, &str)> = vec![(0.0, 3.0, "alice"), (3.0, 6.0, "bob")];
+        // Whole span attributed to a single hyp speaker.
+        let hypothesis = vec![turn(0, 0.0, 6.0)];
+        let r = compute_der_from_rttm(&reference, &hypothesis, 0.0);
+        assert!(r.confusion_frames > 0, "expected confusion, got {r}");
+    }
+
+    #[test]
+    fn parse_uem_skips_non_finite_and_nonnumeric() {
+        let text = "\
+f1 1 NaN 5.0
+f1 1 0.0 inf
+f1 1 abc def
+f1 1 1.0 2.0
+";
+        let map = parse_uem(text);
+        let f1 = map.get("f1").expect("f1 present");
+        assert_eq!(f1.len(), 1, "only the valid line must be kept");
+        assert!((f1[0].start - 1.0).abs() < 1e-9 && (f1[0].end - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wder_unequal_lengths_matches_nearest_midpoint_case_insensitive() {
+        // Hyp has two "hello" words; the one nearest in time carries the
+        // speaker that maps to the reference speaker.
+        let reference = vec![w("Hello", 0.0, 0.5, Some(0)), w("bye", 5.0, 5.5, Some(1))];
+        let hypothesis = vec![
+            w("hello", 0.0, 0.5, Some(7)),
+            w("hello", 9.0, 9.5, Some(8)),
+            w("bye", 5.0, 5.5, Some(3)),
+        ];
+        let r = compute_wder(&reference, &hypothesis);
+        assert_eq!(r.total_words, 2);
+        assert_eq!(r.speaker_errors, 0, "got {r}");
+    }
+
+    #[test]
+    fn wder_unequal_lengths_shared_hyp_speaker_forces_error() {
+        // Lengths differ, so matching is by nearest same-text word. Both ref
+        // words have different speakers, but the hyp attributes them to one
+        // speaker — the optimal mapping can only excuse one of the two.
+        let reference = vec![w("hello", 0.0, 0.5, Some(0)), w("world", 5.0, 5.5, Some(1))];
+        let hypothesis = vec![
+            w("hello", 0.0, 0.5, Some(8)),
+            w("world", 5.0, 5.5, Some(8)),
+            w("noise", 9.0, 9.5, Some(9)),
+        ];
+        let r = compute_wder(&reference, &hypothesis);
+        assert_eq!(r.total_words, 2);
+        assert_eq!(r.speaker_errors, 1);
+        assert!((r.wder - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn wder_unmatched_reference_word_is_error() {
+        // No hyp word shares the reference text → unmatched ref counts as error.
+        let reference = vec![w("zzz", 0.0, 0.5, Some(0))];
+        let hypothesis = vec![w("aaa", 0.0, 0.5, Some(0)), w("bbb", 1.0, 1.5, Some(0))];
+        let r = compute_wder(&reference, &hypothesis);
+        assert_eq!(r.total_words, 1);
+        assert_eq!(r.speaker_errors, 1);
+    }
+
+    #[test]
+    fn wder_matched_hyp_without_speaker_is_error() {
+        // Text matches but the hyp word carries no speaker label.
+        let reference = vec![w("a", 0.0, 0.5, Some(0))];
+        let hypothesis = vec![w("a", 0.0, 0.5, None), w("b", 1.0, 1.5, Some(1))];
+        let r = compute_wder(&reference, &hypothesis);
+        assert_eq!(r.total_words, 1);
+        assert_eq!(r.speaker_errors, 1);
+    }
+
+    #[test]
+    fn wder_equal_lengths_hyp_without_speaker_is_error() {
+        let reference = vec![w("a", 0.0, 0.5, Some(0)), w("b", 0.5, 1.0, Some(0))];
+        let hypothesis = vec![w("a", 0.0, 0.5, Some(0)), w("b", 0.5, 1.0, None)];
+        let r = compute_wder(&reference, &hypothesis);
+        assert_eq!(r.total_words, 2);
+        assert_eq!(r.speaker_errors, 1);
+        assert!((r.wder - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn wder_all_unlabeled_reference_scores_nothing() {
+        let reference = vec![w("a", 0.0, 0.5, None), w("b", 0.5, 1.0, None)];
+        let hypothesis = vec![w("a", 0.0, 0.5, Some(0)), w("b", 0.5, 1.0, Some(1))];
+        let r = compute_wder(&reference, &hypothesis);
+        assert_eq!(r.total_words, 0);
+        assert_eq!(r.speaker_errors, 0);
+        assert_eq!(r.wder, 0.0);
+    }
+
+    #[test]
+    fn decomposition_empty_reference_returns_empty_recall() {
+        let d = compute_der_decomposition(&[], &[turn(0, 0.0, 1.0)], 0.0);
+        assert!(d.per_speaker_recall.is_empty());
+        assert_eq!(d.total.der, 0.0);
+        assert_eq!(d.single_speaker.der, 0.0);
+        assert_eq!(d.overlap.der, 0.0);
+    }
+
+    #[test]
+    fn decomposition_invalid_collar_returns_empty_recall() {
+        let reference = vec![turn(0, 0.0, 2.0)];
+        let hypothesis = vec![turn(0, 0.0, 2.0)];
+        let d = compute_der_decomposition(&reference, &hypothesis, -0.5);
+        assert!(d.per_speaker_recall.is_empty());
+        assert_eq!(d.total.der, 0.0);
+    }
+
+    #[test]
+    fn decomposition_non_finite_times_returns_empty_recall() {
+        let reference = vec![turn(0, 0.0, f64::INFINITY)];
+        let hypothesis = vec![turn(0, 0.0, 1.0)];
+        let d = compute_der_decomposition(&reference, &hypothesis, 0.0);
+        assert!(d.per_speaker_recall.is_empty());
+    }
+
+    #[test]
+    fn decomposition_recall_is_sorted_by_speaker_id() {
+        // Speaker ids deliberately out of order in the input.
+        let reference = vec![turn(3, 0.0, 2.0), turn(1, 2.0, 4.0)];
+        let hypothesis = vec![turn(9, 0.0, 2.0), turn(8, 2.0, 4.0)];
+        let d = compute_der_decomposition(&reference, &hypothesis, 0.0);
+        assert_eq!(d.per_speaker_recall.len(), 2);
+        assert_eq!(d.per_speaker_recall[0].speaker, 1);
+        assert_eq!(d.per_speaker_recall[1].speaker, 3);
+        for rec in &d.per_speaker_recall {
+            assert_eq!(rec.ref_frames, 200);
+            assert_eq!(rec.recalled_frames, 200);
+            assert!((rec.recall - 1.0).abs() < 1e-9);
+        }
+    }
 }

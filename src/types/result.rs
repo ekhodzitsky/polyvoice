@@ -417,3 +417,329 @@ pub fn exclusive_turns(turns: &[SpeakerTurn]) -> Vec<SpeakerTurn> {
     }
     out
 }
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seg(start: f64, end: f64, speaker: Option<u32>) -> Segment {
+        Segment {
+            time: TimeRange { start, end },
+            speaker: speaker.map(SpeakerId),
+            confidence: Some(0.9),
+        }
+    }
+
+    fn turn_range(id: u32, start: f64, end: f64) -> SpeakerTurn {
+        SpeakerTurn::new(SpeakerId(id), TimeRange { start, end })
+    }
+
+    /// Two speakers: id 0 speaks [0,1) and [1,2), id 1 speaks [2,3.5).
+    fn sample_result() -> DiarizationResult {
+        let turns = vec![
+            turn_range(1, 2.0, 3.5),
+            turn_range(0, 0.0, 1.0),
+            turn_range(0, 1.0, 2.0),
+        ];
+        DiarizationResult::new(vec![seg(0.0, 1.0, Some(0))], turns, 2)
+    }
+
+    #[test]
+    fn remap_segments_and_turns_apply_mapping() {
+        let remap = SpeakerIdRemap::from_mapping(vec![(SpeakerId(1), SpeakerId(0))]).unwrap();
+
+        let mut segments = vec![
+            seg(0.0, 1.0, Some(1)),
+            seg(1.0, 2.0, None),
+            seg(2.0, 3.0, Some(5)),
+        ];
+        remap_segments(&mut segments, &remap);
+        assert_eq!(segments[0].speaker, Some(SpeakerId(0)));
+        assert_eq!(segments[1].speaker, None); // unassigned stays unassigned
+        assert_eq!(segments[2].speaker, Some(SpeakerId(5))); // unmapped passes through
+
+        let mut turns = vec![turn_range(1, 0.0, 1.0), turn_range(5, 1.0, 2.0)];
+        remap_turns(&mut turns, &remap);
+        assert_eq!(turns[0].speaker, SpeakerId(0));
+        assert_eq!(turns[1].speaker, SpeakerId(5));
+    }
+
+    #[test]
+    fn speaker_turn_constructors() {
+        let t = SpeakerTurn::new(
+            SpeakerId(1),
+            TimeRange {
+                start: 0.0,
+                end: 1.0,
+            },
+        );
+        assert!(t.stable);
+        assert!(t.text.is_none());
+        let p = SpeakerTurn::with_stability(
+            SpeakerId(1),
+            TimeRange {
+                start: 0.0,
+                end: 1.0,
+            },
+            false,
+        );
+        assert!(!p.stable);
+    }
+
+    #[test]
+    fn speaker_turn_serde_stability_compatibility() {
+        // `stable: true` and absent text are omitted from the payload.
+        let t = turn_range(1, 0.0, 1.0);
+        let json = serde_json::to_string(&t).unwrap();
+        assert!(!json.contains("stable"), "{json}");
+        assert!(!json.contains("text"), "{json}");
+        assert_eq!(serde_json::from_str::<SpeakerTurn>(&json).unwrap(), t);
+
+        // Provisional turns keep the flag in the payload.
+        let p = SpeakerTurn::with_stability(
+            SpeakerId(1),
+            TimeRange {
+                start: 0.0,
+                end: 1.0,
+            },
+            false,
+        );
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains("\"stable\":false"), "{json}");
+        assert_eq!(serde_json::from_str::<SpeakerTurn>(&json).unwrap(), p);
+
+        // Legacy payloads without `stable` default to true.
+        let legacy = r#"{"speaker":2,"time":{"start":1.0,"end":2.0}}"#;
+        let back: SpeakerTurn = serde_json::from_str(legacy).unwrap();
+        assert!(back.stable);
+        assert_eq!(back.speaker, SpeakerId(2));
+        assert!(back.text.is_none());
+    }
+
+    #[test]
+    fn word_alignment_interpolated_omitted_when_false() {
+        let wa = WordAlignment {
+            word: "hi".into(),
+            time: TimeRange {
+                start: 0.0,
+                end: 0.4,
+            },
+            speaker: Some(SpeakerId(0)),
+            confidence: 0.9,
+            interpolated: false,
+        };
+        let json = serde_json::to_string(&wa).unwrap();
+        assert!(!json.contains("interpolated"), "{json}");
+        assert_eq!(serde_json::from_str::<WordAlignment>(&json).unwrap(), wa);
+
+        let wa = WordAlignment {
+            interpolated: true,
+            ..wa
+        };
+        let json = serde_json::to_string(&wa).unwrap();
+        assert!(json.contains("\"interpolated\":true"), "{json}");
+        assert_eq!(serde_json::from_str::<WordAlignment>(&json).unwrap(), wa);
+    }
+
+    #[test]
+    fn segment_and_transcript_serde_roundtrips() {
+        let s = seg(0.1, 0.9, Some(3));
+        let json = serde_json::to_string(&s).unwrap();
+        assert_eq!(serde_json::from_str::<Segment>(&json).unwrap(), s);
+        let s = Segment {
+            speaker: None,
+            confidence: None,
+            ..s
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        assert_eq!(serde_json::from_str::<Segment>(&json).unwrap(), s);
+
+        let t = Transcript {
+            words: vec![Word {
+                word: "hi".into(),
+                time: TimeRange {
+                    start: 0.0,
+                    end: 0.3,
+                },
+                confidence: 0.8,
+            }],
+        };
+        let json = serde_json::to_string(&t).unwrap();
+        assert_eq!(serde_json::from_str::<Transcript>(&json).unwrap(), t);
+        assert!(Transcript::default().words.is_empty());
+    }
+
+    #[test]
+    fn result_new_builds_sorted_speaker_rollup() {
+        let r = sample_result();
+        assert_eq!(r.schema_version, "diarization-result-v1");
+        assert!(!r.provenance.version.is_empty());
+        assert_eq!(r.speakers.len(), 2);
+        // Sorted by numeric id with the canonical label attached.
+        assert_eq!(r.speakers[0].id, 0);
+        assert_eq!(r.speakers[0].label, "SPEAKER_00");
+        assert!((r.speakers[0].total_speech_s - 2.0).abs() < 1e-9);
+        assert_eq!(r.speakers[0].turn_count, 2);
+        assert_eq!(r.speakers[1].id, 1);
+        assert_eq!(r.speakers[1].label, "SPEAKER_01");
+        assert!((r.speakers[1].total_speech_s - 1.5).abs() < 1e-9);
+        assert_eq!(r.speakers[1].turn_count, 1);
+        assert!(r.speakers.iter().all(|s| s.embedding.is_none()));
+    }
+
+    #[test]
+    fn result_builders_attach_audio_and_provenance() {
+        let r = sample_result().with_audio(10.0, 16000);
+        assert_eq!(r.audio.duration_secs, 10.0);
+        assert_eq!(r.audio.sample_rate, 16000);
+
+        // An empty version keeps the version stamped by `new`.
+        let keep = sample_result().with_provenance(Provenance {
+            profile: "balanced".into(),
+            embedder: "wespeaker".into(),
+            ..Provenance::default()
+        });
+        assert_eq!(keep.provenance.profile, "balanced");
+        assert_eq!(keep.provenance.embedder, "wespeaker");
+        assert!(!keep.provenance.version.is_empty());
+
+        // A non-empty version overrides.
+        let over = sample_result().with_provenance(Provenance {
+            version: "9.9.9".into(),
+            ..Provenance::default()
+        });
+        assert_eq!(over.provenance.version, "9.9.9");
+    }
+
+    #[test]
+    fn speaker_summary_embedding_omitted_when_absent() {
+        let r = sample_result();
+        let json = serde_json::to_string(&r.speakers[0]).unwrap();
+        assert!(!json.contains("embedding"), "{json}");
+    }
+
+    #[test]
+    fn with_speaker_embeddings_normalizes_and_matches_by_id() {
+        let r = sample_result().with_speaker_embeddings(&[
+            (SpeakerId(0), vec![3.0, 4.0]), // not pre-normalized
+            (SpeakerId(9), vec![1.0, 0.0]), // no matching speaker — ignored
+        ]);
+        let e0 = r.speakers[0].embedding.as_ref().unwrap();
+        let norm = e0.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-5, "norm={norm}");
+        assert!((e0[0] - 0.6).abs() < 1e-6);
+        assert!(r.speakers[1].embedding.is_none());
+    }
+
+    #[test]
+    fn result_serde_roundtrip_and_legacy_defaults() {
+        let r = sample_result().with_audio(5.0, 16000).with_exclusive();
+        let json = serde_json::to_string(&r).unwrap();
+        assert_eq!(serde_json::from_str::<DiarizationResult>(&json).unwrap(), r);
+
+        // Older payloads without the additive metadata still parse.
+        let legacy = r#"{"segments":[],"turns":[],"num_speakers":0}"#;
+        let back: DiarizationResult = serde_json::from_str(legacy).unwrap();
+        assert_eq!(back.schema_version, "diarization-result-v1");
+        assert_eq!(back.audio, AudioMeta::default());
+        assert_eq!(back.provenance, Provenance::default());
+        assert!(back.speakers.is_empty());
+        assert!(back.exclusive_turns.is_empty());
+    }
+
+    #[test]
+    fn grid_frame_helpers() {
+        assert_eq!(TimeRange::grid_frame_count(1.0), 101);
+        // Huge timelines are capped at the 24 h guard.
+        assert_eq!(
+            TimeRange::grid_frame_count(1e12),
+            TimeRange::MAX_GRID_FRAMES
+        );
+
+        let tr = TimeRange {
+            start: 0.0,
+            end: 0.03,
+        };
+        assert_eq!(tr.grid_frame_range(), (0, 3));
+        // Negative coordinates saturate to frame 0.
+        let neg = TimeRange {
+            start: -1.0,
+            end: 0.02,
+        };
+        assert_eq!(neg.grid_frame_range().0, 0);
+    }
+
+    #[test]
+    fn exclusive_turns_empty_and_degenerate_inputs() {
+        assert!(exclusive_turns(&[]).is_empty());
+        // Non-finite maximum end → no grid to score.
+        let inf = turn_range(0, 0.0, f64::INFINITY);
+        assert!(exclusive_turns(&[inf]).is_empty());
+        // Zero-length, inverted, and NaN turns are all skipped.
+        let zero = turn_range(0, 1.0, 1.0);
+        let neg = turn_range(1, 2.0, 1.0);
+        let nan = turn_range(2, f64::NAN, 3.0);
+        assert!(exclusive_turns(&[zero, neg, nan]).is_empty());
+    }
+
+    #[test]
+    fn exclusive_turns_single_turn_collapses_frames() {
+        let out = exclusive_turns(&[turn_range(0, 0.0, 0.03)]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].speaker, SpeakerId(0));
+        assert!(out[0].time.start.abs() < 1e-9);
+        // Frame quantization keeps the end within one frame of the input.
+        assert!((out[0].time.end - 0.03).abs() <= EXCLUSIVE_FRAME_SECS + 1e-9);
+    }
+
+    #[test]
+    fn exclusive_turns_overlap_picks_longer_covering_turn() {
+        let turns = vec![
+            turn_range(0, 0.0, 1.0), // long — dominates everywhere
+            turn_range(1, 0.2, 0.4), // short concurrent speaker dropped by design
+        ];
+        let out = exclusive_turns(&turns);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].speaker, SpeakerId(0));
+    }
+
+    #[test]
+    fn exclusive_turns_tie_breaks_to_smaller_speaker_id() {
+        // Equal-duration fully-overlapping turns → smaller id wins.
+        let turns = vec![turn_range(2, 0.0, 0.5), turn_range(1, 0.0, 0.5)];
+        let out = exclusive_turns(&turns);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].speaker, SpeakerId(1));
+    }
+
+    #[test]
+    fn exclusive_turns_silence_splits_same_speaker() {
+        let turns = vec![turn_range(0, 0.0, 0.1), turn_range(0, 0.5, 0.7)];
+        let out = exclusive_turns(&turns);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].speaker, SpeakerId(0));
+        assert_eq!(out[1].speaker, SpeakerId(0));
+        assert!((out[1].time.start - 0.5).abs() <= EXCLUSIVE_FRAME_SECS + 1e-9);
+    }
+
+    #[test]
+    fn exclusive_turns_adjacent_speakers_stay_contiguous() {
+        let turns = vec![turn_range(0, 0.0, 0.2), turn_range(1, 0.2, 0.4)];
+        let out = exclusive_turns(&turns);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].speaker, SpeakerId(0));
+        assert_eq!(out[1].speaker, SpeakerId(1));
+        assert!((out[0].time.end - out[1].time.start).abs() < 1e-9);
+    }
+
+    #[test]
+    fn with_exclusive_fills_and_is_idempotent() {
+        let r = sample_result().with_exclusive();
+        assert!(!r.exclusive_turns.is_empty());
+        // `turns` is untouched by the projection.
+        assert_eq!(r.turns.len(), 3);
+        let again = r.clone().with_exclusive();
+        assert_eq!(r.exclusive_turns, again.exclusive_turns);
+    }
+}

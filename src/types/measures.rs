@@ -129,3 +129,69 @@ impl TimeRange {
         self.start <= t && self.end >= t
     }
 }
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sample_rate_bounds_are_inclusive() {
+        assert_eq!(SampleRate::new(8000).unwrap().get(), 8000);
+        assert_eq!(SampleRate::new(192000).unwrap().get(), 192000);
+        assert!(SampleRate::new(7999).is_none());
+        assert!(SampleRate::new(192001).is_none());
+        assert!(SampleRate::new(0).is_none());
+        assert_eq!(SampleRate::default().get(), 16000);
+    }
+
+    #[test]
+    fn confidence_bounds_are_inclusive() {
+        assert_eq!(Confidence::new(0.0).unwrap().get(), 0.0);
+        assert_eq!(Confidence::new(1.0).unwrap().get(), 1.0);
+        assert!(Confidence::new(-0.01).is_none());
+        assert!(Confidence::new(1.01).is_none());
+        assert!(Confidence::new(f32::NAN).is_none());
+        assert_eq!(Confidence::default().get(), 1.0);
+    }
+
+    #[test]
+    fn time_range_geometry() {
+        let tr = TimeRange {
+            start: 1.0,
+            end: 3.5,
+        };
+        assert_eq!(tr.duration(), 2.5);
+        assert_eq!(tr.midpoint(), 2.25);
+        // Inverted ranges clamp the duration to zero.
+        let inv = TimeRange {
+            start: 3.0,
+            end: 1.0,
+        };
+        assert_eq!(inv.duration(), 0.0);
+        // Bounds are inclusive.
+        assert!(tr.contains_instant(1.0));
+        assert!(tr.contains_instant(3.5));
+        assert!(tr.contains_instant(2.0));
+        assert!(!tr.contains_instant(0.999));
+        assert!(!tr.contains_instant(3.501));
+    }
+
+    #[test]
+    fn measures_serde_roundtrip() {
+        let tr = TimeRange {
+            start: 0.5,
+            end: 1.5,
+        };
+        let json = serde_json::to_string(&tr).unwrap();
+        assert_eq!(serde_json::from_str::<TimeRange>(&json).unwrap(), tr);
+
+        let sr = SampleRate::new(44100).unwrap();
+        let json = serde_json::to_string(&sr).unwrap();
+        assert_eq!(serde_json::from_str::<SampleRate>(&json).unwrap(), sr);
+
+        let c = Confidence::new(0.25).unwrap();
+        let json = serde_json::to_string(&c).unwrap();
+        assert_eq!(serde_json::from_str::<Confidence>(&json).unwrap(), c);
+    }
+}

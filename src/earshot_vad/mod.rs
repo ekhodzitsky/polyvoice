@@ -72,15 +72,20 @@ impl EarshotVad {
 
     fn score_frame(&mut self, frame: &[f32]) -> Result<f32, VadError> {
         debug_assert_eq!(frame.len(), FRAME_SIZE);
-        let score = self.detector.predict_f32(frame);
-        // earshot returns -1.0 only when the frame length is wrong (debug path).
-        if !(0.0..=1.0).contains(&score) {
-            return Err(VadError::Model(format!(
-                "earshot returned out-of-range score {score}"
-            )));
-        }
-        Ok(score)
+        checked_score(self.detector.predict_f32(frame))
     }
+}
+
+/// Validate one raw earshot score. earshot returns -1.0 only when the frame
+/// length is wrong (a debug path `score_frame` guards against), so anything
+/// outside `[0, 1]` is a model error rather than a probability.
+fn checked_score(score: f32) -> Result<f32, VadError> {
+    if !(0.0..=1.0).contains(&score) {
+        return Err(VadError::Model(format!(
+            "earshot returned out-of-range score {score}"
+        )));
+    }
+    Ok(score)
 }
 
 impl Default for EarshotVad {
@@ -165,6 +170,26 @@ mod tests {
         assert_eq!(vad.sample_rate(), 16_000);
         assert_eq!(vad.frame_size(), 256);
         assert_eq!(ADAPTER_TYPE, "earshot");
+    }
+
+    #[test]
+    fn default_construct_equals_new() {
+        let vad = EarshotVad::default();
+        assert_eq!(vad.sample_rate(), SAMPLE_RATE);
+        assert_eq!(vad.frame_size(), FRAME_SIZE);
+    }
+
+    #[test]
+    fn checked_score_rejects_out_of_range_values() {
+        // -1.0 is earshot's wrong-length sentinel; NaN and > 1 are not
+        // probabilities either.
+        for bad in [-1.0, 1.5, f32::NAN] {
+            let err = checked_score(bad).expect_err("out-of-range score");
+            assert!(matches!(err, VadError::Model(_)), "score {bad}");
+        }
+        assert_eq!(checked_score(0.0).unwrap(), 0.0);
+        assert_eq!(checked_score(0.5).unwrap(), 0.5);
+        assert_eq!(checked_score(1.0).unwrap(), 1.0);
     }
 
     #[test]
@@ -300,5 +325,15 @@ mod tests {
             err,
             crate::models::AdapterError::AlreadyRegistered { .. }
         ));
+
+        // The registered factory produces the name-marker builtin adapter.
+        let adapter = reg
+            .create(crate::models::AdapterStage::Vad, ADAPTER_TYPE)
+            .expect("factory must construct");
+        let builtin = adapter
+            .downcast::<crate::models::BuiltinAdapter>()
+            .expect("earshot factory yields BuiltinAdapter");
+        assert_eq!(builtin.stage, crate::models::AdapterStage::Vad);
+        assert_eq!(builtin.id, ADAPTER_TYPE);
     }
 }

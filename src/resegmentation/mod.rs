@@ -537,6 +537,17 @@ mod overlap_extract_tests {
     }
 
     #[test]
+    fn extract_normalizes_descending_local_indices() {
+        // Higher local index first in the input: the emitted pair must still be
+        // ordered (lo, hi).
+        let segs = vec![raw(0.0, 1.0, 2, true), raw(0.0, 1.0, 0, true)];
+        let pairs = extract_overlap_time_ranges(&segs);
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].1, 0);
+        assert_eq!(pairs[0].2, 2);
+    }
+
+    #[test]
     fn extract_ignores_non_overlap_segments() {
         let segs = vec![raw(0.0, 1.0, 0, false), raw(0.0, 1.0, 1, false)];
         let pairs = extract_overlap_time_ranges(&segs);
@@ -635,6 +646,45 @@ mod resegmenter_tests {
         };
         let out = r.resegment(inputs).unwrap();
         assert_eq!(out, primary);
+    }
+
+    #[test]
+    fn constructor_getters_and_clamping() {
+        let r = OverlapResegmenter::new(0.7, 0.25);
+        assert_eq!(r.threshold(), 0.7);
+        assert_eq!(r.min_overlap_secs(), 0.25);
+        // Negative min_overlap_secs clamps to zero.
+        let clamped = OverlapResegmenter::new(0.0, -1.0);
+        assert_eq!(clamped.min_overlap_secs(), 0.0);
+        let d = OverlapResegmenter::default();
+        assert_eq!(d.threshold(), 0.0);
+        assert_eq!(d.min_overlap_secs(), 0.1);
+    }
+
+    #[test]
+    fn segmentation_derived_short_region_is_skipped() {
+        // A resolved secondary speaker does not rescue a region shorter than
+        // min_overlap_secs — the overlap span is dropped entirely.
+        let r = OverlapResegmenter::default(); // min_overlap_secs = 0.1
+        let primary = vec![turn(0.0, 2.0, 0)];
+        let centroids = vec![centroid(0, 3, 0), centroid(1, 3, 1)];
+        let regions = vec![OverlapRegionInput {
+            time: TimeRange {
+                start: 2.0,
+                end: 2.05,
+            },
+            primary_speaker: SpeakerId(0),
+            secondary_speaker: Some(SpeakerId(1)),
+            embedding: Vec::new(),
+        }];
+        let out = r
+            .resegment(ResegmentInputs {
+                primary_turns: &primary,
+                speaker_centroids: &centroids,
+                overlap_regions: &regions,
+            })
+            .unwrap();
+        assert_eq!(out, primary, "short overlap region must be skipped");
     }
 
     #[test]

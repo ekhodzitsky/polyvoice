@@ -183,3 +183,149 @@ impl Embedder for FbankOnnxExtractor {
         Ok(embedding)
     }
 }
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::onnx::{ExecutionProvider, InferenceBackend};
+    use std::path::PathBuf;
+
+    /// Self-contained fbank embedder shipped in the repo (256-d output).
+    const RESNET34: &str = "models/wespeaker_resnet34.onnx";
+    const RESNET34_DIM: usize = 256;
+
+    fn resnet34_path() -> Option<PathBuf> {
+        let p = Path::new(RESNET34);
+        if p.is_file() {
+            Some(p.to_path_buf())
+        } else {
+            None
+        }
+    }
+
+    /// `secs` seconds of a 300 Hz sine at sample rate `sr`, amplitude 0.3.
+    fn sine_pcm(secs: f32, sr: u32) -> Vec<f32> {
+        let n = (secs * sr as f32) as usize;
+        (0..n)
+            .map(|i| {
+                let t = i as f32 / sr as f32;
+                0.3 * (2.0 * std::f32::consts::PI * 300.0 * t).sin()
+            })
+            .collect()
+    }
+
+    /// Extract the construction error without requiring `Debug` on the
+    /// extractor itself (it holds ONNX sessions, so it does not derive it).
+    fn build_err(r: Result<FbankOnnxExtractor, FbankExtractorError>) -> FbankExtractorError {
+        match r {
+            Err(e) => e,
+            Ok(_) => panic!("expected construction to fail"),
+        }
+    }
+
+    #[test]
+    fn new_rejects_zero_pool_size() {
+        let err = build_err(FbankOnnxExtractor::new(
+            Path::new("models/__missing__.onnx"),
+            RESNET34_DIM,
+            0,
+            ExecutionProvider::Cpu,
+        ));
+        assert!(matches!(err, FbankExtractorError::EmptyPool));
+        assert_eq!(err.to_string(), "pool_size must be > 0");
+    }
+
+    #[test]
+    fn new_reports_session_build_error_for_missing_model() {
+        let err = build_err(FbankOnnxExtractor::new(
+            Path::new("models/__definitely_missing__.onnx"),
+            RESNET34_DIM,
+            2,
+            ExecutionProvider::Cpu,
+        ));
+        match err {
+            FbankExtractorError::SessionBuild { index, source } => {
+                assert_eq!(index, 0);
+                let msg = FbankExtractorError::SessionBuild { index, source }.to_string();
+                assert!(msg.starts_with("session 0:"), "unexpected: {msg}");
+            }
+            other => panic!("expected SessionBuild, got {other:?}"),
+        }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn new_builds_pool_and_reports_size() {
+        let Some(path) = resnet34_path() else {
+            eprintln!("skip: {RESNET34} missing");
+            return;
+        };
+        // Pin ort: the checked-in fp32 models are validated against ort.
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 2, ExecutionProvider::Cpu).unwrap();
+        assert_eq!(ext.pool_size(), 2);
+        assert_eq!(ext.dim(), RESNET34_DIM);
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn embed_returns_unit_norm_embedding() {
+        let Some(path) = resnet34_path() else {
+            eprintln!("skip: {RESNET34} missing");
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 1, ExecutionProvider::Cpu).unwrap();
+        let pcm = sine_pcm(1.0, 16_000);
+        let emb = ext.embed(&pcm).unwrap();
+        assert_eq!(emb.len(), RESNET34_DIM);
+        assert!(emb.iter().all(|v| v.is_finite()));
+        let norm: f32 = emb.iter().map(|v| v * v).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-4, "expected unit norm, got {norm}");
+        // Same input through the pool checkout again → same embedding.
+        let emb2 = ext.embed(&pcm).unwrap();
+        assert_eq!(emb, emb2);
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn embed_zero_pads_short_input() {
+        let Some(path) = resnet34_path() else {
+            eprintln!("skip: {RESNET34} missing");
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 1, ExecutionProvider::Cpu).unwrap();
+        // Shorter than one fbank window (400 samples) → zero-padded internally.
+        let pcm = sine_pcm(0.005, 16_000);
+        assert!(pcm.len() < 400);
+        let emb = ext.embed(&pcm).unwrap();
+        assert_eq!(emb.len(), RESNET34_DIM);
+        assert!(emb.iter().all(|v| v.is_finite()));
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn embed_detects_dim_mismatch() {
+        let Some(path) = resnet34_path() else {
+            eprintln!("skip: {RESNET34} missing");
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        // Declare the wrong dim: the model emits 256 values per utterance.
+        let ext = FbankOnnxExtractor::new(&path, 192, 1, ExecutionProvider::Cpu).unwrap();
+        let err = ext.embed(&sine_pcm(1.0, 16_000)).unwrap_err();
+        match err {
+            EmbedderError::DimMismatch { expected, actual } => {
+                assert_eq!(expected, 192);
+                assert_eq!(actual, RESNET34_DIM);
+            }
+            other => panic!("expected DimMismatch, got {other:?}"),
+        }
+        InferenceBackend::force(None);
+    }
+}

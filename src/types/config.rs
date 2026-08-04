@@ -384,4 +384,110 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn infinite_hop_and_max_duration_rejected() {
+        let config = DiarizationConfig {
+            window: WindowConfig {
+                hop_secs: f32::INFINITY,
+                ..WindowConfig::default()
+            },
+            ..DiarizationConfig::default()
+        };
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigError::InvalidHopSecs(_))
+        ));
+        let config = DiarizationConfig {
+            max_duration_secs: f32::INFINITY,
+            ..DiarizationConfig::default()
+        };
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigError::InvalidMaxDurationSecs(_))
+        ));
+    }
+
+    #[test]
+    fn sub_sample_hop_alone_rejected() {
+        // Window quantizes fine but the hop alone collapses to zero samples.
+        let config = DiarizationConfig {
+            window: WindowConfig {
+                window_secs: 1.0,
+                hop_secs: 1e-9,
+                ..WindowConfig::default()
+            },
+            ..DiarizationConfig::default()
+        };
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigError::SubSampleWindow { .. })
+        ));
+    }
+
+    #[test]
+    fn sample_counts_defer_to_window_config() {
+        let cfg = DiarizationConfig::default();
+        assert_eq!(cfg.window_samples(), cfg.window.window_samples());
+        assert_eq!(cfg.hop_samples(), cfg.window.hop_samples());
+        assert_eq!(cfg.window_samples(), 24000); // 1.5 s at 16 kHz
+        assert_eq!(cfg.hop_samples(), 12000); // 0.75 s at 16 kHz
+
+        let window = WindowConfig {
+            window_secs: 2.0,
+            hop_secs: 1.0,
+            sample_rate: SampleRate::new(8000).unwrap(),
+        };
+        assert_eq!(window.window_samples(), 16000);
+        assert_eq!(window.hop_samples(), 8000);
+    }
+
+    #[test]
+    fn config_error_display_names_the_field() {
+        let cases = [
+            (
+                ConfigError::InvalidWindowSecs(0.0).to_string(),
+                "window.window_secs",
+            ),
+            (
+                ConfigError::InvalidHopSecs(-1.0).to_string(),
+                "window.hop_secs",
+            ),
+            (
+                ConfigError::HopExceedsWindow {
+                    hop_secs: 2.0,
+                    window_secs: 1.0,
+                }
+                .to_string(),
+                "must be <=",
+            ),
+            (
+                ConfigError::SubSampleWindow {
+                    window_secs: 1e-9,
+                    hop_secs: 1e-9,
+                }
+                .to_string(),
+                "zero samples",
+            ),
+            (
+                ConfigError::InvalidThreshold(2.0).to_string(),
+                "cluster.threshold",
+            ),
+            (
+                ConfigError::InvalidMinSpeechSecs(-0.1).to_string(),
+                "speech_filter.min_speech_secs",
+            ),
+            (
+                ConfigError::InvalidMaxGapSecs(-0.1).to_string(),
+                "speech_filter.max_gap_secs",
+            ),
+            (
+                ConfigError::InvalidMaxDurationSecs(0.0).to_string(),
+                "max_duration_secs",
+            ),
+        ];
+        for (msg, needle) in cases {
+            assert!(msg.contains(needle), "{msg} missing {needle}");
+        }
+    }
 }

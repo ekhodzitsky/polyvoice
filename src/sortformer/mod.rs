@@ -88,4 +88,21 @@ mod tests {
         let err = register_with(&mut reg).expect_err("duplicate");
         assert!(matches!(err, AdapterError::AlreadyRegistered { .. }));
     }
+
+    #[cfg(feature = "download")]
+    #[test]
+    fn register_aliases_resolve_to_adapter_type() {
+        let mut reg = AdapterRegistry::new();
+        register_with(&mut reg).unwrap();
+        for alias in ["latest", "v2"] {
+            let resolved = reg.resolve(AdapterStage::Diarizer, alias).unwrap();
+            assert_eq!(resolved, ADAPTER_TYPE, "alias {alias}");
+        }
+        // The direct id also resolves, and the factory produces a handle.
+        let resolved = reg.resolve(AdapterStage::Diarizer, ADAPTER_TYPE).unwrap();
+        assert_eq!(resolved, ADAPTER_TYPE);
+        let handle = reg.create(AdapterStage::Diarizer, "v2").unwrap();
+        let adapter = handle.downcast::<BuiltinAdapter>().unwrap();
+        assert_eq!(adapter.id, ADAPTER_TYPE);
+    }
 }

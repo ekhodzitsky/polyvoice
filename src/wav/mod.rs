@@ -328,6 +328,147 @@ mod tests {
         assert_eq!(via_load, via_read);
     }
 
+    /// Minimal PCM WAV header bytes with caller-controlled fields, so tests
+    /// can exercise header guards that hound's writer refuses to emit.
+    fn crafted_pcm_wav(
+        channels: u16,
+        sample_rate: u32,
+        bits_per_sample: u16,
+        data_len: u32,
+    ) -> Vec<u8> {
+        let block_align = channels * (bits_per_sample / 8);
+        let byte_rate = sample_rate * u32::from(block_align);
+        let mut b = Vec::new();
+        b.extend_from_slice(b"RIFF");
+        b.extend_from_slice(&(36u32 + data_len).to_le_bytes());
+        b.extend_from_slice(b"WAVE");
+        b.extend_from_slice(b"fmt ");
+        b.extend_from_slice(&16u32.to_le_bytes());
+        b.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        b.extend_from_slice(&channels.to_le_bytes());
+        b.extend_from_slice(&sample_rate.to_le_bytes());
+        b.extend_from_slice(&byte_rate.to_le_bytes());
+        b.extend_from_slice(&block_align.to_le_bytes());
+        b.extend_from_slice(&bits_per_sample.to_le_bytes());
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&data_len.to_le_bytes());
+        b
+    }
+
+    #[test]
+    fn read_wav_rejects_oversized_file() {
+        // Sparse file: large logical length without writing real data.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("huge.wav");
+        let f = std::fs::File::create(&path).unwrap();
+        f.set_len(MAX_WAV_FILE_SIZE + 1).unwrap();
+        drop(f);
+        match read_wav(&path) {
+            Err(WavError::FileTooLarge { size, max }) => {
+                assert_eq!(size, MAX_WAV_FILE_SIZE + 1);
+                assert_eq!(max, MAX_WAV_FILE_SIZE);
+            }
+            other => panic!("expected FileTooLarge, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_wav_rejects_declared_duration_over_limit() {
+        // The header declares far more data than the file holds; the guard
+        // must fire on the declared length before any samples are read.
+        let data_len = (MAX_DURATION_SECS as u64 * 16_000 * 2 + 2) as u32;
+        let bytes = crafted_pcm_wav(1, 16_000, 16, data_len);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("long.wav");
+        std::fs::write(&path, &bytes).unwrap();
+        match read_wav(&path) {
+            Err(WavError::DurationTooLong {
+                duration_secs,
+                max_secs,
+            }) => {
+                assert!(duration_secs > MAX_DURATION_SECS);
+                assert!((max_secs - MAX_DURATION_SECS).abs() < f64::EPSILON);
+            }
+            other => panic!("expected DurationTooLong, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_wav_rejects_truncated_riff() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("truncated.wav");
+        std::fs::write(&path, b"RIFF\x00\x00").unwrap();
+        match read_wav(&path) {
+            Err(WavError::Read(_)) => {}
+            other => panic!("expected Read error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_wav_rejects_bits_per_sample_above_32() {
+        // A 16-byte PCM fmt chunk with bits_per_sample = 40 parses in hound
+        // (multiple of 8, fits block_align) but is out of our supported range.
+        let bytes = crafted_pcm_wav(1, 16_000, 40, 0);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("forty_bit.wav");
+        std::fs::write(&path, &bytes).unwrap();
+        match read_wav(&path) {
+            Err(WavError::UnsupportedFormat(msg)) => {
+                assert!(msg.contains("40"), "got: {msg}");
+            }
+            other => panic!("expected UnsupportedFormat, got: {other:?}"),
+        }
+    }
+
+    #[cfg(feature = "audio-io")]
+    #[test]
+    fn load_audio_empty_non_target_wav_returns_empty_at_target_rate() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty44k.wav");
+        write_sine_wav(&path, 44_100, 0.0, 440.0);
+        let (samples, sr) = load_audio(&path).unwrap();
+        assert!(samples.is_empty());
+        assert_eq!(sr, TARGET_SAMPLE_RATE);
+    }
+
+    #[test]
+    fn wav_error_display_covers_all_variants() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "nope");
+        let cases: Vec<(WavError, &str)> = vec![
+            (
+                WavError::UnsupportedFormat("bits_per_sample 40".into()),
+                "unsupported sample format",
+            ),
+            (
+                WavError::DurationTooLong {
+                    duration_secs: 7200.0,
+                    max_secs: MAX_DURATION_SECS,
+                },
+                "too long",
+            ),
+            (WavError::Metadata(io_err), "metadata"),
+            (
+                WavError::UnsupportedSampleRate {
+                    actual: 48_000,
+                    expected: TARGET_SAMPLE_RATE,
+                },
+                "48000",
+            ),
+            (
+                WavError::FeatureRequired {
+                    path: "clip.mp3".into(),
+                },
+                "audio-io",
+            ),
+            (WavError::Decode("bad stream".into()), "decode"),
+            (WavError::Resample("bad ratio".into()), "resample"),
+        ];
+        for (err, needle) in cases {
+            let msg = format!("{err}");
+            assert!(msg.contains(needle), "expected '{needle}' in: {msg}");
+        }
+    }
+
     #[test]
     fn read_wav_stereo_roundtrip_via_cursor_buffer() {
         // Smoke that hound path still works when writing via Cursor (mirrors

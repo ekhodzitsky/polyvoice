@@ -164,6 +164,25 @@ mod tests {
     }
 
     #[test]
+    fn test_fewer_than_two_segments_no_overlap() {
+        assert!(detect_overlaps(&[]).is_empty());
+        assert!(detect_overlaps(&[seg(0.0, 1.0, 0)]).is_empty());
+    }
+
+    #[test]
+    fn test_adjacent_overlaps_same_speakers_merge() {
+        // Speaker 1 ends one segment and starts another exactly where speaker
+        // 0 is still active, producing two touching overlap regions with the
+        // same speaker set that must merge into one.
+        let segs = vec![seg(0.0, 2.0, 0), seg(1.0, 1.5, 1), seg(1.5, 3.0, 1)];
+        let overlaps = detect_overlaps(&segs);
+        assert_eq!(overlaps.len(), 1);
+        assert!((overlaps[0].time.start - 1.0).abs() < 1e-5);
+        assert!((overlaps[0].time.end - 2.0).abs() < 1e-5);
+        assert_eq!(overlaps[0].speakers.len(), 2);
+    }
+
+    #[test]
     fn test_unlabeled_segments_ignored() {
         let segs = vec![
             Segment {

@@ -508,6 +508,7 @@ mod tests {
 
         let pipeline = LegacyPipeline::new(config, VadConfig::default());
         let embedder = TwoSpeakerEmbedder;
+        assert_eq!(embedder.dim(), 4);
         let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
         let result = pipeline.run(&samples, &embedder, &mut vad).unwrap();
 
@@ -667,6 +668,7 @@ mod tests {
         let samples = sine_wave(300.0, 4.0, sr);
         let pipeline = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default());
         let embedder = InconsistentDimEmbedder(AtomicUsize::new(0));
+        assert_eq!(embedder.dim(), 4);
         let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
         let err = pipeline
             .run(&samples, &embedder, &mut vad)
@@ -680,5 +682,84 @@ mod tests {
             ),
             "got {err:?}"
         );
+    }
+
+    #[cfg(feature = "clusterer")]
+    #[test]
+    fn run_with_clusterer_silence_returns_empty_result() {
+        use crate::clusterer::AhcClusterer;
+
+        let pipeline = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default());
+        let embedder = crate::embedder::DummyExtractor::new(256);
+        let mut vad = crate::vad::EnergyVad::new(-40.0, 16_000, 512);
+        let ahc = AhcClusterer::with_threshold(0, 0.5);
+        // Pure silence → no speech regions → no embeddings: the clusterer is
+        // never invoked and the empty-result shortcut is returned.
+        let result = pipeline
+            .run_with_clusterer(&vec![0.0f32; 16_000], &embedder, &mut vad, &ahc)
+            .expect("silence run");
+        assert_eq!(result.num_speakers, 0);
+        assert!(result.segments.is_empty());
+        assert!(result.turns.is_empty());
+        assert!((result.audio.duration_secs - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn run_prunes_small_clusters_by_duration_when_configured() {
+        let sr = 16_000u32;
+        let mut samples = sine_wave(300.0, 2.0, sr);
+        samples.extend(std::iter::repeat_n(0.0, sr as usize));
+        samples.extend(sine_wave(800.0, 2.0, sr));
+
+        let mut config = DiarizationConfig::default();
+        config.cluster.threshold = 0.9;
+        config.cluster.min_cluster_size = 1;
+        // Non-zero min_cluster_secs selects the duration-based pruning rule.
+        config.cluster.min_cluster_secs = 0.5;
+
+        let pipeline = LegacyPipeline::new(config, VadConfig::default());
+        let embedder = TwoSpeakerEmbedder;
+        let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
+        let result = pipeline.run(&samples, &embedder, &mut vad).unwrap();
+
+        assert!(
+            result.num_speakers >= 1,
+            "duration pruning must keep at least one speaker"
+        );
+        assert!(!result.turns.is_empty());
+        assert!(result.num_speakers <= result.segments.len());
+    }
+
+    #[test]
+    fn run_from_wav_succeeds_on_matching_sample_rate() {
+        let sr = 16_000u32;
+        let samples = sine_wave(440.0, 1.0, sr);
+
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: sr,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut buf = Vec::new();
+        {
+            let cursor = Cursor::new(&mut buf);
+            let mut writer = hound::WavWriter::new(cursor, spec).unwrap();
+            for &s in &samples {
+                writer.write_sample((s * 32767.0) as i16).unwrap();
+            }
+            writer.finalize().unwrap();
+        }
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), &buf).unwrap();
+
+        let pipeline = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default());
+        let embedder = crate::embedder::DummyExtractor::new(256);
+        let mut vad = crate::vad::EnergyVad::new(-40.0, sr, 512);
+        let result = pipeline
+            .run_from_wav(tmp.path(), &embedder, &mut vad)
+            .expect("matching sample rate must run");
+        assert!(!result.segments.is_empty());
+        assert!(result.num_speakers >= 1);
     }
 }

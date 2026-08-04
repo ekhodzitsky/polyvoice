@@ -472,4 +472,152 @@ mod tests {
         assert_eq!(builtin.id, "earshot");
         assert_eq!(builtin.stage, AdapterStage::Vad);
     }
+
+    #[test]
+    fn new_registry_is_empty_until_registration() {
+        let mut reg = AdapterRegistry::new();
+        assert!(reg.is_empty());
+        assert_eq!(reg.len(), 0);
+        let factory: AdapterFactory = Arc::new(|| Box::new(0_u8));
+        reg.register(AdapterStage::Vad, "energy", factory).unwrap();
+        assert!(!reg.is_empty());
+        assert_eq!(reg.len(), 1);
+    }
+
+    #[test]
+    fn register_or_replace_overwrites_existing_factory() {
+        let mut reg = AdapterRegistry::new();
+        let first: AdapterFactory = Arc::new(|| Box::new(String::from("first")));
+        reg.register(AdapterStage::Scoring, "cosine-x", first)
+            .unwrap();
+        let second: AdapterFactory = Arc::new(|| Box::new(String::from("second")));
+        reg.register_or_replace(AdapterStage::Scoring, "cosine-x", second);
+        let instance = reg.create(AdapterStage::Scoring, "cosine-x").unwrap();
+        assert_eq!(instance.downcast_ref::<String>().unwrap(), "second");
+    }
+
+    #[test]
+    fn registered_iterates_all_stage_type_pairs() {
+        let mut reg = AdapterRegistry::new();
+        let factory: AdapterFactory = Arc::new(|| Box::new(0_u8));
+        reg.register(AdapterStage::Vad, "energy", Arc::clone(&factory))
+            .unwrap();
+        reg.register(AdapterStage::Clusterer, "ahc-x", factory)
+            .unwrap();
+        let mut pairs: Vec<(AdapterStage, String)> = reg
+            .registered()
+            .map(|(stage, id)| (stage, id.to_owned()))
+            .collect();
+        pairs.sort_by_key(|(stage, id)| (stage.as_str().to_owned(), id.clone()));
+        assert_eq!(
+            pairs,
+            vec![
+                (AdapterStage::Clusterer, "ahc-x".to_owned()),
+                (AdapterStage::Vad, "energy".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn create_resolves_alias_then_invokes_factory() {
+        let reg = AdapterRegistry::with_builtins();
+        let handle = reg.create(AdapterStage::Embedder, "latest").unwrap();
+        let builtin = handle.downcast_ref::<BuiltinAdapter>().expect("marker");
+        assert_eq!(builtin.id, "wespeaker-resnet34");
+        assert_eq!(builtin.stage, AdapterStage::Embedder);
+
+        let handle = reg
+            .create(AdapterStage::Segmentation, "powerset-v1")
+            .unwrap();
+        let builtin = handle.downcast_ref::<BuiltinAdapter>().expect("marker");
+        assert_eq!(builtin.id, "powerset-v1");
+        assert_eq!(builtin.stage, AdapterStage::Segmentation);
+    }
+
+    #[test]
+    fn resolve_reports_unknown_adapter_directly() {
+        let reg = AdapterRegistry::with_builtins();
+        let err = reg
+            .resolve(AdapterStage::Clusterer, "spectral-ghost")
+            .expect_err("unknown id must fail");
+        assert!(
+            matches!(err, AdapterError::UnknownAdapter { stage, adapter_type }
+                if stage == AdapterStage::Clusterer && adapter_type == "spectral-ghost")
+        );
+    }
+
+    #[test]
+    fn register_alias_then_resolve_on_custom_registry() {
+        let mut reg = AdapterRegistry::new();
+        let factory: AdapterFactory = Arc::new(|| Box::new(0_u8));
+        reg.register(AdapterStage::Embedder, "my-embedder", factory)
+            .unwrap();
+        reg.register_alias(AdapterStage::Embedder, "stable", "my-embedder")
+            .unwrap();
+        assert_eq!(
+            reg.resolve(AdapterStage::Embedder, "stable").unwrap(),
+            "my-embedder"
+        );
+        // Alias ids are not counted as registered types.
+        assert!(!reg.contains(AdapterStage::Embedder, "stable"));
+    }
+
+    #[test]
+    fn stage_display_matches_as_str_and_parse_is_case_insensitive() {
+        for stage in [
+            AdapterStage::Segmentation,
+            AdapterStage::Embedder,
+            AdapterStage::Clusterer,
+            AdapterStage::Scoring,
+            AdapterStage::Vad,
+            AdapterStage::Diarizer,
+        ] {
+            assert_eq!(format!("{stage}"), stage.as_str());
+        }
+        assert_eq!(AdapterStage::parse("VAD"), Some(AdapterStage::Vad));
+        assert_eq!(
+            AdapterStage::parse("Embedding"),
+            Some(AdapterStage::Embedder)
+        );
+        assert_eq!(
+            AdapterStage::parse("CLUSTERING"),
+            Some(AdapterStage::Clusterer)
+        );
+        assert_eq!(AdapterStage::parse("score"), Some(AdapterStage::Scoring));
+        assert_eq!(
+            AdapterStage::parse("e2e-diarizer"),
+            Some(AdapterStage::Diarizer)
+        );
+    }
+
+    #[test]
+    fn adapter_error_display_covers_all_variants() {
+        let err = AdapterError::AlreadyRegistered {
+            stage: AdapterStage::Vad,
+            adapter_type: "energy".into(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("already registered"));
+        assert!(msg.contains("energy"));
+
+        let err = AdapterError::UnknownAlias {
+            stage: AdapterStage::Scoring,
+            alias: "v9".into(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("unknown version alias"));
+        assert!(msg.contains("v9"));
+
+        let err = AdapterError::AliasTargetMissing {
+            stage: AdapterStage::Embedder,
+            alias: "latest".into(),
+            target: "ghost".into(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("unregistered adapter"));
+        assert!(msg.contains("ghost"));
+
+        let err = AdapterError::InvalidStage("nope".into());
+        assert!(format!("{err}").contains("nope"));
+    }
 }

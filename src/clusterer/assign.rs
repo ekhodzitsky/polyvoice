@@ -293,4 +293,152 @@ mod tests {
         assert!((cooc[&0][&1] - 2.0).abs() < 1e-9);
         assert!((cooc[&1][&1] - 3.0).abs() < 1e-9);
     }
+
+    #[test]
+    fn build_cooccurrence_skips_non_positive_durations() {
+        let cooc = build_cooccurrence(&[0, 0, 1], &[0, 1, 1], &[1.0, 0.0, -2.0]);
+        assert_eq!(cooc.len(), 1, "zero and negative durations are dropped");
+        assert!((cooc[&0][&0] - 1.0).abs() < 1e-9);
+        assert!(!cooc.contains_key(&1));
+    }
+
+    #[test]
+    fn build_cooccurrence_truncates_to_shortest_input() {
+        // global_labels only covers 2 of the 3 items.
+        let cooc = build_cooccurrence(&[0, 1, 2], &[0, 1], &[1.0, 1.0, 9.0]);
+        assert_eq!(cooc.len(), 2);
+        assert!(
+            !cooc.contains_key(&2),
+            "trailing item without a label is dropped"
+        );
+    }
+
+    #[test]
+    fn empty_cooc_returns_empty_map() {
+        let map = hungarian_local_to_global(&LocalGlobalDuration::new(), &[]);
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn no_positive_durations_falls_back_to_identity() {
+        // Locals exist but every co-occurrence duration is non-positive, so
+        // there is no active global to assign — fall back to first-seen ids.
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 0.0)]));
+        cooc.insert(2, HashMap::from([(1, -1.0)]));
+        let map = hungarian_local_to_global(&cooc, &[]);
+        assert_eq!(map.get(&0), Some(&SpeakerId(0)));
+        assert_eq!(map.get(&2), Some(&SpeakerId(1)));
+        assert_eq!(map.len(), 2);
+    }
+
+    #[test]
+    fn more_locals_than_globals_uses_majority_for_padded_columns() {
+        // 3 locals but only 1 active global: the cost matrix is padded with
+        // dummy columns, and locals landing on a dummy fall back to their own
+        // majority global.
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 5.0)]));
+        cooc.insert(1, HashMap::from([(0, 9.0)]));
+        cooc.insert(2, HashMap::from([(0, 3.0)]));
+        let map = hungarian_local_to_global(&cooc, &[]);
+        assert_eq!(map.len(), 3);
+        assert!(
+            map.values().all(|s| *s == SpeakerId(0)),
+            "with a single global every local must land on it"
+        );
+    }
+
+    #[test]
+    fn more_globals_than_locals_picks_strongest() {
+        // 1 local, 2 active globals: the local lands on its highest-duration
+        // global and no extra speaker is invented.
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 3.0), (1, 7.0)]));
+        let map = hungarian_local_to_global(&cooc, &[]);
+        assert_eq!(map.get(&0), Some(&SpeakerId(1)));
+        assert_eq!(map.len(), 1);
+    }
+
+    #[test]
+    fn score_ties_still_produce_a_bijection() {
+        // Perfectly tied durations: Hungarian must still partition the locals
+        // onto distinct globals rather than collapsing them together.
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 5.0), (1, 5.0)]));
+        cooc.insert(1, HashMap::from([(0, 5.0), (1, 5.0)]));
+        let map = hungarian_local_to_global(&cooc, &[]);
+        assert_eq!(map.len(), 2);
+        assert_ne!(map.get(&0), map.get(&1));
+        assert!(map.values().all(|s| s.0 < 2));
+    }
+
+    #[test]
+    fn cannot_link_reassigns_victim_to_free_global() {
+        // local 1 carries a zero-duration entry for global 7, which keeps it
+        // out of the active-globals set but leaves it available as a free
+        // reassignment target when the cannot-link conflict is resolved.
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 10.0)]));
+        cooc.insert(1, HashMap::from([(0, 5.0), (7, 0.0)]));
+        let map = hungarian_local_to_global(&cooc, &[(0, 1)]);
+        assert_eq!(
+            map.get(&0),
+            Some(&SpeakerId(0)),
+            "stronger local keeps the global"
+        );
+        assert_eq!(
+            map.get(&1),
+            Some(&SpeakerId(7)),
+            "weaker local moves to its next-best free global"
+        );
+    }
+
+    #[test]
+    fn cannot_link_last_resort_uses_taken_global() {
+        // Every alternative global is already taken, so the victim is moved to
+        // the best distinct global even though it is occupied.
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 10.0), (1, 0.5)]));
+        cooc.insert(1, HashMap::from([(0, 9.0), (1, 0.4)]));
+        cooc.insert(2, HashMap::from([(0, 8.0), (1, 0.3)]));
+        let map = hungarian_local_to_global(&cooc, &[(0, 2)]);
+        assert_ne!(
+            map.get(&0),
+            map.get(&2),
+            "cannot-link pair must end up on distinct globals"
+        );
+    }
+
+    #[test]
+    fn cannot_link_without_alternative_leaves_conflict() {
+        // A single active global and no alternative at all: better to share
+        // the global than to invent a speaker id with no evidence.
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 10.0)]));
+        cooc.insert(1, HashMap::from([(0, 9.0)]));
+        let map = hungarian_local_to_global(&cooc, &[(0, 1)]);
+        assert_eq!(map.get(&0), Some(&SpeakerId(0)));
+        assert_eq!(map.get(&1), Some(&SpeakerId(0)));
+    }
+
+    #[test]
+    fn cannot_link_skips_pairs_with_absent_locals() {
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 5.0)]));
+        // Local 9 never appears in the table; the pair must be ignored.
+        let map = hungarian_local_to_global(&cooc, &[(0, 9)]);
+        assert_eq!(map.get(&0), Some(&SpeakerId(0)));
+        assert_eq!(map.len(), 1);
+    }
+
+    #[test]
+    fn cannot_link_noop_when_globals_already_differ() {
+        let mut cooc = LocalGlobalDuration::new();
+        cooc.insert(0, HashMap::from([(0, 1.0), (1, 9.0)]));
+        cooc.insert(1, HashMap::from([(0, 8.0), (1, 1.0)]));
+        let map = hungarian_local_to_global(&cooc, &[(0, 1)]);
+        assert_eq!(map.get(&0), Some(&SpeakerId(1)));
+        assert_eq!(map.get(&1), Some(&SpeakerId(0)));
+    }
 }

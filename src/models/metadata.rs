@@ -360,4 +360,242 @@ mod tests {
         assert_eq!(meta.num_speakers, Some(3));
         assert_eq!(meta.source, Some(MetaSource::Manifest));
     }
+
+    #[test]
+    fn is_empty_reflects_field_presence() {
+        assert!(ModelConfigMeta::default().is_empty());
+        // `source` alone does not count as content.
+        let source_only = ModelConfigMeta {
+            source: Some(MetaSource::Defaults),
+            ..ModelConfigMeta::default()
+        };
+        assert!(source_only.is_empty());
+
+        let cases: [ModelConfigMeta; 11] = [
+            ModelConfigMeta {
+                model_type: Some("x".into()),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                adapter_type: Some("x".into()),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                version: Some("x".into()),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                sample_rate: Some(16000),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                window_secs: Some(1.0),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                hop_secs: Some(0.5),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                embedding_dim: Some(256),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                num_speakers: Some(3),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                license: Some("MIT".into()),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                license_url: Some("u".into()),
+                ..Default::default()
+            },
+            ModelConfigMeta {
+                provenance: Some("p".into()),
+                ..Default::default()
+            },
+        ];
+        for (i, meta) in cases.iter().enumerate() {
+            assert!(!meta.is_empty(), "case {i} must be non-empty");
+        }
+    }
+
+    #[test]
+    fn fill_from_never_overwrites_present_fields() {
+        let full = ModelConfigMeta {
+            model_type: Some("a".into()),
+            adapter_type: Some("b".into()),
+            version: Some("c".into()),
+            sample_rate: Some(8000),
+            window_secs: Some(2.0),
+            hop_secs: Some(0.25),
+            embedding_dim: Some(128),
+            num_speakers: Some(2),
+            license: Some("MIT".into()),
+            license_url: Some("u".into()),
+            provenance: Some("p".into()),
+            source: None,
+        };
+        let mut meta = full.clone();
+        let other = ModelConfigMeta {
+            model_type: Some("z".into()),
+            adapter_type: Some("z".into()),
+            version: Some("z".into()),
+            sample_rate: Some(16000),
+            window_secs: Some(9.0),
+            hop_secs: Some(9.0),
+            embedding_dim: Some(512),
+            num_speakers: Some(9),
+            license: Some("Apache-2.0".into()),
+            license_url: Some("z".into()),
+            provenance: Some("z".into()),
+            source: None,
+        };
+        meta.fill_from(&other);
+        assert_eq!(meta, full, "no field may be overwritten");
+
+        // And each None field is filled individually.
+        let mut sparse = ModelConfigMeta::default();
+        sparse.fill_from(&other);
+        assert_eq!(sparse.model_type.as_deref(), Some("z"));
+        assert_eq!(sparse.sample_rate, Some(16000));
+        assert_eq!(sparse.num_speakers, Some(9));
+    }
+
+    #[test]
+    fn from_props_accepts_alternate_key_spellings() {
+        let mut props = HashMap::new();
+        props.insert("model-type".into(), "segmenter".into());
+        props.insert("adapter-type".into(), "powerset-v1".into());
+        props.insert("model_version".into(), "3.0".into());
+        props.insert("sr".into(), "16000".into());
+        props.insert("window-size".into(), "10.0".into());
+        props.insert("hop".into(), "1.0".into());
+        props.insert("output_dim".into(), "256".into());
+        props.insert("max_speakers".into(), "3".into());
+        props.insert("license-url".into(), "https://example.com/L".into());
+        props.insert("author".into(), "someone".into());
+        let meta = ModelConfigMeta::from_props(&props);
+        assert_eq!(meta.model_type.as_deref(), Some("segmenter"));
+        assert_eq!(meta.adapter_type.as_deref(), Some("powerset-v1"));
+        assert_eq!(meta.version.as_deref(), Some("3.0"));
+        assert_eq!(meta.sample_rate, Some(16000));
+        assert_eq!(meta.window_secs, Some(10.0));
+        assert_eq!(meta.hop_secs, Some(1.0));
+        assert_eq!(meta.embedding_dim, Some(256));
+        assert_eq!(meta.num_speakers, Some(3));
+        assert_eq!(meta.license_url.as_deref(), Some("https://example.com/L"));
+        assert_eq!(meta.provenance.as_deref(), Some("someone"));
+
+        // Remaining alternates for the numeric keys.
+        let mut props = HashMap::new();
+        props.insert("sample-rate".into(), "8000".into());
+        props.insert("window_size".into(), "5.0".into());
+        props.insert("window_shift".into(), "0.5".into());
+        props.insert("window-shift".into(), "0.5".into());
+        props.insert("embedding-dim".into(), "192".into());
+        props.insert("num-speakers".into(), "4".into());
+        let meta = ModelConfigMeta::from_props(&props);
+        assert_eq!(meta.sample_rate, Some(8000));
+        assert_eq!(meta.window_secs, Some(5.0));
+        assert_eq!(meta.hop_secs, Some(0.5));
+        assert_eq!(meta.embedding_dim, Some(192));
+        assert_eq!(meta.num_speakers, Some(4));
+    }
+
+    #[test]
+    fn from_props_trims_and_drops_empty_values() {
+        let mut props = HashMap::new();
+        props.insert("version".into(), "  1.2  ".into());
+        props.insert("license".into(), "   ".into());
+        props.insert("sample_rate".into(), " 16000 ".into());
+        let meta = ModelConfigMeta::from_props(&props);
+        assert_eq!(meta.version.as_deref(), Some("1.2"));
+        assert_eq!(meta.license, None, "whitespace-only value counts as absent");
+        assert_eq!(meta.sample_rate, Some(16000));
+    }
+
+    #[test]
+    fn from_props_ignores_unparseable_numbers() {
+        let mut props = HashMap::new();
+        props.insert("sample_rate".into(), "not-a-number".into());
+        props.insert("window_secs".into(), "abc".into());
+        props.insert("hop_secs".into(), "1.0.0".into());
+        props.insert("embedding_dim".into(), "-3".into());
+        props.insert("num_speakers".into(), "3.5".into());
+        let meta = ModelConfigMeta::from_props(&props);
+        assert_eq!(meta.sample_rate, None);
+        assert_eq!(meta.window_secs, None);
+        assert_eq!(meta.hop_secs, None);
+        assert_eq!(meta.embedding_dim, None);
+        assert_eq!(meta.num_speakers, None);
+    }
+
+    #[test]
+    fn load_with_propsless_onnx_falls_back_to_manifest() {
+        // silero_vad.onnx ships without polyvoice metadata_props, so the read
+        // succeeds but yields an empty map (and without the onnx feature the
+        // read is a no-op) — either way the manifest tier is exercised.
+        let m = Manifest::from_toml_str(ENTRY_TOML).unwrap();
+        let entry = m.model("powerset_fp32").unwrap();
+        let silero = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/silero_vad.onnx");
+        let meta = load_model_config(Some(&silero), Some(entry), &ModelConfigMeta::default());
+        assert_eq!(meta.window_secs, Some(10.0));
+        assert_eq!(meta.adapter_type.as_deref(), Some("powerset-v1"));
+        assert_eq!(meta.source, Some(MetaSource::Manifest));
+    }
+
+    #[cfg(feature = "onnx")]
+    #[test]
+    fn load_with_unreadable_onnx_falls_back_to_manifest() {
+        let m = Manifest::from_toml_str(ENTRY_TOML).unwrap();
+        let entry = m.model("powerset_fp32").unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let junk = tmp.path().join("junk.onnx");
+        std::fs::write(&junk, b"this is not an onnx model").unwrap();
+        let meta = load_model_config(Some(&junk), Some(entry), &ModelConfigMeta::default());
+        assert_eq!(meta.window_secs, Some(10.0));
+        assert_eq!(meta.source, Some(MetaSource::Manifest));
+    }
+
+    #[cfg(feature = "onnx")]
+    #[test]
+    fn load_reads_geometry_from_onnx_props() {
+        let powerset = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32.onnx");
+        let meta = load_model_config(Some(&powerset), None, &ModelConfigMeta::default());
+        assert_eq!(meta.source, Some(MetaSource::OnnxProps));
+        assert_eq!(meta.sample_rate, Some(16000));
+        assert_eq!(
+            meta.model_type.as_deref(),
+            Some("pyannote-segmentation-3.0")
+        );
+        assert_eq!(meta.num_speakers, Some(3));
+    }
+
+    #[cfg(feature = "onnx")]
+    #[test]
+    fn load_mixing_onnx_manifest_and_defaults_is_marked_mixed() {
+        let m = Manifest::from_toml_str(ENTRY_TOML).unwrap();
+        let entry = m.model("powerset_fp32").unwrap();
+        let powerset = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32.onnx");
+        // The bundled powerset props carry sample_rate/model_type but no hop
+        // or adapter_type, so the manifest fills those; a remaining gap is
+        // closed by caller defaults.
+        let defaults = ModelConfigMeta {
+            embedding_dim: Some(256),
+            ..ModelConfigMeta::default()
+        };
+        let meta = load_model_config(Some(&powerset), Some(entry), &defaults);
+        assert_eq!(meta.source, Some(MetaSource::Mixed));
+        assert_eq!(meta.sample_rate, Some(16000), "identity from onnx props");
+        assert_eq!(meta.hop_secs, Some(1.0), "hop only present in manifest");
+        assert_eq!(
+            meta.adapter_type.as_deref(),
+            Some("powerset-v1"),
+            "adapter_type only present in manifest"
+        );
+        assert_eq!(meta.embedding_dim, Some(256), "gap closed by defaults");
+    }
 }

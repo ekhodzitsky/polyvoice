@@ -842,4 +842,188 @@ mod tests {
         let final_ = [SpeakerId(0), SpeakerId(0)];
         assert!((label_flip_rate(&first, &final_) - 0.5).abs() < 1e-6);
     }
+
+    /// VAD that fails on the first frame, to exercise the `vad.process`
+    /// error-propagation path.
+    struct FailingVad;
+
+    impl VoiceActivityDetector for FailingVad {
+        fn reset(&mut self) {}
+
+        fn process(&mut self, _samples: &[f32]) -> Result<Vec<f32>, VadError> {
+            Err(VadError::Model("synthetic vad failure".into()))
+        }
+
+        fn sample_rate(&self) -> u32 {
+            16000
+        }
+    }
+
+    /// Embedder that always fails with resource exhaustion, to exercise the
+    /// embedding error paths in window extraction and flush.
+    struct FailingEmbedder;
+
+    impl Embedder for FailingEmbedder {
+        fn dim(&self) -> usize {
+            4
+        }
+
+        fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            Err(EmbedderError::ResourceExhausted {
+                detail: "synthetic pool exhaustion".into(),
+            })
+        }
+    }
+
+    #[test]
+    fn feed_propagates_vad_error() {
+        let extractor = DummyExtractor::new(256);
+        let mut p = StreamingPipeline::new(
+            FailingVad,
+            extractor,
+            default_config(),
+            default_vad_config(),
+        )
+        .unwrap();
+        let err = p.feed(&loud_samples(1.0)).unwrap_err();
+        assert!(!err.is_resource_exhausted());
+        match err {
+            StreamingError::Vad(VadError::Model(msg)) => {
+                assert!(msg.contains("synthetic vad failure"));
+            }
+            other => panic!("expected Vad error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn feed_propagates_embed_error_as_resource_exhausted() {
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let mut p =
+            StreamingPipeline::new(vad, FailingEmbedder, default_config(), default_vad_config())
+                .unwrap();
+        // 5 s of speech guarantees a full window is extracted during feed.
+        let err = p.feed(&loud_samples(5.0)).unwrap_err();
+        assert!(matches!(err, StreamingError::Embedding(_)));
+        assert!(
+            err.is_resource_exhausted(),
+            "embedder back-pressure must classify as resource exhaustion"
+        );
+    }
+
+    #[test]
+    fn flush_propagates_embed_error() {
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let mut p =
+            StreamingPipeline::new(vad, FailingEmbedder, default_config(), default_vad_config())
+                .unwrap();
+        // Under one window: nothing extracted during feed, so the error
+        // surfaces from the trailing-window flush path instead.
+        let _ = p.feed(&loud_samples(1.0)).unwrap();
+        let err = p.flush().unwrap_err();
+        assert!(matches!(err, StreamingError::Embedding(_)));
+    }
+
+    #[test]
+    fn short_speech_blip_is_dropped_by_min_duration_filter() {
+        // Region closes after the min-silence hangover but is far shorter than
+        // the configured minimum speech duration, so the buffered audio is
+        // discarded instead of producing a turn.
+        let mut config = default_config();
+        config.speech_filter.min_speech_secs = 5.0;
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let mut p = StreamingPipeline::new(vad, extractor, config, default_vad_config()).unwrap();
+        assert!(p.feed(&loud_samples(0.1)).unwrap().is_empty());
+        // 1 s of silence exceeds the 300 ms min-silence hangover and closes
+        // the region inside feed().
+        assert!(p.feed(&silent_samples(1.0)).unwrap().is_empty());
+        assert!(p.turns().is_empty());
+        assert_eq!(p.num_speakers(), 0);
+    }
+
+    #[test]
+    fn short_in_flight_speech_is_dropped_on_flush() {
+        let mut config = default_config();
+        config.speech_filter.min_speech_secs = 5.0;
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let mut p = StreamingPipeline::new(vad, extractor, config, default_vad_config()).unwrap();
+        let _ = p.feed(&loud_samples(0.5)).unwrap();
+        let turns = p.flush().unwrap();
+        assert!(turns.is_empty(), "sub-minimum region must be discarded");
+        assert!(p.turns().is_empty());
+    }
+
+    #[test]
+    fn flush_without_any_speech_is_empty() {
+        let mut p = pipeline();
+        assert!(p.flush().unwrap().is_empty(), "no region was ever opened");
+        let _ = p.feed(&silent_samples(1.0)).unwrap();
+        assert!(p.flush().unwrap().is_empty(), "silence opens no region");
+        assert!(p.turns().is_empty());
+    }
+
+    #[test]
+    fn sub_frame_chunks_are_buffered_until_a_full_frame() {
+        let mut p = pipeline();
+        // 160 + 160 samples < one 512-sample VAD frame: nothing processed yet.
+        assert!(p.feed(&silent_samples(0.01)).unwrap().is_empty());
+        assert!(p.feed(&silent_samples(0.01)).unwrap().is_empty());
+        // Crossing the frame boundary processes normally.
+        assert!(p.feed(&silent_samples(1.0)).unwrap().is_empty());
+        assert!(p.turns().is_empty());
+    }
+
+    #[test]
+    fn new_pipeline_reports_no_preset_and_config_derived_params() {
+        let mut config = default_config();
+        config.cluster.max_speakers = 5;
+        config.cluster.threshold = 0.7;
+        let vad = EnergyVad::new(-40.0, 16000, 512);
+        let extractor = DummyExtractor::new(256);
+        let p = StreamingPipeline::new(vad, extractor, config, default_vad_config()).unwrap();
+        assert_eq!(p.latency_preset(), None);
+        assert_eq!(p.speaker_cache_cap(), 5);
+        assert!((p.params().match_threshold - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn accurate_preset_reports_preset_and_geometry() {
+        let p = pipeline_preset(LatencyPreset::Accurate);
+        assert_eq!(p.latency_preset(), Some(LatencyPreset::Accurate));
+        assert!((p.params().window_secs - 2.0).abs() < 1e-6);
+        assert_eq!(p.speaker_cache_cap(), 64);
+    }
+
+    #[test]
+    fn streaming_error_display_mentions_variant_details() {
+        let vad_err = StreamingError::Vad(VadError::InvalidChunkSize {
+            expected: 512,
+            got: 100,
+        });
+        let s = vad_err.to_string();
+        assert!(s.contains("VAD error") && s.contains("512") && s.contains("100"));
+        assert!(!vad_err.is_resource_exhausted());
+
+        let emb = StreamingError::Embedding(EmbedderError::AudioTooShort {
+            actual_secs: 0.1,
+            min_secs: 1.0,
+        });
+        assert!(emb.to_string().contains("embedding error"));
+        assert!(!emb.is_resource_exhausted());
+
+        let mismatch = StreamingError::VadFrameMismatch {
+            frame_samples: 512,
+            got: 2,
+        };
+        let s = mismatch.to_string();
+        assert!(s.contains("512") && s.contains('2'));
+        assert!(!mismatch.is_resource_exhausted());
+
+        let invalid = StreamingError::InvalidParams {
+            detail: "window_secs must be positive".into(),
+        };
+        assert!(invalid.to_string().contains("invalid streaming params"));
+        assert!(!invalid.is_resource_exhausted());
+    }
 }

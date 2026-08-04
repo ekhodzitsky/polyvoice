@@ -340,4 +340,258 @@ mod tests {
             "two distinct points must form two clusters"
         );
     }
+
+    #[test]
+    fn seeding_is_deterministic() {
+        // Two calls with the same implicit seed must yield identical labels.
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.9, 0.1],
+            vec![0.0, 1.0],
+            vec![0.1, 0.9],
+            vec![-1.0, 0.0],
+            vec![-0.9, 0.1],
+            vec![0.5, 0.5],
+            vec![-0.5, 0.5],
+        ];
+        let first = kmeans_pp(&embeddings, 3, 20);
+        let second = kmeans_pp(&embeddings, 3, 20);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn explicit_seeds_produce_valid_groupings() {
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.9, 0.1],
+            vec![0.0, 1.0],
+            vec![0.1, 0.9],
+        ];
+        for seed in [0u64, 1, 7, 123_456] {
+            let labels = kmeans_pp_with_seed(&embeddings, 2, 20, seed);
+            assert_eq!(labels.len(), embeddings.len());
+            for &l in &labels {
+                assert!(l < 2);
+            }
+            assert_eq!(labels[0], labels[1]);
+            assert_eq!(labels[2], labels[3]);
+        }
+    }
+
+    #[test]
+    fn zero_max_iter_returns_valid_labels_without_panic() {
+        // Lloyd's loop never runs; labels stay at their initial value.
+        let embeddings = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![-1.0, 0.0]];
+        let labels = kmeans_pp(&embeddings, 2, 0);
+        assert_eq!(labels.len(), 3);
+        assert!(labels.iter().all(|&l| l == 0));
+    }
+
+    #[test]
+    fn converges_before_max_iter_on_separated_data() {
+        // Trivially separated points stabilize almost immediately; running
+        // many more iterations must not change the labels.
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.95, 0.05],
+            vec![0.0, 1.0],
+            vec![0.05, 0.95],
+        ];
+        let short = kmeans_pp(&embeddings, 2, 2);
+        let long = kmeans_pp(&embeddings, 2, 100);
+        assert_eq!(short, long);
+        assert_eq!(short[0], short[1]);
+        assert_eq!(short[2], short[3]);
+        assert_ne!(short[0], short[2]);
+    }
+
+    #[test]
+    fn k_equal_to_n_gives_each_point_its_own_cluster() {
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.0, 1.0],
+            vec![-1.0, 0.0],
+            vec![0.0, -1.0],
+        ];
+        let labels = kmeans_pp(&embeddings, 4, 20);
+        assert_eq!(labels.len(), 4);
+        let distinct: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(distinct.len(), 4);
+    }
+
+    #[test]
+    fn cosine_distance_behaves_on_known_geometry() {
+        let a = vec![1.0f32, 0.0];
+        let same = vec![1.0f64, 0.0];
+        let orth = vec![0.0f64, 1.0];
+        let opposite = vec![-1.0f64, 0.0];
+        assert!(cosine_distance_f32_f64(&a, &same).abs() < 1e-6);
+        assert!((cosine_distance_f32_f64(&a, &orth) - 1.0).abs() < 1e-6);
+        assert!((cosine_distance_f32_f64(&a, &opposite) - 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn silhouette_tiny_input_scores_zero() {
+        // n <= 2 short-circuits to 0 regardless of labels.
+        let dists = vec![0.0f64; 4];
+        assert_eq!(silhouette_score_with_dists(0, &[], &dists), 0.0);
+        assert_eq!(silhouette_score_with_dists(1, &[0], &dists), 0.0);
+        assert_eq!(silhouette_score_with_dists(2, &[0, 1], &dists), 0.0);
+    }
+
+    #[test]
+    fn silhouette_single_cluster_scores_zero() {
+        // All points in one cluster: k < 2 short-circuits to 0.
+        let n = 4;
+        let dists = vec![0.5f64; n * n];
+        let labels = vec![0usize; n];
+        assert_eq!(silhouette_score_with_dists(n, &labels, &dists), 0.0);
+    }
+
+    #[test]
+    fn silhouette_skips_singleton_clusters() {
+        // Point 0 is a singleton cluster: it has no intra-cluster neighbors
+        // and must be skipped rather than counted with a bogus score.
+        let n = 3;
+        let mut dists = vec![0.0f64; n * n];
+        // d(1,2) small (same cluster), d(0,*) large.
+        dists[n + 2] = 0.1;
+        dists[2 * n + 1] = 0.1;
+        dists[1] = 1.0;
+        dists[n] = 1.0;
+        dists[2] = 1.0;
+        dists[2 * n] = 1.0;
+        let labels = vec![0usize, 1, 1];
+        let score = silhouette_score_with_dists(n, &labels, &dists);
+        // Only points 1 and 2 count; both have a=0.1, b=1.0 → s = 0.9.
+        assert!((score - 0.9).abs() < 1e-9, "score was {score}");
+    }
+
+    #[test]
+    fn silhouette_perfect_separation_scores_near_one() {
+        let n = 4;
+        let mut dists = vec![0.0f64; n * n];
+        for i in 0..n {
+            for j in 0..n {
+                if i != j {
+                    let same_cluster = (i < 2) == (j < 2);
+                    dists[i * n + j] = if same_cluster { 0.01 } else { 1.0 };
+                }
+            }
+        }
+        let labels = vec![0usize, 0, 1, 1];
+        let score = silhouette_score_with_dists(n, &labels, &dists);
+        assert!(score > 0.9, "score was {score}");
+        assert!(score <= 1.0);
+    }
+
+    #[test]
+    fn auto_k_empty_input_returns_empty() {
+        let labels = kmeans_auto_k(&[], 2, 5, 10, 3);
+        assert!(labels.is_empty());
+    }
+
+    #[test]
+    fn auto_k_single_point_returns_single_label() {
+        let embeddings = vec![vec![1.0f32, 0.0]];
+        let labels = kmeans_auto_k(&embeddings, 2, 5, 10, 3);
+        assert_eq!(labels, vec![0]);
+    }
+
+    #[test]
+    fn auto_k_homogeneous_embeddings_force_single_cluster() {
+        // Nearly identical embeddings fall below the homogeneity threshold,
+        // so the k search is skipped and a single cluster is returned.
+        let embeddings: Vec<Vec<f32>> = (0..8)
+            .map(|i| {
+                let mut v = vec![1.0f32, 0.0];
+                v[1] = i as f32 * 1e-4;
+                crate::utils::l2_normalize(&mut v);
+                v
+            })
+            .collect();
+        let labels = kmeans_auto_k(&embeddings, 2, 6, 20, 3);
+        assert_eq!(labels, vec![0; 8]);
+    }
+
+    #[test]
+    fn auto_k_finds_two_well_separated_clusters() {
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.95, 0.05],
+            vec![0.9, 0.1],
+            vec![1.0, 0.02],
+            vec![0.0, 1.0],
+            vec![0.05, 0.95],
+            vec![0.1, 0.9],
+            vec![0.02, 1.0],
+        ];
+        let labels = kmeans_auto_k(&embeddings, 2, 4, 20, 3);
+        assert_eq!(labels.len(), 8);
+        let distinct: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(distinct.len(), 2, "expected two clusters, got {labels:?}");
+        assert_eq!(labels[0], labels[1]);
+        assert_eq!(labels[2], labels[3]);
+        assert_eq!(labels[4], labels[5]);
+        assert_eq!(labels[6], labels[7]);
+        assert_ne!(labels[0], labels[4]);
+    }
+
+    #[test]
+    fn auto_k_zero_trials_still_runs_once() {
+        // trials=0 is clamped to a single run per k.
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.9, 0.1],
+            vec![0.0, 1.0],
+            vec![0.1, 0.9],
+        ];
+        let labels = kmeans_auto_k(&embeddings, 2, 2, 20, 0);
+        assert_eq!(labels.len(), 4);
+        assert_eq!(labels[0], labels[1]);
+        assert_eq!(labels[2], labels[3]);
+        assert_ne!(labels[0], labels[2]);
+    }
+
+    #[test]
+    fn auto_k_clamps_k_range_to_point_count() {
+        // k_min/k_max beyond n must not panic or produce invalid labels.
+        let embeddings: Vec<Vec<f32>> = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![-1.0, 0.0]];
+        let labels = kmeans_auto_k(&embeddings, 10, 20, 10, 2);
+        assert_eq!(labels.len(), 3);
+        for &l in &labels {
+            assert!(l < 3);
+        }
+    }
+
+    #[test]
+    fn auto_k_k_min_below_two_is_raised() {
+        // k_min below 2 is clamped up; the search still returns valid labels.
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.9, 0.1],
+            vec![0.0, 1.0],
+            vec![0.1, 0.9],
+        ];
+        let labels = kmeans_auto_k(&embeddings, 0, 2, 20, 2);
+        assert_eq!(labels.len(), 4);
+        for &l in &labels {
+            assert!(l < 2);
+        }
+    }
+
+    #[test]
+    fn auto_k_is_deterministic() {
+        let embeddings: Vec<Vec<f32>> = vec![
+            vec![1.0, 0.0],
+            vec![0.9, 0.1],
+            vec![0.0, 1.0],
+            vec![0.1, 0.9],
+            vec![-1.0, 0.0],
+            vec![-0.9, 0.1],
+        ];
+        let first = kmeans_auto_k(&embeddings, 2, 3, 20, 3);
+        let second = kmeans_auto_k(&embeddings, 2, 3, 20, 3);
+        assert_eq!(first, second);
+    }
 }

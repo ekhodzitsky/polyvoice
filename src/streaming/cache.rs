@@ -425,4 +425,111 @@ mod tests {
         assert_eq!(cache.len(), 1);
         assert!(r.overflow_merged);
     }
+
+    #[test]
+    fn is_empty_tracks_assigns() {
+        let mut cache = ArrivalOrderSpeakerCache::new(4, 0.5, 2, 0.0);
+        assert!(cache.is_empty());
+        cache.assign(&unit(4, 0));
+        assert!(!cache.is_empty());
+    }
+
+    #[test]
+    fn evict_weakest_returns_none_below_cap() {
+        let mut cache = ArrivalOrderSpeakerCache::new(4, 0.5, 2, 0.0);
+        assert_eq!(cache.evict_weakest(), None);
+        cache.assign(&unit(4, 0));
+        assert_eq!(cache.evict_weakest(), None, "not at cap yet");
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn evict_weakest_drops_stale_entry_and_keeps_recent() {
+        // A: two hits (stable) but older; B: one recent hit. A's keep score is
+        // lower because the recency term dominates, so A is evicted.
+        let mut cache = ArrivalOrderSpeakerCache::new(2, 0.5, 2, 0.0);
+        let a = unit(4, 0);
+        let b = unit(4, 1);
+        cache.assign(&a); // step 1
+        cache.assign(&near(4, 0, 0.01)); // step 2: A latches stable
+        cache.assign(&b); // step 3: B, most recent
+        let evicted = cache.evict_weakest();
+        assert_eq!(evicted, Some(SpeakerId(0)));
+        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.speaker_ids(), vec![SpeakerId(1)]);
+        // The surviving entry still matches its own embedding.
+        let r = cache.assign(&b);
+        assert_eq!(r.speaker, SpeakerId(1));
+    }
+
+    #[test]
+    fn evict_weakest_resets_current_speaker_when_evicted() {
+        // Force B's average confidence down with overflow merges so the
+        // recency boost cannot save it; B is the current speaker, so eviction
+        // must also clear the hysteresis anchor.
+        let mut cache = ArrivalOrderSpeakerCache::new(2, 0.9, 1, 0.0);
+        let a = unit(4, 0);
+        let b = unit(4, 1);
+        cache.assign(&a); // step 1: A, immediately stable (min_hits = 1)
+        cache.assign(&b); // step 2: B becomes current
+        // Orthogonal embeddings force-merge into B (tie on cosine 0, current
+        // speaker preferred) and drag B's average confidence to 1/3.
+        let r = cache.assign(&unit(4, 2));
+        assert!(r.overflow_merged);
+        assert_eq!(r.speaker, SpeakerId(1));
+        let r = cache.assign(&unit(4, 3));
+        assert!(r.overflow_merged);
+        assert_eq!(r.speaker, SpeakerId(1));
+
+        let evicted = cache.evict_weakest();
+        assert_eq!(evicted, Some(SpeakerId(1)), "low-confidence current B");
+        assert_eq!(cache.speaker_ids(), vec![SpeakerId(0)]);
+        // With B gone (and no stale hysteresis anchor), B's embedding arrives
+        // as a brand-new speaker rather than matching A.
+        let r = cache.assign(&b);
+        assert_eq!(
+            r.speaker,
+            SpeakerId(2),
+            "next arrival-order id after eviction"
+        );
+        assert!(!r.overflow_merged);
+    }
+
+    #[test]
+    fn speaker_ids_are_sorted_by_arrival_order() {
+        let mut cache = ArrivalOrderSpeakerCache::new(4, 0.9, 2, 0.0);
+        cache.assign(&unit(8, 0));
+        cache.assign(&unit(8, 1));
+        cache.assign(&unit(8, 2));
+        assert_eq!(
+            cache.speaker_ids(),
+            vec![SpeakerId(0), SpeakerId(1), SpeakerId(2)]
+        );
+    }
+
+    #[test]
+    fn min_hits_one_makes_first_assign_stable() {
+        let mut cache = ArrivalOrderSpeakerCache::new(4, 0.5, 1, 0.0);
+        let r = cache.assign(&unit(4, 0));
+        assert!(r.stable, "min_hits_to_stable = 1 stabilizes on creation");
+        assert_eq!(r.confidence, 1.0);
+    }
+
+    #[test]
+    fn match_confidence_reports_cosine_to_updated_centroid() {
+        let mut cache = ArrivalOrderSpeakerCache::new(4, 0.5, 2, 0.0);
+        let a = unit(4, 0);
+        let r1 = cache.assign(&a);
+        assert_eq!(r1.confidence, 1.0, "brand-new speaker reports 1.0");
+        let na = near(4, 0, 0.01);
+        let r2 = cache.assign(&na);
+        assert_eq!(r2.speaker, r1.speaker);
+        assert!(!r2.overflow_merged);
+        let expected = cosine_similarity(&na, &a);
+        assert!(
+            (r2.confidence - expected).abs() < 1e-3,
+            "confidence {} should track cosine {expected}",
+            r2.confidence
+        );
+    }
 }

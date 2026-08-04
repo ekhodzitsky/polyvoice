@@ -234,4 +234,69 @@ mod tests {
             "expected bin {expected} dominant, hits={hits}/{interior}"
         );
     }
+
+    #[test]
+    fn preemphasis_keeps_first_sample_and_differences_rest() {
+        assert!(apply_preemphasis(&[], PREEMPH).is_empty());
+        let out = apply_preemphasis(&[1.0, 1.0, 3.0], 0.5);
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0], 1.0);
+        assert!((out[1] - 0.5).abs() < 1e-6);
+        assert!((out[2] - 2.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn default_features_extract_like_new() {
+        let f = SortformerFeatures::default();
+        let (data, n_frames) = f.extract_log_mel(&[0.0f32; HOP_LENGTH * 4]).unwrap();
+        assert!(n_frames > 0);
+        assert_eq!(data.len(), n_frames * N_MELS);
+    }
+
+    #[test]
+    fn mel_scale_roundtrips_in_linear_and_log_regions() {
+        // Below 1 kHz (linear branch), at the corner, and above (log branch).
+        for hz in [100.0f64, 500.0, 1000.0, 4000.0, 8000.0] {
+            let mel = hz_to_mel_slaney(hz);
+            let back = mel_to_hz_slaney(mel);
+            assert!((back - hz).abs() < 0.5, "hz={hz} roundtrip={back}");
+        }
+        // mel_to_hz linear branch directly.
+        assert!((mel_to_hz_slaney(1.0) - F_SP).abs() < 1e-9);
+        // hz_to_mel linear branch directly.
+        assert!((hz_to_mel_slaney(F_SP) - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn hann_window_endpoints_and_center() {
+        let w = hann_window(64);
+        assert_eq!(w.len(), 64);
+        assert!(w[0].abs() < 1e-7, "periodic Hann starts at zero");
+        assert!((w[32] - 1.0).abs() < 1e-6, "center peaks at one");
+        assert!(w.iter().all(|&v| (0.0..=1.0).contains(&v)));
+    }
+
+    #[test]
+    fn mel_filterbank_is_normalized_nonnegative_and_overlapping() {
+        let fb = create_mel_filterbank_slaney(N_FFT, N_MELS, SAMPLE_RATE as usize);
+        assert_eq!(fb.len(), N_MELS);
+        let freq_bins = N_FFT / 2 + 1;
+        assert!(fb.iter().all(|row| row.len() == freq_bins));
+        assert!(fb.iter().flatten().all(|&v| v.is_finite() && v >= 0.0));
+        // Every filter has energy somewhere.
+        assert!(fb.iter().all(|row| row.iter().any(|&v| v > 0.0)));
+        // Triangular filters overlap: each interior bin is covered by some filter.
+        let covered = |k: usize| fb.iter().any(|row| row[k] > 0.0);
+        assert!((1..freq_bins - 1).all(covered));
+    }
+
+    #[test]
+    fn extract_log_mel_short_audio_still_produces_frames() {
+        // Center padding guarantees frames even for sub-window inputs.
+        let f = SortformerFeatures::new();
+        let (data, n_frames) = f.extract_log_mel(&[0.5f32; 100]).unwrap();
+        assert!(n_frames >= 1);
+        assert_eq!(data.len(), n_frames * N_MELS);
+        assert!(data.iter().all(|v| v.is_finite()));
+    }
 }

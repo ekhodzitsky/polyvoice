@@ -475,4 +475,99 @@ mod tests {
         }
         assert!(FbankExtractor::try_new(FbankConfig::default()).is_ok());
     }
+
+    #[test]
+    fn fbank_config_validate_rejects_each_field() {
+        let cases: Vec<FbankConfig> = vec![
+            FbankConfig {
+                n_fft: 0,
+                ..Default::default()
+            },
+            FbankConfig {
+                win_length: 0,
+                ..Default::default()
+            },
+            FbankConfig {
+                n_mels: 0,
+                ..Default::default()
+            },
+            FbankConfig {
+                f_min: f32::NAN,
+                ..Default::default()
+            },
+            FbankConfig {
+                f_min: -1.0,
+                ..Default::default()
+            },
+            FbankConfig {
+                f_max: f32::NAN,
+                ..Default::default()
+            },
+            FbankConfig {
+                f_min: 100.0,
+                f_max: 100.0,
+                ..Default::default()
+            },
+            FbankConfig {
+                f_min: 200.0,
+                f_max: 100.0,
+                ..Default::default()
+            },
+        ];
+        for c in cases {
+            assert!(
+                matches!(c.validate(), Err(FbankError::InvalidConfig(_))),
+                "expected InvalidConfig for {c:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn fbank_error_display_messages() {
+        assert_eq!(
+            FbankError::Fft("boom".into()).to_string(),
+            "fft failed: boom"
+        );
+        assert_eq!(
+            FbankError::Shape("bad".into()).to_string(),
+            "invalid shape: bad"
+        );
+        assert_eq!(
+            FbankError::InvalidConfig("nope".into()).to_string(),
+            "invalid fbank config: nope"
+        );
+    }
+
+    #[test]
+    fn test_pre_emphasis_empty() {
+        assert!(pre_emphasis(&[], 0.97).is_empty());
+    }
+
+    #[test]
+    fn frame_exact_window_multiple() {
+        let samples = vec![1.0f32; 800];
+        let frames = frame(&samples, 400, 160);
+        assert_eq!(frames.len(), 1 + (800 - 400) / 160);
+        assert!(frames.iter().all(|f| f.len() == 400));
+        // Exactly one window's worth of samples yields exactly one frame.
+        let frames = frame(&samples[..400], 400, 160);
+        assert_eq!(frames.len(), 1);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn fbank_extract_sine_yields_finite_frames() {
+        let config = FbankConfig::default();
+        let extractor = FbankExtractor::new(config);
+        let sr = config.sample_rate as f32;
+        let samples: Vec<f32> = (0..16000)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sr).sin() * 0.5)
+            .collect();
+        let fb = extractor.extract(&samples).unwrap();
+        assert_eq!(
+            fb.len(),
+            1 + (16000 - config.win_length) / config.hop_length
+        );
+        assert!(fb.iter().all(|frame| frame.iter().all(|v| v.is_finite())));
+    }
 }

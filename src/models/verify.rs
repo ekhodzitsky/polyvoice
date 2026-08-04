@@ -203,4 +203,68 @@ mod tests {
             "error should indicate bad signature, got: {err}"
         );
     }
+
+    /// Absolute path to a checked-in model fixture under `models/`.
+    fn fixture_path(name: &str) -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("models")
+            .join(name)
+    }
+
+    #[test]
+    fn embedded_public_key_parses() {
+        PublicKey::from_base64(SIGNING_PUBKEY_BASE64)
+            .expect("the baked-in signing key must be valid base64");
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn checked_in_small_model_verifies_against_its_signature() {
+        // The repo ships models signed with the project key; use one as a
+        // deterministic end-to-end fixture (no minisign CLI needed).
+        let sig = fs::read_to_string(fixture_path("ecapa_tdnn_mel.onnx.minisig"))
+            .expect("signature fixture must be checked in");
+        verify_minisign(&fixture_path("ecapa_tdnn_mel.onnx"), &sig)
+            .expect("checked-in model must verify against its checked-in signature");
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn checked_in_large_model_verifies_across_many_chunks() {
+        // 6 MB spans many 64 KiB streaming reads, exercising the update loop.
+        let sig = fs::read_to_string(fixture_path("powerset_fp32.onnx.minisig"))
+            .expect("signature fixture must be checked in");
+        verify_minisign(&fixture_path("powerset_fp32.onnx"), &sig)
+            .expect("checked-in model must verify against its checked-in signature");
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn missing_file_is_io_error() {
+        // A valid signature gets past decoding, so the file-open failure
+        // surfaces as the Io variant rather than a signature error.
+        let sig = fs::read_to_string(fixture_path("ecapa_tdnn_mel.onnx.minisig"))
+            .expect("signature fixture must be checked in");
+        let missing = fixture_path("definitely-not-present.onnx");
+        let err = verify_minisign(&missing, &sig).expect_err("missing file must fail");
+        assert!(matches!(err, SignatureError::Io { .. }), "got {err:?}");
+    }
+
+    #[test]
+    fn signature_error_display_mentions_context() {
+        let bad_key = SignatureError::BadPublicKey("k".to_owned());
+        assert!(format!("{bad_key}").contains('k'));
+
+        let bad_sig = SignatureError::BadSignature("s".to_owned());
+        assert!(format!("{bad_sig}").contains('s'));
+
+        let failed = SignatureError::VerificationFailed("v".to_owned());
+        assert!(format!("{failed}").contains('v'));
+
+        let io_err = SignatureError::Io {
+            path: std::path::PathBuf::from("/tmp/missing.bin"),
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "gone"),
+        };
+        assert!(format!("{io_err}").contains("/tmp/missing.bin"));
+    }
 }

@@ -1091,4 +1091,61 @@ mod tests {
             assert!((g.confidence - conf).abs() < 1e-5);
         }
     }
+
+    // --- interval helpers ---
+
+    #[test]
+    fn gap_is_zero_for_overlapping_intervals() {
+        let a = TimeRange {
+            start: 0.0,
+            end: 2.0,
+        };
+        let b = TimeRange {
+            start: 1.0,
+            end: 3.0,
+        };
+        assert_eq!(gap(&a, &b), 0.0);
+        assert_eq!(gap(&b, &a), 0.0);
+        // Containment also counts as overlap.
+        let inner = TimeRange {
+            start: 0.5,
+            end: 1.0,
+        };
+        assert_eq!(gap(&a, &inner), 0.0);
+        // Disjoint intervals keep the true gap, in either direction.
+        let later = TimeRange {
+            start: 5.0,
+            end: 6.0,
+        };
+        assert!((gap(&a, &later) - 3.0).abs() < 1e-12);
+        assert!((gap(&later, &a) - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn sentence_smoothing_noop_for_single_speaker_sentence() {
+        // A whole sentence attributed to one speaker: nothing to relabel.
+        let turns = vec![turn(0, 0.0, 10.0)];
+        let words = vec![word("all", 1.0, 1.5, 1.0), word("mine.", 2.0, 2.5, 1.0)];
+        let cfg = AttributionConfig {
+            sentence_smoothing: true,
+            interpolate_timestamps: false,
+            ..AttributionConfig::default()
+        };
+        let out = attribute_words_with_config(&words, &turns, &cfg);
+        assert!(out.iter().all(|w| w.speaker == Some(SpeakerId(0))));
+    }
+
+    #[test]
+    fn sentence_smoothing_noop_without_attributed_words() {
+        // No turns → no attributed speakers; smoothing must leave words alone.
+        let words = vec![word("nobody", 1.0, 1.5, 0.9), word("here.", 2.0, 2.5, 0.8)];
+        let cfg = AttributionConfig {
+            sentence_smoothing: true,
+            interpolate_timestamps: false,
+            ..AttributionConfig::default()
+        };
+        let out = attribute_words_with_config(&words, &[], &cfg);
+        assert!(out.iter().all(|w| w.speaker.is_none()));
+        assert!((out[0].confidence - 0.9).abs() < 1e-6);
+    }
 }

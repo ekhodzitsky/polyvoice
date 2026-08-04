@@ -455,4 +455,140 @@ mod tests {
         assert_eq!(config.sample_rate, default.sample_rate);
         assert!((config.hop_secs - 0.5).abs() < 1e-6);
     }
+
+    /// Path to the powerset model checked into the repo (no network needed).
+    fn local_model_path() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32.onnx")
+    }
+
+    fn sine_audio(secs: f32, sample_rate: u32) -> Vec<f32> {
+        let n = (secs * sample_rate as f32) as usize;
+        (0..n)
+            .map(|i| {
+                (2.0 * std::f32::consts::PI * 220.0 * i as f32 / sample_rate as f32).sin() * 0.3
+            })
+            .collect()
+    }
+
+    /// Small-window segmenter so inference stays fast; `pool_size` fans
+    /// windows out across pooled sessions.
+    fn load_test_segmenter(pool_size: usize) -> PowersetSegmenter {
+        let config = PowersetConfig {
+            window_secs: 2.0,
+            hop_secs: 1.0,
+            pool_size,
+            ..Default::default()
+        };
+        PowersetSegmenter::with_config(
+            local_model_path(),
+            config,
+            crate::onnx::ExecutionProvider::Cpu,
+        )
+        .expect("local powerset model loads")
+    }
+
+    #[test]
+    fn with_config_missing_model_reports_model_io() {
+        let err = PowersetSegmenter::with_config(
+            "/nonexistent/powerset.onnx",
+            PowersetConfig::default(),
+            crate::onnx::ExecutionProvider::Cpu,
+        )
+        .err()
+        .expect("missing model must fail");
+        match err {
+            SegmentationError::ModelIo { path, .. } => {
+                assert!(path.ends_with("powerset.onnx"), "got {path:?}");
+            }
+            other => panic!("expected ModelIo, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn new_loads_local_model_and_exposes_accessors() {
+        let seg = PowersetSegmenter::new(local_model_path()).expect("local powerset model loads");
+        assert!(seg.model_path().ends_with("powerset_fp32.onnx"));
+        let cfg = seg.config();
+        assert!((cfg.window_secs - 10.0).abs() < 1e-6);
+        assert!((cfg.hop_secs - 2.0).abs() < 1e-6);
+        assert_eq!(cfg.sample_rate, 16_000);
+        assert_eq!(seg.window_samples(), 160_000);
+        assert_eq!(seg.hop_samples(), 32_000);
+        assert_eq!(seg.max_local_speakers(), 3);
+        assert!(seg.supports_overlap());
+    }
+
+    #[test]
+    fn segment_rejects_too_short_audio() {
+        let seg = load_test_segmenter(1);
+        let err = seg.segment(&vec![0.0_f32; 100]).unwrap_err();
+        match err {
+            SegmentationError::AudioTooShort {
+                actual_secs,
+                min_secs,
+            } => {
+                assert!(actual_secs < min_secs);
+                assert!((min_secs - 0.1).abs() < 1e-6);
+            }
+            other => panic!("expected AudioTooShort, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn segment_rejects_invalid_geometry_before_inference() {
+        // Geometry is only validated in `segment()`, not at load time.
+        let config = PowersetConfig {
+            window_secs: 1.0,
+            hop_secs: 2.0,
+            ..Default::default()
+        };
+        let seg = PowersetSegmenter::with_config(
+            local_model_path(),
+            config,
+            crate::onnx::ExecutionProvider::Cpu,
+        )
+        .expect("load does not validate geometry");
+        let err = seg.segment(&vec![0.0_f32; 16_000]).unwrap_err();
+        assert!(matches!(err, SegmentationError::InvalidGeometry { .. }));
+    }
+
+    #[test]
+    fn segment_runs_pooled_windows_and_returns_well_formed_segments() {
+        // pool_size 2 exercises the scoped-thread fan-out; 5s of audio with a
+        // 2s window / 1s hop yields 5 windows, the last one partial.
+        let seg = load_test_segmenter(2);
+        let audio = sine_audio(5.0, 16_000);
+        let total_secs = audio.len() as f64 / 16_000.0;
+        let segments = seg.segment(&audio).expect("segment runs");
+        for w in segments.windows(2) {
+            assert!(
+                w[0].time.start <= w[1].time.start,
+                "segments must be sorted by start"
+            );
+        }
+        for s in &segments {
+            assert!(s.time.start >= 0.0, "start in bounds: {s:?}");
+            assert!(
+                s.time.end <= total_secs + 1e-3,
+                "end in bounds: {s:?} vs {total_secs}"
+            );
+            assert!(s.time.end >= s.time.start, "non-decreasing time: {s:?}");
+            assert!(s.local_speaker_idx < 3, "local speaker bound: {s:?}");
+            assert!(
+                (0.0..=1.0).contains(&s.confidence.get()),
+                "confidence in range: {s:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn segment_single_window_pool_size_zero_treated_as_one() {
+        // pool_size 0 must not panic or spawn zero workers.
+        let seg = load_test_segmenter(0);
+        let audio = sine_audio(2.0, 16_000);
+        let segments = seg.segment(&audio).expect("segment runs");
+        for s in &segments {
+            assert!(s.local_speaker_idx < 3);
+        }
+    }
 }

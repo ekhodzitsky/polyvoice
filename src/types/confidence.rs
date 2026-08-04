@@ -127,3 +127,127 @@ pub fn segment_confidences_from_embeddings(
     }
     out
 }
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn confidence_is_monotone_in_similarity_and_bounded() {
+        let mut prev = 0.0f32;
+        for i in -10..=10 {
+            let sim = i as f32 / 10.0;
+            let c = confidence_from_similarity(sim);
+            assert!((0.0..=1.0).contains(&c), "sim={sim}");
+            assert!(c >= prev, "sim={sim}");
+            prev = c;
+        }
+        // The midpoint similarity maps to exactly 0.5.
+        assert!((confidence_from_similarity(CONFIDENCE_SIM_MIDPOINT) - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn non_finite_similarity_maps_near_zero() {
+        assert!(confidence_from_similarity(f32::NAN) < 0.01);
+        assert!(confidence_from_similarity(f32::INFINITY) < 0.01);
+        assert!(confidence_from_similarity(f32::NEG_INFINITY) < 0.01);
+    }
+
+    #[test]
+    fn extreme_logit_saturates_to_zero_and_one() {
+        assert_eq!(confidence_from_similarity_params(1.0, 0.5, 100.0), 1.0);
+        assert_eq!(confidence_from_similarity_params(-1.0, 0.5, 100.0), 0.0);
+    }
+
+    #[test]
+    fn invalid_params_fall_back_to_defaults() {
+        let reference = confidence_from_similarity(0.7);
+        // Non-positive or non-finite steepness falls back to the default slope.
+        assert_eq!(confidence_from_similarity_params(0.7, 0.5, -1.0), reference);
+        assert_eq!(confidence_from_similarity_params(0.7, 0.5, 0.0), reference);
+        assert_eq!(
+            confidence_from_similarity_params(0.7, 0.5, f32::NAN),
+            reference
+        );
+        // Non-finite midpoint falls back to the default midpoint.
+        assert_eq!(
+            confidence_from_similarity_params(0.7, f32::INFINITY, 10.0),
+            reference
+        );
+        // Out-of-range similarity is clamped into [-1, 1].
+        assert_eq!(
+            confidence_from_similarity_params(5.0, 0.5, 10.0),
+            confidence_from_similarity_params(1.0, 0.5, 10.0)
+        );
+    }
+
+    #[test]
+    fn distance_confidence_decreases_in_distance() {
+        assert_eq!(
+            confidence_from_distance(0.3),
+            confidence_from_similarity(0.7)
+        );
+        let near = confidence_from_distance(0.1);
+        let far = confidence_from_distance(0.9);
+        assert!(near > far);
+        // Non-finite distance is treated as maximally far.
+        assert!(confidence_from_distance(f32::NAN) < 0.01);
+    }
+
+    #[test]
+    fn mean_embeddings_empty_inputs_yield_empty() {
+        assert!(mean_speaker_embeddings(&[], &[]).is_empty());
+        assert!(mean_speaker_embeddings(&[SpeakerId(0)], &[]).is_empty());
+    }
+
+    #[test]
+    fn mean_embeddings_skip_bad_vectors_and_sort_by_id() {
+        let labels = [SpeakerId(1), SpeakerId(0), SpeakerId(1), SpeakerId(1)];
+        let embeddings = vec![
+            vec![f32::NAN, 0.0], // non-finite — skipped
+            vec![1.0, 0.0],      // speaker 0
+            vec![0.0, 1.0],      // speaker 1 (first usable, fixes dim 2)
+            vec![0.0, 1.0, 0.0], // dimension mismatch — skipped
+        ];
+        let means = mean_speaker_embeddings(&labels, &embeddings);
+        assert_eq!(means.len(), 2);
+        assert_eq!(means[0].0, SpeakerId(0));
+        assert_eq!(means[1].0, SpeakerId(1));
+        // Every mean is L2-normalized.
+        for (_, v) in &means {
+            let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((norm - 1.0).abs() < 1e-5, "norm={norm}");
+        }
+        // Speaker 0's single usable embedding is its own mean.
+        assert!((means[0].1[0] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn mean_embeddings_average_repeated_speakers() {
+        let labels = [SpeakerId(0), SpeakerId(0)];
+        let embeddings = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let means = mean_speaker_embeddings(&labels, &embeddings);
+        assert_eq!(means.len(), 1);
+        let v = &means[0].1;
+        // Mean of [1,0] and [0,1] is [0.5, 0.5], normalized to [1/√2, 1/√2].
+        let expect = 1.0 / 2.0f32.sqrt();
+        assert!((v[0] - expect).abs() < 1e-6);
+        assert!((v[1] - expect).abs() < 1e-6);
+    }
+
+    #[test]
+    fn segment_confidences_score_against_own_centroid() {
+        let labels = [SpeakerId(0), SpeakerId(0), SpeakerId(1)];
+        let embeddings = vec![vec![1.0, 0.0], vec![0.9, 0.1], vec![0.0, 1.0]];
+        let confs = segment_confidences_from_embeddings(&labels, &embeddings);
+        assert_eq!(confs.len(), 3);
+        assert!(confs.iter().all(|c| (0.0..=1.0).contains(c)));
+        // Close-to-centroid embeddings rank confidently.
+        assert!(confs[0] > 0.5);
+        assert!(confs[1] > 0.5);
+        // Mismatched slice lengths truncate to the shorter side.
+        let confs = segment_confidences_from_embeddings(&labels[..2], &embeddings);
+        assert_eq!(confs.len(), 2);
+    }
+}

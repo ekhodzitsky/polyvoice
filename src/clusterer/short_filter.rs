@@ -189,4 +189,84 @@ mod tests {
         assert_eq!(n_speakers, 2, "short must not create a third speaker");
         assert!(full[6] == full[0] || full[6] == full[3]);
     }
+
+    #[test]
+    fn partition_empty_durations_returns_empty() {
+        let (kept, short) = partition_by_min_duration(&[], 1.6);
+        assert!(kept.is_empty());
+        assert!(short.is_empty());
+    }
+
+    #[test]
+    fn partition_negative_threshold_keeps_all() {
+        let durs = vec![0.0, 0.5];
+        let (kept, short) = partition_by_min_duration(&durs, -1.0);
+        assert_eq!(kept, vec![0, 1]);
+        assert!(short.is_empty());
+    }
+
+    #[test]
+    fn partition_all_short_tie_promotes_lowest_index() {
+        // Equal durations: the lowest index wins the promotion tie-break.
+        let durs = vec![0.5, 0.5, 0.5];
+        let (kept, short) = partition_by_min_duration(&durs, 1.6);
+        assert_eq!(kept, vec![0]);
+        assert_eq!(short, vec![1, 2]);
+    }
+
+    #[test]
+    fn partition_boundary_duration_is_kept() {
+        // Exactly `min_secs` counts as long enough.
+        let durs = vec![1.6, 1.59];
+        let (kept, short) = partition_by_min_duration(&durs, 1.6);
+        assert_eq!(kept, vec![0]);
+        assert_eq!(short, vec![1]);
+    }
+
+    #[test]
+    fn reassign_empty_kept_returns_zeros() {
+        let embeddings = vec![ax(0), ax(1)];
+        let out = reassign_short_by_cosine(&embeddings, &[], &[], &[0, 1]);
+        assert_eq!(out, vec![0, 0]);
+    }
+
+    #[test]
+    fn reassign_mismatched_label_count_returns_zeros() {
+        let embeddings = vec![ax(0), ax(1)];
+        let out = reassign_short_by_cosine(&embeddings, &[0], &[0, 1], &[1]);
+        assert_eq!(out, vec![0, 0], "kept/labels length mismatch is rejected");
+    }
+
+    #[test]
+    fn reassign_skips_out_of_range_indices() {
+        let embeddings = vec![ax(0), ax(1)];
+        // kept index 9 and short index 7 are both out of bounds; must be
+        // skipped without panicking.
+        let out = reassign_short_by_cosine(&embeddings, &[0, 9], &[1, 1], &[7]);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0], 1);
+    }
+
+    #[test]
+    fn reassign_skips_label_slots_with_no_members() {
+        // Non-contiguous kept labels (0 and 2): the empty slot 1 must not
+        // attract short embeddings via its zero centroid.
+        let embeddings = vec![ax(0), ax(0), ax(1), ax(1), ax(1)];
+        let kept = vec![0, 1, 2, 3];
+        let kept_labels = vec![0, 0, 2, 2];
+        let short = vec![4];
+        let out = reassign_short_by_cosine(&embeddings, &kept, &kept_labels, &short);
+        assert_eq!(out, vec![0, 0, 2, 2, 2]);
+    }
+
+    #[test]
+    fn reassign_by_features_scores_in_feature_space() {
+        // Feature-space variant behaves like the cosine one on matching rows.
+        let features = vec![ax(0), ax(0), ax(1), ax(1), ax(1)];
+        let kept = vec![0, 1, 2, 3];
+        let kept_labels = vec![0, 0, 1, 1];
+        let short = vec![4];
+        let out = reassign_short_by_features(&features, &kept, &kept_labels, &short);
+        assert_eq!(out, vec![0, 0, 1, 1, 1]);
+    }
 }

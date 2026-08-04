@@ -172,4 +172,59 @@ mod trait_tests {
         assert!(msg.contains("0.05"));
         assert!(msg.contains("0.1"));
     }
+
+    #[test]
+    fn error_inference_failed_displays_window_and_detail() {
+        let err = SegmentationError::InferenceFailed {
+            window_idx: 7,
+            detail: "session exploded".to_string(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("window 7"), "got: {msg}");
+        assert!(msg.contains("session exploded"), "got: {msg}");
+    }
+
+    #[test]
+    fn error_invalid_output_shape_displays_actual_shape() {
+        let err = SegmentationError::InvalidOutputShape {
+            actual_shape: vec![1, 49, 5],
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("[1, 49, 5]"), "got: {msg}");
+    }
+
+    #[test]
+    fn error_permutation_failed_displays_window_pair() {
+        let err = SegmentationError::PermutationFailed {
+            prev_idx: 1,
+            next_idx: 2,
+            detail: "no assignment".to_string(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("1->2"), "got: {msg}");
+        assert!(msg.contains("no assignment"), "got: {msg}");
+    }
+
+    #[test]
+    fn error_model_io_displays_path_and_detail() {
+        let err = SegmentationError::ModelIo {
+            path: std::path::PathBuf::from("/tmp/nope.onnx"),
+            detail: "not found".to_string(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("/tmp/nope.onnx"), "got: {msg}");
+        assert!(msg.contains("not found"), "got: {msg}");
+    }
+
+    #[test]
+    fn error_invalid_geometry_displays_detail() {
+        let err = SegmentationError::InvalidGeometry {
+            detail: "hop_secs must be <= window_secs".to_string(),
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("hop_secs must be <= window_secs"),
+            "got: {msg}"
+        );
+    }
 }

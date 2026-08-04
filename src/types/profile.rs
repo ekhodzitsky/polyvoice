@@ -81,3 +81,72 @@ impl std::fmt::Display for ProfileParseError {
 }
 
 impl std::error::Error for ProfileParseError {}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_str_is_case_insensitive() {
+        assert_eq!("mobile".parse::<Profile>().unwrap(), Profile::Mobile);
+        assert_eq!("BALANCED".parse::<Profile>().unwrap(), Profile::Balanced);
+        assert_eq!("Fast".parse::<Profile>().unwrap(), Profile::Fast);
+        assert_eq!("CUSTOM".parse::<Profile>().unwrap(), Profile::Custom);
+    }
+
+    #[test]
+    fn from_str_unknown_profile_reports_expected_set() {
+        let err = "weird".parse::<Profile>().unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "unknown profile 'weird': expected mobile|balanced|fast|custom"
+        );
+        // Usable as a trait object error.
+        let _: &dyn std::error::Error = &err;
+    }
+
+    #[test]
+    fn manifest_ids_parse_back_to_their_profile() {
+        for p in [
+            Profile::Mobile,
+            Profile::Balanced,
+            Profile::Fast,
+            Profile::Custom,
+        ] {
+            assert_eq!(p.manifest_id().parse::<Profile>().unwrap(), p);
+        }
+    }
+
+    #[test]
+    fn embedding_dims_and_thresholds_match_model_bundles() {
+        assert_eq!(Profile::Mobile.embedding_dim(), 512);
+        assert_eq!(Profile::Balanced.embedding_dim(), 256);
+        assert_eq!(Profile::Fast.embedding_dim(), 256);
+        assert_eq!(Profile::Custom.embedding_dim(), 0);
+
+        assert_eq!(Profile::Mobile.default_threshold(), 0.55);
+        assert_eq!(
+            Profile::Balanced.default_threshold(),
+            crate::types::config::DEFAULT_AHC_THRESHOLD
+        );
+        assert_eq!(
+            Profile::Fast.default_threshold(),
+            crate::types::config::DEFAULT_AHC_THRESHOLD
+        );
+        assert_eq!(Profile::Custom.default_threshold(), 0.5);
+    }
+
+    #[test]
+    fn profile_serde_roundtrip() {
+        for p in [
+            Profile::Mobile,
+            Profile::Balanced,
+            Profile::Fast,
+            Profile::Custom,
+        ] {
+            let json = serde_json::to_string(&p).unwrap();
+            assert_eq!(serde_json::from_str::<Profile>(&json).unwrap(), p);
+        }
+    }
+}

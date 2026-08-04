@@ -227,4 +227,145 @@ mod tests {
         let one = list_wavs(dir.path(), Some(1)).unwrap();
         assert_eq!(one.len(), 1);
     }
+
+    #[test]
+    fn list_wavs_missing_audio_dir_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = list_wavs(dir.path(), None).err().unwrap();
+        assert!(format!("{err:#}").contains("read_dir"));
+    }
+
+    #[test]
+    fn load_rttm_segments_missing_file_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = load_rttm_segments(dir.path(), "nope").err().unwrap();
+        assert!(format!("{err:#}").contains("parse"));
+    }
+
+    #[test]
+    fn load_rttm_segments_unknown_stem_yields_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        // The RTTM parses, but its file id matches neither the stem nor the
+        // AMI-style prefix fallback, so the lookup comes back empty.
+        std::fs::write(
+            dir.path().join("absent.rttm"),
+            "SPEAKER other 1 0.0 1.0 <NA> <NA> A <NA> <NA>\n",
+        )
+        .unwrap();
+        let segs = load_rttm_segments(dir.path(), "absent").unwrap();
+        assert!(segs.is_empty());
+    }
+
+    #[test]
+    fn load_ref_turns_projects_segments_onto_turns() {
+        let dir = tempfile::tempdir().unwrap();
+        // RTTM columns are start + duration: 2.0 + 3.0 → turn ends at 5.0.
+        std::fs::write(
+            dir.path().join("plain.rttm"),
+            "SPEAKER plain 1 0.0 1.5 <NA> <NA> B <NA> <NA>\n\
+             SPEAKER plain 1 2.0 3.0 <NA> <NA> B <NA> <NA>\n",
+        )
+        .unwrap();
+        let turns = load_ref_turns(dir.path(), "plain").unwrap();
+        assert_eq!(turns.len(), 2);
+        assert_eq!(turns[0].speaker.0, 0);
+        assert!((turns[0].time.start - 0.0).abs() < 1e-9);
+        assert!((turns[1].time.end - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn legacy_config_applies_threshold() {
+        let cfg = legacy_diarization_config(0.42);
+        assert_eq!(cfg.cluster.threshold, 0.42);
+    }
+
+    #[test]
+    fn load_legacy_stack_rejects_missing_embedder() {
+        let err = load_legacy_stack(
+            Path::new("/nonexistent/embedder.onnx"),
+            192,
+            ExecutionProvider::Cpu,
+            Path::new("/nonexistent/vad.onnx"),
+            512,
+        )
+        .err()
+        .unwrap();
+        assert!(format!("{err:#}").contains("load embedder"));
+    }
+
+    /// Registry rooted at the checked-in model files (SHA-256-verified cache
+    /// hits, no network). `None` when the local models are absent.
+    fn local_models_registry() -> Option<ModelRegistry> {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
+        for f in ["powerset_fp32.onnx", "wespeaker_resnet34.onnx"] {
+            if !dir.join(f).is_file() {
+                eprintln!("models/{f} not found — skipping model-backed test");
+                return None;
+            }
+        }
+        ModelRegistry::with_cache_dir(&dir).ok()
+    }
+
+    #[test]
+    fn load_legacy_stack_loads_sessions_from_local_models() {
+        let models = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
+        let embedder = models.join("wespeaker_resnet34.onnx");
+        let vad = models.join("silero_vad.onnx");
+        if !embedder.is_file() || !vad.is_file() {
+            eprintln!("local ONNX models not found — skipping");
+            return;
+        }
+        load_legacy_stack(&embedder, 256, ExecutionProvider::Cpu, &vad, 512).unwrap();
+    }
+
+    #[test]
+    fn load_legacy_stack_rejects_missing_vad() {
+        let embedder = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/wespeaker_resnet34.onnx");
+        if !embedder.is_file() {
+            eprintln!("models/wespeaker_resnet34.onnx not found — skipping");
+            return;
+        }
+        let err = load_legacy_stack(
+            &embedder,
+            256,
+            ExecutionProvider::Cpu,
+            Path::new("/nonexistent/vad.onnx"),
+            512,
+        )
+        .err()
+        .unwrap();
+        assert!(format!("{err:#}").contains("load vad"));
+    }
+
+    #[test]
+    fn build_v2_pipeline_ahc_builds_from_local_models() {
+        let Some(registry) = local_models_registry() else {
+            return;
+        };
+        let config = PipelineConfig {
+            clusterer: ClustererKind::Ahc { threshold: 0.7 },
+            execution_provider: ExecutionProvider::Cpu,
+            ..PipelineConfig::default()
+        };
+        build_v2_pipeline(config, registry).unwrap();
+    }
+
+    #[cfg(feature = "vbx")]
+    #[test]
+    fn build_v2_pipeline_vbx_error_names_remedies() {
+        let Some(registry) = local_models_registry() else {
+            return;
+        };
+        let empty = tempfile::tempdir().unwrap();
+        let config = PipelineConfig {
+            clusterer: ClustererKind::Vbx,
+            vbx_plda_dir: Some(empty.path().to_path_buf()),
+            execution_provider: ExecutionProvider::Cpu,
+            ..PipelineConfig::default()
+        };
+        let err = build_v2_pipeline(config, registry).err().unwrap();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("vbx_plda_dir"), "{msg}");
+        assert!(msg.contains("--clusterer ahc"), "{msg}");
+    }
 }

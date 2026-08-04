@@ -414,4 +414,156 @@ mod tests {
             );
         }
     }
+
+    use polyvoice::types::{SpeakerId, SpeakerTurn, TimeRange};
+
+    /// Minimal valid input pointing at `path`; every optional knob unset.
+    fn input(path: &str) -> DiarizeInput {
+        DiarizeInput {
+            path: path.to_owned(),
+            profile: None,
+            clusterer: None,
+            threshold: None,
+            max_speakers: None,
+            vbx_plda_dir: None,
+            verbosity: None,
+        }
+    }
+
+    /// A two-speaker, three-turn result over 3s of audio.
+    fn sample_result() -> DiarizationResult {
+        let turn = |id: u32, start: f64, end: f64| SpeakerTurn {
+            speaker: SpeakerId(id),
+            time: TimeRange { start, end },
+            text: None,
+            stable: true,
+        };
+        DiarizationResult::new(
+            Vec::new(),
+            vec![turn(0, 0.0, 1.0), turn(1, 1.0, 2.5), turn(0, 2.5, 3.0)],
+            2,
+        )
+        .with_audio(3.0, 16000)
+    }
+
+    #[test]
+    fn project_concise_omits_turns_and_rolls_up_speakers() {
+        let out = project(&sample_result(), false);
+        assert!(out.turns.is_none());
+        assert_eq!(out.num_speakers, 2);
+        assert!((out.duration_s - 3.0).abs() < 1e-9);
+        assert!(!out.schema_version.is_empty());
+        assert_eq!(out.speakers.len(), 2);
+        let s0 = &out.speakers[0];
+        assert_eq!(s0.label, "SPEAKER_00");
+        assert_eq!(s0.id, 0);
+        assert_eq!(s0.turn_count, 2);
+        assert!((s0.total_speech_s - 1.5).abs() < 1e-9);
+        let s1 = &out.speakers[1];
+        assert_eq!(s1.label, "SPEAKER_01");
+        assert_eq!(s1.turn_count, 1);
+        // Concise output must not carry a "turns" key at all.
+        let json = serde_json::to_value(&out).unwrap();
+        assert!(json.get("turns").is_none());
+        assert!(json["speakers"].as_array().unwrap().len() == 2);
+    }
+
+    #[test]
+    fn project_detailed_includes_ordered_turns() {
+        let out = project(&sample_result(), true);
+        let turns = out.turns.as_ref().expect("detailed turns");
+        assert_eq!(turns.len(), 3);
+        assert_eq!(turns[0].speaker, "SPEAKER_00");
+        assert_eq!(turns[0].speaker_id, 0);
+        assert!((turns[0].start - 0.0).abs() < 1e-9);
+        assert!((turns[0].end - 1.0).abs() < 1e-9);
+        assert_eq!(turns[1].speaker, "SPEAKER_01");
+        assert!((turns[1].end - 2.5).abs() < 1e-9);
+        assert_eq!(turns[2].speaker_id, 0);
+        let json = serde_json::to_value(&out).unwrap();
+        assert_eq!(json["turns"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn run_diarize_missing_file_is_invalid_params() {
+        let e = run_diarize(&input("/definitely/not/here.wav")).unwrap_err();
+        assert_eq!(e.code.0, -32602);
+        let data = e.data.expect("data");
+        assert_eq!(data["code"], ERR_INVALID_ARG);
+        assert!(data["message"].as_str().unwrap().contains("no such file"));
+    }
+
+    #[test]
+    fn run_diarize_rejects_unknown_profile() {
+        let tmp = tempfile::NamedTempFile::with_suffix(".wav").unwrap();
+        let mut i = input(tmp.path().to_str().unwrap());
+        i.profile = Some("nope".to_owned());
+        let e = run_diarize(&i).unwrap_err();
+        assert_eq!(e.code.0, -32602);
+        assert_eq!(e.data.expect("data")["code"], ERR_INVALID_ARG);
+    }
+
+    #[test]
+    fn run_diarize_rejects_unknown_clusterer() {
+        let tmp = tempfile::NamedTempFile::with_suffix(".wav").unwrap();
+        let mut i = input(tmp.path().to_str().unwrap());
+        i.clusterer = Some("nope".to_owned());
+        let e = run_diarize(&i).unwrap_err();
+        assert_eq!(e.code.0, -32602);
+        assert_eq!(e.data.expect("data")["code"], ERR_INVALID_ARG);
+    }
+
+    #[test]
+    fn run_diarize_rejects_out_of_range_max_speakers() {
+        let tmp = tempfile::NamedTempFile::with_suffix(".wav").unwrap();
+        let mut i = input(tmp.path().to_str().unwrap());
+        i.max_speakers = Some(0);
+        let e = run_diarize(&i).unwrap_err();
+        assert_eq!(e.code.0, -32602);
+        assert_eq!(e.data.expect("data")["code"], ERR_INVALID_ARG);
+    }
+
+    #[test]
+    fn diarize_tool_surfaces_run_diarize_errors() {
+        let server = PolyvoiceMcp::new();
+        let e = server
+            .diarize(Parameters(input("/definitely/not/here.wav")))
+            .err()
+            .expect("missing file must error");
+        assert_eq!(e.code.0, -32602);
+        assert_eq!(e.data.expect("data")["code"], ERR_INVALID_ARG);
+    }
+
+    #[test]
+    fn transcribe_stub_returns_asr_unavailable() {
+        let server = PolyvoiceMcp::new();
+        let e = server
+            .transcribe(Parameters(TranscribeInput {
+                path: "x.wav".to_owned(),
+            }))
+            .err()
+            .expect("transcribe is stubbed");
+        assert_eq!(e.data.expect("data")["code"], ERR_INTERNAL);
+    }
+
+    #[test]
+    fn diarize_and_transcribe_stub_fails_as_a_whole() {
+        let server = PolyvoiceMcp::new();
+        let e = server
+            .diarize_and_transcribe(Parameters(input("x.wav")))
+            .err()
+            .expect("diarize_and_transcribe is stubbed");
+        let data = e.data.expect("data");
+        assert_eq!(data["code"], ERR_INTERNAL);
+        assert!(data["message"].as_str().unwrap().contains("polyvoice-asr"));
+    }
+
+    #[test]
+    fn server_info_advertises_tools_and_instructions() {
+        let info = PolyvoiceMcp::new().get_info();
+        assert!(info.capabilities.tools.is_some());
+        let instructions = info.instructions.expect("instructions");
+        assert!(instructions.contains("polyvoice.diarize"));
+        assert!(instructions.contains("polyvoice.capabilities"));
+    }
 }

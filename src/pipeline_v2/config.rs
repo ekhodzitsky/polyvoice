@@ -134,4 +134,18 @@ mod tests {
         let ep = ExecutionProvider::auto();
         let _ = ep;
     }
+
+    #[test]
+    fn clusterer_kind_nme_sc_and_vbx_variants_are_distinct() {
+        assert_eq!(ClustererKind::NmeSc, ClustererKind::NmeSc);
+        assert_eq!(ClustererKind::Vbx, ClustererKind::Vbx);
+        assert_ne!(ClustererKind::NmeSc, ClustererKind::Vbx);
+        assert_ne!(ClustererKind::NmeSc, ClustererKind::Ahc { threshold: 0.5 });
+    }
+
+    #[test]
+    fn default_pool_size_stays_within_clamp() {
+        let n = default_pool_size();
+        assert!((1..=4).contains(&n));
+    }
 }

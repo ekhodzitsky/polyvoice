@@ -179,4 +179,62 @@ mod tests {
         // Two clusters.
         assert_eq!(select_k_by_normalized_eigengap(&[0.0, 0.0, 1.0, 1.0], 4), 2);
     }
+
+    #[test]
+    fn eigengap_clamps_max_k_and_skips_zero_eigenvalue_gaps() {
+        // max_k beyond the spectrum length is clamped; a zero |lam_k1|
+        // contributes gap 0, so k stays 1 on an all-zero spectrum.
+        assert_eq!(select_k_by_normalized_eigengap(&[0.0, 0.0, 0.0], 100), 1);
+        // max_k = 1 leaves no candidates.
+        assert_eq!(select_k_by_normalized_eigengap(&[0.0, 1.0], 1), 1);
+        // Empty spectrum.
+        assert_eq!(select_k_by_normalized_eigengap(&[], 5), 1);
+    }
+
+    #[test]
+    fn spectral_graph_empty_and_singleton() {
+        assert!(SpectralGraph::from_embeddings(&[]).is_none());
+
+        let g = SpectralGraph::from_embeddings(&[vec![1.0, 2.0]]).unwrap();
+        assert_eq!(g.n(), 1);
+        assert_eq!(g.eig_asc(), vec![0.0]);
+        // k is clamped into 1..=n.
+        assert_eq!(g.embedding_f64(5), vec![vec![1.0]]);
+        assert_eq!(g.embedding_f32(1), vec![vec![1.0f32]]);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn spectral_graph_two_clusters_recovers_k2() {
+        // Two tight, well-separated clusters of near-parallel embeddings.
+        let mut embeddings = Vec::new();
+        for i in 0..10 {
+            embeddings.push(vec![1.0, 0.01 * i as f32, 0.0]);
+        }
+        for i in 0..10 {
+            embeddings.push(vec![0.0, 0.01 * i as f32, 1.0]);
+        }
+        let g = SpectralGraph::from_embeddings(&embeddings).unwrap();
+        assert_eq!(g.n(), 20);
+
+        let eig = g.eig_asc();
+        assert_eq!(eig.len(), 20);
+        assert!(eig.windows(2).all(|w| w[0] <= w[1]));
+        assert!(eig[0].abs() < 1e-6, "first eigenvalue should be ~0");
+
+        let k = select_k_by_normalized_eigengap(&eig, 5);
+        assert_eq!(k, 2);
+
+        let emb = g.embedding_f32(2);
+        assert_eq!(emb.len(), 20);
+        assert!(emb.iter().all(|row| row.len() == 2));
+        // Row-normalized: non-degenerate rows are unit norm.
+        for row in &emb {
+            let norm: f32 = row.iter().map(|v| v * v).sum::<f32>().sqrt();
+            assert!(
+                norm < 1e-10 || (norm - 1.0).abs() < 1e-4,
+                "row norm {norm} neither degenerate nor ~1"
+            );
+        }
+    }
 }

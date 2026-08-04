@@ -236,4 +236,94 @@ mod tests {
         // 2.0 + 0.25 + 0.032
         assert!((acc - 2.282).abs() < 1e-3);
     }
+
+    #[test]
+    fn as_str_roundtrips_through_parse() {
+        assert_eq!(LatencyPreset::Realtime.as_str(), "realtime");
+        assert_eq!(LatencyPreset::Balanced.as_str(), "balanced");
+        assert_eq!(LatencyPreset::Accurate.as_str(), "accurate");
+        for preset in [
+            LatencyPreset::Realtime,
+            LatencyPreset::Balanced,
+            LatencyPreset::Accurate,
+        ] {
+            assert_eq!(LatencyPreset::parse_name(preset.as_str()), Some(preset));
+        }
+    }
+
+    #[test]
+    fn from_preset_matches_preset_params() {
+        for preset in [
+            LatencyPreset::Realtime,
+            LatencyPreset::Balanced,
+            LatencyPreset::Accurate,
+        ] {
+            assert_eq!(StreamingParams::from_preset(preset), preset.params());
+        }
+    }
+
+    #[test]
+    fn default_preset_is_balanced() {
+        assert_eq!(LatencyPreset::default(), LatencyPreset::Balanced);
+    }
+
+    #[test]
+    fn from_str_accepts_all_documented_aliases() {
+        use std::str::FromStr;
+        for name in ["realtime", "real-time", "low", "low-latency", " REAL-TIME "] {
+            assert_eq!(
+                LatencyPreset::from_str(name),
+                Ok(LatencyPreset::Realtime),
+                "alias {name:?}"
+            );
+        }
+        for name in ["balanced", "default", " DEFAULT"] {
+            assert_eq!(
+                LatencyPreset::from_str(name),
+                Ok(LatencyPreset::Balanced),
+                "alias {name:?}"
+            );
+        }
+        for name in ["accurate", "accuracy", "high"] {
+            assert_eq!(
+                LatencyPreset::from_str(name),
+                Ok(LatencyPreset::Accurate),
+                "alias {name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_error_display_lists_valid_names() {
+        let err = "weird"
+            .parse::<LatencyPreset>()
+            .expect_err("unknown preset must fail");
+        let msg = err.to_string();
+        assert!(msg.contains("weird"));
+        assert!(msg.contains("realtime|balanced|accurate"));
+        // Usable through the standard error trait.
+        let source: &dyn std::error::Error = &err;
+        assert!(source.source().is_none());
+    }
+
+    #[test]
+    fn preset_is_hashable() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(LatencyPreset::Realtime);
+        set.insert(LatencyPreset::Realtime);
+        set.insert(LatencyPreset::Accurate);
+        assert_eq!(set.len(), 2);
+        assert!(set.contains(&LatencyPreset::Realtime));
+    }
+
+    #[test]
+    fn accurate_preset_widens_window_and_cache() {
+        let fast = LatencyPreset::Realtime.params();
+        let acc = LatencyPreset::Accurate.params();
+        assert!(acc.window_secs > fast.window_secs);
+        assert!(acc.speaker_cache_cap > fast.speaker_cache_cap);
+        assert!(acc.min_hits_to_stable > fast.min_hits_to_stable);
+        assert!(acc.right_context_secs > fast.right_context_secs);
+    }
 }

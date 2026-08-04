@@ -233,4 +233,39 @@ SPEAKER_01: hello
         assert_eq!(render(|w| write_vtt(w, &[])), "WEBVTT\n\n");
         assert_eq!(render(|w| write_txt(w, &[])), "");
     }
+
+    #[test]
+    fn timecode_clamps_positive_infinity_to_zero() {
+        assert_eq!(timecode(f64::INFINITY, ','), "00:00:00,000");
+        assert_eq!(timecode(f64::NEG_INFINITY, '.'), "00:00:00.000");
+        // Hours beyond a day keep growing (no wraparound).
+        assert_eq!(timecode(90061.0, ','), "25:01:01,000");
+    }
+
+    #[test]
+    fn empty_text_falls_back_to_bare_label() {
+        let turns = vec![turn(0, 0.0, 1.0, Some(""))];
+        let srt = render(|w| write_srt(w, &turns));
+        assert!(srt.contains("SPEAKER_00\n"), "{srt}");
+        assert!(!srt.contains("SPEAKER_00: "), "{srt}");
+        let vtt = render(|w| write_vtt(w, &turns));
+        assert!(!vtt.contains("<v "), "{vtt}");
+    }
+
+    #[test]
+    fn writers_propagate_io_errors() {
+        struct FailingWriter;
+        impl Write for FailingWriter {
+            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let turns = vec![turn(0, 0.0, 1.0, None)];
+        assert!(write_srt(&mut FailingWriter, &turns).is_err());
+        assert!(write_vtt(&mut FailingWriter, &turns).is_err());
+        assert!(write_txt(&mut FailingWriter, &turns).is_err());
+    }
 }

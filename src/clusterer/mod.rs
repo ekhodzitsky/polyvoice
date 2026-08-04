@@ -359,6 +359,60 @@ mod trait_tests {
         let msg = format!("{err}");
         assert!(msg.contains('0'));
     }
+
+    #[test]
+    fn error_dim_mismatch_displays_details() {
+        let err = ClustererError::DimMismatch {
+            expected: 3,
+            actual: 4,
+            index: 2,
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains('3'));
+        assert!(msg.contains('4'));
+        assert!(msg.contains('2'));
+    }
+
+    #[test]
+    fn error_algorithm_failed_displays_detail() {
+        let err = ClustererError::AlgorithmFailed {
+            detail: "eigengap blew up".to_string(),
+        };
+        assert!(format!("{err}").contains("eigengap blew up"));
+    }
+
+    #[test]
+    fn cluster_with_durations_default_ignores_durations() {
+        let c = ConstantClusterer {
+            labels: vec![0, 1, 0],
+        };
+        let embeddings: Vec<Vec<f32>> = (0..3).map(|_| vec![1.0; 3]).collect();
+        // Matching and mismatched duration lengths both delegate to `cluster`.
+        let with = c
+            .cluster_with_durations(&embeddings, &[2.0, 0.5, 1.0])
+            .unwrap();
+        let without = c.cluster_with_durations(&embeddings, &[]).unwrap();
+        assert_eq!(with, vec![0, 1, 0]);
+        assert_eq!(without, vec![0, 1, 0]);
+    }
+
+    #[test]
+    fn wants_raw_embeddings_defaults_to_false() {
+        let c = ConstantClusterer { labels: vec![0] };
+        assert!(!c.wants_raw_embeddings());
+    }
+
+    #[test]
+    fn mock_clusterer_satisfies_trait() {
+        let mut mock = MockClusterer::new();
+        mock.expect_cluster()
+            .returning(|embs| Ok(vec![0; embs.len()]));
+        mock.expect_max_clusters().returning(|| 4);
+        let c: Box<dyn Clusterer> = Box::new(mock);
+        let labels = c.cluster(&[vec![1.0, 0.0], vec![0.0, 1.0]]).unwrap();
+        assert_eq!(labels, vec![0, 0]);
+        assert_eq!(c.max_clusters(), 4);
+    }
 }
 
 #[allow(clippy::unwrap_used)]
@@ -412,6 +466,35 @@ mod ahc_tests {
         let c = AhcClusterer::default();
         let labels = c.cluster(&[vec![1.0, 0.0, 0.0]]).unwrap();
         assert_eq!(labels, vec![0]);
+    }
+
+    #[test]
+    fn ahc_new_clamps_zero_max_clusters_to_one() {
+        assert_eq!(AhcClusterer::new(0).max_clusters(), 1);
+        assert_eq!(AhcClusterer::new(64).max_clusters(), 64);
+        assert_eq!(AhcClusterer::default().max_clusters(), 64);
+    }
+
+    #[test]
+    fn ahc_with_threshold_separates_well_separated_clusters() {
+        let c = AhcClusterer::with_threshold(0, 0.5);
+        let labels = c.cluster(&synth_two_clusters()).unwrap();
+        assert_eq!(labels[0], labels[1]);
+        assert_eq!(labels[3], labels[4]);
+        assert_ne!(labels[0], labels[3]);
+    }
+
+    #[test]
+    fn ahc_with_threshold_respects_max_clusters_cap() {
+        // Ceiling of 1 forces every embedding into a single cluster even
+        // though the data clearly holds two groups.
+        let c = AhcClusterer::with_threshold(1, 0.5);
+        let labels = c.cluster(&synth_two_clusters()).unwrap();
+        assert_eq!(labels.len(), 6);
+        assert!(
+            labels.iter().all(|&l| l == labels[0]),
+            "max_clusters = 1 must collapse to one cluster"
+        );
     }
 }
 
@@ -545,6 +628,142 @@ mod min_cluster_size_tests {
         assert_eq!(u.len(), 2);
         let max = out.iter().copied().max().unwrap();
         assert_eq!(max, u.len() - 1, "labels are compact 0..K");
+    }
+
+    #[test]
+    fn cluster_with_durations_also_prunes() {
+        // 2 large members (label 0) + 1 small member (label 1), min_size 2:
+        // the duration-aware entry point must prune exactly like `cluster`.
+        let embs = near(0, 3);
+        let labels = vec![0, 0, 1];
+        let c = MinClusterSizeClusterer::new(Box::new(PresetClusterer { labels }), 2);
+        let out = c.cluster_with_durations(&embs, &[2.0, 2.0, 0.4]).unwrap();
+        assert_eq!(out.len(), 3);
+        assert_eq!(unique(&out).len(), 1, "singleton cluster is dissolved");
+    }
+
+    #[test]
+    fn delegates_max_clusters_and_raw_embedding_preference() {
+        struct RawPresetClusterer {
+            labels: Vec<usize>,
+        }
+        impl Clusterer for RawPresetClusterer {
+            fn cluster(&self, _embeddings: &[Vec<f32>]) -> Result<Vec<usize>, ClustererError> {
+                Ok(self.labels.clone())
+            }
+            fn max_clusters(&self) -> usize {
+                7
+            }
+            fn wants_raw_embeddings(&self) -> bool {
+                true
+            }
+        }
+
+        let plain = MinClusterSizeClusterer::new(Box::new(PresetClusterer { labels: vec![0] }), 2);
+        assert_eq!(plain.max_clusters(), 64);
+        assert!(!plain.wants_raw_embeddings());
+
+        let raw = MinClusterSizeClusterer::new(Box::new(RawPresetClusterer { labels: vec![0] }), 2);
+        assert_eq!(raw.max_clusters(), 7);
+        assert!(raw.wants_raw_embeddings());
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod kmeans_tests {
+    use super::*;
+
+    /// Two tight, well-separated blobs of 8 embeddings each on axes 0 and 1.
+    /// A small per-point jitter keeps the points distinct so higher-k
+    /// candidates don't hit degenerate seeding.
+    fn synth_two_blobs() -> Vec<Vec<f32>> {
+        let mut embs = Vec::new();
+        for axis in [0usize, 1] {
+            for i in 0..8 {
+                let mut v = vec![0.02f32, 0.02, 0.02];
+                v[axis] = 1.0;
+                v[2] += i as f32 * 0.001;
+                embs.push(v);
+            }
+        }
+        embs
+    }
+
+    #[test]
+    fn kmeans_rejects_empty_input() {
+        let c = KmeansClusterer::default();
+        let labels: &[Vec<f32>] = &[];
+        let err = c.cluster(labels).expect_err("empty must fail");
+        assert!(matches!(err, ClustererError::TooFewEmbeddings { .. }));
+    }
+
+    #[test]
+    fn kmeans_handles_single_embedding() {
+        let c = KmeansClusterer::default();
+        let labels = c.cluster(&[vec![1.0, 0.0, 0.0]]).unwrap();
+        assert_eq!(labels, vec![0]);
+    }
+
+    #[test]
+    fn kmeans_new_clamps_max_clusters_to_two() {
+        assert_eq!(KmeansClusterer::new(0).max_clusters(), 2);
+        assert_eq!(KmeansClusterer::new(8).max_clusters(), 8);
+        assert_eq!(KmeansClusterer::default().max_clusters(), 64);
+    }
+
+    #[test]
+    fn kmeans_falls_back_to_ahc_below_eight_embeddings() {
+        // Below the stability floor k-means delegates to AHC; two clear groups
+        // must still be separated.
+        let c = KmeansClusterer::default();
+        let embeddings = vec![
+            vec![1.0, 0.02, 0.02],
+            vec![0.98, 0.02, 0.02],
+            vec![1.0, 0.02, 0.02],
+            vec![0.02, 1.0, 0.02],
+            vec![0.02, 0.98, 0.02],
+            vec![0.02, 1.0, 0.02],
+        ];
+        let labels = c.cluster(&embeddings).unwrap();
+        assert_eq!(labels[0], labels[1]);
+        assert_eq!(labels[3], labels[4]);
+        assert_ne!(labels[0], labels[3]);
+    }
+
+    #[test]
+    fn kmeans_separates_two_blobs() {
+        let c = KmeansClusterer::new(4);
+        let labels = c.cluster(&synth_two_blobs()).unwrap();
+        assert_eq!(labels.len(), 16);
+        let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(
+            unique.len(),
+            2,
+            "two well-separated blobs give two clusters"
+        );
+        assert!(labels[..8].iter().all(|&l| l == labels[0]));
+        assert!(labels[8..].iter().all(|&l| l == labels[8]));
+        assert_ne!(labels[0], labels[8]);
+    }
+
+    #[test]
+    fn kmeans_fast_mode_separates_two_blobs() {
+        let c = KmeansClusterer::new(4).fast_mode();
+        let labels = c.cluster(&synth_two_blobs()).unwrap();
+        let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(unique.len(), 2);
+        assert_ne!(labels[0], labels[8]);
+    }
+
+    #[test]
+    fn kmeans_builder_overrides_are_applied() {
+        // with_trials(0) clamps to 1; custom iteration cap still converges.
+        let c = KmeansClusterer::new(4).with_max_iter(10).with_trials(0);
+        let labels = c.cluster(&synth_two_blobs()).unwrap();
+        assert_eq!(labels.len(), 16);
+        let unique: std::collections::HashSet<usize> = labels.iter().copied().collect();
+        assert_eq!(unique.len(), 2);
     }
 }
 

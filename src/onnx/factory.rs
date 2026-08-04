@@ -166,3 +166,119 @@ impl InferenceRuntime for RuntimeSession {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    fn silero_path() -> Option<PathBuf> {
+        let p = Path::new("models/silero_vad.onnx");
+        if p.is_file() {
+            Some(p.to_path_buf())
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn force_overrides_resolution() {
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        assert_eq!(InferenceBackend::resolve(), InferenceBackend::Ort);
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    fn backend_derives() {
+        let b = InferenceBackend::Ort;
+        let copied = b;
+        assert_eq!(copied, b);
+        assert_eq!(format!("{b:?}"), "Ort");
+        #[cfg(feature = "backend-tract")]
+        assert_eq!(format!("{:?}", InferenceBackend::Tract), "Tract");
+    }
+
+    /// All `POLYVOICE_INFERENCE_BACKEND` cases live in one test so the
+    /// process-global env mutations stay on a single thread.
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn resolve_reads_env_var() {
+        // SAFETY: env mutation is process-global. nextest runs each test in
+        // its own process, and every other test in this crate that resolves a
+        // backend pins `InferenceBackend::force` first, so no concurrent
+        // reader observes these values.
+        unsafe { std::env::set_var("POLYVOICE_INFERENCE_BACKEND", "ORT") };
+        assert_eq!(InferenceBackend::resolve(), InferenceBackend::Ort);
+
+        // SAFETY: see above.
+        unsafe { std::env::set_var("POLYVOICE_INFERENCE_BACKEND", "onnxruntime") };
+        assert_eq!(InferenceBackend::resolve(), InferenceBackend::Ort);
+
+        // SAFETY: see above. Mixed case exercises the lowercase normalization.
+        unsafe { std::env::set_var("POLYVOICE_INFERENCE_BACKEND", "OnNx-RuNtImE") };
+        assert_eq!(InferenceBackend::resolve(), InferenceBackend::Ort);
+
+        // SAFETY: see above.
+        unsafe { std::env::set_var("POLYVOICE_INFERENCE_BACKEND", "tract") };
+        #[cfg(feature = "backend-tract")]
+        assert_eq!(InferenceBackend::resolve(), InferenceBackend::Tract);
+        #[cfg(not(feature = "backend-tract"))]
+        assert_eq!(InferenceBackend::resolve(), InferenceBackend::Ort);
+
+        // SAFETY: see above. Unknown values warn and fall back to ort.
+        unsafe { std::env::set_var("POLYVOICE_INFERENCE_BACKEND", "bogus") };
+        assert_eq!(InferenceBackend::resolve(), InferenceBackend::Ort);
+
+        // SAFETY: see above. With the variable gone the default is ort.
+        unsafe { std::env::remove_var("POLYVOICE_INFERENCE_BACKEND") };
+        assert_eq!(InferenceBackend::resolve(), InferenceBackend::Ort);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn runtime_session_ort_round_trip() {
+        let Some(path) = silero_path() else {
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let mut session =
+            RuntimeSession::from_path(&path, ExecutionProvider::Cpu, Some(1)).unwrap();
+        assert_eq!(session.backend(), InferenceBackend::Ort);
+        assert!(format!("{session:?}").contains("Ort"));
+        assert!(!session.input_names().is_empty());
+        assert_eq!(session.primary_input_name(), Some("input"));
+
+        let input = InferenceTensor::f32(vec![1, 576], vec![0.01f32; 576]);
+        let state = InferenceTensor::f32(vec![2, 1, 128], vec![0.0f32; 2 * 128]);
+        let sr = InferenceTensor::i64_scalar(16_000);
+        let out = session
+            .run(&[
+                NamedTensor::new("input", &input),
+                NamedTensor::new("state", &state),
+                NamedTensor::new("sr", &sr),
+            ])
+            .unwrap();
+        assert_eq!(out.len(), 2);
+
+        let out_ordered = session.run_ordered(&[&input, &state, &sr]).unwrap();
+        assert_eq!(out_ordered.len(), 2);
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn runtime_session_rejects_garbage_before_backend() {
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(&[0xAB; 64]).unwrap();
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let err = RuntimeSession::from_path(tmp.path(), ExecutionProvider::Cpu, None)
+            .expect_err("garbage must fail header validation");
+        InferenceBackend::force(None);
+        assert!(
+            matches!(err, OnnxError::Validation(_)),
+            "unexpected error: {err}"
+        );
+    }
+}

@@ -578,6 +578,42 @@ mod overlap_mask_tests {
         let masked = apply_overlap_mask(&audio, &[(0.7, 0.5)], 16_000);
         assert_eq!(masked, audio, "end<start is silently skipped");
     }
+
+    #[test]
+    fn non_finite_overlap_bounds_are_skipped() {
+        let audio = vec![1.0_f32; 16_000];
+        let masked = apply_overlap_mask(
+            &audio,
+            &[(f32::NAN, 0.5), (0.1, f32::INFINITY), (0.2, f32::NAN)],
+            16_000,
+        );
+        assert_eq!(masked, audio, "NaN/infinite bounds are silently skipped");
+    }
+
+    #[test]
+    fn zero_length_overlap_is_no_op() {
+        let audio = vec![1.0_f32; 16_000];
+        let masked = apply_overlap_mask(&audio, &[(0.5, 0.5)], 16_000);
+        assert_eq!(masked, audio, "end==start is silently skipped");
+    }
+
+    #[test]
+    fn overlap_extending_past_end_is_clamped_to_len() {
+        let audio = vec![1.0_f32; 100];
+        let masked = apply_overlap_mask(&audio, &[(0.0, 10.0)], 16_000);
+        assert!(
+            masked.iter().all(|&v| v == 0.0),
+            "region past the end zeroes through the final sample"
+        );
+        assert_eq!(masked.len(), audio.len());
+    }
+
+    #[test]
+    fn overlap_starting_past_end_is_no_op() {
+        let audio = vec![1.0_f32; 100];
+        let masked = apply_overlap_mask(&audio, &[(5.0, 6.0)], 16_000);
+        assert_eq!(masked, audio, "region fully past the end is a no-op");
+    }
 }
 
 #[allow(clippy::unwrap_used)]
@@ -760,6 +796,31 @@ mod pool_tests {
     }
 
     #[test]
+    fn pool_propagates_inner_embedder_error() {
+        struct FailingEmbedder;
+
+        impl Embedder for FailingEmbedder {
+            fn dim(&self) -> usize {
+                8
+            }
+            fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+                Err(EmbedderError::InferenceFailed {
+                    detail: "boom".into(),
+                })
+            }
+        }
+
+        let pool = EmbedderPool::new(vec![FailingEmbedder]).unwrap();
+        let err = pool
+            .embed(&[0.0_f32; 16])
+            .expect_err("inner error surfaces");
+        assert!(
+            matches!(err, EmbedderError::InferenceFailed { ref detail } if detail == "boom"),
+            "expected the inner InferenceFailed error, got {err}"
+        );
+    }
+
+    #[test]
     fn pipeline_and_streaming_error_helpers() {
         use crate::pipeline::LegacyPipelineError;
         use crate::streaming::StreamingError;
@@ -776,5 +837,352 @@ mod pool_tests {
             max_secs: 1.0,
         };
         assert!(!non_embedding.is_resource_exhausted());
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod error_display_tests {
+    use super::*;
+
+    #[test]
+    fn inference_failed_display_includes_detail() {
+        let err = EmbedderError::InferenceFailed {
+            detail: "session crashed".into(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("ONNX inference failed"));
+        assert!(msg.contains("session crashed"));
+    }
+
+    #[test]
+    fn resource_exhausted_display_includes_detail() {
+        let err = EmbedderError::ResourceExhausted {
+            detail: "all sessions busy".into(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("resource exhausted"));
+        assert!(msg.contains("all sessions busy"));
+    }
+
+    #[test]
+    fn dim_mismatch_display_includes_both_dims() {
+        let err = EmbedderError::DimMismatch {
+            expected: 192,
+            actual: 256,
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("192"));
+        assert!(msg.contains("256"));
+    }
+
+    #[test]
+    fn model_io_display_includes_path_and_detail() {
+        let err = EmbedderError::ModelIo {
+            path: std::path::PathBuf::from("/tmp/missing.onnx"),
+            detail: "no such file".into(),
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("/tmp/missing.onnx"));
+        assert!(msg.contains("no such file"));
+    }
+
+    #[test]
+    fn legacy_display_includes_message() {
+        let err = EmbedderError::Legacy("old adapter broke".into());
+        assert!(format!("{err}").contains("old adapter broke"));
+    }
+
+    #[test]
+    fn legacy_variant_with_pool_exhausted_string_classifies() {
+        let err = EmbedderError::Legacy("onnx session pool exhausted".into());
+        assert!(err.is_resource_exhausted());
+    }
+
+    #[test]
+    fn legacy_variant_without_marker_does_not_classify() {
+        let err = EmbedderError::Legacy("some other failure".into());
+        assert!(!err.is_resource_exhausted());
+    }
+
+    #[test]
+    fn inference_failed_without_marker_does_not_classify() {
+        let err = EmbedderError::InferenceFailed {
+            detail: "shape mismatch".into(),
+        };
+        assert!(!err.is_resource_exhausted());
+    }
+
+    #[test]
+    fn unrelated_variants_do_not_classify_as_exhausted() {
+        let too_short = EmbedderError::AudioTooShort {
+            actual_secs: 0.1,
+            min_secs: 0.5,
+        };
+        assert!(!too_short.is_resource_exhausted());
+
+        let io = EmbedderError::ModelIo {
+            path: std::path::PathBuf::from("m.onnx"),
+            detail: "pool exhausted on disk".into(),
+        };
+        assert!(
+            !io.is_resource_exhausted(),
+            "ModelIo must not substring-match the legacy marker"
+        );
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod dummy_extractor_tests {
+    use super::*;
+
+    fn tone_1s() -> Vec<f32> {
+        vec![0.1_f32; 16_000]
+    }
+
+    #[test]
+    fn dim_is_reported() {
+        let e = DummyExtractor::new(192);
+        assert_eq!(e.dim(), 192);
+    }
+
+    #[test]
+    fn embed_returns_l2_normalized_vector_of_dim() {
+        let e = DummyExtractor::new(256);
+        let v = e.embed(&tone_1s()).unwrap();
+        assert_eq!(v.len(), 256);
+        let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!(
+            (norm - 1.0).abs() < 1e-3,
+            "expected unit vector, |v|={norm}"
+        );
+    }
+
+    #[test]
+    fn successive_embeds_differ() {
+        let e = DummyExtractor::new(64);
+        let a = e.embed(&tone_1s()).unwrap();
+        let b = e.embed(&tone_1s()).unwrap();
+        assert_ne!(a, b, "the internal seed advances between calls");
+    }
+
+    #[test]
+    fn fresh_instances_reproduce_the_same_sequence() {
+        let e1 = DummyExtractor::new(32);
+        let e2 = DummyExtractor::new(32);
+        for _ in 0..3 {
+            assert_eq!(e1.embed(&[]).unwrap(), e2.embed(&[]).unwrap());
+        }
+    }
+
+    #[test]
+    fn zero_dim_extractor_returns_empty_embedding() {
+        let e = DummyExtractor::new(0);
+        assert_eq!(e.dim(), 0);
+        assert!(e.embed(&tone_1s()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn default_batch_embeds_each_input() {
+        let e = DummyExtractor::new(16);
+        let audio = tone_1s();
+        let inputs: Vec<&[f32]> = vec![&audio, &audio];
+        let out = e.embed_batch(&inputs).unwrap();
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|v| v.len() == 16));
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(all(test, feature = "onnx", feature = "embedder"))]
+mod onnx_adapter_tests {
+    use super::*;
+    use std::error::Error as _;
+    use std::path::{Path, PathBuf};
+
+    fn local_model(name: &str) -> Option<PathBuf> {
+        let p = Path::new("models").join(name);
+        if p.is_file() { Some(p) } else { None }
+    }
+
+    /// 1 second of synthetic 16 kHz mono audio (220 Hz tone).
+    fn synthetic_audio_1s() -> Vec<f32> {
+        use std::f32::consts::PI;
+        let sr = 16_000_usize;
+        (0..sr)
+            .map(|i| (2.0 * PI * 220.0 * (i as f32 / sr as f32)).sin() * 0.3)
+            .collect()
+    }
+
+    /// `expect_err` without requiring `Debug` on the adapter types.
+    fn unwrap_err<T>(r: Result<T, EmbedderError>) -> EmbedderError {
+        match r {
+            Err(e) => e,
+            Ok(_) => panic!("expected Err"),
+        }
+    }
+
+    struct FailingEmbedder;
+
+    impl Embedder for FailingEmbedder {
+        fn dim(&self) -> usize {
+            4
+        }
+        fn embed(&self, _audio: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            Err(EmbedderError::Legacy("synthetic failure".into()))
+        }
+    }
+
+    #[test]
+    fn resnet34_missing_model_reports_session_build_with_path() {
+        let path = Path::new("models/definitely-not-a-real-model.onnx");
+        let err = unwrap_err(ResNet34Adapter::new(
+            path,
+            1,
+            crate::onnx::ExecutionProvider::Cpu,
+        ));
+        match &err {
+            EmbedderError::SessionBuild { path: p, .. } => {
+                assert_eq!(p, path);
+            }
+            other => panic!("expected SessionBuild, got {other}"),
+        }
+        let msg = format!("{err}");
+        assert!(msg.contains("definitely-not-a-real-model.onnx"));
+        assert!(
+            err.source().is_some(),
+            "typed cause is preserved as the error source"
+        );
+    }
+
+    #[test]
+    fn cam_pp_zero_pool_size_fails_construction() {
+        let err = unwrap_err(CamPlusPlusExtractor::new(
+            "models/cam_pp_fp32.onnx",
+            512,
+            0,
+            crate::onnx::ExecutionProvider::Cpu,
+        ));
+        assert!(
+            matches!(err, EmbedderError::SessionBuild { .. }),
+            "pool-size validation maps to SessionBuild, got {err}"
+        );
+    }
+
+    #[test]
+    fn eres2netv2_dim_constant_is_192() {
+        assert_eq!(ERes2NetV2Extractor::DIM, 192);
+    }
+
+    #[test]
+    fn eres2netv2_missing_model_reports_session_build() {
+        let path = Path::new("models/definitely-not-eres2netv2.onnx");
+        let err = unwrap_err(ERes2NetV2Extractor::new(
+            path,
+            1,
+            crate::onnx::ExecutionProvider::Cpu,
+        ));
+        assert!(
+            matches!(err, EmbedderError::SessionBuild { .. }),
+            "got {err}"
+        );
+
+        let err = unwrap_err(ERes2NetV2Extractor::with_dim(
+            path,
+            256,
+            1,
+            crate::onnx::ExecutionProvider::Cpu,
+        ));
+        assert!(
+            matches!(err, EmbedderError::SessionBuild { .. }),
+            "got {err}"
+        );
+    }
+
+    #[test]
+    fn resnet34_real_model_embeds_256d_unit_vector() {
+        let Some(path) = local_model("wespeaker_resnet34.onnx") else {
+            eprintln!("skip resnet34_real_model: models/wespeaker_resnet34.onnx missing");
+            return;
+        };
+        let extractor = ResNet34Adapter::new(&path, 1, crate::onnx::ExecutionProvider::Cpu)
+            .expect("local model loads");
+        assert_eq!(extractor.dim(), 256);
+
+        let embedding = extractor.embed(&synthetic_audio_1s()).expect("embed");
+        assert_eq!(embedding.len(), 256);
+        let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-2, "L2 norm not 1.0: {norm}");
+    }
+
+    #[test]
+    fn cam_pp_real_model_embeds_and_batches_512d() {
+        let Some(path) = local_model("cam_pp_fp32.onnx") else {
+            eprintln!("skip cam_pp_real_model: models/cam_pp_fp32.onnx missing");
+            return;
+        };
+        let extractor =
+            CamPlusPlusExtractor::new(&path, 512, 2, crate::onnx::ExecutionProvider::Cpu)
+                .expect("local model loads");
+        assert_eq!(extractor.dim(), 512);
+
+        let audio = synthetic_audio_1s();
+        let embedding = extractor.embed(&audio).expect("embed");
+        assert_eq!(embedding.len(), 512);
+
+        // Batches fan out across the session pool via parallel_embed_batch.
+        let batch = extractor
+            .embed_batch(&[&audio, &audio, &audio])
+            .expect("batch");
+        assert_eq!(batch.len(), 3);
+        for v in &batch {
+            assert_eq!(v.len(), 512);
+            let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((norm - 1.0).abs() < 1e-2, "L2 norm not 1.0: {norm}");
+        }
+        // Deterministic model: same input yields the same embedding.
+        assert_eq!(batch[0], batch[1]);
+    }
+
+    #[test]
+    fn parallel_embed_batch_empty_input_returns_empty() {
+        let e = DummyExtractor::new(8);
+        let out = parallel_embed_batch(&e, &[], 4).unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn parallel_embed_batch_collects_all_results() {
+        let e = DummyExtractor::new(8);
+        let audio = synthetic_audio_1s();
+        let inputs: Vec<&[f32]> = (0..16).map(|_| &audio[..]).collect();
+        let out = parallel_embed_batch(&e, &inputs, 4).unwrap();
+        assert_eq!(out.len(), 16);
+        for v in &out {
+            assert_eq!(v.len(), 8);
+            let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((norm - 1.0).abs() < 1e-3, "L2 norm not 1.0: {norm}");
+        }
+    }
+
+    #[test]
+    fn parallel_embed_batch_zero_max_threads_still_runs() {
+        let e = DummyExtractor::new(8);
+        let audio = synthetic_audio_1s();
+        let out = parallel_embed_batch(&e, &[&audio, &audio], 0).unwrap();
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn parallel_embed_batch_propagates_inner_error() {
+        let e = FailingEmbedder;
+        let audio = synthetic_audio_1s();
+        let err = parallel_embed_batch(&e, &[&audio, &audio], 2)
+            .expect_err("inner failure must propagate");
+        assert!(
+            matches!(err, EmbedderError::Legacy(ref d) if d == "synthetic failure"),
+            "got {err}"
+        );
     }
 }

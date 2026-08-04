@@ -133,10 +133,9 @@ pub(crate) fn map_max_cooccurrence(cooccurrence: &HashMap<(u32, u32), u64>) -> H
         }
     }
 
-    let assignment = match solve(&cost) {
-        Some(a) => a,
-        None => return HashMap::new(),
-    };
+    // `cost` is square by construction, so `solve` cannot return None here;
+    // an empty assignment would filter down to an empty mapping anyway.
+    let assignment = solve(&cost).unwrap_or_default();
 
     let mut mapping: HashMap<u32, u32> = HashMap::new();
     for (row, &col) in assignment.iter().enumerate() {

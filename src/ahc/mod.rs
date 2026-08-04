@@ -434,11 +434,9 @@ fn ahc_impl_with_matrix(
     // opaque and DER maps speakers optimally (order-invariant).
     let mut group: HashMap<usize, (usize, usize)> = HashMap::new(); // raw label -> (size, min_index)
     for (idx, &label) in labels.iter().enumerate() {
-        let e = group.entry(label).or_insert((0, idx));
-        e.0 += 1;
-        if idx < e.1 {
-            e.1 = idx;
-        }
+        // idx ascends, so the first sight of a label already holds its
+        // smallest member index.
+        group.entry(label).or_insert((0, idx)).0 += 1;
     }
     let mut order: Vec<(usize, usize, usize)> = group
         .iter()
@@ -485,10 +483,7 @@ fn estimate_threshold_from_matrix(sim_matrix: &[Vec<f32>]) -> f32 {
     }
     sims.sort_by(|a, b| a.total_cmp(b));
 
-    if sims.is_empty() {
-        return 0.5;
-    }
-
+    // n >= 2 here, so the upper triangle holds at least one similarity.
     let median_idx = sims.len() / 2;
     // Search for the largest gap in the range [0.0, median].
     let mut best_gap = 0.0f32;
@@ -749,5 +744,118 @@ mod tests {
         let classic = agglomerative_cluster_max_clusters(&embeddings, 0.5, 0);
         let asc = agglomerative_cluster_asc(&embeddings, 0.5, 0, AscStop::Off, None);
         assert_eq!(classic, asc);
+    }
+
+    #[test]
+    fn cahc_asc_min_secs_ignored_without_matching_time_ranges() {
+        // MinSecs with no time ranges (or a length mismatch) degrades to Off:
+        // threshold 0 then glues everything, exactly like classic AHC.
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.98, 0.05, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.05, 0.98, 0.0],
+        ];
+        let classic = agglomerative_cluster(&embeddings, 0.0);
+        assert_eq!(ndistinct(&classic), 1);
+
+        let no_times = agglomerative_cluster_asc(&embeddings, 0.0, 0, AscStop::MinSecs(2.0), None);
+        assert_eq!(no_times, classic, "missing time ranges → stop ignored");
+
+        let short = vec![tr(0.0, 1.0), tr(1.0, 2.0)];
+        let mismatched =
+            agglomerative_cluster_asc(&embeddings, 0.0, 0, AscStop::MinSecs(2.0), Some(&short));
+        assert_eq!(mismatched, classic, "length mismatch → stop ignored");
+    }
+
+    #[test]
+    fn cahc_asc_degenerate_stops_are_off() {
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.9, 0.1, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.1, 0.9, 0.0],
+        ];
+        let classic = agglomerative_cluster(&embeddings, 0.0);
+        assert_eq!(ndistinct(&classic), 1);
+        for stop in [
+            AscStop::MinMembers(0),
+            AscStop::MinSecs(0.0),
+            AscStop::MinSecs(-1.5),
+        ] {
+            let asc = agglomerative_cluster_asc(&embeddings, 0.0, 0, stop, None);
+            assert_eq!(asc, classic, "{stop:?} must behave as Off");
+        }
+    }
+
+    #[test]
+    fn cahc_asc_ceiling_yields_to_established_clusters() {
+        // Two tight pairs, each established after one merge. max_clusters = 1
+        // wants more merging, but every remaining pair is two established
+        // clusters — the ASC stop wins over the ceiling.
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.98, 0.05, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.05, 0.98, 0.0],
+        ];
+        let asc = agglomerative_cluster_asc(&embeddings, 0.0, 1, AscStop::MinMembers(2), None);
+        assert_eq!(
+            ndistinct(&asc),
+            2,
+            "ceiling must not glue two established clusters"
+        );
+        assert_eq!(asc[0], asc[1]);
+        assert_eq!(asc[2], asc[3]);
+        assert_ne!(asc[0], asc[2]);
+    }
+
+    #[test]
+    fn cahc_asc_stop_holds_even_at_unbounded_threshold() {
+        // threshold = -inf merges anything allowed; the only blocked merge is
+        // the established-vs-established pair, which must still be refused.
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.98, 0.05, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.05, 0.98, 0.0],
+        ];
+        let asc = agglomerative_cluster_asc(
+            &embeddings,
+            f32::NEG_INFINITY,
+            0,
+            AscStop::MinMembers(2),
+            None,
+        );
+        assert_eq!(ndistinct(&asc), 2);
+        // Sanity: without the stop, -inf glues everything into one cluster.
+        let classic = agglomerative_cluster(&embeddings, f32::NEG_INFINITY);
+        assert_eq!(ndistinct(&classic), 1);
+    }
+
+    #[test]
+    fn cluster_durations_sums_disjoint_spans_separately() {
+        // Disjoint spans in one cluster must not be merged into a single span:
+        // total = (1.0) + (1.0) = 2.0, not the 4.0 outer envelope.
+        let times = vec![tr(0.0, 1.0), tr(3.0, 4.0), tr(0.5, 2.0)];
+        let labels = vec![0, 0, 1];
+        let durs = cluster_durations(&times, &labels);
+        assert!((durs[&0] - 2.0).abs() < 1e-12);
+        assert!((durs[&1] - 1.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn auto_max_clusters_empty_input() {
+        let (labels, th) = agglomerative_cluster_auto_max_clusters(&[], 3);
+        assert!(labels.is_empty());
+        assert_eq!(th, 0.0);
+    }
+
+    #[test]
+    fn auto_max_clusters_mismatched_dimensions_fall_back_to_one_cluster() {
+        let embeddings = vec![vec![1.0, 0.0, 0.0], vec![0.9, 0.1]];
+        let (labels, th) = agglomerative_cluster_auto_max_clusters(&embeddings, 2);
+        assert_eq!(labels, vec![0, 0]);
+        assert_eq!(th, 0.0);
     }
 }

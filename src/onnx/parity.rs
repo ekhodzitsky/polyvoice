@@ -272,3 +272,97 @@ fn backend_resolve_force_override() {
     assert_eq!(InferenceBackend::resolve(), InferenceBackend::Ort);
     InferenceBackend::force(None);
 }
+
+#[test]
+fn model_path_returns_none_for_missing_blob() {
+    assert!(model_path("no_such_model_blob.onnx").is_none());
+}
+
+#[test]
+fn max_abs_rel_reports_worst_case() {
+    // Dominant absolute error on the second element; relative error uses the
+    // max(|a|, |b|) scale with a 1e-8 floor so near-zero pairs stay finite.
+    let a = [1.0f32, 2.0, 0.0];
+    let b = [1.0f32, 2.5, 0.0];
+    let (max_abs, max_rel) = max_abs_rel(&a, &b);
+    assert!((max_abs - 0.5).abs() < 1e-6, "max_abs={max_abs}");
+    assert!((max_rel - 0.2).abs() < 1e-6, "max_rel={max_rel}");
+}
+
+#[test]
+fn max_abs_rel_handles_all_zero_pairs() {
+    let (max_abs, max_rel) = max_abs_rel(&[0.0f32, 0.0], &[0.0f32, 0.0]);
+    assert_eq!(max_abs, 0.0);
+    assert_eq!(max_rel, 0.0);
+}
+
+#[test]
+#[should_panic(expected = "length mismatch 2 vs 3")]
+fn max_abs_rel_panics_on_length_mismatch() {
+    max_abs_rel(&[1.0f32, 2.0], &[1.0f32, 2.0, 3.0]);
+}
+
+#[test]
+fn assert_f32_close_accepts_within_tolerance() {
+    let a = InferenceTensor::f32(vec![2], vec![1.0, 100.0]);
+    let b = InferenceTensor::f32(vec![2], vec![1.0 + 5e-4, 100.5]);
+    assert_f32_close("within-tol", &a, &b, Tol::DEFAULT);
+}
+
+#[test]
+fn assert_f32_close_accepts_looser_tol() {
+    let a = InferenceTensor::f32(vec![1], vec![1.0]);
+    let b = InferenceTensor::f32(vec![1], vec![1.05]);
+    assert_f32_close("loose", &a, &b, Tol { abs: 0.1, rel: 0.1 });
+}
+
+#[test]
+#[should_panic(expected = "shape mismatch")]
+fn assert_f32_close_rejects_shape_mismatch() {
+    let a = InferenceTensor::f32(vec![1, 2], vec![1.0, 2.0]);
+    let b = InferenceTensor::f32(vec![2], vec![1.0, 2.0]);
+    assert_f32_close("shapes", &a, &b, Tol::DEFAULT);
+}
+
+#[test]
+#[should_panic(expected = "max_abs=")]
+fn assert_f32_close_rejects_large_error() {
+    let a = InferenceTensor::f32(vec![1], vec![1.0]);
+    let b = InferenceTensor::f32(vec![1], vec![2.0]);
+    assert_f32_close("values", &a, &b, Tol::DEFAULT);
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn compare_ordered_reports_ort_run_error() {
+    let Some(path) = model_path("cam_pp_fp32.onnx") else {
+        eprintln!("skip: models/cam_pp_fp32.onnx missing");
+        return;
+    };
+    // Shape product (6) disagrees with the data length (5): the ort run must
+    // fail before the tract side is even attempted.
+    let bad = InferenceTensor::f32(vec![1, 2, 3], vec![0.0f32; 5]);
+    let err = compare_ordered("cam_pp_bad_input", &path, &[bad], Tol::DEFAULT)
+        .expect_err("malformed input must fail");
+    assert!(err.contains("ort run:"), "unexpected: {err}");
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn compare_ordered_reports_tract_load_error() {
+    // Silero is a documented tract load failure: compare_ordered must surface
+    // the session-build error instead of panicking.
+    let Some(path) = model_path("silero_vad.onnx") else {
+        eprintln!("skip: models/silero_vad.onnx missing");
+        return;
+    };
+    let input = InferenceTensor::f32(vec![1, 576], vec![0.0f32; 576]);
+    match compare_ordered("silero", &path, &[input], Tol::DEFAULT) {
+        Err(e) => eprintln!("compare_ordered silero: documented failure: {e}"),
+        Ok(_) => {
+            // A future tract version may load Silero; the run itself must then
+            // have failed on the incomplete input set — unreachable in practice.
+            eprintln!("compare_ordered silero: unexpectedly succeeded");
+        }
+    }
+}

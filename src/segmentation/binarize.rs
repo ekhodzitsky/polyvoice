@@ -155,3 +155,233 @@ fn mark_region(
         }
     }
 }
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One frame of class probabilities with `p` on the solo class of speaker
+    /// `s` and the rest on silence.
+    fn solo(s: usize, p: f32) -> [f32; NUM_POWERSET_CLASSES] {
+        let mut row = [0.0; NUM_POWERSET_CLASSES];
+        row[0] = 1.0 - p;
+        row[1 + s] = p;
+        row
+    }
+
+    fn silence() -> [f32; NUM_POWERSET_CLASSES] {
+        solo(0, 0.0)
+    }
+
+    #[test]
+    fn default_config_is_plain_thresholding() {
+        let cfg = BinarizationConfig::default();
+        assert!((cfg.onset - 0.5).abs() < 1e-6);
+        assert!((cfg.offset - 0.5).abs() < 1e-6);
+        assert!((cfg.min_duration_on - 0.0).abs() < 1e-6);
+        assert!((cfg.min_duration_off - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn uncovered_frames_emit_none_and_zero_confidence() {
+        let avg = vec![silence(), silence(), silence()];
+        let has_data = vec![true, false, true];
+        let (classes, confs) =
+            binarize_frames(&avg, &has_data, 0.01, &BinarizationConfig::default());
+        assert_eq!(classes.len(), 3);
+        assert_eq!(confs.len(), 3);
+        assert_eq!(classes[0], Some(PowersetClass::Silence));
+        assert_eq!(classes[1], None);
+        assert_eq!(classes[2], Some(PowersetClass::Silence));
+        assert!((confs[1] - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn empty_input_returns_empty_tracks() {
+        let (classes, confs) = binarize_frames(&[], &[], 0.01, &BinarizationConfig::default());
+        assert!(classes.is_empty());
+        assert!(confs.is_empty());
+    }
+
+    #[test]
+    fn silence_frame_confidence_is_silence_probability() {
+        let avg = vec![silence()];
+        let has_data = vec![true];
+        let (classes, confs) =
+            binarize_frames(&avg, &has_data, 0.01, &BinarizationConfig::default());
+        assert_eq!(classes[0], Some(PowersetClass::Silence));
+        assert!((confs[0] - 1.0).abs() < 1e-6, "got {}", confs[0]);
+    }
+
+    #[test]
+    fn single_active_speaker_maps_to_solo_class_with_mean_confidence() {
+        let avg = vec![silence(), solo(1, 0.9), solo(1, 0.7), silence()];
+        let has_data = vec![true; 4];
+        let (classes, confs) =
+            binarize_frames(&avg, &has_data, 0.01, &BinarizationConfig::default());
+        assert_eq!(
+            classes,
+            vec![
+                Some(PowersetClass::Silence),
+                Some(PowersetClass::Speaker(1)),
+                Some(PowersetClass::Speaker(1)),
+                Some(PowersetClass::Silence),
+            ]
+        );
+        assert!((confs[1] - 0.9).abs() < 1e-6, "got {}", confs[1]);
+        assert!((confs[2] - 0.7).abs() < 1e-6, "got {}", confs[2]);
+    }
+
+    #[test]
+    fn two_active_speakers_map_to_pair_class() {
+        // Classes {0} and {1} both above onset on the middle frame.
+        let mut frame = [0.0; NUM_POWERSET_CLASSES];
+        frame[0] = 0.1;
+        frame[1] = 0.5; // {0}
+        frame[2] = 0.4; // {1}
+        let avg = vec![silence(), frame, silence()];
+        let has_data = vec![true; 3];
+        let cfg = BinarizationConfig {
+            onset: 0.2,
+            ..BinarizationConfig::default()
+        };
+        let (classes, confs) = binarize_frames(&avg, &has_data, 0.01, &cfg);
+        assert_eq!(classes[1], Some(PowersetClass::Pair(0, 1)));
+        assert!((confs[1] - 0.45).abs() < 1e-6, "got {}", confs[1]);
+    }
+
+    #[test]
+    fn three_active_speakers_truncate_to_top_two_by_probability() {
+        // All three solo classes above onset: powerset expresses at most two,
+        // so the weakest speaker is dropped.
+        let mut frame = [0.0; NUM_POWERSET_CLASSES];
+        frame[1] = 0.4; // {0}
+        frame[2] = 0.35; // {1}
+        frame[3] = 0.25; // {2}
+        let avg = vec![frame];
+        let has_data = vec![true];
+        let cfg = BinarizationConfig {
+            onset: 0.2,
+            offset: 0.2,
+            ..Default::default()
+        };
+        let (classes, confs) = binarize_frames(&avg, &has_data, 0.01, &cfg);
+        assert_eq!(classes[0], Some(PowersetClass::Pair(0, 1)));
+        assert!((confs[0] - 0.375).abs() < 1e-6, "got {}", confs[0]);
+    }
+
+    #[test]
+    fn hysteresis_holds_speaker_on_through_dip_above_offset() {
+        let avg = vec![
+            silence(),
+            solo(0, 0.7),  // crosses onset
+            solo(0, 0.45), // between offset and onset: stays ON
+            solo(0, 0.1),  // below offset: OFF
+        ];
+        let has_data = vec![true; 4];
+        let cfg = BinarizationConfig {
+            onset: 0.6,
+            offset: 0.4,
+            ..Default::default()
+        };
+        let (classes, _) = binarize_frames(&avg, &has_data, 1.0, &cfg);
+        assert_eq!(
+            classes,
+            vec![
+                Some(PowersetClass::Silence),
+                Some(PowersetClass::Speaker(0)),
+                Some(PowersetClass::Speaker(0)),
+                Some(PowersetClass::Silence),
+            ]
+        );
+    }
+
+    #[test]
+    fn short_gap_is_bridged_by_min_duration_off() {
+        // One inactive frame between two active runs, min_off = 2 frames.
+        let avg = vec![
+            silence(),
+            solo(0, 0.9),
+            solo(0, 0.0),
+            solo(0, 0.9),
+            silence(),
+        ];
+        let has_data = vec![true; 5];
+        let cfg = BinarizationConfig {
+            min_duration_off: 2.0, // stride 1.0 -> 2 frames
+            ..Default::default()
+        };
+        let (classes, _) = binarize_frames(&avg, &has_data, 1.0, &cfg);
+        assert_eq!(
+            classes,
+            vec![
+                Some(PowersetClass::Silence),
+                Some(PowersetClass::Speaker(0)),
+                Some(PowersetClass::Speaker(0)), // bridged
+                Some(PowersetClass::Speaker(0)),
+                Some(PowersetClass::Silence),
+            ]
+        );
+    }
+
+    #[test]
+    fn short_active_blip_is_dropped_by_min_duration_on() {
+        // Two active frames, min_on = 3 frames: the run is too short to keep.
+        let avg = vec![silence(), solo(0, 0.9), solo(0, 0.9), silence()];
+        let has_data = vec![true; 4];
+        let cfg = BinarizationConfig {
+            min_duration_on: 3.0, // stride 1.0 -> 3 frames
+            ..Default::default()
+        };
+        let (classes, _) = binarize_frames(&avg, &has_data, 1.0, &cfg);
+        assert_eq!(classes, vec![Some(PowersetClass::Silence); 4]);
+    }
+
+    #[test]
+    fn coverage_hole_hard_closes_region_instead_of_bridging() {
+        // min_off large enough to bridge any gap, but the uncovered frame must
+        // still split the two active runs and emit None.
+        let avg = vec![
+            solo(0, 0.9),
+            solo(0, 0.9),
+            silence(),
+            solo(1, 0.9),
+            solo(1, 0.9),
+        ];
+        let has_data = vec![true, true, false, true, true];
+        let cfg = BinarizationConfig {
+            min_duration_off: 10.0, // stride 1.0 -> 10 frames
+            ..Default::default()
+        };
+        let (classes, confs) = binarize_frames(&avg, &has_data, 1.0, &cfg);
+        assert_eq!(
+            classes,
+            vec![
+                Some(PowersetClass::Speaker(0)),
+                Some(PowersetClass::Speaker(0)),
+                None,
+                Some(PowersetClass::Speaker(1)),
+                Some(PowersetClass::Speaker(1)),
+            ]
+        );
+        assert!((confs[2] - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn speakers_are_independent_tracks() {
+        // Speaker 0 active on frame 1, speaker 2 active on frame 2.
+        let avg = vec![silence(), solo(0, 0.9), solo(2, 0.9), silence()];
+        let has_data = vec![true; 4];
+        let (classes, _) = binarize_frames(&avg, &has_data, 0.01, &BinarizationConfig::default());
+        assert_eq!(
+            classes,
+            vec![
+                Some(PowersetClass::Silence),
+                Some(PowersetClass::Speaker(0)),
+                Some(PowersetClass::Speaker(2)),
+                Some(PowersetClass::Silence),
+            ]
+        );
+    }
+}

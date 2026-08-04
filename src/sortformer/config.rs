@@ -198,4 +198,97 @@ mod tests {
         // (124 + 1) * 0.08 = 10.0
         assert!((cfg.latency_secs() - 10.0).abs() < 1e-6);
     }
+
+    #[test]
+    fn with_max_speakers_accepts_full_valid_range() {
+        for n in 1..=MAX_SPEAKERS {
+            let cfg = SortformerConfig::default().with_max_speakers(n).unwrap();
+            assert_eq!(cfg.max_speakers, n);
+            cfg.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn with_max_speakers_zero_rejected() {
+        let err = SortformerConfig::default()
+            .with_max_speakers(0)
+            .expect_err("zero speakers is meaningless");
+        assert!(matches!(
+            err,
+            SortformerError::MaxSpeakersExceeded { requested: 0 }
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_above_cap_without_builder() {
+        let cfg = SortformerConfig {
+            max_speakers: MAX_SPEAKERS + 3,
+            ..Default::default()
+        };
+        let err = cfg.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            SortformerError::MaxSpeakersExceeded { requested } if requested == MAX_SPEAKERS + 3
+        ));
+    }
+
+    #[test]
+    fn latency_scales_with_chunk_len_and_right_context() {
+        let cfg = SortformerConfig {
+            chunk_len: 10,
+            right_context: 2,
+            ..Default::default()
+        };
+        assert!((cfg.latency_secs() - 12.0 * FRAME_DURATION_SECS).abs() < 1e-6);
+    }
+
+    #[test]
+    fn postprocess_default_is_callhome_and_dihard3_differs() {
+        let callhome = PostProcessConfig::callhome();
+        assert_eq!(callhome, PostProcessConfig::default());
+        let dihard3 = PostProcessConfig::dihard3();
+        assert!((dihard3.onset - 0.56).abs() < 1e-6);
+        assert!((dihard3.offset - 1.0).abs() < 1e-6);
+        assert!((dihard3.pad_onset - 0.063).abs() < 1e-6);
+        assert!((dihard3.pad_offset - 0.002).abs() < 1e-6);
+        assert!((dihard3.min_duration_on - 0.007).abs() < 1e-6);
+        assert!((dihard3.min_duration_off - 0.151).abs() < 1e-6);
+        assert_eq!(dihard3.median_window, 11);
+        assert_ne!(callhome, dihard3);
+    }
+
+    #[test]
+    fn error_display_covers_shape_missing_output_and_inference() {
+        let shape = SortformerError::Shape("bad rank".into());
+        assert!(format!("{shape}").contains("bad rank"));
+
+        let missing = SortformerError::MissingOutput {
+            name: "spkcache_fifo_chunk_preds",
+            available: vec!["other".to_owned()],
+        };
+        let msg = format!("{missing}");
+        assert!(msg.contains("spkcache_fifo_chunk_preds"), "{msg}");
+        assert!(msg.contains("other"), "{msg}");
+
+        let inference: SortformerError =
+            crate::onnx::InferenceError::Run("backend boom".into()).into();
+        assert!(format!("{inference}").contains("backend boom"));
+
+        let zero = SortformerError::MaxSpeakersExceeded { requested: 0 };
+        assert!(format!("{zero}").contains('0'));
+    }
+
+    #[test]
+    fn default_geometry_constants_match_documented_export() {
+        let cfg = SortformerConfig::default();
+        assert_eq!(cfg.chunk_len, DEFAULT_CHUNK_LEN);
+        assert_eq!(cfg.fifo_len, DEFAULT_FIFO_LEN);
+        assert_eq!(cfg.spkcache_len, DEFAULT_SPKCACHE_LEN);
+        assert_eq!(cfg.right_context, DEFAULT_RIGHT_CONTEXT);
+        assert_eq!(SAMPLE_RATE, 16_000);
+        assert!((FRAME_DURATION_SECS - 0.08).abs() < 1e-9);
+        assert_eq!(SUBSAMPLING, 8);
+        assert_eq!(EMB_DIM, 512);
+        assert_eq!(N_MELS, 128);
+    }
 }

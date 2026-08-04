@@ -535,6 +535,14 @@ mod tests {
     }
 
     #[test]
+    fn vad_state_machine_exposes_min_speech_frames() {
+        let sm = VadStateMachine::new(0.5, 3, 7);
+        assert_eq!(sm.min_speech_frames(), 7);
+        assert!(sm.meets_min_speech_duration(0, 7));
+        assert!(!sm.meets_min_speech_duration(0, 6));
+    }
+
+    #[test]
     fn segment_speech_empty_samples() {
         let mut vad = EnergyVad::new(-40.0, 16000, 512);
         let samples: Vec<f32> = vec![];

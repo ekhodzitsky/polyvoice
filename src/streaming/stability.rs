@@ -135,4 +135,38 @@ mod tests {
     fn flip_rate_empty_is_zero() {
         assert_eq!(label_flip_rate(&[], &[]), 0.0);
     }
+
+    #[test]
+    fn hysteresis_empty_candidates_returns_none() {
+        assert_eq!(prefer_current_speaker(Some(SpeakerId(0)), &[], 0.1), None);
+        assert_eq!(prefer_current_speaker(None, &[], 0.1), None);
+    }
+
+    #[test]
+    fn hysteresis_current_absent_from_candidates_picks_best() {
+        let cands = [(SpeakerId(0), 0.5), (SpeakerId(1), 0.9)];
+        assert_eq!(
+            prefer_current_speaker(Some(SpeakerId(7)), &cands, 0.5),
+            Some(SpeakerId(1)),
+            "a current speaker with no score cannot be kept"
+        );
+    }
+
+    #[test]
+    fn hysteresis_current_already_best_is_kept() {
+        let cands = [(SpeakerId(0), 0.9), (SpeakerId(1), 0.5)];
+        assert_eq!(
+            prefer_current_speaker(Some(SpeakerId(0)), &cands, 0.0),
+            Some(SpeakerId(0))
+        );
+    }
+
+    #[test]
+    fn flip_rate_compares_over_shorter_input() {
+        let first = [SpeakerId(0), SpeakerId(1), SpeakerId(1), SpeakerId(9)];
+        let final_ = [SpeakerId(0), SpeakerId(0)];
+        // Only the first two positions are compared: one flip out of two.
+        assert!((label_flip_rate(&first, &final_) - 0.5).abs() < 1e-6);
+        assert_eq!(label_flip_rate(&first, &[]), 0.0);
+    }
 }

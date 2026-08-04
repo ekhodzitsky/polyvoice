@@ -81,4 +81,43 @@ mod tests {
             out.len()
         );
     }
+
+    #[test]
+    fn sixteen_to_forty_eight_upsample_length() {
+        let input = vec![0.0f32; 16_000];
+        let out = resample_mono(&input, TARGET_SAMPLE_RATE, 48_000).unwrap();
+        let secs = out.len() as f64 / 48_000f64;
+        assert!(
+            (secs - 1.0).abs() < 0.02,
+            "got {secs}s ({} samples)",
+            out.len()
+        );
+    }
+
+    #[test]
+    fn odd_ratio_eight_to_sixteen_length() {
+        // Non-integer-adjacent chunk sizing path (ratio 1:2 with small input).
+        let input: Vec<f32> = (0..8_000).map(|i| (i as f32 * 0.01).sin()).collect();
+        let out = resample_mono(&input, 8_000, TARGET_SAMPLE_RATE).unwrap();
+        let secs = out.len() as f64 / TARGET_SAMPLE_RATE as f64;
+        assert!(
+            (secs - 1.0).abs() < 0.02,
+            "got {secs}s ({} samples)",
+            out.len()
+        );
+    }
+
+    #[test]
+    fn zero_from_rate_errors() {
+        let err = resample_mono(&[0.1, 0.2], 0, TARGET_SAMPLE_RATE).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("invalid sample rates"), "got: {msg}");
+    }
+
+    #[test]
+    fn zero_to_rate_errors() {
+        let err = resample_mono(&[0.1, 0.2], 48_000, 0).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("invalid sample rates"), "got: {msg}");
+    }
 }

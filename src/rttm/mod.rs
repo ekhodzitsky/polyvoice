@@ -276,4 +276,186 @@ SPEAKER file1 1 2.0 1.0 <NA> <NA> B <NA> <NA>
         let result = parse_rttm(input.as_bytes());
         assert!(result.is_err());
     }
+
+    fn parse_error(input: &str) -> (usize, String) {
+        match parse_rttm(input.as_bytes()) {
+            Err(RttmError::Parse { line, reason }) => (line, reason),
+            other => panic!("expected parse error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reject_too_few_fields_with_line_number() {
+        // First line is valid; the malformed line reports its 1-based index.
+        let input = "\
+SPEAKER f 1 0.0 1.0 <NA> <NA> A <NA> <NA>
+; comment lines do not count as content but do count as lines
+SPEAKER f 1 0.5 2.3 <NA> <NA> SPEAKER_00
+";
+        let (line, reason) = parse_error(input);
+        assert_eq!(line, 3);
+        assert!(reason.contains("expected >= 9 fields, got 8"), "{reason}");
+    }
+
+    #[test]
+    fn skip_non_speaker_record_types() {
+        // RTTM files may carry SPKR-INFO etc.; only SPEAKER lines are segments.
+        let input = "\
+SPKR-INFO file1 1 <NA> <NA> <NA> unknown SPEAKER_00 <NA>
+SPEAKER file1 1 0.0 1.0 <NA> <NA> A <NA> <NA>
+";
+        let segments = parse_rttm(input.as_bytes()).unwrap();
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].speaker, "A");
+    }
+
+    #[test]
+    fn reject_non_numeric_start() {
+        let (_, reason) = parse_error("SPEAKER f 1 abc 1.0 <NA> <NA> A <NA> <NA>\n");
+        assert!(reason.contains("invalid start time: abc"), "{reason}");
+    }
+
+    #[test]
+    fn reject_negative_or_non_finite_start() {
+        let (_, reason) = parse_error("SPEAKER f 1 -0.5 1.0 <NA> <NA> A <NA> <NA>\n");
+        assert!(reason.contains("invalid start time: -0.5"), "{reason}");
+        // "NaN"/"inf" parse as f64 but fail the finite/non-negative check.
+        let (_, reason) = parse_error("SPEAKER f 1 NaN 1.0 <NA> <NA> A <NA> <NA>\n");
+        assert!(reason.contains("invalid start time"), "{reason}");
+        let (_, reason) = parse_error("SPEAKER f 1 inf 1.0 <NA> <NA> A <NA> <NA>\n");
+        assert!(reason.contains("invalid start time"), "{reason}");
+    }
+
+    #[test]
+    fn reject_bad_duration() {
+        let (_, reason) = parse_error("SPEAKER f 1 0.0 xyz <NA> <NA> A <NA> <NA>\n");
+        assert!(reason.contains("invalid duration: xyz"), "{reason}");
+        let (_, reason) = parse_error("SPEAKER f 1 0.0 -1.0 <NA> <NA> A <NA> <NA>\n");
+        assert!(reason.contains("invalid duration: -1"), "{reason}");
+        let (_, reason) = parse_error("SPEAKER f 1 0.0 NaN <NA> <NA> A <NA> <NA>\n");
+        assert!(reason.contains("invalid duration"), "{reason}");
+    }
+
+    #[test]
+    fn zero_duration_segments_are_accepted() {
+        let input = "SPEAKER f 1 1.0 0.0 <NA> <NA> A <NA> <NA>\n";
+        let segments = parse_rttm(input.as_bytes()).unwrap();
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].end(), 1.0);
+    }
+
+    #[test]
+    fn parse_rttm_file_reads_from_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ref.rttm");
+        std::fs::write(&path, "SPEAKER f 1 0.0 1.0 <NA> <NA> A <NA> <NA>\n").unwrap();
+        let segments = parse_rttm_file(&path).unwrap();
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].file_id, "f");
+    }
+
+    #[test]
+    fn parse_rttm_file_missing_path_is_io_error() {
+        let err = parse_rttm_file(Path::new("definitely/not/a/real/file.rttm")).unwrap_err();
+        assert!(matches!(err, RttmError::Io(_)));
+    }
+
+    #[test]
+    fn error_display_includes_line_and_reason() {
+        let e = RttmError::Parse {
+            line: 7,
+            reason: "boom".into(),
+        };
+        assert_eq!(e.to_string(), "invalid RTTM line 7: boom");
+        let io = RttmError::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "nope"));
+        assert!(io.to_string().starts_with("I/O error:"), "{io}");
+    }
+
+    #[test]
+    fn group_by_file_collects_per_file() {
+        let mk = |file: &str, start: f64| RttmSegment {
+            file_id: file.into(),
+            start,
+            duration: 1.0,
+            speaker: "A".into(),
+        };
+        let segments = vec![mk("a", 0.0), mk("b", 0.0), mk("a", 2.0)];
+        let groups = group_by_file(&segments);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups["a"].len(), 2);
+        assert_eq!(groups["b"].len(), 1);
+        // Grouping keeps the original order within each file.
+        assert!(groups["a"][0].start < groups["a"][1].start);
+    }
+
+    #[test]
+    fn to_speaker_turns_empty_input() {
+        let (turns, map) = to_speaker_turns(&[]);
+        assert!(turns.is_empty());
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn to_speaker_turns_preserves_overlap_and_times() {
+        // Overlapping reference segments stay overlapping turns (no merging).
+        let segments = vec![
+            RttmSegment {
+                file_id: "f".into(),
+                start: 0.0,
+                duration: 2.0,
+                speaker: "A".into(),
+            },
+            RttmSegment {
+                file_id: "f".into(),
+                start: 1.0,
+                duration: 2.0,
+                speaker: "B".into(),
+            },
+        ];
+        let (turns, map) = to_speaker_turns(&segments);
+        assert_eq!(turns.len(), 2);
+        assert!((turns[0].time.end - 2.0).abs() < 1e-9);
+        assert!((turns[1].time.start - 1.0).abs() < 1e-9);
+        assert!(turns[0].stable);
+        assert!(turns[0].text.is_none());
+        assert_eq!(map["A"], turns[0].speaker);
+        assert_eq!(map["B"], turns[1].speaker);
+    }
+
+    #[test]
+    fn write_rttm_empty_turns_produces_no_lines() {
+        let mut buf = Vec::new();
+        write_rttm(&mut buf, "f", &[]).unwrap();
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn write_rttm_propagates_io_errors() {
+        struct FailingWriter;
+        impl Write for FailingWriter {
+            fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "closed",
+                ))
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let turns = vec![SpeakerTurn {
+            speaker: SpeakerId(0),
+            time: TimeRange {
+                start: 0.0,
+                end: 1.0,
+            },
+            text: None,
+            stable: true,
+        }];
+        let mut w = FailingWriter;
+        assert!(matches!(
+            write_rttm(&mut w, "f", &turns),
+            Err(RttmError::Io(_))
+        ));
+    }
 }

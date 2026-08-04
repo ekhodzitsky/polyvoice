@@ -72,3 +72,50 @@ impl fmt::Display for SpeakerId {
         write!(f, "SPEAKER_{:02}", self.0)
     }
 }
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_pads_to_two_digits() {
+        assert_eq!(SpeakerId(0).to_string(), "SPEAKER_00");
+        assert_eq!(SpeakerId(9).to_string(), "SPEAKER_09");
+        assert_eq!(SpeakerId(10).to_string(), "SPEAKER_10");
+        assert_eq!(SpeakerId(123).to_string(), "SPEAKER_123");
+    }
+
+    #[test]
+    fn from_mapping_rejects_duplicate_old_ids() {
+        let dup = SpeakerIdRemap::from_mapping(vec![
+            (SpeakerId(0), SpeakerId(1)),
+            (SpeakerId(0), SpeakerId(2)),
+        ]);
+        assert!(dup.is_none());
+    }
+
+    #[test]
+    fn remap_applies_known_ids_and_passes_through_unknown() {
+        let remap = SpeakerIdRemap::from_mapping(vec![(SpeakerId(2), SpeakerId(0))]).unwrap();
+        assert_eq!(remap.len(), 1);
+        assert!(!remap.is_empty());
+        assert_eq!(remap.remap(SpeakerId(2)), SpeakerId(0));
+        assert_eq!(remap.remap(SpeakerId(7)), SpeakerId(7));
+    }
+
+    #[test]
+    fn empty_remap_is_identity() {
+        let remap = SpeakerIdRemap::from_mapping(vec![]).unwrap();
+        assert!(remap.is_empty());
+        assert_eq!(remap.len(), 0);
+        assert_eq!(remap.remap(SpeakerId(3)), SpeakerId(3));
+    }
+
+    #[test]
+    fn speaker_id_serde_roundtrip() {
+        let id = SpeakerId(42);
+        let json = serde_json::to_string(&id).unwrap();
+        assert_eq!(serde_json::from_str::<SpeakerId>(&json).unwrap(), id);
+    }
+}

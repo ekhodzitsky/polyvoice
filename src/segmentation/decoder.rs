@@ -379,4 +379,16 @@ mod tests {
         assert_eq!(PowersetClass::from_speakers(&[1, 1]), None);
         assert_eq!(PowersetClass::from_speakers(&[0, 3]), None);
     }
+
+    /// NaN logits make the softmax sum NaN; the degenerate-sum guard must
+    /// fall back to a unit denominator instead of panicking or dividing by
+    /// zero. NaN comparisons are all false, so the argmax stays at class 0.
+    #[test]
+    fn nan_logits_use_safe_softmax_denominator() {
+        let logits = [f32::NAN; 7];
+        let label = PowersetDecoder::decode_frame(&logits).unwrap();
+        assert_eq!(label.class, PowersetClass::Silence);
+        let probs = softmax(&logits);
+        assert_eq!(probs.len(), NUM_POWERSET_CLASSES);
+    }
 }

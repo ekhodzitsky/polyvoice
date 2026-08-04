@@ -158,3 +158,186 @@ impl VoiceActivityDetector for SileroVad {
         Self::SAMPLE_RATE
     }
 }
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::onnx::{ExecutionProvider, InferenceBackend};
+    use std::path::{Path, PathBuf};
+
+    const SILERO: &str = "models/silero_vad.onnx";
+
+    fn silero_path() -> Option<PathBuf> {
+        let p = Path::new(SILERO);
+        if p.is_file() {
+            Some(p.to_path_buf())
+        } else {
+            None
+        }
+    }
+
+    /// `n` samples of a 300 Hz sine at 16 kHz, amplitude 0.3.
+    fn sine_samples(n: usize) -> Vec<f32> {
+        (0..n)
+            .map(|i| 0.3 * (2.0 * std::f32::consts::PI * 300.0 * i as f32 / 16_000.0).sin())
+            .collect()
+    }
+
+    /// Extract the construction error without requiring `Debug` on the VAD
+    /// itself (it holds an ONNX session, so it does not derive it).
+    fn build_err(r: Result<SileroVad, SileroVadError>) -> SileroVadError {
+        match r {
+            Err(e) => e,
+            Ok(_) => panic!("expected construction to fail"),
+        }
+    }
+
+    #[test]
+    fn new_rejects_zero_chunk_size() {
+        let err = build_err(SileroVad::new(Path::new("models/__missing__.onnx"), 0));
+        assert!(matches!(err, SileroVadError::ZeroChunkSize));
+        assert_eq!(err.to_string(), "SileroVad: chunk_size must be > 0");
+    }
+
+    #[test]
+    fn new_fails_on_garbage_model() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(&[0xAB; 64]).unwrap();
+        let err = build_err(SileroVad::new(tmp.path(), 512));
+        assert!(matches!(err, SileroVadError::Session(_)));
+        assert!(
+            err.to_string().contains("failed to load Silero VAD model"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn with_ep_sets_context_size_from_chunk() {
+        let Some(path) = silero_path() else {
+            eprintln!("skip: {SILERO} missing");
+            return;
+        };
+        // Pin ort: silero does not load on the tract backend today.
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let vad = SileroVad::new(&path, 512).unwrap();
+        assert_eq!(vad.context_size, 64);
+        assert_eq!(vad.context.len(), 64);
+        assert_eq!(vad.state.len(), SileroVad::STATE_SIZE);
+        assert!(vad.state.iter().all(|v| *v == 0.0));
+        let vad = SileroVad::new(&path, 256).unwrap();
+        assert_eq!(vad.context_size, 32);
+        assert_eq!(vad.context.len(), 32);
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn with_ep_accepts_unwired_providers() {
+        let Some(path) = silero_path() else {
+            eprintln!("skip: {SILERO} missing");
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        // Unwired providers warn and fall back to CPU — never panic or error.
+        assert!(SileroVad::with_ep(&path, 512, ExecutionProvider::Cuda).is_ok());
+        assert!(SileroVad::with_ep(&path, 512, ExecutionProvider::auto()).is_ok());
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn process_rejects_partial_chunk() {
+        let Some(path) = silero_path() else {
+            eprintln!("skip: {SILERO} missing");
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let mut vad = SileroVad::new(&path, 512).unwrap();
+        let err = vad.process(&vec![0.0f32; 500]).unwrap_err();
+        assert!(matches!(
+            err,
+            VadError::InvalidChunkSize {
+                expected: 512,
+                got: 500
+            }
+        ));
+        let err = vad.process(&vec![0.0f32; 512 + 256]).unwrap_err();
+        assert!(matches!(
+            err,
+            VadError::InvalidChunkSize {
+                expected: 512,
+                got: 768
+            }
+        ));
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn process_returns_probs_in_unit_range() {
+        let Some(path) = silero_path() else {
+            eprintln!("skip: {SILERO} missing");
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let mut vad = SileroVad::new(&path, 512).unwrap();
+        assert_eq!(vad.sample_rate(), 16_000);
+        let probs = vad.process(&sine_samples(512 * 4)).unwrap();
+        assert_eq!(probs.len(), 4);
+        assert!(
+            probs
+                .iter()
+                .all(|p| p.is_finite() && (0.0..=1.0).contains(p)),
+            "probs out of range: {probs:?}"
+        );
+        // LSTM state and trailing context are carried between chunks.
+        assert!(vad.state.iter().any(|v| *v != 0.0));
+        assert!(vad.context.iter().any(|v| *v != 0.0));
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn silence_scores_low() {
+        let Some(path) = silero_path() else {
+            eprintln!("skip: {SILERO} missing");
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let mut vad = SileroVad::new(&path, 512).unwrap();
+        let probs = vad.process(&vec![0.0f32; 512 * 2]).unwrap();
+        assert_eq!(probs.len(), 2);
+        assert!(
+            probs.iter().all(|p| *p < 0.5),
+            "silence scored high: {probs:?}"
+        );
+        InferenceBackend::force(None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn reset_restores_fresh_state() {
+        let Some(path) = silero_path() else {
+            eprintln!("skip: {SILERO} missing");
+            return;
+        };
+        InferenceBackend::force(Some(InferenceBackend::Ort));
+        let mut vad = SileroVad::new(&path, 512).unwrap();
+        let chunk = sine_samples(512);
+        let first = vad.process(&chunk).unwrap();
+        vad.reset();
+        assert!(vad.state.iter().all(|v| *v == 0.0));
+        assert!(vad.context.iter().all(|v| *v == 0.0));
+        let second = vad.process(&chunk).unwrap();
+        assert!(
+            (first[0] - second[0]).abs() < 1e-6,
+            "reset did not restore determinism: {} vs {}",
+            first[0],
+            second[0]
+        );
+        InferenceBackend::force(None);
+    }
+}

@@ -613,4 +613,108 @@ mod tests {
         assert_eq!(merged.len(), 1);
         assert!(merged[0].confidence.is_none());
     }
+
+    #[test]
+    fn cosine_similarity_length_mismatch_and_zero_norm_return_zero() {
+        assert_eq!(cosine_similarity(&[1.0, 2.0], &[1.0]), 0.0);
+        assert_eq!(cosine_similarity(&[0.0, 0.0], &[1.0, 2.0]), 0.0);
+        assert_eq!(cosine_similarity(&[], &[]), 0.0);
+    }
+
+    #[test]
+    fn cosine_similarity_f32_f64_paths() {
+        // Length mismatch.
+        assert_eq!(cosine_similarity_f32_f64(&[1.0, 2.0], &[1.0_f64]), 0.0);
+        // Zero-norm input.
+        assert_eq!(cosine_similarity_f32_f64(&[0.0, 0.0], &[1.0_f64, 2.0]), 0.0);
+        // Matching direction across precisions.
+        let sim = cosine_similarity_f32_f64(&[1.0, 0.0], &[1.0_f64, 0.0]);
+        assert!((sim - 1.0).abs() < 1e-5);
+        // Non-finite input stays finite.
+        let sim = cosine_similarity_f32_f64(&[f32::INFINITY, 1.0], &[1.0_f64, 2.0]);
+        assert!(sim.is_finite());
+        assert_eq!(sim, 0.0);
+    }
+
+    #[test]
+    fn l2_normalize_zero_vector_unchanged() {
+        let mut v = vec![0.0f32; 3];
+        l2_normalize(&mut v);
+        assert_eq!(v, vec![0.0; 3]);
+    }
+
+    #[test]
+    fn mean_vector_empty_returns_none() {
+        assert!(mean_vector(&[]).is_none());
+    }
+
+    #[test]
+    fn merge_segments_empty_input() {
+        assert!(merge_segments(Vec::new(), 0.5).is_empty());
+    }
+
+    #[test]
+    fn merge_segments_flushes_on_speaker_change_and_gap() {
+        let segs = vec![
+            seg(0.0, 1.0, 0, Some(0.8)),
+            seg(1.1, 2.0, 1, Some(0.5)), // different speaker → flush
+            seg(2.1, 3.0, 1, Some(0.7)), // same speaker, small gap → extend
+            seg(5.0, 6.0, 1, Some(1.0)), // gap above max_gap_secs → flush
+        ];
+        let merged = merge_segments(segs, 0.5);
+        assert_eq!(merged.len(), 3);
+        assert!((merged[0].confidence.expect("confidence") - 0.8).abs() < 1e-6);
+        assert!((merged[1].time.start - 1.1).abs() < 1e-9);
+        assert!((merged[1].time.end - 3.0).abs() < 1e-9);
+        assert!((merged[1].confidence.expect("confidence") - 0.6).abs() < 1e-6);
+        assert!((merged[2].confidence.expect("confidence") - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn object_pool_checkout_deref_and_return_on_drop() {
+        let pool = ObjectPool::new(vec![1u32, 2, 3]);
+        {
+            let mut guard = pool.checkout();
+            *guard += 10;
+            assert!(*guard >= 11);
+        }
+        // The mutated item is back in the pool after the guard dropped.
+        let guard = pool.checkout();
+        assert!(*guard >= 1);
+    }
+
+    #[test]
+    fn object_pool_checkout_blocks_until_item_returned() {
+        use std::sync::Arc;
+        let pool = Arc::new(ObjectPool::new(vec![7u32]));
+        let guard = pool.checkout();
+        let pool2 = Arc::clone(&pool);
+        let handle = std::thread::spawn(move || *pool2.checkout());
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(!handle.is_finished());
+        drop(guard);
+        assert_eq!(handle.join().expect("worker panicked"), 7);
+    }
+
+    #[test]
+    fn xorshift_seed_zero_remapped_and_deterministic() {
+        let mut a = XorShift64Star::new(0);
+        let mut b = XorShift64Star::new(0);
+        assert_eq!(a.next_u64(), b.next_u64());
+        let mut c = XorShift64Star::new(1);
+        assert_ne!(a.next_u64(), c.next_u64());
+    }
+
+    #[test]
+    fn xorshift_f64_and_usize_ranges() {
+        let mut rng = XorShift64Star::new(42);
+        for _ in 0..1000 {
+            let f = rng.f64();
+            assert!((0.0..1.0).contains(&f), "f64 out of range: {f}");
+        }
+        let mut rng = XorShift64Star::new(42);
+        for _ in 0..1000 {
+            assert!(rng.usize(7) < 7);
+        }
+    }
 }

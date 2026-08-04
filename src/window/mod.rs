@@ -377,6 +377,34 @@ mod tests {
         );
         assert!(WindowBuffer::try_new(4, 2).is_ok());
     }
+
+    #[test]
+    fn window_buffer_len_empty_clear_and_set_next_start() {
+        let mut buf = WindowBuffer::new(4, 2);
+        assert!(buf.is_empty());
+        assert_eq!(buf.len(), 0);
+        buf.extend(&[1.0, 2.0]);
+        assert!(!buf.is_empty());
+        assert_eq!(buf.len(), 2);
+        buf.set_next_start(100);
+        buf.extend(&[3.0, 4.0]);
+        let (start, window) = buf.try_pop().unwrap();
+        assert_eq!(start, 100);
+        assert_eq!(window, vec![1.0, 2.0, 3.0, 4.0]);
+        buf.clear();
+        assert!(buf.is_empty());
+        assert!(buf.try_pop().is_none());
+    }
+
+    #[test]
+    fn window_buffer_flush_without_padding_when_buf_exceeds_win() {
+        let mut buf = WindowBuffer::new(4, 4);
+        buf.extend(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let (start, window) = buf.flush().unwrap();
+        assert_eq!(start, 0);
+        assert_eq!(window, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        assert!(buf.is_empty());
+    }
 }
 
 #[allow(clippy::unwrap_used)]

@@ -382,4 +382,90 @@ mod tests {
         };
         let _ = SpeakerCluster::new(config);
     }
+
+    #[test]
+    fn centroids_reports_average_confidence() {
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
+        let e1 = emb(1.0, 256);
+        let mut e2 = e1.clone();
+        e2[0] += 0.001;
+        l2_normalize(&mut e2);
+
+        let (id1, _) = cluster.assign(&e1);
+        let (_, sim2) = cluster.assign(&e2);
+
+        let centroids = cluster.centroids();
+        assert_eq!(centroids.len(), 1);
+        let (id, _vector, avg_conf) = &centroids[0];
+        assert_eq!(*id, id1);
+        // First assignment seeds confidence at 1.0; the second adds sim2.
+        let expected = (1.0 + sim2) / 2.0;
+        assert!(
+            (avg_conf - expected).abs() < 1e-5,
+            "avg_conf {avg_conf} != expected {expected}"
+        );
+    }
+
+    #[test]
+    fn centroids_stay_l2_normalized_after_updates() {
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
+        let e = emb(1.0, 256);
+        for _ in 0..5 {
+            cluster.assign(&e);
+        }
+        let centroids = cluster.centroids();
+        assert_eq!(centroids.len(), 1);
+        let norm: f32 = centroids[0].1.iter().map(|v| v * v).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-4, "centroid norm was {norm}");
+    }
+
+    #[test]
+    fn assign_at_max_speakers_updates_existing_centroid() {
+        let config = ClusterConfig {
+            max_speakers: 1,
+            ..Default::default()
+        };
+        let mut cluster = SpeakerCluster::new(config);
+        let mut e1 = vec![0.0f32; 256];
+        e1[0] = 1.0;
+        let mut e2 = vec![0.0f32; 256];
+        e2[1] = 1.0;
+
+        cluster.assign(&e1);
+        // At the speaker limit, a dissimilar embedding is forced into the
+        // single existing centroid instead of creating a new speaker.
+        let (id2, _) = cluster.assign(&e2);
+        assert_eq!(id2.0, 0);
+        assert_eq!(cluster.num_speakers(), 1);
+
+        let centroids = cluster.centroids();
+        assert_eq!(centroids.len(), 1);
+        let norm: f32 = centroids[0].1.iter().map(|v| v * v).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-4, "centroid norm was {norm}");
+    }
+
+    #[test]
+    fn merge_combines_counts_and_keeps_unit_norm() {
+        let mut cluster = SpeakerCluster::new(ClusterConfig::default());
+        let mut e0 = vec![0.0f32; 256];
+        e0[0] = 1.0;
+        let mut e1 = vec![0.0f32; 256];
+        e1[1] = 1.0;
+
+        let (id0, _) = cluster.assign(&e0);
+        let (id1, _) = cluster.assign(&e1);
+        // Bump speaker 1's count so the merge exercises weighted averaging.
+        cluster.assign(&e1);
+
+        cluster.merge(id1, id0).expect("merge should succeed");
+        assert_eq!(cluster.num_speakers(), 1);
+
+        let centroids = cluster.centroids();
+        let norm: f32 = centroids[0].1.iter().map(|v| v * v).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-4, "merged centroid norm was {norm}");
+        // Average confidence: (1.0 + (1.0 + 1.0)) / 3 — the re-assignment of
+        // the identical embedding scores a similarity of 1.0.
+        let (_, _, avg_conf) = centroids[0];
+        assert!((avg_conf - 1.0).abs() < 1e-5, "avg_conf was {avg_conf}");
+    }
 }
