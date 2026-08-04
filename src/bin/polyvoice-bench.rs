@@ -867,6 +867,16 @@ mod tests {
             .join(name)
     }
 
+    /// `false` (test skips) when the gitignored model blob is absent locally.
+    fn has_model(name: &str) -> bool {
+        if repo_model(name).exists() {
+            true
+        } else {
+            eprintln!("skip: models/{name} missing");
+            false
+        }
+    }
+
     /// Synthetic DerResult: `errors` miss frames over `ref_frames`.
     fn synth_der(errors: u64, ref_frames: u64) -> DerResult {
         DerResult {
@@ -977,6 +987,9 @@ mod tests {
 
     #[test]
     fn check_model_sha256_accepts_shipped_model() {
+        if !has_model("silero_vad.onnx") {
+            return;
+        }
         let registry = ModelRegistry::default().unwrap();
         check_model_sha256(&registry, "silero_vad", &repo_model("silero_vad.onnx")).unwrap();
     }
@@ -1014,6 +1027,9 @@ mod tests {
 
     #[test]
     fn verify_model_integrity_accepts_shipped_pair() {
+        if !has_model("wespeaker_resnet34.onnx") || !has_model("silero_vad.onnx") {
+            return;
+        }
         let registry = ModelRegistry::default().unwrap();
         verify_model_integrity(
             &registry,
@@ -1026,6 +1042,9 @@ mod tests {
 
     #[test]
     fn verify_model_integrity_rejects_swapped_vad() {
+        if !has_model("wespeaker_resnet34.onnx") {
+            return;
+        }
         let registry = ModelRegistry::default().unwrap();
         // The embedder file standing in as the VAD fails the sha256 gate.
         let e = verify_model_integrity(

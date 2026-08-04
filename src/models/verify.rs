@@ -220,11 +220,16 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn checked_in_small_model_verifies_against_its_signature() {
-        // The repo ships models signed with the project key; use one as a
-        // deterministic end-to-end fixture (no minisign CLI needed).
+        // The repo ships model signatures; the gitignored blob is present
+        // only after a local model download, so skip when it is absent.
+        let model = fixture_path("ecapa_tdnn_mel.onnx");
+        if !model.exists() {
+            eprintln!("skip: models/ecapa_tdnn_mel.onnx missing");
+            return;
+        }
         let sig = fs::read_to_string(fixture_path("ecapa_tdnn_mel.onnx.minisig"))
             .expect("signature fixture must be checked in");
-        verify_minisign(&fixture_path("ecapa_tdnn_mel.onnx"), &sig)
+        verify_minisign(&model, &sig)
             .expect("checked-in model must verify against its checked-in signature");
     }
 
@@ -232,9 +237,14 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn checked_in_large_model_verifies_across_many_chunks() {
         // 6 MB spans many 64 KiB streaming reads, exercising the update loop.
+        let model = fixture_path("powerset_fp32.onnx");
+        if !model.exists() {
+            eprintln!("skip: models/powerset_fp32.onnx missing");
+            return;
+        }
         let sig = fs::read_to_string(fixture_path("powerset_fp32.onnx.minisig"))
             .expect("signature fixture must be checked in");
-        verify_minisign(&fixture_path("powerset_fp32.onnx"), &sig)
+        verify_minisign(&model, &sig)
             .expect("checked-in model must verify against its checked-in signature");
     }
 

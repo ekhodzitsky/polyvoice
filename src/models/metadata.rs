@@ -564,6 +564,10 @@ mod tests {
     #[test]
     fn load_reads_geometry_from_onnx_props() {
         let powerset = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32.onnx");
+        if !powerset.exists() {
+            eprintln!("skip: models/powerset_fp32.onnx missing");
+            return;
+        }
         let meta = load_model_config(Some(&powerset), None, &ModelConfigMeta::default());
         assert_eq!(meta.source, Some(MetaSource::OnnxProps));
         assert_eq!(meta.sample_rate, Some(16000));

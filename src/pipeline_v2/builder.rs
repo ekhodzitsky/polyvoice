@@ -458,16 +458,22 @@ mod tests {
         filename = "plda_mu.npy"
     "#;
 
-    fn registry_with_local_models() -> (tempfile::TempDir, ModelRegistry) {
+    /// `None` (test skips) when the gitignored model blobs are not present
+    /// locally — they exist only after a local model download.
+    fn registry_with_local_models() -> Option<(tempfile::TempDir, ModelRegistry)> {
         let tmp = tempfile::TempDir::new().expect("temp dir");
         for f in ["powerset_fp32.onnx", "wespeaker_resnet34.onnx"] {
-            std::fs::copy(repo_file(&format!("models/{f}")), tmp.path().join(f))
-                .expect("copy local model into cache");
+            let src = repo_file(&format!("models/{f}"));
+            if !src.exists() {
+                eprintln!("skip: models/{f} missing");
+                return None;
+            }
+            std::fs::copy(src, tmp.path().join(f)).expect("copy local model into cache");
         }
         let manifest =
             Manifest::from_toml_str(LOCAL_PROFILE_MANIFEST).expect("local manifest parses");
         let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
-        (tmp, registry)
+        Some((tmp, registry))
     }
 
     #[test]
@@ -741,7 +747,9 @@ mod tests {
 
     #[test]
     fn build_balanced_with_local_models_succeeds() {
-        let (_tmp, registry) = registry_with_local_models();
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
         let p = fresh()
             .profile(Profile::Balanced)
             .with_models_from(registry)
@@ -753,7 +761,9 @@ mod tests {
 
     #[test]
     fn build_mobile_with_local_models_succeeds() {
-        let (_tmp, registry) = registry_with_local_models();
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
         let p = fresh()
             .profile(Profile::Mobile)
             .with_models_from(registry)
@@ -765,7 +775,9 @@ mod tests {
 
     #[test]
     fn build_fast_with_local_models_succeeds() {
-        let (_tmp, registry) = registry_with_local_models();
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
         let p = fresh()
             .profile(Profile::Fast)
             .with_models_from(registry)
@@ -777,7 +789,9 @@ mod tests {
 
     #[test]
     fn build_with_nme_sc_clusterer_succeeds() {
-        let (_tmp, registry) = registry_with_local_models();
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
         let cfg = PipelineConfig {
             clusterer: ClustererKind::NmeSc,
             ..PipelineConfig::default()
@@ -793,7 +807,9 @@ mod tests {
 
     #[test]
     fn build_with_min_cluster_size_pruning_succeeds() {
-        let (_tmp, registry) = registry_with_local_models();
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
         let cfg = PipelineConfig {
             min_cluster_size: 4,
             ..PipelineConfig::default()
@@ -809,13 +825,15 @@ mod tests {
 
     #[test]
     fn build_garbage_segmenter_reports_load_error() {
+        let embedder_src = repo_file("models/wespeaker_resnet34.onnx");
+        if !embedder_src.exists() {
+            eprintln!("skip: models/wespeaker_resnet34.onnx missing");
+            return;
+        }
         let tmp = tempfile::TempDir::new().expect("temp dir");
         std::fs::write(tmp.path().join("garbage.onnx"), GARBAGE_BYTES).expect("write garbage");
-        std::fs::copy(
-            repo_file("models/wespeaker_resnet34.onnx"),
-            tmp.path().join("wespeaker_resnet34.onnx"),
-        )
-        .expect("copy embedder model");
+        std::fs::copy(embedder_src, tmp.path().join("wespeaker_resnet34.onnx"))
+            .expect("copy embedder model");
         let manifest =
             Manifest::from_toml_str(GARBAGE_SEGMENTER_MANIFEST).expect("manifest parses");
         let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
@@ -837,13 +855,15 @@ mod tests {
 
     #[test]
     fn build_garbage_embedder_reports_load_error() {
+        let segmenter_src = repo_file("models/powerset_fp32.onnx");
+        if !segmenter_src.exists() {
+            eprintln!("skip: models/powerset_fp32.onnx missing");
+            return;
+        }
         let tmp = tempfile::TempDir::new().expect("temp dir");
         std::fs::write(tmp.path().join("garbage.onnx"), GARBAGE_BYTES).expect("write garbage");
-        std::fs::copy(
-            repo_file("models/powerset_fp32.onnx"),
-            tmp.path().join("powerset_fp32.onnx"),
-        )
-        .expect("copy segmenter model");
+        std::fs::copy(segmenter_src, tmp.path().join("powerset_fp32.onnx"))
+            .expect("copy segmenter model");
         let manifest = Manifest::from_toml_str(GARBAGE_EMBEDDER_MANIFEST).expect("manifest parses");
         let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
         let err = fresh()
@@ -894,7 +914,9 @@ mod tests {
     #[cfg(feature = "vbx")]
     #[test]
     fn build_vbx_from_explicit_plda_dir_succeeds() {
-        let (_tmp, registry) = registry_with_local_models();
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
         let cfg = PipelineConfig {
             clusterer: ClustererKind::Vbx,
             vbx_plda_dir: Some(repo_file("fixtures/vbx-plda")),
@@ -916,7 +938,9 @@ mod tests {
     #[cfg(feature = "vbx")]
     #[test]
     fn build_vbx_from_env_plda_dir_succeeds() {
-        let (_tmp, registry) = registry_with_local_models();
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
         let cfg = PipelineConfig {
             clusterer: ClustererKind::Vbx,
             ..PipelineConfig::default()
@@ -943,8 +967,12 @@ mod tests {
     fn build_vbx_from_registry_cache_succeeds() {
         let tmp = tempfile::TempDir::new().expect("temp dir");
         for f in ["powerset_fp32.onnx", "wespeaker_resnet34.onnx"] {
-            std::fs::copy(repo_file(&format!("models/{f}")), tmp.path().join(f))
-                .expect("copy local model into cache");
+            let src = repo_file(&format!("models/{f}"));
+            if !src.exists() {
+                eprintln!("skip: models/{f} missing");
+                return;
+            }
+            std::fs::copy(src, tmp.path().join(f)).expect("copy local model into cache");
         }
         for entry in std::fs::read_dir(repo_file("fixtures/vbx-plda")).expect("fixture dir") {
             let entry = entry.expect("dir entry");
@@ -971,7 +999,9 @@ mod tests {
     #[cfg(feature = "vbx")]
     #[test]
     fn build_vbx_missing_plda_dir_reports_load_error() {
-        let (_tmp, registry) = registry_with_local_models();
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
         let cfg = PipelineConfig {
             clusterer: ClustererKind::Vbx,
             vbx_plda_dir: Some(repo_file("fixtures/does-not-exist")),

@@ -471,20 +471,24 @@ mod tests {
     }
 
     /// Small-window segmenter so inference stays fast; `pool_size` fans
-    /// windows out across pooled sessions.
-    fn load_test_segmenter(pool_size: usize) -> PowersetSegmenter {
+    /// windows out across pooled sessions. `None` (test skips) when the
+    /// gitignored model blob is not present locally.
+    fn load_test_segmenter(pool_size: usize) -> Option<PowersetSegmenter> {
+        let path = local_model_path();
+        if !path.exists() {
+            eprintln!("skip: models/powerset_fp32.onnx missing");
+            return None;
+        }
         let config = PowersetConfig {
             window_secs: 2.0,
             hop_secs: 1.0,
             pool_size,
             ..Default::default()
         };
-        PowersetSegmenter::with_config(
-            local_model_path(),
-            config,
-            crate::onnx::ExecutionProvider::Cpu,
+        Some(
+            PowersetSegmenter::with_config(path, config, crate::onnx::ExecutionProvider::Cpu)
+                .expect("local powerset model loads"),
         )
-        .expect("local powerset model loads")
     }
 
     #[test]
@@ -506,6 +510,10 @@ mod tests {
 
     #[test]
     fn new_loads_local_model_and_exposes_accessors() {
+        if !local_model_path().exists() {
+            eprintln!("skip: models/powerset_fp32.onnx missing");
+            return;
+        }
         let seg = PowersetSegmenter::new(local_model_path()).expect("local powerset model loads");
         assert!(seg.model_path().ends_with("powerset_fp32.onnx"));
         let cfg = seg.config();
@@ -520,7 +528,9 @@ mod tests {
 
     #[test]
     fn segment_rejects_too_short_audio() {
-        let seg = load_test_segmenter(1);
+        let Some(seg) = load_test_segmenter(1) else {
+            return;
+        };
         let err = seg.segment(&vec![0.0_f32; 100]).unwrap_err();
         match err {
             SegmentationError::AudioTooShort {
@@ -537,6 +547,10 @@ mod tests {
     #[test]
     fn segment_rejects_invalid_geometry_before_inference() {
         // Geometry is only validated in `segment()`, not at load time.
+        if !local_model_path().exists() {
+            eprintln!("skip: models/powerset_fp32.onnx missing");
+            return;
+        }
         let config = PowersetConfig {
             window_secs: 1.0,
             hop_secs: 2.0,
@@ -556,7 +570,9 @@ mod tests {
     fn segment_runs_pooled_windows_and_returns_well_formed_segments() {
         // pool_size 2 exercises the scoped-thread fan-out; 5s of audio with a
         // 2s window / 1s hop yields 5 windows, the last one partial.
-        let seg = load_test_segmenter(2);
+        let Some(seg) = load_test_segmenter(2) else {
+            return;
+        };
         let audio = sine_audio(5.0, 16_000);
         let total_secs = audio.len() as f64 / 16_000.0;
         let segments = seg.segment(&audio).expect("segment runs");
@@ -584,7 +600,9 @@ mod tests {
     #[test]
     fn segment_single_window_pool_size_zero_treated_as_one() {
         // pool_size 0 must not panic or spawn zero workers.
-        let seg = load_test_segmenter(0);
+        let Some(seg) = load_test_segmenter(0) else {
+            return;
+        };
         let audio = sine_audio(2.0, 16_000);
         let segments = seg.segment(&audio).expect("segment runs");
         for s in &segments {
