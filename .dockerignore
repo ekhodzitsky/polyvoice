@@ -10,6 +10,7 @@ benchmarks/
 benches/*
 !benches/der_ami.rs
 examples/*
+!examples/build_asnorm_cohort.rs
 tests/data/voxconverse-test/
 tests/data/ami-test-single/
 *.md

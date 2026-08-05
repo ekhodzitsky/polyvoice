@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-05
+
+### Added
+
+- **AS-norm score normalization for the AHC clusterer** (opt-in): pairwise
+  cosine scores are z-normalized against an imposter cohort before merging,
+  so one threshold generalizes across recording domains. New
+  `AsNormClusterer` decorator, `PipelineConfig::as_norm`, and
+  `--as-norm` / `--cohort` flags on `polyvoice` and `polyvoice-bench`.
+  Cohort ships as `fixtures/asnorm/cohort_voxdev.npy` (96 VoxConverse-dev
+  speakers) and via the model registry as `asnorm_cohort_voxdev`.
+- **Per-domain scoring profiles** (voxconverse / ami / callhome) carrying
+  calibrated AHC thresholds as data: `PipelineConfig::domain` and
+  `--domain-profile`. Raw-cosine and AS-norm z-score thresholds are separate
+  fields; the CLI `--threshold` default now follows the active scorer
+  (0.45 raw, 4.0 z). Measured no-collar micro DER: VoxConverse-test
+  24.14 → 22.98 (z=4), AMI-test 30.77 → 28.68 (z=5).
+- `scripts/calibrate-threshold.sh` — dev-split threshold sweep helper, with
+  and without AS-norm.
+
+### Breaking
+
+- `PipelineConfig` gained the pub fields `as_norm` and `domain`; exhaustive
+  struct literals must add them (or switch to `..Default::default()`).
+
 ### Documentation
 
 - **README rewritten around the measured numbers** (DER per corpus, 53–68×
