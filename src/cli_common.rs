@@ -26,6 +26,21 @@ pub fn parse_clusterer_kind(name: &str, threshold: f32) -> Result<ClustererKind>
     }
 }
 
+/// Effective AHC threshold from CLI-style flags. An explicit `--threshold`
+/// always wins. Without one, the default depends on the active scorer: the
+/// raw-cosine default is meaningless on the AS-norm z-scale (and vice versa),
+/// so AS-norm falls back to the calibrated VoxConverse z-threshold.
+pub fn resolve_ahc_threshold(explicit: Option<f32>, as_norm: bool) -> f32 {
+    explicit.unwrap_or(if as_norm {
+        // The VoxConverse z-threshold is calibrated and always Some.
+        crate::clusterer::domain::VOXCONVERSE
+            .as_norm_threshold
+            .unwrap_or(4.0)
+    } else {
+        crate::types::DEFAULT_AHC_THRESHOLD
+    })
+}
+
 /// Parse a `--domain-profile`-style selector into the calibrated domain
 /// profile. Profiles are data: the profile swaps threshold / cohort-size
 /// values, never code paths.
@@ -216,6 +231,29 @@ mod tests {
         }
         let err = parse_domain_profile("switchboard").err().unwrap();
         assert!(format!("{err:#}").contains("voxconverse|ami|callhome"));
+    }
+
+    #[test]
+    fn ahc_threshold_resolution_picks_the_active_scorers_scale() {
+        // Explicit value always wins, on either scale.
+        assert_eq!(resolve_ahc_threshold(Some(0.7), false), 0.7);
+        assert_eq!(resolve_ahc_threshold(Some(6.0), true), 6.0);
+        // Defaults track the scorer: raw cosine vs AS-norm z-score.
+        assert_eq!(
+            resolve_ahc_threshold(None, false),
+            crate::types::DEFAULT_AHC_THRESHOLD
+        );
+        let z = resolve_ahc_threshold(None, true);
+        assert!(
+            z > 1.0,
+            "z-scale default must sit above the raw-cosine range, got {z}"
+        );
+        assert_eq!(
+            z,
+            crate::clusterer::domain::VOXCONVERSE
+                .as_norm_threshold
+                .unwrap()
+        );
     }
 
     #[test]

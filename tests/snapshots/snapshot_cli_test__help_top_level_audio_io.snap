@@ -28,7 +28,7 @@ Options:
       --models-cache <MODELS_CACHE>
           
       --threshold <THRESHOLD>
-          [default: 0.45]
+          AHC merge threshold on the active scorer's scale: raw cosine (default 0.45), or AS-norm z-score when `--as-norm` is set (default 4.0). `--domain-profile` overrides this with its calibrated value
       --speakers <SPEAKERS>
           Target speaker count (caps clustering at N speakers)
       --max-speakers <MAX_SPEAKERS>

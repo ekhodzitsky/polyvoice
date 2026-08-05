@@ -66,8 +66,11 @@ struct DiarizeArgs {
     format: OutputFormat,
     #[arg(long)]
     models_cache: Option<PathBuf>,
-    #[arg(long, default_value_t = polyvoice::DEFAULT_AHC_THRESHOLD)]
-    threshold: f32,
+    /// AHC merge threshold on the active scorer's scale: raw cosine (default
+    /// 0.45), or AS-norm z-score when `--as-norm` is set (default 4.0).
+    /// `--domain-profile` overrides this with its calibrated value.
+    #[arg(long)]
+    threshold: Option<f32>,
     /// Target speaker count (caps clustering at N speakers).
     #[arg(long)]
     speakers: Option<usize>,
@@ -352,7 +355,7 @@ fn run_legacy_pipeline(
     wav: &Path,
     profile: Profile,
     registry: &ModelRegistry,
-    threshold: f32,
+    threshold: Option<f32>,
     max_clusters: Option<usize>,
     latency: Option<polyvoice::streaming::LatencyPreset>,
     quiet: bool,
@@ -369,7 +372,9 @@ fn run_legacy_pipeline(
         512,
     )?;
 
-    let mut config = cli_common::legacy_diarization_config(threshold);
+    let mut config = cli_common::legacy_diarization_config(
+        threshold.unwrap_or(polyvoice::DEFAULT_AHC_THRESHOLD),
+    );
     if let Some(n) = max_clusters {
         config.cluster.max_speakers = n;
     }
@@ -418,7 +423,7 @@ fn run_v2_pipeline(
     wav: &Path,
     profile: Profile,
     registry: &ModelRegistry,
-    threshold: f32,
+    threshold: Option<f32>,
     max_clusters: Option<usize>,
     clusterer: &str,
     vbx_plda_dir: Option<PathBuf>,
@@ -429,7 +434,10 @@ fn run_v2_pipeline(
     execution_provider: &str,
     quiet: bool,
 ) -> Result<DiarizationResult> {
-    let clusterer_kind = cli_common::parse_clusterer_kind(clusterer, threshold)?;
+    let clusterer_kind = cli_common::parse_clusterer_kind(
+        clusterer,
+        cli_common::resolve_ahc_threshold(threshold, as_norm),
+    )?;
     if as_norm
         && !matches!(
             clusterer_kind,
@@ -719,7 +727,7 @@ mod unit_tests {
             output: None,
             format: OutputFormat::Rttm,
             models_cache: None,
-            threshold: polyvoice::DEFAULT_AHC_THRESHOLD,
+            threshold: Some(polyvoice::DEFAULT_AHC_THRESHOLD),
             speakers: None,
             max_speakers: None,
             quiet: true,

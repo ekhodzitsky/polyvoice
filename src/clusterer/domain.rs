@@ -10,39 +10,48 @@
 pub struct DomainProfile {
     /// Stable lowercase name (CLI value): `voxconverse`, `ami`, `callhome`.
     pub name: &'static str,
-    /// Merge threshold for fixed-threshold AHC, on the active scorer's scale
-    /// (raw cosine in `[-1, 1]`, or AS-norm z-scores when AS-norm is enabled).
+    /// Merge threshold for fixed-threshold AHC on raw cosine scores in
+    /// `[-1, 1]`.
     pub ahc_threshold: f32,
+    /// Merge threshold on the AS-norm z-score scale, used only when AS-norm
+    /// is enabled. `None` = not calibrated for this domain.
+    pub as_norm_threshold: Option<f32>,
     /// Cohort size (top-N) for AS-norm normalization stats in this domain.
     pub as_norm_top_n: usize,
 }
 
-/// VoxConverse: the shipped default. The threshold matches the pipeline's
-/// long-standing AHC default; AS-norm z-scale thresholds are calibrated
-/// separately before being frozen here.
+/// VoxConverse: the shipped default. The raw threshold matches the pipeline's
+/// long-standing AHC default. The z-threshold was calibrated on a 30-file
+/// VoxConverse-dev sweep (raw best 10.85% DER @ 0.45; z=3 10.31%, z=4 10.40%)
+/// and confirmed on VoxConverse-test (z=4: 22.98% vs raw 24.14% no-collar
+/// micro DER).
 pub const VOXCONVERSE: DomainProfile = DomainProfile {
     name: "voxconverse",
     ahc_threshold: 0.5,
+    as_norm_threshold: Some(4.0),
     as_norm_top_n: 100,
 };
 
 /// AMI (meetings, distant microphones).
-// PLACEHOLDER: not yet calibrated — must be tuned on the AMI dev split before
-// being trusted. Distinct from the VoxConverse value so profile selection is
-// observable; do not treat 0.55 as a tuned number.
+// PLACEHOLDER raw threshold: no AMI dev split is available locally, so the
+// raw value is not dev-calibrated. The z-threshold (z=5: 28.68% vs raw 30.77%
+// no-collar micro DER) was measured on ami-test and must be re-derived from a
+// proper dev split before being trusted — treat it as directional only.
 pub const AMI: DomainProfile = DomainProfile {
     name: "ami",
     ahc_threshold: 0.55,
+    as_norm_threshold: Some(5.0),
     as_norm_top_n: 100,
 };
 
 /// CALLHOME (telephone speech).
-// PLACEHOLDER: not yet calibrated — must be tuned on the CALLHOME dev split
-// before being trusted. Distinct from the other profiles so profile selection
-// is observable; do not treat 0.45 as a tuned number.
+// PLACEHOLDER: no CALLHOME data is available locally at all — neither value
+// is calibrated. Distinct from the other profiles so profile selection is
+// observable; do not treat these as tuned numbers.
 pub const CALLHOME: DomainProfile = DomainProfile {
     name: "callhome",
     ahc_threshold: 0.45,
+    as_norm_threshold: None,
     as_norm_top_n: 100,
 };
 

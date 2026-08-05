@@ -41,8 +41,11 @@ struct Args {
     skip_overlap: bool,
     #[arg(long)]
     max_files: Option<usize>,
-    #[arg(long, default_value_t = polyvoice::DEFAULT_AHC_THRESHOLD)]
-    threshold: f32,
+    /// AHC merge threshold on the active scorer's scale: raw cosine (default
+    /// 0.45), or AS-norm z-score when `--as-norm` is set (default 4.0).
+    /// `--domain-profile` overrides this with its calibrated value.
+    #[arg(long)]
+    threshold: Option<f32>,
     /// Which pipeline to benchmark: `v2` (powerset segmentation + embeddings +
     /// clusterer + overlap resegmentation — the shipped CLI default) or
     /// `legacy` (Silero VAD + sliding-window embeddings + AHC).
@@ -340,7 +343,10 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
 
     let (runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
         "v2" => {
-            let clusterer = cli_common::parse_clusterer_kind(&args.clusterer, args.threshold)?;
+            let clusterer = cli_common::parse_clusterer_kind(
+                &args.clusterer,
+                cli_common::resolve_ahc_threshold(args.threshold, args.as_norm),
+            )?;
             if args.as_norm && !matches!(clusterer, ClustererKind::Ahc { .. }) {
                 anyhow::bail!("--as-norm applies to the AHC clusterer only (pass --clusterer ahc)");
             }
@@ -419,7 +425,9 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
             // sha256 disagrees with the manifest (swapped/corrupted/non-FP32).
             verify_model_integrity(&registry, profile, &models.embedder_path, &vad_path)?;
 
-            let mut config = cli_common::legacy_diarization_config(args.threshold);
+            let mut config = cli_common::legacy_diarization_config(
+                args.threshold.unwrap_or(polyvoice::DEFAULT_AHC_THRESHOLD),
+            );
             config.cluster.min_cluster_size = args.min_cluster_size.unwrap_or(1);
             config.cluster.min_cluster_secs = args.min_cluster_secs.unwrap_or(0.0);
             let pipeline = LegacyPipeline::new(config, VadConfig::default());

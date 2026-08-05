@@ -176,12 +176,19 @@ use crate::resegmentation::OverlapResegmenter;
 /// Resolve the effective clusterer kind: a per-domain profile replaces the
 /// configured AHC merge threshold with the profile's calibrated value.
 /// Profiles are data, so this stays a pure lookup; other clusterer kinds are
-/// unaffected.
+/// unaffected. The raw and AS-norm z scales differ, so the profile picks the
+/// field matching the active scorer; a profile without a calibrated
+/// z-threshold keeps the configured threshold unchanged.
 pub(crate) fn resolve_clusterer_kind(config: &PipelineConfig) -> ClustererKind {
     match (config.clusterer, config.domain) {
-        (ClustererKind::Ahc { .. }, Some(domain)) => ClustererKind::Ahc {
-            threshold: domain.ahc_threshold,
-        },
+        (ClustererKind::Ahc { threshold }, Some(domain)) => {
+            let threshold = if config.as_norm.is_some() {
+                domain.as_norm_threshold.unwrap_or(threshold)
+            } else {
+                domain.ahc_threshold
+            };
+            ClustererKind::Ahc { threshold }
+        }
         (kind, _) => kind,
     }
 }
@@ -1159,6 +1166,45 @@ mod tests {
         assert_eq!(
             resolve(ClustererKind::NmeSc, Some(domain::AMI)),
             ClustererKind::NmeSc
+        );
+    }
+
+    #[test]
+    fn resolve_clusterer_kind_picks_z_threshold_when_as_norm_enabled() {
+        use crate::clusterer::{AsNormConfig, CohortSource, domain};
+
+        let mut config = PipelineConfig {
+            clusterer: ClustererKind::Ahc { threshold: 0.5 },
+            domain: Some(domain::VOXCONVERSE),
+            as_norm: Some(AsNormConfig {
+                top_n: 100,
+                cohort: CohortSource::Path(std::path::PathBuf::from("unused")),
+            }),
+            ..PipelineConfig::default()
+        };
+        assert_eq!(
+            resolve_clusterer_kind(&config),
+            ClustererKind::Ahc {
+                threshold: domain::VOXCONVERSE.as_norm_threshold.unwrap()
+            },
+            "AS-norm runs on z-scores, so the profile's z-threshold applies"
+        );
+
+        // A profile without a calibrated z-threshold keeps the configured value.
+        config.domain = Some(domain::CALLHOME);
+        assert_eq!(
+            resolve_clusterer_kind(&config),
+            ClustererKind::Ahc { threshold: 0.5 }
+        );
+
+        // Same domain without AS-norm resolves to the raw-cosine threshold.
+        config.as_norm = None;
+        config.domain = Some(domain::AMI);
+        assert_eq!(
+            resolve_clusterer_kind(&config),
+            ClustererKind::Ahc {
+                threshold: domain::AMI.ahc_threshold
+            }
         );
     }
 
