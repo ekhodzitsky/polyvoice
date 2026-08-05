@@ -103,111 +103,26 @@ fn l2_normalize_rows(embeddings: &ArrayView2<f64>) -> Array2<f64> {
     out
 }
 
-// ---- Minimal NPY v1.0 reader (C-order, '<f4' or '<f8') ----
-// Avoids an ndarray-npy dependency (which pins an older ndarray major) by parsing
-// the small, fixed NPY format we control. Supports 1-D and 2-D little-endian
-// float arrays in C (row-major) order — exactly what the offline PLDA dump emits.
+// ---- NPY parameter loading ----
+// The NPY parsing itself lives in `crate::utils::npy` (shared with the AS-norm
+// cohort loader); these wrappers only reshape into ndarray and translate
+// errors into the public `PldaError` surface.
 
-fn read_file(path: &Path) -> Result<Vec<u8>, PldaError> {
-    std::fs::read(path).map_err(|e| PldaError::Io {
-        path: path.display().to_string(),
-        detail: e.to_string(),
-    })
-}
-
-/// Parse an NPY header, returning `(dtype, shape, data_offset)`.
-fn parse_npy_header(bytes: &[u8], path: &Path) -> Result<(String, Vec<usize>, usize), PldaError> {
-    let bad = |detail: &str| PldaError::Io {
-        path: path.display().to_string(),
-        detail: detail.to_string(),
-    };
-    if bytes.len() < 10 || &bytes[0..6] != b"\x93NUMPY" {
-        return Err(bad("not an NPY file"));
-    }
-    let major = bytes[6];
-    // v1.0: 2-byte header len; v2.0+: 4-byte. We emit v1.0 but accept both.
-    let (header_len, header_start) = if major >= 2 {
-        let l = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize;
-        (l, 12usize)
-    } else {
-        let l = u16::from_le_bytes([bytes[8], bytes[9]]) as usize;
-        (l, 10usize)
-    };
-    let header = std::str::from_utf8(
-        bytes
-            .get(header_start..header_start + header_len)
-            .ok_or_else(|| bad("truncated NPY header"))?,
-    )
-    .map_err(|_| bad("non-utf8 NPY header"))?;
-
-    let descr = extract_between(header, "'descr':", ',')
-        .or_else(|| extract_between(header, "\"descr\":", ','))
-        .ok_or_else(|| bad("no descr in NPY header"))?
-        .trim()
-        .trim_matches(['\'', '"', ' '])
-        .to_string();
-
-    if header.contains("'fortran_order': True") || header.contains("\"fortran_order\": True") {
-        return Err(bad("fortran-order NPY unsupported"));
-    }
-
-    let shape_str = extract_between(header, "'shape':", ')')
-        .or_else(|| extract_between(header, "\"shape\":", ')'))
-        .ok_or_else(|| bad("no shape in NPY header"))?;
-    let shape: Vec<usize> = shape_str
-        .trim_start_matches([' ', '('])
-        .split(',')
-        .filter_map(|s| {
-            let t = s.trim();
-            if t.is_empty() { None } else { t.parse().ok() }
-        })
-        .collect();
-
-    Ok((descr, shape, header_start + header_len))
-}
-
-/// Slice of `s` after `key` up to (not including) the next `end` char.
-fn extract_between(s: &str, key: &str, end: char) -> Option<String> {
-    let start = s.find(key)? + key.len();
-    let rest = &s[start..];
-    let stop = rest.find(end)?;
-    Some(rest[..stop].to_string())
-}
-
-fn read_npy_flat(path: &Path) -> Result<(Vec<f64>, Vec<usize>), PldaError> {
-    let bytes = read_file(path)?;
-    let (descr, shape, offset) = parse_npy_header(&bytes, path)?;
-    let data = &bytes[offset..];
-    let values: Vec<f64> = match descr.as_str() {
-        "<f8" => data
-            .chunks_exact(8)
-            .map(|c| f64::from_le_bytes(c.try_into().unwrap_or([0; 8])))
-            .collect(),
-        "<f4" => data
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes(c.try_into().unwrap_or([0; 4])) as f64)
-            .collect(),
-        "<i8" => data
-            .chunks_exact(8)
-            .map(|c| i64::from_le_bytes(c.try_into().unwrap_or([0; 8])) as f64)
-            .collect(),
-        other => {
-            return Err(PldaError::Io {
-                path: path.display().to_string(),
-                detail: format!("unsupported NPY dtype {other} (expected <f4, <f8 or <i8)"),
-            });
+impl From<crate::utils::npy::NpyError> for PldaError {
+    fn from(e: crate::utils::npy::NpyError) -> Self {
+        match e {
+            crate::utils::npy::NpyError::Io { path, detail } => PldaError::Io { path, detail },
         }
-    };
-    Ok((values, shape))
+    }
 }
 
 fn read_npy_1d(path: &Path) -> Result<Array1<f64>, PldaError> {
-    let (values, _shape) = read_npy_flat(path)?;
+    let (values, _shape) = crate::utils::npy::read_npy_flat(path)?;
     Ok(Array1::from(values))
 }
 
 fn read_npy_2d(path: &Path) -> Result<Array2<f64>, PldaError> {
-    let (values, shape) = read_npy_flat(path)?;
+    let (values, shape) = crate::utils::npy::read_npy_flat(path)?;
     if shape.len() != 2 {
         return Err(PldaError::Shape {
             name: "matrix",
@@ -336,10 +251,6 @@ mod tests {
         values.iter().flat_map(|v| v.to_le_bytes()).collect()
     }
 
-    fn f4_bytes(values: &[f32]) -> Vec<u8> {
-        values.iter().flat_map(|v| v.to_le_bytes()).collect()
-    }
-
     #[test]
     fn fixture_model_loads_and_transforms() {
         let plda = PldaModel::from_dir(&fixture_dir()).expect("load fixture plda");
@@ -379,125 +290,6 @@ mod tests {
         assert!((out[[0, 0]] - 0.6).abs() < 1e-12);
         // Zero row has no direction; it is left as zeros rather than NaN.
         assert!(out.row(1).iter().all(|&v| v == 0.0));
-    }
-
-    #[test]
-    fn read_npy_1d_f8_roundtrip() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = write_npy_v1(tmp.path(), "a.npy", "<f8", &[2], &f8_bytes(&[1.5, -2.25]));
-        let arr = read_npy_1d(&path).unwrap();
-        assert_eq!(arr.as_slice().unwrap(), &[1.5, -2.25]);
-    }
-
-    #[test]
-    fn read_npy_2d_f4_roundtrip() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = write_npy_v1(
-            tmp.path(),
-            "m.npy",
-            "<f4",
-            &[2, 2],
-            &f4_bytes(&[1.0, 2.0, 3.0, 4.0]),
-        );
-        let m = read_npy_2d(&path).unwrap();
-        assert_eq!(m.dim(), (2, 2));
-        assert!((m[[1, 0]] - 3.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn read_npy_i8_widens_to_f64() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let data: Vec<u8> = [1i64, -2, 3].iter().flat_map(|v| v.to_le_bytes()).collect();
-        let path = write_npy_v1(tmp.path(), "i.npy", "<i8", &[3], &data);
-        let arr = read_npy_1d(&path).unwrap();
-        assert_eq!(arr.as_slice().unwrap(), &[1.0, -2.0, 3.0]);
-    }
-
-    #[test]
-    fn read_npy_accepts_v2_header() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let header = "{'descr': '<f8', 'fortran_order': False, 'shape': (1,), }";
-        let mut bytes = b"\x93NUMPY\x02\x00".to_vec();
-        bytes.extend_from_slice(&(header.len() as u32).to_le_bytes());
-        bytes.extend_from_slice(header.as_bytes());
-        bytes.extend_from_slice(&f8_bytes(&[42.0]));
-        let path = tmp.path().join("v2.npy");
-        std::fs::write(&path, &bytes).unwrap();
-        let arr = read_npy_1d(&path).unwrap();
-        assert_eq!(arr.as_slice().unwrap(), &[42.0]);
-    }
-
-    #[test]
-    fn read_npy_rejects_bad_magic_and_short_files() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let short = tmp.path().join("short.npy");
-        std::fs::write(&short, b"\x93NUM").unwrap();
-        let err = read_npy_1d(&short).unwrap_err();
-        assert!(format!("{err}").contains("not an NPY file"), "{err}");
-
-        let bad = tmp.path().join("bad.npy");
-        std::fs::write(&bad, b"NOTNUMPY!!rest of the file").unwrap();
-        let err = read_npy_1d(&bad).unwrap_err();
-        assert!(format!("{err}").contains("not an NPY file"), "{err}");
-    }
-
-    #[test]
-    fn read_npy_rejects_truncated_header() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = tmp.path().join("trunc.npy");
-        let mut bytes = b"\x93NUMPY\x01\x00".to_vec();
-        bytes.extend_from_slice(&500u16.to_le_bytes()); // claims a 500-byte header
-        bytes.extend_from_slice(b"{'descr': '<f8'"); // but the file ends early
-        std::fs::write(&path, &bytes).unwrap();
-        let err = read_npy_1d(&path).unwrap_err();
-        assert!(format!("{err}").contains("truncated NPY header"), "{err}");
-    }
-
-    #[test]
-    fn read_npy_rejects_fortran_order() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let header = "{'descr': '<f8', 'fortran_order': True, 'shape': (1,), }";
-        let mut bytes = b"\x93NUMPY\x01\x00".to_vec();
-        bytes.extend_from_slice(&(header.len() as u16).to_le_bytes());
-        bytes.extend_from_slice(header.as_bytes());
-        bytes.extend_from_slice(&f8_bytes(&[1.0]));
-        let path = tmp.path().join("f.npy");
-        std::fs::write(&path, &bytes).unwrap();
-        let err = read_npy_1d(&path).unwrap_err();
-        assert!(format!("{err}").contains("fortran-order"), "{err}");
-    }
-
-    #[test]
-    fn read_npy_rejects_unsupported_dtype() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = write_npy_v1(tmp.path(), "u.npy", "<u1", &[2], &[1, 2]);
-        let err = read_npy_1d(&path).unwrap_err();
-        let msg = format!("{err}");
-        assert!(msg.contains("unsupported NPY dtype <u1"), "{msg}");
-    }
-
-    #[test]
-    fn read_npy_rejects_headers_missing_fields() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let no_descr = "{'fortran_order': False, 'shape': (1,), }";
-        let mut bytes = b"\x93NUMPY\x01\x00".to_vec();
-        bytes.extend_from_slice(&(no_descr.len() as u16).to_le_bytes());
-        bytes.extend_from_slice(no_descr.as_bytes());
-        bytes.extend_from_slice(&f8_bytes(&[1.0]));
-        let path = tmp.path().join("nod.npy");
-        std::fs::write(&path, &bytes).unwrap();
-        let err = read_npy_1d(&path).unwrap_err();
-        assert!(format!("{err}").contains("no descr"), "{err}");
-
-        let no_shape = "{'descr': '<f8', 'fortran_order': False, }";
-        let mut bytes = b"\x93NUMPY\x01\x00".to_vec();
-        bytes.extend_from_slice(&(no_shape.len() as u16).to_le_bytes());
-        bytes.extend_from_slice(no_shape.as_bytes());
-        bytes.extend_from_slice(&f8_bytes(&[1.0]));
-        let path = tmp.path().join("nos.npy");
-        std::fs::write(&path, &bytes).unwrap();
-        let err = read_npy_1d(&path).unwrap_err();
-        assert!(format!("{err}").contains("no shape"), "{err}");
     }
 
     #[test]
@@ -543,27 +335,10 @@ mod tests {
     }
 
     #[test]
-    fn read_npy_missing_file_reports_path() {
-        let path = std::path::Path::new("/no/such/dir/plda_mean1.npy");
-        let err = read_npy_1d(path).unwrap_err();
-        let msg = format!("{err}");
-        assert!(msg.contains("/no/such/dir/plda_mean1.npy"), "{msg}");
-    }
-
-    #[test]
     fn from_dir_reports_first_missing_param() {
         let tmp = tempfile::TempDir::new().unwrap();
         let err = PldaModel::from_dir(tmp.path()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("plda_mean1.npy"), "{msg}");
-    }
-
-    #[test]
-    fn extract_between_slices_between_key_and_end() {
-        let h = "{'shape': (2, 3), }";
-        assert_eq!(extract_between(h, "'shape':", ')').unwrap(), " (2, 3");
-        assert!(extract_between(h, "'missing':", ')').is_none());
-        // Key present but the end char never comes.
-        assert!(extract_between("abc key: value", "key:", '!').is_none());
     }
 }

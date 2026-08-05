@@ -42,6 +42,17 @@ pub struct PipelineConfig {
     /// hysteresis + min-duration smoothing) instead of per-frame argmax.
     /// `None` keeps the shipped argmax behavior.
     pub binarization: Option<crate::segmentation::BinarizationConfig>,
+    /// Optional AS-norm score normalization for the fixed-threshold AHC
+    /// clusterer: pairwise cosine scores are z-normalized against an imposter
+    /// cohort before merging, so one threshold generalizes across recording
+    /// domains. `None` keeps raw cosine scoring. Only applies to
+    /// `ClustererKind::Ahc`; other clusterers ignore it.
+    pub as_norm: Option<crate::clusterer::AsNormConfig>,
+    /// Optional per-domain scoring profile. With `ClustererKind::Ahc` the
+    /// profile's calibrated threshold replaces the configured one at build
+    /// time; `None` keeps the configured threshold. Profiles are data (see
+    /// [`crate::clusterer::domain`]) — never code branching.
+    pub domain: Option<crate::clusterer::DomainProfile>,
 }
 
 impl Default for PipelineConfig {
@@ -66,6 +77,8 @@ impl Default for PipelineConfig {
             vbx_plda_dir: None,
             embed_window_secs: None,
             binarization: None,
+            as_norm: None,
+            domain: None,
         }
     }
 }
@@ -117,6 +130,8 @@ mod tests {
         assert!((cfg.max_gap_secs - 0.5).abs() < f32::EPSILON);
         assert!(cfg.embedder_pool_size >= 1);
         assert!(cfg.embedder_pool_size <= 4);
+        assert!(cfg.as_norm.is_none());
+        assert!(cfg.domain.is_none());
     }
 
     #[test]

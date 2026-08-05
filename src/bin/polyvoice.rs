@@ -101,6 +101,22 @@ struct DiarizeArgs {
     /// `--clusterer vbx` (the default).
     #[arg(long)]
     vbx_plda_dir: Option<PathBuf>,
+    /// AS-norm score normalization for the AHC clusterer: pairwise cosine
+    /// scores are z-normalized against an imposter cohort before merging, so
+    /// one threshold generalizes across recording domains. Requires
+    /// `--clusterer ahc`. Ignored with `--legacy`.
+    #[arg(long)]
+    as_norm: bool,
+    /// Imposter cohort for --as-norm: (N, 256) '<f4' .npy of speaker
+    /// embeddings. Omitted = model-registry cohort, with the
+    /// POLYVOICE_ASNORM_COHORT env override.
+    #[arg(long)]
+    cohort: Option<PathBuf>,
+    /// Per-domain scoring profile: voxconverse | ami | callhome. Overrides
+    /// --threshold for the AHC clusterer with the profile's calibrated
+    /// threshold and sets the AS-norm cohort size. Ignored with `--legacy`.
+    #[arg(long)]
+    domain_profile: Option<String>,
     /// v2 dense embedding window in seconds (e.g. `1.5`): split segments into
     /// overlapping sub-windows for more embeddings per speaker — lower confusion
     /// on clean audio at the cost of more embedder calls. Omit for one
@@ -187,6 +203,9 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         v2: _v2_deprecated,
         clusterer,
         vbx_plda_dir,
+        as_norm,
+        cohort,
+        domain_profile,
         embed_window,
         execution_provider,
         exclusive,
@@ -259,6 +278,9 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
             max_clusters,
             &clusterer,
             vbx_plda_dir,
+            as_norm,
+            cohort,
+            domain_profile,
             // Streaming latency presets map onto v2 dense embed windows when the
             // user did not pass an explicit --embed-window.
             embed_window.or_else(|| latency.map(|p| p.params().window_secs)),
@@ -400,16 +422,35 @@ fn run_v2_pipeline(
     max_clusters: Option<usize>,
     clusterer: &str,
     vbx_plda_dir: Option<PathBuf>,
+    as_norm: bool,
+    cohort: Option<PathBuf>,
+    domain_profile: Option<String>,
     embed_window: Option<f32>,
     execution_provider: &str,
     quiet: bool,
 ) -> Result<DiarizationResult> {
     let clusterer_kind = cli_common::parse_clusterer_kind(clusterer, threshold)?;
+    if as_norm
+        && !matches!(
+            clusterer_kind,
+            polyvoice::pipeline_v2::ClustererKind::Ahc { .. }
+        )
+    {
+        anyhow::bail!("--as-norm applies to the AHC clusterer only (pass --clusterer ahc)");
+    }
+    let domain = domain_profile
+        .as_deref()
+        .map(cli_common::parse_domain_profile)
+        .transpose()?;
+    let as_norm_config =
+        cli_common::resolve_as_norm_config(as_norm, cohort, domain.map(|d| d.as_norm_top_n))?;
     let ep = cli_common::parse_execution_provider(execution_provider)?;
     let mut config = PipelineConfig {
         profile,
         clusterer: clusterer_kind,
         vbx_plda_dir,
+        as_norm: as_norm_config,
+        domain,
         embed_window_secs: embed_window,
         execution_provider: ep,
         ..PipelineConfig::default()
@@ -687,6 +728,9 @@ mod unit_tests {
             v2: false,
             clusterer: "vbx".to_string(),
             vbx_plda_dir: None,
+            as_norm: false,
+            cohort: None,
+            domain_profile: None,
             embed_window: None,
             execution_provider: "auto".to_string(),
             exclusive: false,

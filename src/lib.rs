@@ -116,7 +116,8 @@ pub mod clusterer;
 pub use clusterer::KMeansClusterer;
 #[cfg(feature = "clusterer")]
 pub use clusterer::{
-    AhcClusterer, Clusterer, ClustererError, KmeansClusterer, MinClusterSizeClusterer,
+    AhcClusterer, AsNormClusterer, Clusterer, ClustererError, KmeansClusterer,
+    MinClusterSizeClusterer,
 };
 
 #[cfg(all(feature = "clusterer", feature = "spectral"))]

@@ -251,6 +251,12 @@ name = "polyvoice-mcp"
 path = "src/bin/polyvoice-mcp.rs"
 required-features = ["mcp"]
 
+# Cohort generator for the AS-norm imposter fixture: needs the ONNX embedder
+# stack, so it is skipped in feature-free builds (CI clippy --all-targets).
+[[example]]
+name = "build_asnorm_cohort"
+required-features = ["cli"]
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(kani)'] }
 

@@ -13,7 +13,7 @@ use polyvoice::der::{
 };
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::LegacyPipeline;
-use polyvoice::pipeline_v2::{Pipeline as V2Pipeline, PipelineConfig, StageTimings};
+use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig, StageTimings};
 use polyvoice::types::{DiarizationResult, Profile, SampleRate, TimeRange};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
@@ -90,6 +90,22 @@ struct Args {
     /// v2 binarization: bridge gaps shorter than this many seconds.
     #[arg(long)]
     binarize_min_off: Option<f32>,
+    /// AS-norm score normalization for the AHC clusterer (v2 only; requires
+    /// --clusterer ahc): pairwise cosine scores are z-normalized against an
+    /// imposter cohort before merging, so one threshold generalizes across
+    /// domains.
+    #[arg(long)]
+    as_norm: bool,
+    /// Imposter cohort for --as-norm: (N, 256) '<f4' .npy of speaker
+    /// embeddings. Omitted = model-registry cohort (id asnorm_cohort_voxdev),
+    /// with the POLYVOICE_ASNORM_COHORT env override.
+    #[arg(long)]
+    cohort: Option<PathBuf>,
+    /// Per-domain scoring profile: voxconverse | ami | callhome. Overrides
+    /// --threshold for the AHC clusterer with the profile's calibrated
+    /// threshold and sets the AS-norm cohort size. v2 only.
+    #[arg(long)]
+    domain_profile: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -325,6 +341,19 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
     let (runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
         "v2" => {
             let clusterer = cli_common::parse_clusterer_kind(&args.clusterer, args.threshold)?;
+            if args.as_norm && !matches!(clusterer, ClustererKind::Ahc { .. }) {
+                anyhow::bail!("--as-norm applies to the AHC clusterer only (pass --clusterer ahc)");
+            }
+            let domain = args
+                .domain_profile
+                .as_deref()
+                .map(cli_common::parse_domain_profile)
+                .transpose()?;
+            let as_norm = cli_common::resolve_as_norm_config(
+                args.as_norm,
+                args.cohort.clone(),
+                domain.map(|d| d.as_norm_top_n),
+            )?;
             let binarization = if args.binarize_onset.is_some()
                 || args.binarize_offset.is_some()
                 || args.binarize_min_on.is_some()
@@ -346,6 +375,8 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
                 embed_window_secs: args.embed_window,
                 execution_provider: resolved_ep,
                 binarization,
+                as_norm,
+                domain,
                 ..PipelineConfig::default()
             };
             if let Some(mcs) = args.min_cluster_size {
@@ -370,6 +401,9 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
         other => {
             if other != "legacy" {
                 anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')");
+            }
+            if args.as_norm || args.domain_profile.is_some() {
+                anyhow::bail!("--as-norm/--domain-profile apply to --pipeline v2 only");
             }
             let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
             let stack = cli_common::load_legacy_stack(

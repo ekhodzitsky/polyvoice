@@ -26,6 +26,45 @@ pub fn parse_clusterer_kind(name: &str, threshold: f32) -> Result<ClustererKind>
     }
 }
 
+/// Parse a `--domain-profile`-style selector into the calibrated domain
+/// profile. Profiles are data: the profile swaps threshold / cohort-size
+/// values, never code paths.
+pub fn parse_domain_profile(name: &str) -> Result<crate::clusterer::DomainProfile> {
+    crate::clusterer::domain_profile(name).ok_or_else(|| {
+        anyhow::anyhow!("unknown --domain-profile '{name}' (expected voxconverse|ami|callhome)")
+    })
+}
+
+/// Assemble the v2 AS-norm config from CLI-style flags. Without an explicit
+/// cohort file the registry cohort model id is used (resolved at pipeline
+/// build time, with the `POLYVOICE_ASNORM_COHORT` env override). `top_n`
+/// falls back to the selected domain profile's cohort size, then the built-in
+/// default. An explicit cohort path must exist — fail fast here, before any
+/// model download.
+pub fn resolve_as_norm_config(
+    enabled: bool,
+    cohort: Option<PathBuf>,
+    top_n: Option<usize>,
+) -> Result<Option<crate::clusterer::AsNormConfig>> {
+    if !enabled {
+        return Ok(None);
+    }
+    use crate::clusterer::CohortSource;
+    let source = match cohort {
+        Some(p) => {
+            if !p.is_file() {
+                anyhow::bail!("--cohort file not found: {}", p.display());
+            }
+            CohortSource::Path(p)
+        }
+        None => CohortSource::ModelId(crate::clusterer::DEFAULT_ASNORM_COHORT_MODEL_ID.to_owned()),
+    };
+    Ok(Some(crate::clusterer::AsNormConfig {
+        top_n: top_n.unwrap_or(crate::clusterer::DEFAULT_AS_NORM_TOP_N),
+        cohort: source,
+    }))
+}
+
 /// Parse an `--execution-provider`-style selector. `auto` resolves to the best
 /// provider for the current target; providers not compiled into the build warn
 /// and fall back to CPU at session-build time.
@@ -167,6 +206,62 @@ mod tests {
             other => panic!("expected Ahc, got {other:?}"),
         }
         assert!(parse_clusterer_kind("nope", 0.7).is_err());
+    }
+
+    #[test]
+    fn domain_profile_parses_known_names() {
+        for name in ["voxconverse", "ami", "callhome"] {
+            let p = parse_domain_profile(name).unwrap();
+            assert_eq!(p.name, name);
+        }
+        let err = parse_domain_profile("switchboard").err().unwrap();
+        assert!(format!("{err:#}").contains("voxconverse|ami|callhome"));
+    }
+
+    #[test]
+    fn as_norm_config_disabled_is_none() {
+        assert!(resolve_as_norm_config(false, None, None).unwrap().is_none());
+        // Even a bogus cohort path is ignored when AS-norm is off.
+        assert!(
+            resolve_as_norm_config(false, Some(PathBuf::from("/no/such.npy")), None)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn as_norm_config_requires_existing_cohort_file() {
+        let err = resolve_as_norm_config(true, Some(PathBuf::from("/no/such/cohort.npy")), None)
+            .err()
+            .unwrap();
+        assert!(format!("{err:#}").contains("/no/such/cohort.npy"));
+    }
+
+    #[test]
+    fn as_norm_config_defaults_to_registry_cohort_and_default_top_n() {
+        let cfg = resolve_as_norm_config(true, None, None).unwrap().unwrap();
+        assert_eq!(cfg.top_n, crate::clusterer::DEFAULT_AS_NORM_TOP_N);
+        match cfg.cohort {
+            crate::clusterer::CohortSource::ModelId(id) => {
+                assert_eq!(id, crate::clusterer::DEFAULT_ASNORM_COHORT_MODEL_ID);
+            }
+            other => panic!("expected ModelId, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn as_norm_config_honors_explicit_path_and_top_n() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cohort.npy");
+        std::fs::write(&path, b"placeholder").unwrap();
+        let cfg = resolve_as_norm_config(true, Some(path.clone()), Some(42))
+            .unwrap()
+            .unwrap();
+        assert_eq!(cfg.top_n, 42);
+        match cfg.cohort {
+            crate::clusterer::CohortSource::Path(p) => assert_eq!(p, path),
+            other => panic!("expected Path, got {other:?}"),
+        }
     }
 
     #[test]

@@ -4,6 +4,11 @@
 //! similarity matrices, mean centroids, segment merging) used by clustering,
 //! embedding, and overlap modules. See [`cosine_similarity`].
 
+/// Minimal NPY reader shared by the VBx PLDA params and the AS-norm cohort.
+/// Compiled only with the consumers; pure `std`, no ONNX.
+#[cfg(any(feature = "clusterer", feature = "vbx"))]
+pub(crate) mod npy;
+
 /// { true }
 /// pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32
 /// { ret >= -1.0 && ret <= 1.0 }

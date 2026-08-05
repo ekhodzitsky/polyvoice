@@ -7,11 +7,21 @@ pub mod plda;
 #[cfg(feature = "vbx")]
 pub mod vbx;
 
+pub mod asnorm;
 pub mod assign;
+pub mod domain;
 pub mod short_filter;
 
+pub use asnorm::{
+    AsNormClusterer, AsNormCohort, AsNormConfig, AsNormError, CohortSource, DEFAULT_AS_NORM_TOP_N,
+    DEFAULT_ASNORM_COHORT_MODEL_ID,
+};
 pub use assign::{
     LocalGlobalDuration, build_cooccurrence, hungarian_local_to_global, majority_local_to_global,
+};
+pub use domain::{
+    AMI, CALLHOME, DEFAULT_DOMAIN_PROFILE, DOMAIN_PROFILES, DomainProfile, VOXCONVERSE,
+    domain_profile,
 };
 pub use short_filter::{
     partition_by_min_duration, reassign_short_by_cosine, reassign_short_by_features,

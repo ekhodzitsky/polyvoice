@@ -10,6 +10,45 @@ use crate::utils::{
 };
 use std::collections::HashMap;
 
+/// Pairwise scoring seam for the AHC core.
+///
+/// Clusters are scored at two sites: the initial similarity matrix and the
+/// post-merge refresh (a merged centroid is re-scored against every active
+/// centroid). Both go through this trait so a normalizing scorer (AS-norm)
+/// stays in effect across merges — transforming only the initial matrix would
+/// be undone by the first refresh.
+///
+/// `member_a` / `member_b` index the *dominant* original embedding of each
+/// cluster: at every merge the dominant member is inherited from the
+/// heavier side (larger member count), so a merged centroid is normalized
+/// with the cohort statistics of its largest-weight member embedding.
+/// Cohort-free scorers ignore the indices.
+pub(crate) trait AhcScorer {
+    /// Score two clusters by their (L2-normalized) centroids.
+    fn score(
+        &self,
+        centroid_a: &[f32],
+        member_a: usize,
+        centroid_b: &[f32],
+        member_b: usize,
+    ) -> f32;
+}
+
+/// Plain cosine similarity; the default scorer. Ignores member indices.
+pub(crate) struct CosineScorer;
+
+impl AhcScorer for CosineScorer {
+    fn score(
+        &self,
+        centroid_a: &[f32],
+        _member_a: usize,
+        centroid_b: &[f32],
+        _member_b: usize,
+    ) -> f32 {
+        cosine_similarity(centroid_a, centroid_b)
+    }
+}
+
 /// { embeddings.is_empty() || embeddings.iter().all(|e| e.len() == embeddings`[0]`.len()) }
 /// `pub fn agglomerative_cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usize>`
 /// { ret.len() == embeddings.len() && ret.iter().all(|&l| l < embeddings.len()) }
@@ -262,8 +301,45 @@ pub fn agglomerative_cluster_auto_max_clusters(
         max_clusters,
         AscStop::Off,
         None,
+        &CosineScorer,
         sim_matrix,
     )
+}
+
+/// Run fixed-threshold AHC with a custom pairwise scorer (e.g. AS-norm).
+///
+/// The scorer is used BOTH for the initial similarity matrix and for every
+/// post-merge centroid refresh, so normalization holds across the whole merge
+/// sequence. Only the fixed-threshold path accepts a custom scorer: the auto
+/// path derives its threshold from the raw matrix's gap structure, which a
+/// normalizing scorer would rescale.
+#[cfg(feature = "clusterer")]
+pub(crate) fn agglomerative_cluster_scored(
+    embeddings: &[Vec<f32>],
+    threshold: f32,
+    max_clusters: usize,
+    scorer: &dyn AhcScorer,
+) -> Vec<usize> {
+    let n = embeddings.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let dim = embeddings[0].len();
+    if !embeddings.iter().all(|e| e.len() == dim) {
+        // Defensive fallback: mixed dimensions would break similarity math.
+        return vec![0; n];
+    }
+    let sim_matrix = similarity_matrix_scored(embeddings, scorer);
+    ahc_impl_with_matrix(
+        embeddings,
+        threshold,
+        max_clusters,
+        AscStop::Off,
+        None,
+        scorer,
+        sim_matrix,
+    )
+    .0
 }
 
 /// Nested (row-per-embedding) cosine-similarity matrix over `embeddings`:
@@ -272,6 +348,26 @@ fn similarity_matrix(embeddings: &[Vec<f32>]) -> Vec<Vec<f32>> {
     let n = embeddings.len();
     let flat = pairwise_cosine_similarity_matrix(embeddings);
     flat.chunks(n).map(<[f32]>::to_vec).collect()
+}
+
+/// Like [`similarity_matrix`] but scored by `scorer` — used when a normalizing
+/// scorer (AS-norm) replaces plain cosine.
+#[cfg(feature = "clusterer")]
+#[allow(clippy::needless_range_loop)] // triangular mirror indexing, same style as the AHC core
+fn similarity_matrix_scored(embeddings: &[Vec<f32>], scorer: &dyn AhcScorer) -> Vec<Vec<f32>> {
+    let n = embeddings.len();
+    let mut matrix = vec![vec![1.0f32; n]; n];
+    for (i, row) in matrix.iter_mut().enumerate() {
+        for (j, cell) in row.iter_mut().enumerate().skip(i + 1) {
+            *cell = scorer.score(&embeddings[i], i, &embeddings[j], j);
+        }
+    }
+    for i in 0..n {
+        for j in 0..i {
+            matrix[i][j] = matrix[j][i];
+        }
+    }
+    matrix
 }
 
 fn ahc_impl(
@@ -307,17 +403,20 @@ fn ahc_impl_with_times(
         max_clusters,
         stop,
         time_ranges,
+        &CosineScorer,
         sim_matrix,
     )
 }
 
 #[allow(clippy::needless_range_loop)]
+#[allow(clippy::too_many_arguments)]
 fn ahc_impl_with_matrix(
     embeddings: &[Vec<f32>],
     threshold: f32,
     max_clusters: usize,
     stop: AscStop,
     time_ranges: Option<&[TimeRange]>,
+    scorer: &dyn AhcScorer,
     mut sim_matrix: Vec<Vec<f32>>,
 ) -> (Vec<usize>, f32) {
     // Callers guarantee n >= 1 and uniform embedding dimensions.
@@ -326,6 +425,12 @@ fn ahc_impl_with_matrix(
     let mut labels: Vec<usize> = (0..n).collect();
     let mut centroids: Vec<Vec<f32>> = embeddings.to_vec();
     let mut cluster_sizes: Vec<usize> = vec![1; n];
+    // Dominant member of each cluster root: the original-embedding index a
+    // cohort-based scorer uses for this centroid's normalization stats. Starts
+    // as the singleton itself; at each merge the heavier side's dominant
+    // member wins (ties keep the merge target's), matching the weighted
+    // centroid update.
+    let mut dominant: Vec<usize> = (0..n).collect();
     // Per-root total speech duration (only used for AscStop::MinSecs).
     let mut cluster_dur: Vec<f64> = match (stop, time_ranges) {
         (AscStop::MinSecs(_), Some(times)) if times.len() == n => {
@@ -399,6 +504,12 @@ fn ahc_impl_with_matrix(
         l2_normalize(&mut new_centroid);
 
         centroids[best_i] = new_centroid;
+        // The merged cluster's dominant member comes from the heavier side
+        // (ties keep best_i's): its cohort stats approximate the merged
+        // centroid's normalization better than any per-member recomputation.
+        if cluster_sizes[best_j] > cluster_sizes[best_i] {
+            dominant[best_i] = dominant[best_j];
+        }
         cluster_sizes[best_i] = total;
         cluster_dur[best_i] += cluster_dur[best_j];
         active[best_j] = false;
@@ -410,11 +521,18 @@ fn ahc_impl_with_matrix(
         }
 
         // Update similarities for best_i against all other active clusters.
+        // The scorer sees the dominant member indices so cohort-based
+        // normalization survives merges (a matrix-only transform would not).
         for k in 0..n {
             if k == best_i || !active[k] {
                 continue;
             }
-            let sim = cosine_similarity(&centroids[best_i], &centroids[k]);
+            let sim = scorer.score(
+                &centroids[best_i],
+                dominant[best_i],
+                &centroids[k],
+                dominant[k],
+            );
             sim_matrix[best_i][k] = sim;
             sim_matrix[k][best_i] = sim;
         }
@@ -857,5 +975,126 @@ mod tests {
         let (labels, th) = agglomerative_cluster_auto_max_clusters(&embeddings, 2);
         assert_eq!(labels, vec![0, 0]);
         assert_eq!(th, 0.0);
+    }
+
+    // --- custom-scorer (AS-norm seam) tests ---
+
+    /// Scorer driven by a fixed member-keyed score table, recording every
+    /// `(member_a, member_b)` pair it is called with, so tests can observe
+    /// which dominant members the merge loop scores after each merge.
+    #[cfg(feature = "clusterer")]
+    struct TableScorer {
+        table: HashMap<(usize, usize), f32>,
+        calls: std::cell::RefCell<Vec<(usize, usize)>>,
+    }
+
+    #[cfg(feature = "clusterer")]
+    impl TableScorer {
+        fn from_pairs(pairs: &[((usize, usize), f32)]) -> Self {
+            Self {
+                table: pairs.iter().copied().collect(),
+                calls: std::cell::RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    #[cfg(feature = "clusterer")]
+    impl AhcScorer for TableScorer {
+        fn score(&self, _a: &[f32], ma: usize, _b: &[f32], mb: usize) -> f32 {
+            self.calls.borrow_mut().push((ma, mb));
+            self.table
+                .get(&(ma, mb))
+                .or_else(|| self.table.get(&(mb, ma)))
+                .copied()
+                .unwrap_or(f32::NEG_INFINITY)
+        }
+    }
+
+    #[cfg(feature = "clusterer")]
+    #[test]
+    fn scored_ahc_uses_scorer_for_matrix_and_post_merge_refresh() {
+        // Four embeddings; geometry irrelevant — the table drives every score.
+        let embeddings = vec![
+            vec![1.0, 0.0],
+            vec![0.9, 0.1],
+            vec![0.0, 1.0],
+            vec![0.1, 0.9],
+        ];
+        // s(0,1) = 0.99 merges first; then {0,1} (dominant 0, heavier side)
+        // merges with 2 at 0.9; 3 stays out at 0.1. Threshold 0.85.
+        let scorer = TableScorer::from_pairs(&[
+            ((0, 1), 0.99),
+            ((0, 2), 0.9),
+            ((1, 2), 0.9),
+            ((0, 3), 0.1),
+            ((1, 3), 0.1),
+            ((2, 3), 0.1),
+        ]);
+        let labels = agglomerative_cluster_scored(&embeddings, 0.85, 0, &scorer);
+        assert_eq!(labels, vec![0, 0, 0, 1], "table-driven merges");
+        let calls = scorer.calls.borrow();
+        assert_eq!(
+            &calls[..6],
+            &[(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)],
+            "initial matrix scored once per pair, upper triangle"
+        );
+        // After merging 1 into 0 (tie 1v1 keeps best_i's dominant) the refresh
+        // re-scores centroid 0 via its dominant member 0 — not raw cosine.
+        assert_eq!(calls[6], (0, 2), "post-merge refresh uses dominant member");
+        assert_eq!(calls[7], (0, 3));
+        // After the second merge ({0,1} heavier than {2}), the dominant member
+        // stays 0 — the heavier side's member, not the freshly merged 2.
+        assert_eq!(
+            calls[8],
+            (0, 3),
+            "dominant member of an unequal merge comes from the heavier side"
+        );
+        assert_eq!(calls.len(), 9, "no rescoring beyond the merge refreshes");
+    }
+
+    #[cfg(feature = "clusterer")]
+    #[test]
+    fn scored_ahc_constant_scorer_controls_merging() {
+        let embeddings = vec![vec![1.0, 0.0], vec![0.9, 0.1], vec![0.0, 1.0]];
+        struct Const(f32);
+        impl AhcScorer for Const {
+            fn score(&self, _a: &[f32], _ma: usize, _b: &[f32], _mb: usize) -> f32 {
+                self.0
+            }
+        }
+        // All pairs at 1.0 ≥ 0.5: everything merges despite the geometry.
+        let merged = agglomerative_cluster_scored(&embeddings, 0.5, 0, &Const(1.0));
+        assert_eq!(merged, vec![0, 0, 0]);
+        // All pairs at 0.0 < 0.5: nothing merges.
+        let split = agglomerative_cluster_scored(&embeddings, 0.5, 0, &Const(0.0));
+        assert_eq!(split, vec![0, 1, 2]);
+    }
+
+    #[cfg(feature = "clusterer")]
+    #[test]
+    fn scored_ahc_degenerate_inputs() {
+        let empty: Vec<Vec<f32>> = Vec::new();
+        assert!(agglomerative_cluster_scored(&empty, 0.5, 0, &CosineScorer).is_empty());
+        // Mixed dimensions fall back to a single cluster, like the cosine path.
+        let mixed = vec![vec![1.0, 0.0], vec![0.9]];
+        assert_eq!(
+            agglomerative_cluster_scored(&mixed, 0.5, 0, &CosineScorer),
+            vec![0, 0]
+        );
+    }
+
+    #[cfg(feature = "clusterer")]
+    #[test]
+    fn scored_ahc_with_cosine_scorer_matches_classic() {
+        // The cosine scorer through the scored path must reproduce plain AHC.
+        let embeddings = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.9, 0.1, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.1, 0.9, 0.0],
+        ];
+        let classic = agglomerative_cluster_max_clusters(&embeddings, 0.5, 0);
+        let scored = agglomerative_cluster_scored(&embeddings, 0.5, 0, &CosineScorer);
+        assert_eq!(classic, scored);
     }
 }

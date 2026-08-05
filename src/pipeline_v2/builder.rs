@@ -173,6 +173,124 @@ use crate::pipeline_v2::Pipeline;
 use crate::pipeline_v2::config::ClustererKind;
 use crate::resegmentation::OverlapResegmenter;
 
+/// Resolve the effective clusterer kind: a per-domain profile replaces the
+/// configured AHC merge threshold with the profile's calibrated value.
+/// Profiles are data, so this stays a pure lookup; other clusterer kinds are
+/// unaffected.
+pub(crate) fn resolve_clusterer_kind(config: &PipelineConfig) -> ClustererKind {
+    match (config.clusterer, config.domain) {
+        (ClustererKind::Ahc { .. }, Some(domain)) => ClustererKind::Ahc {
+            threshold: domain.ahc_threshold,
+        },
+        (kind, _) => kind,
+    }
+}
+
+/// Load the AS-norm imposter cohort. Resolution mirrors the VBx PLDA chain:
+/// explicit path → `POLYVOICE_ASNORM_COHORT` env → registry download. The
+/// builder is the library's single env-resolution point.
+fn load_as_norm_cohort(
+    as_norm: &crate::clusterer::AsNormConfig,
+    registry: &ModelRegistry,
+) -> Result<crate::clusterer::AsNormCohort, ConfigError> {
+    use crate::clusterer::CohortSource;
+    let path = match &as_norm.cohort {
+        CohortSource::Path(p) => p.clone(),
+        CohortSource::ModelId(id) => match std::env::var_os("POLYVOICE_ASNORM_COHORT") {
+            Some(p) => std::path::PathBuf::from(p),
+            None => registry.ensure(id).map_err(|e| match e {
+                RegistryError::ModelNotFound { .. } => ConfigError::Load {
+                    model_id: "asnorm_cohort",
+                    source: std::io::Error::other(format!(
+                        "cohort model '{id}' is not in the manifest; pass an explicit cohort \
+                         file (CLI: --cohort) or set POLYVOICE_ASNORM_COHORT"
+                    ))
+                    .into(),
+                },
+                other => ConfigError::Registry(other),
+            })?,
+        },
+    };
+    crate::clusterer::AsNormCohort::from_npy(&path).map_err(|e| ConfigError::Load {
+        model_id: "asnorm_cohort",
+        source: Box::new(e),
+    })
+}
+
+/// Construct the clusterer for the profile path: domain-profile threshold
+/// resolution, optional AS-norm decoration (fixed-threshold AHC only), and
+/// the VBx PLDA fallback chain.
+fn build_profile_clusterer(
+    config: &PipelineConfig,
+    registry: &ModelRegistry,
+) -> Result<Box<dyn Clusterer>, ConfigError> {
+    match resolve_clusterer_kind(config) {
+        ClustererKind::Ahc { threshold } => {
+            let max = config.max_speakers as usize;
+            match &config.as_norm {
+                Some(as_norm) => {
+                    // AS-norm decorates the fixed-threshold AHC scoring only;
+                    // the auto-threshold path derives its threshold from the
+                    // raw matrix and is never wrapped.
+                    let cohort = load_as_norm_cohort(as_norm, registry)?;
+                    Ok(Box::new(crate::clusterer::AsNormClusterer::new(
+                        max,
+                        threshold,
+                        cohort,
+                        as_norm.top_n,
+                    )))
+                }
+                None => Ok(Box::new(crate::clusterer::AhcClusterer::with_threshold(
+                    max, threshold,
+                ))),
+            }
+        }
+        #[cfg(feature = "spectral")]
+        ClustererKind::NmeSc => Ok(Box::new(crate::clusterer::NmeScClusterer::new(
+            config.max_speakers as usize,
+        ))),
+        #[cfg(not(feature = "spectral"))]
+        ClustererKind::NmeSc => Ok(Box::new(crate::clusterer::AhcClusterer::with_threshold(
+            config.max_speakers as usize,
+            config.profile.default_threshold(),
+        ))),
+        #[cfg(feature = "vbx")]
+        ClustererKind::Vbx => {
+            let max = config.max_speakers as usize;
+            // PLDA resolution order: explicit `vbx_plda_dir` →
+            // `POLYVOICE_VBX_PLDA_DIR` env → registry download.
+            // This is the library's single env-resolution point;
+            // `pipeline_v2` always has `download`, so the registry
+            // fallback is available.
+            let mut vbx = match &config.vbx_plda_dir {
+                Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(dir, max),
+                None => match std::env::var_os("POLYVOICE_VBX_PLDA_DIR") {
+                    Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(
+                        std::path::Path::new(&dir),
+                        max,
+                    ),
+                    None => crate::clusterer::vbx::VbxClusterer::from_registry(registry, max),
+                },
+            }
+            .map_err(|e| ConfigError::Load {
+                model_id: "vbx",
+                source: Box::new(e),
+            })?;
+            // Dense windowed embeddings are non-contiguous: the HMM
+            // self-loop assumption is invalid → auto GMM-VBx.
+            // `loop_prob` is an explicit `VbxConfig` knob; windowed
+            // mode always forces GMM.
+            let windowed = config.embed_window_secs.is_some_and(|w| w > 0.0);
+            vbx = vbx.auto_gmm_for_windowed(windowed);
+            Ok(Box::new(vbx))
+        }
+        #[cfg(not(feature = "vbx"))]
+        ClustererKind::Vbx => Err(ConfigError::UnknownModel {
+            model_id: "vbx (requires the `vbx` feature)".to_owned(),
+        }),
+    }
+}
+
 impl PipelineBuilder {
     /// Validate + construct the inner `Pipeline`.
     pub fn build(self) -> Result<Pipeline, ConfigError> {
@@ -237,63 +355,8 @@ impl PipelineBuilder {
                         source: Box::new(e),
                     })?,
                 );
-                let clusterer: Box<dyn Clusterer> = match self.config.clusterer {
-                    ClustererKind::Ahc { threshold } => {
-                        Box::new(crate::clusterer::AhcClusterer::with_threshold(
-                            self.config.max_speakers as usize,
-                            threshold,
-                        ))
-                    }
-                    #[cfg(feature = "spectral")]
-                    ClustererKind::NmeSc => Box::new(crate::clusterer::NmeScClusterer::new(
-                        self.config.max_speakers as usize,
-                    )),
-                    #[cfg(not(feature = "spectral"))]
-                    ClustererKind::NmeSc => {
-                        Box::new(crate::clusterer::AhcClusterer::with_threshold(
-                            self.config.max_speakers as usize,
-                            self.config.profile.default_threshold(),
-                        ))
-                    }
-                    #[cfg(feature = "vbx")]
-                    ClustererKind::Vbx => {
-                        let max = self.config.max_speakers as usize;
-                        // PLDA resolution order: explicit `vbx_plda_dir` →
-                        // `POLYVOICE_VBX_PLDA_DIR` env → registry download.
-                        // This is the library's single env-resolution point;
-                        // `pipeline_v2` always has `download`, so the registry
-                        // fallback is available.
-                        let mut vbx = match &self.config.vbx_plda_dir {
-                            Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(dir, max),
-                            None => match std::env::var_os("POLYVOICE_VBX_PLDA_DIR") {
-                                Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(
-                                    std::path::Path::new(&dir),
-                                    max,
-                                ),
-                                None => crate::clusterer::vbx::VbxClusterer::from_registry(
-                                    &registry, max,
-                                ),
-                            },
-                        }
-                        .map_err(|e| ConfigError::Load {
-                            model_id: "vbx",
-                            source: Box::new(e),
-                        })?;
-                        // Dense windowed embeddings are non-contiguous: the HMM
-                        // self-loop assumption is invalid → auto GMM-VBx.
-                        // `loop_prob` is an explicit `VbxConfig` knob; windowed
-                        // mode always forces GMM.
-                        let windowed = self.config.embed_window_secs.is_some_and(|w| w > 0.0);
-                        vbx = vbx.auto_gmm_for_windowed(windowed);
-                        Box::new(vbx)
-                    }
-                    #[cfg(not(feature = "vbx"))]
-                    ClustererKind::Vbx => {
-                        return Err(ConfigError::UnknownModel {
-                            model_id: "vbx (requires the `vbx` feature)".to_owned(),
-                        });
-                    }
-                };
+                let clusterer: Box<dyn Clusterer> =
+                    build_profile_clusterer(&self.config, &registry)?;
                 // Activate min_cluster_size pruning (this config field was
                 // previously dead — never read by any clusterer). Dissolves
                 // spurious sub-min clusters into the nearest large speaker: the
@@ -1021,5 +1084,272 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    // --- AS-norm / domain-profile wiring ---
+
+    /// Write a `(rows, dim) <f4` NPY cohort file for the AS-norm tests.
+    fn write_test_cohort(dir: &std::path::Path, rows: &[Vec<f32>]) -> PathBuf {
+        let cols = rows[0].len();
+        let dict = format!(
+            "{{'descr': '<f4', 'fortran_order': False, 'shape': ({}, {cols}), }}",
+            rows.len()
+        );
+        let pad = (64 - (10 + dict.len() + 1) % 64) % 64;
+        let header = format!("{dict}{}{}", " ".repeat(pad), "\n");
+        let mut bytes = b"\x93NUMPY\x01\x00".to_vec();
+        bytes.extend_from_slice(&(header.len() as u16).to_le_bytes());
+        bytes.extend_from_slice(header.as_bytes());
+        for row in rows {
+            for v in row {
+                bytes.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        let path = dir.join("cohort.npy");
+        std::fs::write(&path, &bytes).expect("write test cohort");
+        path
+    }
+
+    #[test]
+    fn resolve_clusterer_kind_domain_profile_overrides_ahc_threshold() {
+        use crate::clusterer::domain;
+
+        let resolve = |clusterer: ClustererKind,
+                       domain: Option<crate::clusterer::DomainProfile>| {
+            resolve_clusterer_kind(&PipelineConfig {
+                clusterer,
+                domain,
+                ..PipelineConfig::default()
+            })
+        };
+        let ahc = ClustererKind::Ahc { threshold: 0.5 };
+
+        assert_eq!(
+            resolve(ahc, Some(domain::AMI)),
+            ClustererKind::Ahc {
+                threshold: domain::AMI.ahc_threshold
+            },
+            "AMI profile replaces the configured threshold"
+        );
+        // Deterministic: same config, same resolution.
+        assert_eq!(
+            resolve(ahc, Some(domain::AMI)),
+            resolve(ahc, Some(domain::AMI))
+        );
+
+        assert_eq!(
+            resolve(ahc, Some(domain::VOXCONVERSE)),
+            ClustererKind::Ahc { threshold: 0.5 },
+            "VoxConverse profile keeps the shipped default"
+        );
+        assert_eq!(
+            resolve(ahc, Some(domain::CALLHOME)),
+            ClustererKind::Ahc {
+                threshold: domain::CALLHOME.ahc_threshold
+            }
+        );
+
+        // No domain → configured threshold preserved.
+        assert_eq!(
+            resolve(ClustererKind::Ahc { threshold: 0.42 }, None),
+            ClustererKind::Ahc { threshold: 0.42 }
+        );
+
+        // Non-AHC kinds are never rewritten by a domain profile.
+        assert_eq!(
+            resolve(ClustererKind::NmeSc, Some(domain::AMI)),
+            ClustererKind::NmeSc
+        );
+    }
+
+    /// Scene where raw cosine and AS-norm z-scores disagree decisively: two
+    /// tight pairs (within-pair cosine ≈ 0.98, cross-pair ≈ 0), with a cohort
+    /// anti-aligned with both groups so every cohort stat mean is negative.
+    /// Then z(within) ≫ z(cross) ≫ 1, so a z-scale threshold above 1 merges
+    /// nothing under raw cosine but splits the pairs under AS-norm.
+    fn as_norm_discriminating_scene() -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
+        let embeddings = vec![
+            vec![1.0, 0.1, 0.0, 0.0, 0.0],
+            vec![1.0, -0.1, 0.0, 0.0, 0.0],
+            vec![0.0, 0.0, 1.0, 0.1, 0.0],
+            vec![0.0, 0.0, 1.0, -0.1, 0.0],
+        ];
+        // Cohort rows ≈ -0.7·(axis0 + axis2) with jitter on axis 4, orthogonal
+        // to every embedding, so each embedding sees a tight cluster of
+        // negative cohort scores (std driven by the jitter only).
+        let cohort: Vec<Vec<f32>> = (0..12)
+            .map(|k| {
+                let o = 0.05 * (k as f32 - 5.5);
+                vec![-0.7, 0.0, -0.7, 0.0, o]
+            })
+            .collect();
+        (embeddings, cohort)
+    }
+
+    #[test]
+    fn build_profile_clusterer_wraps_ahc_with_as_norm_only_when_enabled() {
+        use crate::clusterer::asnorm::AsNormScorer;
+        use crate::clusterer::{AsNormCohort, AsNormConfig, CohortSource};
+
+        let tmp = tempfile::TempDir::new().expect("temp dir");
+        let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
+        let (embeddings, cohort_rows) = as_norm_discriminating_scene();
+        let cohort_path = write_test_cohort(tmp.path(), &cohort_rows);
+
+        // Derive the z-scale decision threshold from the scene itself, then
+        // confirm it sits above every raw cosine in the scene.
+        use crate::ahc::AhcScorer;
+        let cohort = AsNormCohort::from_rows(cohort_rows);
+        let scorer = AsNormScorer::new(&cohort, &embeddings, 10);
+        let z_within = scorer.score(&embeddings[0], 0, &embeddings[1], 1);
+        let z_cross = scorer.score(&embeddings[0], 0, &embeddings[2], 2);
+        assert!(
+            z_within > z_cross + 1.0,
+            "scene must separate on the z-scale: within={z_within} cross={z_cross}"
+        );
+        let threshold = (z_within + z_cross) / 2.0;
+        assert!(
+            threshold > 1.0,
+            "threshold {threshold} must exceed every raw cosine for the contrast to bite"
+        );
+
+        // Disabled: plain fixed-threshold AHC — nothing reaches a >1 cosine
+        // threshold, so every embedding stays its own cluster.
+        let plain_cfg = PipelineConfig {
+            clusterer: ClustererKind::Ahc { threshold },
+            ..PipelineConfig::default()
+        };
+        let plain = build_profile_clusterer(&plain_cfg, &registry).expect("plain ahc");
+        let plain_labels = plain.cluster(&embeddings).expect("cluster");
+        assert_eq!(plain_labels, vec![0, 1, 2, 3], "raw cosine merges nothing");
+
+        // Enabled: the same numeric threshold now sits between the within- and
+        // cross-speaker z-scores, so the two pairs merge into two speakers.
+        let as_norm_cfg = PipelineConfig {
+            clusterer: ClustererKind::Ahc { threshold },
+            as_norm: Some(AsNormConfig {
+                top_n: 10,
+                cohort: CohortSource::Path(cohort_path),
+            }),
+            ..PipelineConfig::default()
+        };
+        let wrapped = build_profile_clusterer(&as_norm_cfg, &registry).expect("as-norm ahc");
+        let labels = wrapped.cluster(&embeddings).expect("cluster");
+        assert_eq!(labels, vec![0, 0, 1, 1], "as-norm recovers the two pairs");
+    }
+
+    #[test]
+    fn load_as_norm_cohort_missing_model_id_guides_to_explicit_path() {
+        let tmp = tempfile::TempDir::new().expect("temp dir");
+        let manifest =
+            Manifest::from_toml_str(r#"schema = "polyvoice-models-v2""#).expect("manifest parses");
+        let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
+        let cfg = crate::clusterer::AsNormConfig {
+            top_n: 10,
+            cohort: crate::clusterer::CohortSource::ModelId(
+                crate::clusterer::DEFAULT_ASNORM_COHORT_MODEL_ID.to_owned(),
+            ),
+        };
+        let err = load_as_norm_cohort(&cfg, &registry).expect_err("must fail offline");
+        let msg = err.to_string();
+        assert!(msg.contains("asnorm_cohort"), "{msg}");
+        assert!(msg.contains("--cohort"), "{msg}");
+    }
+
+    #[test]
+    fn load_as_norm_cohort_env_override_wins_over_registry() {
+        let tmp = tempfile::TempDir::new().expect("temp dir");
+        let cohort_path = write_test_cohort(tmp.path(), &[vec![1.0, 0.0], vec![0.0, 1.0]]);
+        let manifest =
+            Manifest::from_toml_str(r#"schema = "polyvoice-models-v2""#).expect("manifest parses");
+        let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
+        let cfg = crate::clusterer::AsNormConfig {
+            top_n: 2,
+            // A model id the manifest does not contain: only the env override
+            // can make this load succeed.
+            cohort: crate::clusterer::CohortSource::ModelId("absent_cohort".to_owned()),
+        };
+        // nextest runs each test in its own process, so the env var cannot
+        // leak into other tests.
+        unsafe {
+            std::env::set_var("POLYVOICE_ASNORM_COHORT", &cohort_path);
+        }
+        let loaded = load_as_norm_cohort(&cfg, &registry);
+        unsafe {
+            std::env::remove_var("POLYVOICE_ASNORM_COHORT");
+        }
+        let cohort = loaded.expect("env override supplies the cohort");
+        assert_eq!(cohort.rows().len(), 2);
+    }
+
+    #[test]
+    fn load_as_norm_cohort_bad_file_reports_load_error() {
+        let tmp = tempfile::TempDir::new().expect("temp dir");
+        let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
+        let cfg = crate::clusterer::AsNormConfig {
+            top_n: 10,
+            cohort: crate::clusterer::CohortSource::Path(tmp.path().join("missing.npy")),
+        };
+        let err = load_as_norm_cohort(&cfg, &registry).expect_err("missing file must fail");
+        assert!(matches!(
+            err,
+            ConfigError::Load {
+                model_id: "asnorm_cohort",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn build_ahc_with_as_norm_cohort_path_succeeds() {
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
+        let cohort_tmp = tempfile::TempDir::new().expect("temp dir");
+        let (_, cohort_rows) = as_norm_discriminating_scene();
+        let cohort_path = write_test_cohort(cohort_tmp.path(), &cohort_rows);
+        let cfg = PipelineConfig {
+            clusterer: ClustererKind::Ahc { threshold: 0.5 },
+            as_norm: Some(crate::clusterer::AsNormConfig {
+                top_n: 10,
+                cohort: crate::clusterer::CohortSource::Path(cohort_path),
+            }),
+            domain: Some(crate::clusterer::domain::AMI),
+            ..PipelineConfig::default()
+        };
+        let p = fresh()
+            .config(cfg)
+            .with_models_from(registry)
+            .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+            .build()
+            .expect("AHC + AS-norm + domain profile builds");
+        assert!(matches!(p.config().clusterer, ClustererKind::Ahc { .. }));
+    }
+
+    #[cfg(feature = "vbx")]
+    #[test]
+    fn build_vbx_never_touches_as_norm_config() {
+        let Some((_tmp, registry)) = registry_with_local_models() else {
+            return;
+        };
+        let cfg = PipelineConfig {
+            clusterer: ClustererKind::Vbx,
+            vbx_plda_dir: Some(repo_file("fixtures/vbx-plda")),
+            // A cohort source that would fail if the VBx path resolved it:
+            // success below proves AS-norm decorates AHC only.
+            as_norm: Some(crate::clusterer::AsNormConfig {
+                top_n: 10,
+                cohort: crate::clusterer::CohortSource::ModelId("absent_cohort".to_owned()),
+            }),
+            domain: Some(crate::clusterer::domain::AMI),
+            ..PipelineConfig::default()
+        };
+        let p = fresh()
+            .config(cfg)
+            .with_models_from(registry)
+            .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+            .build()
+            .expect("VBx path ignores AS-norm and domain config");
+        assert!(matches!(p.config().clusterer, ClustererKind::Vbx));
     }
 }
