@@ -13,7 +13,7 @@ use polyvoice::der::{
 };
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::LegacyPipeline;
-use polyvoice::pipeline_v2::{ClustererKind, Pipeline as V2Pipeline, PipelineConfig, StageTimings};
+use polyvoice::pipeline_v2::{Pipeline as V2Pipeline, PipelineConfig, StageTimings};
 use polyvoice::types::{DiarizationResult, Profile, SampleRate, TimeRange};
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
@@ -43,7 +43,7 @@ struct Args {
     max_files: Option<usize>,
     /// AHC merge threshold on the active scorer's scale: raw cosine (default
     /// 0.45), or AS-norm z-score when `--as-norm` is set (default 4.0).
-    /// `--domain-profile` overrides this with its calibrated value.
+    /// An explicit value wins over `--domain-profile`'s calibrated threshold.
     #[arg(long)]
     threshold: Option<f32>,
     /// Which pipeline to benchmark: `v2` (powerset segmentation + embeddings +
@@ -104,9 +104,10 @@ struct Args {
     /// with the POLYVOICE_ASNORM_COHORT env override.
     #[arg(long)]
     cohort: Option<PathBuf>,
-    /// Per-domain scoring profile: voxconverse | ami | callhome. Overrides
-    /// --threshold for the AHC clusterer with the profile's calibrated
-    /// threshold and sets the AS-norm cohort size. v2 only.
+    /// Per-domain scoring profile: voxconverse | ami | callhome. Replaces the
+    /// default AHC threshold with the profile's calibrated value (an explicit
+    /// --threshold wins) and sets the AS-norm cohort size. Requires
+    /// --clusterer ahc. v2 only.
     #[arg(long)]
     domain_profile: Option<String>,
 }
@@ -343,22 +344,12 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
 
     let (runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
         "v2" => {
-            let clusterer = cli_common::parse_clusterer_kind(
+            let (clusterer, as_norm, domain) = cli_common::resolve_clusterer_flags(
                 &args.clusterer,
-                cli_common::resolve_ahc_threshold(args.threshold, args.as_norm),
-            )?;
-            if args.as_norm && !matches!(clusterer, ClustererKind::Ahc { .. }) {
-                anyhow::bail!("--as-norm applies to the AHC clusterer only (pass --clusterer ahc)");
-            }
-            let domain = args
-                .domain_profile
-                .as_deref()
-                .map(cli_common::parse_domain_profile)
-                .transpose()?;
-            let as_norm = cli_common::resolve_as_norm_config(
+                args.threshold,
                 args.as_norm,
                 args.cohort.clone(),
-                domain.map(|d| d.as_norm_top_n),
+                args.domain_profile.as_deref(),
             )?;
             let binarization = if args.binarize_onset.is_some()
                 || args.binarize_offset.is_some()
@@ -408,8 +399,8 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
             if other != "legacy" {
                 anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')");
             }
-            if args.as_norm || args.domain_profile.is_some() {
-                anyhow::bail!("--as-norm/--domain-profile apply to --pipeline v2 only");
+            if args.as_norm || args.cohort.is_some() || args.domain_profile.is_some() {
+                anyhow::bail!("--as-norm/--cohort/--domain-profile apply to --pipeline v2 only");
             }
             let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
             let stack = cli_common::load_legacy_stack(

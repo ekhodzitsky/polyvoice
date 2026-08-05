@@ -652,6 +652,65 @@ mod tests {
         assert!(labels.is_empty());
     }
 
+    /// Scored AHC: when a singleton absorbs a strictly heavier cluster, the
+    /// merged cluster's dominant member must come from the heavier
+    /// (merged-into) side — its cohort stats best approximate the weighted
+    /// centroid.
+    #[cfg(feature = "clusterer")]
+    #[test]
+    fn dominant_member_comes_from_the_heavier_merged_into_side() {
+        use std::cell::RefCell;
+
+        /// Returns scripted scores per dominant-member pair and records the
+        /// member indices of every call (centroid values are ignored).
+        struct TableScorer {
+            scores: HashMap<(usize, usize), f32>,
+            calls: RefCell<Vec<(usize, usize)>>,
+        }
+        impl AhcScorer for TableScorer {
+            fn score(&self, _a: &[f32], ma: usize, _b: &[f32], mb: usize) -> f32 {
+                self.calls.borrow_mut().push((ma, mb));
+                self.scores[&(ma, mb)]
+            }
+        }
+
+        // Merge script: (1,2) at 0.9 merges first (equal sizes — the merge
+        // target keeps its own dominant member, 1). The refresh then scores
+        // the {1,2} cluster against singleton 0 at 0.8, so 0 absorbs {1,2}:
+        // the merged-into side is strictly heavier, and the merged cluster
+        // must inherit dominant member 1, not 0.
+        let scores: HashMap<(usize, usize), f32> = [
+            ((0, 1), 0.5),
+            ((0, 2), 0.5),
+            ((0, 3), 0.0),
+            ((1, 2), 0.9),
+            ((1, 3), 0.1),
+            ((2, 3), 0.1),
+            ((1, 0), 0.8), // refreshed score of {1,2} against 0
+        ]
+        .into_iter()
+        .collect();
+        let scorer = TableScorer {
+            scores,
+            calls: RefCell::new(Vec::new()),
+        };
+        let embeddings = vec![
+            vec![1.0, 0.0],
+            vec![0.0, 1.0],
+            vec![0.1, 0.9],
+            vec![0.8, 0.2],
+        ];
+        let labels = agglomerative_cluster_scored(&embeddings, 0.05, 0, &scorer);
+        assert!(
+            labels.iter().all(|&l| l == labels[0]),
+            "all scripted scores clear the threshold: {labels:?}"
+        );
+        // The last call is the refresh of the merged {0,1,2} cluster against
+        // singleton 3: member 1 (inherited from the heavier side), not 0.
+        // Without the heavier-side inheritance this would read (0, 3).
+        assert_eq!(scorer.calls.borrow().last(), Some(&(1, 3)));
+    }
+
     // --- duration-based pruning ---
 
     fn ax(a: usize) -> Vec<f32> {

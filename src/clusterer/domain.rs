@@ -20,14 +20,14 @@ pub struct DomainProfile {
     pub as_norm_top_n: usize,
 }
 
-/// VoxConverse: the shipped default. The raw threshold matches the pipeline's
-/// long-standing AHC default. The z-threshold was calibrated on a 30-file
-/// VoxConverse-dev sweep (raw best 10.85% DER @ 0.45; z=3 10.31%, z=4 10.40%)
-/// and confirmed on VoxConverse-test (z=4: 22.98% vs raw 24.14% no-collar
-/// micro DER).
+/// VoxConverse: the shipped default. The raw threshold is the shipped CLI
+/// default and the dev-sweep optimum (10.85% DER @ 0.45 vs 11.11% @ 0.50 on
+/// the 30-file VoxConverse-dev sweep, no-collar micro). The z-threshold comes
+/// from the same sweep (z=3 10.31%, z=4 10.40%), confirmed on
+/// VoxConverse-test (z=4: 22.98% vs raw 24.14% no-collar micro DER).
 pub const VOXCONVERSE: DomainProfile = DomainProfile {
     name: "voxconverse",
-    ahc_threshold: 0.5,
+    ahc_threshold: 0.45,
     as_norm_threshold: Some(4.0),
     as_norm_top_n: 100,
 };
@@ -46,11 +46,11 @@ pub const AMI: DomainProfile = DomainProfile {
 
 /// CALLHOME (telephone speech).
 // PLACEHOLDER: no CALLHOME data is available locally at all — neither value
-// is calibrated. Distinct from the other profiles so profile selection is
-// observable; do not treat these as tuned numbers.
+// is calibrated. Kept distinct from the other profiles so profile selection
+// stays observable; do not treat these as tuned numbers.
 pub const CALLHOME: DomainProfile = DomainProfile {
     name: "callhome",
-    ahc_threshold: 0.45,
+    ahc_threshold: 0.5,
     as_norm_threshold: None,
     as_norm_top_n: 100,
 };

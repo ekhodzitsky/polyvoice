@@ -67,7 +67,10 @@ surface:
     contract: >
       Pipeline configuration: profile, clusterer kind (AHC / NME-SC / VBx),
       execution provider, sample rate, speech/gap thresholds, embedder pool
-      size, overlap toggle, optional dense embed window and binarization.
+      size, overlap toggle, optional dense embed window and binarization,
+      optional AS-norm score normalization (as_norm) and per-domain scoring
+      profile (domain — replaces the AHC threshold with the profile's
+      calibrated value at build time).
     proof:
       kind: unit-test
       target: src/pipeline_v2::config::tests

@@ -174,11 +174,14 @@ use crate::pipeline_v2::config::ClustererKind;
 use crate::resegmentation::OverlapResegmenter;
 
 /// Resolve the effective clusterer kind: a per-domain profile replaces the
-/// configured AHC merge threshold with the profile's calibrated value.
-/// Profiles are data, so this stays a pure lookup; other clusterer kinds are
-/// unaffected. The raw and AS-norm z scales differ, so the profile picks the
-/// field matching the active scorer; a profile without a calibrated
-/// z-threshold keeps the configured threshold unchanged.
+/// configured AHC merge threshold with the profile's calibrated value. This
+/// is the library contract — `PipelineConfig.domain` always wins over
+/// `PipelineConfig.clusterer`'s threshold (the CLI inverts the precedence for
+/// an explicit `--threshold` by simply not setting `domain`). Profiles are
+/// data, so this stays a pure lookup; other clusterer kinds are unaffected.
+/// The raw and AS-norm z scales differ, so the profile picks the field
+/// matching the active scorer; a profile without a calibrated z-threshold
+/// keeps the configured threshold unchanged.
 pub(crate) fn resolve_clusterer_kind(config: &PipelineConfig) -> ClustererKind {
     match (config.clusterer, config.domain) {
         (ClustererKind::Ahc { threshold }, Some(domain)) => {
@@ -382,8 +385,13 @@ impl PipelineBuilder {
                     } else {
                         clusterer
                     };
+                // Store the effective (post-domain-profile) clusterer kind so
+                // `Pipeline::config()` reports the threshold the clusterer was
+                // actually built with, not the pre-resolution configured one.
+                let mut config = self.config;
+                config.clusterer = resolve_clusterer_kind(&config);
                 Ok(Pipeline::from_components(
-                    self.config,
+                    config,
                     segmenter,
                     embedder,
                     clusterer,
@@ -1146,8 +1154,15 @@ mod tests {
 
         assert_eq!(
             resolve(ahc, Some(domain::VOXCONVERSE)),
-            ClustererKind::Ahc { threshold: 0.5 },
-            "VoxConverse profile keeps the shipped default"
+            ClustererKind::Ahc {
+                threshold: domain::VOXCONVERSE.ahc_threshold
+            },
+            "VoxConverse profile replaces the configured threshold too"
+        );
+        // The VoxConverse raw threshold IS the shipped CLI default.
+        assert_eq!(
+            domain::VOXCONVERSE.ahc_threshold,
+            crate::types::DEFAULT_AHC_THRESHOLD
         );
         assert_eq!(
             resolve(ahc, Some(domain::CALLHOME)),
@@ -1245,7 +1260,7 @@ mod tests {
         // Derive the z-scale decision threshold from the scene itself, then
         // confirm it sits above every raw cosine in the scene.
         use crate::ahc::AhcScorer;
-        let cohort = AsNormCohort::from_rows(cohort_rows);
+        let cohort = AsNormCohort::from_rows(cohort_rows).expect("uniform test cohort");
         let scorer = AsNormScorer::new(&cohort, &embeddings, 10);
         let z_within = scorer.score(&embeddings[0], 0, &embeddings[1], 1);
         let z_cross = scorer.score(&embeddings[0], 0, &embeddings[2], 2);
@@ -1369,7 +1384,15 @@ mod tests {
             .execution_provider(crate::onnx::ExecutionProvider::Cpu)
             .build()
             .expect("AHC + AS-norm + domain profile builds");
-        assert!(matches!(p.config().clusterer, ClustererKind::Ahc { .. }));
+        // config() reports the EFFECTIVE threshold: the AMI profile's
+        // z-threshold replaced the configured 0.5 at build time.
+        match p.config().clusterer {
+            ClustererKind::Ahc { threshold } => assert_eq!(
+                threshold,
+                crate::clusterer::domain::AMI.as_norm_threshold.unwrap()
+            ),
+            other => panic!("expected Ahc, got {other:?}"),
+        }
     }
 
     #[cfg(feature = "vbx")]

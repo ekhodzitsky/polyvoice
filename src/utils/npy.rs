@@ -35,8 +35,11 @@ fn parse_npy_header(bytes: &[u8], path: &Path) -> Result<(String, Vec<usize>, us
     let major = bytes[6];
     // v1.0: 2-byte header len; v2.0+: 4-byte. We emit v1.0 but accept both.
     let (header_len, header_start) = if major >= 2 {
-        let l = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize;
-        (l, 12usize)
+        let len_bytes: [u8; 4] = bytes
+            .get(8..12)
+            .and_then(|s| s.try_into().ok())
+            .ok_or_else(|| bad("truncated NPY header"))?;
+        (u32::from_le_bytes(len_bytes) as usize, 12usize)
     } else {
         let l = u16::from_le_bytes([bytes[8], bytes[9]]) as usize;
         (l, 10usize)
@@ -89,6 +92,28 @@ pub(crate) fn read_npy_flat(path: &Path) -> Result<(Vec<f64>, Vec<usize>), NpyEr
     let bytes = read_file(path)?;
     let (descr, shape, offset) = parse_npy_header(&bytes, path)?;
     let data = &bytes[offset..];
+    let elem_size = match descr.as_str() {
+        "<f8" | "<i8" => 8,
+        "<f4" => 4,
+        other => {
+            return Err(NpyError::Io {
+                path: path.display().to_string(),
+                detail: format!("unsupported NPY dtype {other} (expected <f4, <f8 or <i8)"),
+            });
+        }
+    };
+    // A payload whose length is not a whole number of elements is truncated
+    // or carries trailing garbage — reject it rather than silently dropping
+    // the tail bytes.
+    if data.len() % elem_size != 0 {
+        return Err(NpyError::Io {
+            path: path.display().to_string(),
+            detail: format!(
+                "NPY payload of {} bytes is not a multiple of the {elem_size}-byte element size ({descr})",
+                data.len()
+            ),
+        });
+    }
     let values: Vec<f64> = match descr.as_str() {
         "<f8" => data
             .chunks_exact(8)
@@ -102,12 +127,7 @@ pub(crate) fn read_npy_flat(path: &Path) -> Result<(Vec<f64>, Vec<usize>), NpyEr
             .chunks_exact(8)
             .map(|c| i64::from_le_bytes(c.try_into().unwrap_or([0; 8])) as f64)
             .collect(),
-        other => {
-            return Err(NpyError::Io {
-                path: path.display().to_string(),
-                detail: format!("unsupported NPY dtype {other} (expected <f4, <f8 or <i8)"),
-            });
-        }
+        _ => unreachable!("elem_size match above rejects other dtypes"),
     };
     Ok((values, shape))
 }
@@ -246,6 +266,39 @@ mod tests {
         std::fs::write(&path, &bytes).unwrap();
         let err = read_npy_flat(&path).unwrap_err();
         assert!(format!("{err}").contains("truncated NPY header"), "{err}");
+    }
+
+    #[test]
+    fn read_npy_rejects_truncated_v2_header() {
+        // A v2.0 file whose 4-byte header length is cut short must error, not
+        // panic on the length read.
+        let tmp = tempfile::TempDir::new().unwrap();
+        for name in ["v2-10.npy", "v2-11.npy"] {
+            let path = tmp.path().join(name);
+            let mut bytes = b"\x93NUMPY\x02\x00".to_vec();
+            bytes.extend_from_slice(&[0x10, 0x00]); // only half the length field
+            if name == "v2-11.npy" {
+                bytes.push(0x00);
+            }
+            std::fs::write(&path, &bytes).unwrap();
+            let err = read_npy_flat(&path).unwrap_err();
+            assert!(
+                format!("{err}").contains("truncated NPY header"),
+                "{name}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_npy_rejects_ragged_payload() {
+        // One whole <f4 element plus two trailing bytes: the tail must be
+        // rejected, not silently dropped.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut payload = f4_bytes(&[1.0]);
+        payload.extend_from_slice(&[0xAA, 0xBB]);
+        let path = write_npy_v1(tmp.path(), "ragged.npy", "<f4", &[1], &payload);
+        let err = read_npy_flat(&path).unwrap_err();
+        assert!(format!("{err}").contains("not a multiple"), "{err}");
     }
 
     #[test]

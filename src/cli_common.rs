@@ -29,7 +29,9 @@ pub fn parse_clusterer_kind(name: &str, threshold: f32) -> Result<ClustererKind>
 /// Effective AHC threshold from CLI-style flags. An explicit `--threshold`
 /// always wins. Without one, the default depends on the active scorer: the
 /// raw-cosine default is meaningless on the AS-norm z-scale (and vice versa),
-/// so AS-norm falls back to the calibrated VoxConverse z-threshold.
+/// so AS-norm falls back to the calibrated VoxConverse z-threshold. When a
+/// domain profile applies (and no explicit threshold was given), the profile's
+/// calibrated value replaces this fallback at pipeline build time.
 pub fn resolve_ahc_threshold(explicit: Option<f32>, as_norm: bool) -> f32 {
     explicit.unwrap_or(if as_norm {
         // The VoxConverse z-threshold is calibrated and always Some.
@@ -78,6 +80,73 @@ pub fn resolve_as_norm_config(
         top_n: top_n.unwrap_or(crate::clusterer::DEFAULT_AS_NORM_TOP_N),
         cohort: source,
     }))
+}
+
+/// Resolve the CLI clustering flags into the v2 config triple
+/// `(clusterer, as_norm, domain)`, applying the CLI-level precedence and
+/// validation rules that the library config cannot express:
+///
+/// - `--as-norm` and `--domain-profile` require the AHC clusterer (they are
+///   silently inert otherwise — a hard error beats a surprise).
+/// - An explicit `--threshold` beats the domain profile's calibrated
+///   threshold: the profile is then dropped from the returned config so the
+///   builder cannot override the explicit value (the profile's cohort size
+///   was already folded into the AS-norm config). Library users get the
+///   opposite precedence — `PipelineConfig.domain` always overrides the
+///   configured threshold at build time.
+///
+/// Suspicious-but-legal combinations warn on stderr: a raw-cosine-looking
+/// explicit threshold on the AS-norm z-scale, an AS-norm domain profile
+/// without a calibrated z-threshold (the VoxConverse fallback is used), and a
+/// `--cohort` path without `--as-norm` (ignored).
+pub fn resolve_clusterer_flags(
+    clusterer: &str,
+    threshold: Option<f32>,
+    as_norm: bool,
+    cohort: Option<PathBuf>,
+    domain_profile: Option<&str>,
+) -> Result<(
+    ClustererKind,
+    Option<crate::clusterer::AsNormConfig>,
+    Option<crate::clusterer::DomainProfile>,
+)> {
+    let kind = parse_clusterer_kind(clusterer, resolve_ahc_threshold(threshold, as_norm))?;
+    let is_ahc = matches!(kind, ClustererKind::Ahc { .. });
+    if as_norm && !is_ahc {
+        anyhow::bail!("--as-norm applies to the AHC clusterer only (pass --clusterer ahc)");
+    }
+    let domain = domain_profile.map(parse_domain_profile).transpose()?;
+    if domain.is_some() && !is_ahc {
+        anyhow::bail!("--domain-profile applies to the AHC clusterer only (pass --clusterer ahc)");
+    }
+    if !as_norm && cohort.is_some() {
+        eprintln!("warning: --cohort is ignored without --as-norm");
+    }
+    if as_norm {
+        match (threshold, domain) {
+            (Some(t), _) if t < 1.5 => {
+                eprintln!(
+                    "warning: --threshold {t} is on the raw-cosine scale; with --as-norm the \
+                     merge threshold is a z-score (calibrated domains use z = 4-5)"
+                );
+            }
+            (None, Some(d)) if d.as_norm_threshold.is_none() => {
+                let fallback = resolve_ahc_threshold(None, true);
+                eprintln!(
+                    "warning: --domain-profile {} has no calibrated AS-norm z-threshold; \
+                     using the VoxConverse-calibrated z = {fallback}",
+                    d.name
+                );
+            }
+            _ => {}
+        }
+    }
+    let as_norm_config = resolve_as_norm_config(as_norm, cohort, domain.map(|d| d.as_norm_top_n))?;
+    // CLI precedence: an explicit threshold already won via
+    // `resolve_ahc_threshold`; drop the profile so the builder's library
+    // contract (profile overrides the configured threshold) cannot undo it.
+    let domain = if threshold.is_some() { None } else { domain };
+    Ok((kind, as_norm_config, domain))
 }
 
 /// Parse an `--execution-provider`-style selector. `auto` resolves to the best
@@ -300,6 +369,83 @@ mod tests {
             crate::clusterer::CohortSource::Path(p) => assert_eq!(p, path),
             other => panic!("expected Path, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn clusterer_flags_require_ahc_for_as_norm_and_domain_profile() {
+        let err = resolve_clusterer_flags("vbx", None, true, None, None)
+            .err()
+            .unwrap();
+        assert!(format!("{err:#}").contains("--clusterer ahc"));
+        // A domain profile with the default VBx clusterer must not be
+        // silently inert either.
+        let err = resolve_clusterer_flags("vbx", None, false, None, Some("ami"))
+            .err()
+            .unwrap();
+        assert!(format!("{err:#}").contains("--domain-profile"));
+        assert!(format!("{err:#}").contains("--clusterer ahc"));
+    }
+
+    #[test]
+    fn clusterer_flags_explicit_threshold_beats_domain_profile() {
+        let (kind, as_norm, domain) =
+            resolve_clusterer_flags("ahc", Some(0.7), false, None, Some("ami")).unwrap();
+        assert_eq!(kind, ClustererKind::Ahc { threshold: 0.7 });
+        // The profile is dropped from the config so the builder cannot
+        // override the explicit threshold; without AS-norm there is no
+        // cohort size to preserve.
+        assert!(domain.is_none());
+        assert!(as_norm.is_none());
+    }
+
+    #[test]
+    fn clusterer_flags_profile_supplies_threshold_and_top_n_without_explicit() {
+        let z_fallback = crate::clusterer::domain::VOXCONVERSE
+            .as_norm_threshold
+            .unwrap();
+        let (kind, as_norm, domain) =
+            resolve_clusterer_flags("ahc", None, true, None, Some("ami")).unwrap();
+        // No explicit threshold: the fallback z-threshold goes into the kind
+        // and the profile stays in the config to override it at build time.
+        assert_eq!(
+            kind,
+            ClustererKind::Ahc {
+                threshold: z_fallback
+            }
+        );
+        assert_eq!(domain.unwrap().name, "ami");
+        // The profile's cohort size feeds the AS-norm config.
+        assert_eq!(
+            as_norm.unwrap().top_n,
+            crate::clusterer::domain::AMI.as_norm_top_n
+        );
+    }
+
+    #[test]
+    fn clusterer_flags_warn_paths_still_resolve() {
+        let z_fallback = crate::clusterer::domain::VOXCONVERSE
+            .as_norm_threshold
+            .unwrap();
+        // Raw-scale-looking explicit threshold with AS-norm: warns, resolves.
+        let (kind, _, domain) =
+            resolve_clusterer_flags("ahc", Some(0.5), true, None, Some("ami")).unwrap();
+        assert_eq!(kind, ClustererKind::Ahc { threshold: 0.5 });
+        assert!(domain.is_none());
+        // Uncalibrated-z domain with AS-norm: warns, keeps the fallback.
+        let (kind, _, domain) =
+            resolve_clusterer_flags("ahc", None, true, None, Some("callhome")).unwrap();
+        assert_eq!(
+            kind,
+            ClustererKind::Ahc {
+                threshold: z_fallback
+            }
+        );
+        assert_eq!(domain.unwrap().name, "callhome");
+        // Cohort without AS-norm: warns, ignored.
+        let (_, as_norm, _) =
+            resolve_clusterer_flags("ahc", None, false, Some(PathBuf::from("/x.npy")), None)
+                .unwrap();
+        assert!(as_norm.is_none());
     }
 
     #[test]

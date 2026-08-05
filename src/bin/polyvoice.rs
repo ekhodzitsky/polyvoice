@@ -68,7 +68,7 @@ struct DiarizeArgs {
     models_cache: Option<PathBuf>,
     /// AHC merge threshold on the active scorer's scale: raw cosine (default
     /// 0.45), or AS-norm z-score when `--as-norm` is set (default 4.0).
-    /// `--domain-profile` overrides this with its calibrated value.
+    /// An explicit value wins over `--domain-profile`'s calibrated threshold.
     #[arg(long)]
     threshold: Option<f32>,
     /// Target speaker count (caps clustering at N speakers).
@@ -115,9 +115,10 @@ struct DiarizeArgs {
     /// POLYVOICE_ASNORM_COHORT env override.
     #[arg(long)]
     cohort: Option<PathBuf>,
-    /// Per-domain scoring profile: voxconverse | ami | callhome. Overrides
-    /// --threshold for the AHC clusterer with the profile's calibrated
-    /// threshold and sets the AS-norm cohort size. Ignored with `--legacy`.
+    /// Per-domain scoring profile: voxconverse | ami | callhome. Replaces the
+    /// default AHC threshold with the profile's calibrated value (an explicit
+    /// --threshold wins) and sets the AS-norm cohort size. Requires
+    /// `--clusterer ahc`. Ignored with `--legacy`.
     #[arg(long)]
     domain_profile: Option<String>,
     /// v2 dense embedding window in seconds (e.g. `1.5`): split segments into
@@ -263,6 +264,11 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     };
 
     let mut result = if use_legacy {
+        if as_norm || cohort.is_some() || domain_profile.is_some() {
+            anyhow::bail!(
+                "--as-norm/--cohort/--domain-profile apply to the default v2 pipeline only"
+            );
+        }
         run_legacy_pipeline(
             &wav,
             profile,
@@ -434,24 +440,13 @@ fn run_v2_pipeline(
     execution_provider: &str,
     quiet: bool,
 ) -> Result<DiarizationResult> {
-    let clusterer_kind = cli_common::parse_clusterer_kind(
+    let (clusterer_kind, as_norm_config, domain) = cli_common::resolve_clusterer_flags(
         clusterer,
-        cli_common::resolve_ahc_threshold(threshold, as_norm),
+        threshold,
+        as_norm,
+        cohort,
+        domain_profile.as_deref(),
     )?;
-    if as_norm
-        && !matches!(
-            clusterer_kind,
-            polyvoice::pipeline_v2::ClustererKind::Ahc { .. }
-        )
-    {
-        anyhow::bail!("--as-norm applies to the AHC clusterer only (pass --clusterer ahc)");
-    }
-    let domain = domain_profile
-        .as_deref()
-        .map(cli_common::parse_domain_profile)
-        .transpose()?;
-    let as_norm_config =
-        cli_common::resolve_as_norm_config(as_norm, cohort, domain.map(|d| d.as_norm_top_n))?;
     let ep = cli_common::parse_execution_provider(execution_provider)?;
     let mut config = PipelineConfig {
         profile,

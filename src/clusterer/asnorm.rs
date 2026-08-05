@@ -45,6 +45,9 @@ pub enum CohortSource {
 #[derive(Clone, Debug)]
 pub struct AsNormConfig {
     /// Number of top cohort scores per embedding used for mean/std estimation.
+    /// `top_n <= 1` yields a zero-dispersion top-N set, which falls back to
+    /// the identity normalizer: normalization is then silently disabled and
+    /// the z-scores collapse to raw cosines.
     pub top_n: usize,
     /// Cohort provenance.
     pub cohort: CohortSource,
@@ -55,6 +58,14 @@ pub struct AsNormConfig {
 pub enum AsNormError {
     #[error("as-norm cohort io error on {path}: {detail}")]
     Io { path: String, detail: String },
+    #[error(
+        "as-norm cohort rows must share one dimension: row 0 has {expected}, row {row} has {actual}"
+    )]
+    RaggedRows {
+        expected: usize,
+        row: usize,
+        actual: usize,
+    },
 }
 
 impl From<crate::utils::npy::NpyError> for AsNormError {
@@ -74,20 +85,35 @@ pub struct AsNormCohort {
 }
 
 impl AsNormCohort {
-    /// Build from in-memory rows; every row is L2-normalized.
-    pub fn from_rows(rows: Vec<Vec<f32>>) -> Self {
+    /// Build from in-memory rows; every row is L2-normalized. Rows must all
+    /// share one dimension — a ragged cohort would silently score short rows
+    /// against mismatched embeddings, so it is rejected up front.
+    pub fn from_rows(rows: Vec<Vec<f32>>) -> Result<Self, AsNormError> {
+        if let Some(expected) = rows.first().map(Vec::len)
+            && let Some((i, row)) = rows
+                .iter()
+                .enumerate()
+                .skip(1)
+                .find(|(_, r)| r.len() != expected)
+        {
+            return Err(AsNormError::RaggedRows {
+                expected,
+                row: i,
+                actual: row.len(),
+            });
+        }
         let mut rows = rows;
         for row in &mut rows {
             l2_normalize(row);
         }
-        Self { rows }
+        Ok(Self { rows })
     }
 
     /// Load from a `.npy` file of shape `(N, D)`, dtype `'<f4'`, C-order.
     pub fn from_npy(path: &Path) -> Result<Self, AsNormError> {
         let (values, _rows, cols) = crate::utils::npy::read_npy_f32_2d(path)?;
         let rows = values.chunks_exact(cols).map(<[f32]>::to_vec).collect();
-        Ok(Self::from_rows(rows))
+        Self::from_rows(rows)
     }
 
     /// The cohort rows (L2-normalized).
@@ -209,7 +235,8 @@ pub struct AsNormClusterer {
 impl AsNormClusterer {
     /// `max_clusters == 0` means no ceiling, matching
     /// [`crate::clusterer::AhcClusterer::with_threshold`]. `top_n == 0` clamps
-    /// to a single top cohort score per embedding.
+    /// to a single top cohort score per embedding — a zero-dispersion top-N
+    /// set, which falls back to the identity normalizer (normalization off).
     pub fn new(max_clusters: usize, threshold: f32, cohort: AsNormCohort, top_n: usize) -> Self {
         Self {
             max_clusters,
@@ -343,20 +370,27 @@ mod tests {
         };
         let speaker_a = utterances(&mut rng, &center_a);
         let speaker_b = utterances(&mut rng, &center_b);
-        (AsNormCohort::from_rows(cohort), speaker_a, speaker_b)
+        (
+            AsNormCohort::from_rows(cohort).expect("test cohort rows are uniform"),
+            speaker_a,
+            speaker_b,
+        )
     }
 
-    /// All same-speaker and cross-speaker scores under `score_pair`.
+    /// All same-speaker and cross-speaker scores under `score_pair`. Member
+    /// indices address the joint embedding slice `a ++ b`, so speaker b's
+    /// local indices are offset by `a.len()` — otherwise its same-speaker
+    /// pairs would be scored with speaker a's cohort stats.
     fn same_cross_scores(
         a: &[Vec<f32>],
         b: &[Vec<f32>],
         mut score_pair: impl FnMut(&[f32], usize, &[f32], usize) -> f32,
     ) -> (Vec<f32>, Vec<f32>) {
         let mut same = Vec::new();
-        for spk in [a, b] {
+        for (offset, spk) in [(0usize, a), (a.len(), b)] {
             for i in 0..spk.len() {
                 for j in (i + 1)..spk.len() {
-                    same.push(score_pair(&spk[i], i, &spk[j], j));
+                    same.push(score_pair(&spk[i], offset + i, &spk[j], offset + j));
                 }
             }
         }
@@ -369,6 +403,104 @@ mod tests {
             }
         }
         (same, cross)
+    }
+
+    #[test]
+    fn as_norm_score_matches_the_symmetric_formula_oracle() {
+        // Hand-computable fixture: unit cohort rows chosen so the two
+        // embeddings get DISTINCT (mean, std) stats — a one-sided s-norm or a
+        // mean/std cross-swap lands on a different number.
+        let cohort =
+            AsNormCohort::from_rows(vec![vec![1.0, 0.0], vec![0.6, 0.8], vec![0.0, 1.0]]).unwrap();
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        let scorer = AsNormScorer::new(&cohort, &[a.clone(), b.clone()], 3);
+
+        // a's cohort scores are 1.0, 0.6, 0.0; b's are 0.0, 0.8, 1.0; the
+        // raw score is s = cos(a, b) = 0.
+        let stats = |scores: [f64; 3]| {
+            let m = scores.iter().sum::<f64>() / 3.0;
+            let v = scores.iter().map(|s| (s - m).powi(2)).sum::<f64>() / 3.0;
+            (m, v.sqrt())
+        };
+        let (mean_a, std_a) = stats([1.0, 0.6, 0.0]);
+        let (mean_b, std_b) = stats([0.0, 0.8, 1.0]);
+        assert_ne!(
+            (mean_a, std_a),
+            (mean_b, std_b),
+            "oracle is vacuous unless the two stats differ"
+        );
+        let expected = 0.5 * ((0.0 - mean_a) / std_a + (0.0 - mean_b) / std_b);
+
+        let z = scorer.score(&a, 0, &b, 1);
+        assert!(
+            (z as f64 - expected).abs() < 1e-6,
+            "symmetric as-norm formula: got {z}, want {expected}"
+        );
+        // Symmetric in its arguments, bit for bit.
+        assert_eq!(z, scorer.score(&b, 1, &a, 0));
+    }
+
+    #[test]
+    fn identical_embeddings_merge_with_real_and_degenerate_cohorts() {
+        let mut rng = XorShift(7);
+        let e = unit(&noise(&mut rng, 8));
+        let embeddings = vec![e.clone(); 4];
+
+        // Real varied cohort: every copy sees the same stats, so an identical
+        // pair (raw s = 1) scores z = (1 - mean) / std — far above any
+        // calibrated z-threshold — and all copies merge into one cluster.
+        let cohort_rows: Vec<Vec<f32>> = (0..8).map(|_| unit(&noise(&mut rng, 8))).collect();
+        let cohort = AsNormCohort::from_rows(cohort_rows).unwrap();
+        let scorer = AsNormScorer::new(&cohort, &embeddings, 5);
+        let (m, s) = scorer.stats()[0];
+        assert!(s > 0.0, "varied cohort must give non-zero dispersion");
+        let z = scorer.score(&embeddings[0], 0, &embeddings[1], 1);
+        assert!(
+            (z - (1.0 - m) / s).abs() < 1e-5,
+            "z of an identical pair is (1 - mean) / std: {z}"
+        );
+        assert!(
+            z > 4.0,
+            "identical pair must sit above the calibrated z-thresholds: {z}"
+        );
+        let labels = AsNormClusterer::new(0, 4.0, cohort, 5)
+            .cluster(&embeddings)
+            .unwrap();
+        assert!(
+            labels.iter().all(|&l| l == labels[0]),
+            "identical embeddings merge into one cluster: {labels:?}"
+        );
+
+        // Zero-dispersion fallback: cohort rows identical to the embeddings
+        // make every top-N cohort score 1.0, the std collapses, the identity
+        // normalizer passes the raw cosine (1.0) through, and the copies
+        // still merge.
+        let dup = AsNormCohort::from_rows(vec![e.clone(), e.clone()]).unwrap();
+        let scorer = AsNormScorer::new(&dup, &embeddings, 2);
+        assert!(
+            scorer.stats().iter().all(|&st| st == (0.0, 1.0)),
+            "zero-dispersion top-N set must yield the identity normalizer"
+        );
+        let z = scorer.score(&embeddings[0], 0, &embeddings[1], 1);
+        assert!((z - 1.0).abs() < 1e-6, "raw passthrough of s = 1: {z}");
+        let labels = AsNormClusterer::new(0, 0.5, dup, 2)
+            .cluster(&embeddings)
+            .unwrap();
+        assert!(
+            labels.iter().all(|&l| l == labels[0]),
+            "raw passthrough still merges identical embeddings: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn from_rows_rejects_ragged_rows() {
+        let err = AsNormCohort::from_rows(vec![vec![1.0, 0.0], vec![1.0, 0.0, 0.0]]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("row 1"), "{msg}");
+        assert!(msg.contains("dimension"), "{msg}");
+        // A uniform cohort still builds.
+        assert!(AsNormCohort::from_rows(vec![vec![1.0, 0.0]; 3]).is_ok());
     }
 
     #[test]
@@ -387,21 +519,16 @@ mod tests {
         });
 
         // Scale-free separation: same/cross gap in units of cross-speaker std.
+        // (A relative same-speaker-spread check used to live here; it only
+        // passed while same_cross_scores scored speaker b's pairs with
+        // speaker a's stats — with honest per-speaker stats the spread
+        // reduction is not significant, so the separation t-stat is what this
+        // test asserts.)
         let t_raw = (mean(&same_raw) - mean(&cross_raw)) / var(&cross_raw).sqrt();
         let t_z = (mean(&same_z) - mean(&cross_z)) / var(&cross_z).sqrt();
         assert!(
             t_z > t_raw,
             "as-norm must sharpen separation: t_raw={t_raw:.3} t_z={t_z:.3}"
-        );
-
-        // Scale-free same-speaker spread, relative to the squared gap.
-        let gap_raw = (mean(&same_raw) - mean(&cross_raw)).powi(2);
-        let gap_z = (mean(&same_z) - mean(&cross_z)).powi(2);
-        let spread_raw = var(&same_raw) / gap_raw;
-        let spread_z = var(&same_z) / gap_z;
-        assert!(
-            spread_z < spread_raw,
-            "as-norm must reduce relative cross-utterance spread: raw={spread_raw:.3} z={spread_z:.3}"
         );
     }
 
@@ -462,7 +589,7 @@ mod tests {
     #[test]
     fn top_n_clamps_to_cohort_size() {
         let mut rng = XorShift(42);
-        let cohort = AsNormCohort::from_rows((0..5).map(|_| noise(&mut rng, 8)).collect());
+        let cohort = AsNormCohort::from_rows((0..5).map(|_| noise(&mut rng, 8)).collect()).unwrap();
         let emb = unit(&noise(&mut rng, 8));
 
         // top_n larger than the cohort uses the whole cohort, no panic.
@@ -471,9 +598,12 @@ mod tests {
         assert!(s_all > 0.0);
 
         // top-1 is degenerate (a single score has zero dispersion) → identity
-        // normalizer by design.
+        // normalizer by design; top_n == 0 clamps to that same single-score
+        // case.
         let (m1, s1, _) = top_score_stats(cohort.rows(), &emb, 1);
         assert_eq!((m1, s1), (0.0, 1.0));
+        let (m0, s0, _) = top_score_stats(cohort.rows(), &emb, 0);
+        assert_eq!((m0, s0), (0.0, 1.0));
 
         // top-2 stats track the two highest cohort scores exactly.
         let mut scores: Vec<f32> = cohort
@@ -501,14 +631,14 @@ mod tests {
             .unwrap();
 
         for (name, cohort) in [
-            ("empty", AsNormCohort::from_rows(Vec::new())),
+            ("empty", AsNormCohort::from_rows(Vec::new()).unwrap()),
             (
                 "single-row",
-                AsNormCohort::from_rows(vec![vec![1.0, 0.0, 0.0]]),
+                AsNormCohort::from_rows(vec![vec![1.0, 0.0, 0.0]]).unwrap(),
             ),
             (
                 "constant (std=0)",
-                AsNormCohort::from_rows(vec![vec![0.3, 0.9, 0.1]; 16]),
+                AsNormCohort::from_rows(vec![vec![0.3, 0.9, 0.1]; 16]).unwrap(),
             ),
         ] {
             let scorer = AsNormScorer::new(&cohort, &embeddings, 10);

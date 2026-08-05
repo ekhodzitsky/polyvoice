@@ -28,7 +28,7 @@ Options:
       --models-cache <MODELS_CACHE>
           
       --threshold <THRESHOLD>
-          AHC merge threshold on the active scorer's scale: raw cosine (default 0.45), or AS-norm z-score when `--as-norm` is set (default 4.0). `--domain-profile` overrides this with its calibrated value
+          AHC merge threshold on the active scorer's scale: raw cosine (default 0.45), or AS-norm z-score when `--as-norm` is set (default 4.0). An explicit value wins over `--domain-profile`'s calibrated threshold
       --speakers <SPEAKERS>
           Target speaker count (caps clustering at N speakers)
       --max-speakers <MAX_SPEAKERS>
@@ -48,7 +48,7 @@ Options:
       --cohort <COHORT>
           Imposter cohort for --as-norm: (N, 256) '<f4' .npy of speaker embeddings. Omitted = model-registry cohort, with the POLYVOICE_ASNORM_COHORT env override
       --domain-profile <DOMAIN_PROFILE>
-          Per-domain scoring profile: voxconverse | ami | callhome. Overrides --threshold for the AHC clusterer with the profile's calibrated threshold and sets the AS-norm cohort size. Ignored with `--legacy`
+          Per-domain scoring profile: voxconverse | ami | callhome. Replaces the default AHC threshold with the profile's calibrated value (an explicit --threshold wins) and sets the AS-norm cohort size. Requires `--clusterer ahc`. Ignored with `--legacy`
       --embed-window <EMBED_WINDOW>
           v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Ignored with `--legacy`
       --execution-provider <EXECUTION_PROVIDER>
