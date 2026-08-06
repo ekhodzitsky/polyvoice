@@ -28,7 +28,7 @@
       "embedder": "wespeaker_resnet34",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational \u2014 full 232-file VoxConverse-test gate 2026-07-25; pipeline v2 + VBx (PLDA data/vbx-plda, CoreML EP). Became CLI default in 0.11 after hard gate no-collar micro \u2264 legacy. micro no-collar 15.37% / collar 11.12%.",
+    "_status": "operational — full 232-file VoxConverse-test gate 2026-07-25; pipeline v2 + VBx (PLDA data/vbx-plda, CoreML EP). Became CLI default in 0.11 after hard gate no-collar micro ≤ legacy. micro no-collar 15.37% / collar 11.12%.",
     "_filled_by": "benchmarks/results/full-der-2026-07-25/v2-vbx-voxconverse-test-232.json"
   },
   "ami_test": {
@@ -56,7 +56,7 @@
       "embedder": "wespeaker_resnet34",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational \u2014 full 16-meeting AMI Mix-Headset gate 2026-07-25; pipeline v2 + VBx. CLI default in 0.11. Re-measured 2026-07-30 with the 2.0s powerset window hop (CPU provider): micro no-collar 23.42% / collar 15.71% (was 25.17% / 17.66% at 1.0s hop).",
+    "_status": "operational — full 16-meeting AMI Mix-Headset gate 2026-07-25; pipeline v2 + VBx. CLI default in 0.11. Re-measured 2026-07-30 with the 2.0s powerset window hop (CPU provider): micro no-collar 23.42% / collar 15.71% (was 25.17% / 17.66% at 1.0s hop).",
     "_filled_by": "benchmarks/results/powerset-hop2-2026-07-30/v2-vbx-ami-test-16.json"
   },
   "voxconverse_dev": {
@@ -69,7 +69,7 @@
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "PLACEHOLDER \u2014 dev split for TUNING the fixed AHC threshold and VBx parameters. Fill from scripts/run-der-sweep.sh on the shipped FP32 artifact; tune on dev, report on voxconverse_test.",
+    "_status": "PLACEHOLDER — dev split for TUNING the fixed AHC threshold and VBx parameters. Fill from scripts/run-der-sweep.sh on the shipped FP32 artifact; tune on dev, report on voxconverse_test.",
     "_filled_by": "scripts/run-der-sweep.sh"
   },
   "voxconverse_test_10files": {
@@ -85,7 +85,7 @@
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational \u2014 10-file subset, legacy pipeline (threshold=0.45), re-captured on crate 0.9.0 (master 9bbcdcd, shipped FP32, macOS aarch64 CPU). GATED METRICS: der_collar_0_25 is the historical MACRO mean-of-per-file gate (tightened 17.43 -> 15.82 after singleton pruning improvements); der_no_collar is MICRO (frame-weighted, sum of error frames / sum of ref frames) \u2014 the headline like-for-like convention. The prior der_no_collar 25.99 was a v0.6 macro-era value and is not comparable; micro upweights the long hard files, hence 27.08 > the old number while collar-0.25 quality actually improved.",
+    "_status": "operational — 10-file subset, legacy pipeline (threshold=0.45), re-captured on crate 0.9.0 (master 9bbcdcd, shipped FP32, macOS aarch64 CPU). GATED METRICS: der_collar_0_25 is the historical MACRO mean-of-per-file gate (tightened 17.43 -> 15.82 after singleton pruning improvements); der_no_collar is MICRO (frame-weighted, sum of error frames / sum of ref frames) — the headline like-for-like convention. The prior der_no_collar 25.99 was a v0.6 macro-era value and is not comparable; micro upweights the long hard files, hence 27.08 > the old number while collar-0.25 quality actually improved.",
     "_filled_by": "cargo nextest run --run-ignored only --test der_regression_test --features onnx,download der_regression_voxconverse_10_file_subset --no-capture"
   },
   "e2e_smoke": {
@@ -98,7 +98,7 @@
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational \u2014 bundled 26 s clip, legacy pipeline (threshold=0.45). der_no_collar captured on crate 0.9.0 (master 9bbcdcd): 14.52% at collar 0 on the same run that scored 6.62% at collar 0.25 (short clip, many boundaries \u2014 the collar hides a large share).",
+    "_status": "operational — bundled 26 s clip, legacy pipeline (threshold=0.45). der_no_collar captured on crate 0.9.0 (master 9bbcdcd): 14.52% at collar 0 on the same run that scored 6.62% at collar 0.25 (short clip, many boundaries — the collar hides a large share).",
     "_filled_by": "cargo nextest run --run-ignored only --test der_regression_test --features onnx,download der_regression_e2e_smoke --no-capture"
   },
   "ami_test_single": {
@@ -108,13 +108,13 @@
     "der_no_collar": 42.9,
     "der_single_speaker": null,
     "der_single_speaker_tolerance": 2.0,
-    "_der_single_speaker_status": "PLACEHOLDER \u2014 overlap-excluded (single-speaker-region) DER. Run the AMI regression test with --ignored, read the printed 'overlap-excluded DER', then set this value to activate the long-form numeric floor.",
+    "_der_single_speaker_status": "PLACEHOLDER — overlap-excluded (single-speaker-region) DER. Run the AMI regression test with --ignored, read the printed 'overlap-excluded DER', then set this value to activate the long-form numeric floor.",
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational \u2014 EN2002a single meeting, legacy pipeline (threshold=0.45). Tightened on crate 0.9.0 (master 9bbcdcd) after singleton-pruning improvements: collar 36.30 -> 34.62, no-collar 44.73 -> 42.90.",
+    "_status": "operational — EN2002a single meeting, legacy pipeline (threshold=0.45). Tightened on crate 0.9.0 (master 9bbcdcd) after singleton-pruning improvements: collar 36.30 -> 34.62, no-collar 44.73 -> 42.90.",
     "_filled_by": "cargo nextest run --run-ignored only --test der_regression_test --features onnx,download der_regression_ami_test_single --no-capture"
   },
   "v2_e2e_smoke": {
@@ -127,7 +127,7 @@
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "operational \u2014 Pipeline v2 (Powerset + ResNet34 + AHC), DER < 5% on 26s clip. der_no_collar captured on crate 0.9.0 (master 9bbcdcd): 11.81% measured at collar 0 on the same run that scored 4.34% at collar 0.25 (the 26 s clip has many boundaries, so the collar hides a large share).",
+    "_status": "operational — Pipeline v2 (Powerset + ResNet34 + AHC), DER < 5% on 26s clip. der_no_collar captured on crate 0.9.0 (master 9bbcdcd): 11.81% measured at collar 0 on the same run that scored 4.34% at collar 0.25 (the 26 s clip has many boundaries, so the collar hides a large share).",
     "_filled_by": "cargo nextest run --run-ignored only --test cli_der_regression_test --features cli,download cli_der_regression_v2_e2e_smoke --no-capture"
   },
   "hybrid_e2e_smoke": {
@@ -140,7 +140,7 @@
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "retired \u2014 hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured, polyvoice-bench no longer exposes the hybrid pipeline)",
+    "_status": "retired — hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured, polyvoice-bench no longer exposes the hybrid pipeline)",
     "_filled_by": "cargo test --test pipeline_v2_hybrid_test -- --ignored"
   },
   "hybrid_voxconverse_3file": {
@@ -153,7 +153,7 @@
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "retired \u2014 hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured)",
+    "_status": "retired — hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured)",
     "_filled_by": "cargo test --test pipeline_v2_hybrid_test -- --ignored"
   },
   "hybrid_voxconverse_10file": {
@@ -166,7 +166,7 @@
       "segmenter": "powerset_fp32",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "retired \u2014 hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured). aorju was a known outlier (47.00% DER, 12 speakers, 23 min, 17% overlap); excluding aorju avg DER was ~9.4%.",
+    "_status": "retired — hybrid experiment superseded by pipeline v2; historical value, ungated; der_no_collar intentionally left null (not re-measured). aorju was a known outlier (47.00% DER, 12 speakers, 23 min, 17% overlap); excluding aorju avg DER was ~9.4%.",
     "_filled_by": "cargo test --release --test pipeline_v2_hybrid_test -- hybrid_voxconverse_10_file_subset --ignored --nocapture"
   },
   "hybrid_ami_test_single": {
@@ -176,7 +176,7 @@
     "der_no_collar": null,
     "der_single_speaker": 24.8,
     "der_single_speaker_tolerance": 3.0,
-    "_der_single_speaker_status": "ACTIVE \u2014 overlap-excluded (single-speaker-region) DER floor for pipeline v2 on EN2002a, measured 24.80% on crate 0.9.0 (master 9bbcdcd, CLI --v2, collar 0.25). This is the long-form numeric gate: unlike total DER (miss-bound at ~79% overlap), it discriminates healthy vs collapsed diarization.",
+    "_der_single_speaker_status": "ACTIVE — overlap-excluded (single-speaker-region) DER floor for pipeline v2 on EN2002a, measured 24.80% on crate 0.9.0 (master 9bbcdcd, CLI --v2, collar 0.25). This is the long-form numeric gate: unlike total DER (miss-bound at ~79% overlap), it discriminates healthy vs collapsed diarization.",
     "tolerance": 3.0,
     "model_versions": {
       "segmenter": "powerset_fp32",
@@ -209,7 +209,7 @@
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "historical \u2014 full 232-file legacy Silero+AHC (min_cluster_size=2) on 2026-07-25 gate; CLI default until 0.11. micro no-collar 18.54% / collar 12.91%.",
+    "_status": "historical — full 232-file legacy Silero+AHC (min_cluster_size=2) on 2026-07-25 gate; CLI default until 0.11. micro no-collar 18.54% / collar 12.91%.",
     "_filled_by": "benchmarks/results/full-der-2026-07-25/legacy-voxconverse-test-232.json"
   },
   "ami_test_legacy": {
@@ -233,7 +233,58 @@
       "segmenter": "silero_vad",
       "embedder": "wespeaker_resnet34"
     },
-    "_status": "historical \u2014 full 16-meeting AMI Mix-Headset legacy Silero+AHC on 2026-07-25 gate; CLI default until 0.11. micro no-collar 32.87% / collar 25.20%.",
+    "_status": "historical — full 16-meeting AMI Mix-Headset legacy Silero+AHC on 2026-07-25 gate; CLI default until 0.11. micro no-collar 32.87% / collar 25.20%.",
     "_filled_by": "benchmarks/results/full-der-2026-07-25/legacy-ami-test-16.json"
+  },
+  "notsofar_dev": {
+    "files": 36,
+    "profile": "balanced",
+    "pipeline": "v2",
+    "clusterer": "vbx",
+    "der_collar_0_25": 29.77,
+    "der_no_collar": 47.08,
+    "der_collar_macro": 30.45,
+    "der_collar_micro": 29.77,
+    "der_no_collar_macro": 45.11,
+    "der_no_collar_micro": 47.08,
+    "miss": 24.59,
+    "false_alarm": 1.86,
+    "confusion": 18.66,
+    "speaker_count": {
+      "exact": 8,
+      "plus_minus_1": 18,
+      "off_by_2_or_more": 10
+    },
+    "tolerance": 2.0,
+    "model_versions": {
+      "segmenter": "powerset_fp32",
+      "embedder": "wespeaker_resnet34",
+      "clusterer": "vbx_plda"
+    },
+    "_status": "operational — NOTSOFAR-1 dev-set-1 (240825.1_dev1) cross-corpus gate 2026-08-06; 36 meetings, first sorted single-channel far-field device per meeting; pipeline v2 + VBx (CPU provider). micro no-collar 47.08% / collar 29.77%. Distant-mic office meetings are much harder than VoxConverse/AMI — the gate tracks regressions, not competitiveness with array-based systems.",
+    "_filled_by": "benchmarks/results/notsofar-dev/v2-vbx-collar{0,025}.json"
+  },
+  "notsofar_dev_3file": {
+    "files": 3,
+    "profile": "balanced",
+    "pipeline": "v2",
+    "clusterer": "vbx",
+    "der_collar_0_25": 32.62,
+    "der_no_collar": 41.46,
+    "der_collar_macro": 32.93,
+    "der_collar_micro": 32.62,
+    "der_no_collar_macro": 41.81,
+    "der_no_collar_micro": 41.46,
+    "miss": null,
+    "false_alarm": null,
+    "confusion": null,
+    "tolerance": 2.5,
+    "model_versions": {
+      "segmenter": "powerset_fp32",
+      "embedder": "wespeaker_resnet34",
+      "clusterer": "vbx_plda"
+    },
+    "_status": "operational — NOTSOFAR-1 dev-set-1 fixed 3-meeting subset (MTG_30860/30861/30862, first three sorted meeting ids) used by the der_v2_baseline_test gate; same measurement as the full 36-meeting run, macro-averaged over the subset.",
+    "_filled_by": "benchmarks/results/notsofar-dev/v2-vbx-3file-collar025.json"
   }
 }

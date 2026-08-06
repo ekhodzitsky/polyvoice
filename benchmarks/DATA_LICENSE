@@ -28,4 +28,15 @@ Competitor model weights
 
 Attribution
   When citing numbers produced by this harness, cite the dataset (VoxConverse /
-  AMI) and disclose the collar and overlap-handling, per docs/BENCHMARKS.md.
+  AMI / NOTSOFAR-1) and disclose the collar and overlap-handling, per
+  docs/BENCHMARKS.md.
+
+NOTSOFAR-1 (dev-set-1, single-channel)
+  Source:  https://huggingface.co/datasets/microsoft/NOTSOFAR
+           (mirror of the Azure blob original at notsofarsa.blob.core.windows.net)
+  Paper:   CHiME-8 DASR challenge (arXiv:2407.16447)
+  Split:   benchmark-datasets/dev_set/240825.1_dev1 — 36 meetings, first sorted
+           single-channel sc_* device per meeting; GT gt_transcription.json
+           converted to RTTM by ../scripts/notsofar-to-rttm.py.
+  License: CC-BY-4.0 (see the dataset's DATA_LICENSE file).
+  Audio:   downloaded via scripts/download-notsofar.sh — NOT redistributed here.

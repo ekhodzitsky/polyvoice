@@ -168,3 +168,74 @@ fn v2_der_ami_test_single() {
         &baseline.hybrid_ami_test_single,
     );
 }
+
+/// Fixed NOTSOFAR-1 subset (the first three sorted meeting ids), so the gate
+/// stays stable as the corpus grows. Scored at collar 0.25 and no-collar.
+#[cfg(feature = "vbx")]
+#[test]
+#[ignore = "requires downloaded models and dataset"]
+fn v2_der_notsofar_3_file_subset() {
+    const NOTSOFAR_SUBSET_3: &[&str] = &["MTG_30860", "MTG_30861", "MTG_30862"];
+    let audio_dir = Path::new("data/notsofar-dev/audio");
+    let rttm_dir = Path::new("data/notsofar-dev/rttm");
+    if !common::require_wav(&audio_dir.join("MTG_30860.wav")) {
+        return;
+    }
+
+    let registry = ModelRegistry::default().expect("registry");
+    // Match the bench invocation the baseline was recorded with:
+    // `polyvoice-bench --pipeline v2 --clusterer vbx`.
+    let pipeline = Pipeline::builder()
+        .config(PipelineConfig {
+            clusterer: polyvoice::pipeline_v2::ClustererKind::Vbx,
+            ..PipelineConfig::default()
+        })
+        .profile(Profile::Balanced)
+        .with_models_from(registry)
+        .build()
+        .expect("pipeline build");
+
+    let mut total_der = 0.0_f64;
+    let mut total_der_no_collar = 0.0_f64;
+    let mut count = 0_usize;
+    for stem in NOTSOFAR_SUBSET_3 {
+        let wav_path = audio_dir.join(format!("{stem}.wav"));
+        let rttm_path = rttm_dir.join(format!("{stem}.rttm"));
+        let (samples, sr_hz) = read_wav(&wav_path).expect("wav");
+        assert_eq!(sr_hz, 16000, "only 16 kHz WAVs supported");
+        let result = pipeline
+            .run(&samples, SampleRate::new(16000).unwrap())
+            .expect("pipeline.run should succeed");
+        let ref_turns = common::load_ref_turns(&rttm_path, stem);
+        let decomp = compute_der_decomposition(&ref_turns, &result.turns, 0.25);
+        let decomp_no_collar = compute_der_decomposition(&ref_turns, &result.turns, 0.0);
+        println!(
+            "{stem}: DER={:.2}% no-collar={:.2}% speakers={} ref_speakers={}",
+            decomp.total.der * 100.0,
+            decomp_no_collar.total.der * 100.0,
+            result.num_speakers,
+            ref_turns
+                .iter()
+                .map(|t| t.speaker.0)
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+        );
+        total_der += decomp.total.der;
+        total_der_no_collar += decomp_no_collar.total.der;
+        count += 1;
+    }
+
+    assert!(count > 0, "no files processed");
+    let baseline = common::load_baseline(&common::der_baseline_path());
+    // Macro average over the fixed subset, mirroring the recorded baseline.
+    common::gate_against_baseline(
+        "notsofar_dev_3file",
+        total_der / count as f64,
+        &baseline.notsofar_dev_3file,
+    );
+    common::assert_no_collar(
+        "notsofar_dev_3file",
+        total_der_no_collar / count as f64,
+        &baseline.notsofar_dev_3file,
+    );
+}

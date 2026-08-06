@@ -101,6 +101,10 @@ pub struct DerBaseline {
     pub hybrid_ami_test_single: DatasetBaseline,
     pub voxconverse_test_legacy: DatasetBaseline,
     pub ami_test_legacy: DatasetBaseline,
+    /// Cross-corpus gate: NOTSOFAR-1 dev-set-1, single far-field channel.
+    pub notsofar_dev: DatasetBaseline,
+    /// Fixed 3-meeting NOTSOFAR-1 subset used by the regression test.
+    pub notsofar_dev_3file: DatasetBaseline,
 }
 
 /// One dataset entry in `tests/der_baseline.json`.

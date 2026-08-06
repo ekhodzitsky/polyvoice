@@ -120,6 +120,28 @@ AMI-test 16 Mix-Headset, collar 0, `benchmarks/der.py`, Apple M1 Pro (2026-08-04
 polyvoice (v2+VBx) at the 0.25 s collar: **15.71 %** micro (macro 15.24).
 Legacy at collar 0.25: **25.20 %** micro (macro 24.75).
 
+## Accuracy — NOTSOFAR-1 dev-set-1 (36 meetings, single far-field channel)
+
+**Collar 0, overlap scored** (collar 0.25 in parentheses). Distant-microphone
+office meetings are a much harder domain than VoxConverse/AMI; the gate exists
+to track regressions on a third corpus, not to compare with array-based
+systems (multi-channel beamforming is out of scope for the default pipeline).
+
+Protocol: `benchmark-datasets/dev_set/240825.1_dev1`, the first sorted
+single-channel `sc_*` device per meeting, GT from `gt_transcription.json`
+converted to RTTM by `scripts/notsofar-to-rttm.py`. Download:
+`scripts/download-notsofar.sh` (CC BY 4.0, HF mirror).
+
+| System | DER₀ micro (macro) | DER₀.₂₅ micro (macro) | miss | FA | conf | source |
+|---|---|---|---|---|---|---|
+| **polyvoice (v2+VBx, default)** | **47.08 (45.11)** | **29.77 (30.45)** | 24.59 | 1.86 | 18.66 | this repo ⁵ |
+
+Speaker count on the 36 meetings: exact 8, ±1 18, off-by-2+ 10 — the pipeline
+under-counts on 4–8-speaker far-field meetings, the same failure mode as AMI.
+Artifacts: [`benchmarks/results/notsofar-dev/`](../benchmarks/results/notsofar-dev/).
+A fixed 3-meeting subset (`MTG_30860/30861/30862`) is gated in
+`tests/der_v2_baseline_test.rs`.
+
 ## polyvoice speaker-count & error decomposition
 
 A low DER can hide bad speaker counting; we report it explicitly.
@@ -244,6 +266,7 @@ peer (ONNX, CPU) but publishes **no DER**.
 |---|---|---|---|
 | VoxConverse dev / test | 216 / 232 | [voxconverse](https://github.com/joonson/voxconverse) | annotations CC-BY-4.0; audio from YouTube (not redistributed) |
 | AMI test (Mix-Headset) | 16 | [AMI corpus](https://groups.inf.ed.ac.uk/ami/corpus/) | CC-BY-4.0 |
+| NOTSOFAR-1 dev-set-1 | 36 | [microsoft/NOTSOFAR](https://huggingface.co/datasets/microsoft/NOTSOFAR) | CC-BY-4.0 |
 
 Audio is downloaded by `scripts/download-*.sh`; this repo redistributes none of
 it. See [`benchmarks/DATA_LICENSE`](../benchmarks/DATA_LICENSE).

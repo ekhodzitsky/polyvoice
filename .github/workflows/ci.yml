@@ -466,6 +466,12 @@ jobs:
             data_script: scripts/download-ami-test-single.sh
             data_key: ami-test-single
             data_path: data/ami-test-single
+          - name: pipeline-v2-notsofar
+            test: v2_der_notsofar_3_file_subset
+            test_flags: "--test der_v2_baseline_test --features onnx,segmentation,embedder,clusterer,resegmentation,download,vbx"
+            data_script: scripts/download-notsofar.sh
+            data_key: notsofar-dev
+            data_path: data/notsofar-dev
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
