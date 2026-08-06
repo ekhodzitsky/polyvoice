@@ -176,8 +176,11 @@ use crate::resegmentation::OverlapResegmenter;
 // Clusterer construction lives in `clusterer_factory`; re-export so `build()`
 // and this module's unit tests share one path (`super::*` in tests).
 pub(crate) use crate::pipeline_v2::clusterer_factory::{
-    build_profile_clusterer, load_as_norm_cohort, resolve_clusterer_kind,
+    build_profile_clusterer, resolve_clusterer_kind,
 };
+// Only referenced from builder_tests — keep out of non-test lib graphs (bins).
+#[cfg(test)]
+pub(crate) use crate::pipeline_v2::clusterer_factory::load_as_norm_cohort;
 
 impl PipelineBuilder {
     /// Validate + construct the inner `Pipeline`.
