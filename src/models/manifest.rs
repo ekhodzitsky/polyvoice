@@ -43,7 +43,8 @@ pub struct ProfileEntry {
 pub struct ModelEntry {
     pub url: String,
     pub sha256: String,
-    /// Optional declared size in bytes (informational).
+    /// Optional declared size in bytes. Used as the basis for the streaming
+    /// download cap (`2 × size`, clamped to 1 GiB); informational when absent.
     #[serde(default)]
     pub size: Option<u64>,
     /// Filename used when caching to disk. Required so the cache is deterministic

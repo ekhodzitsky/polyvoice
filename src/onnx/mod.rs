@@ -38,19 +38,29 @@ pub const ONNX_MIN_HEADER_BYTES: usize = 64;
 ///
 /// EP is **ort-specific config** — it is not part of [`InferenceRuntime`].
 /// Stages pass it only at session construction via [`build_session_with_ep`].
+///
+/// **Wiring status (ort):** `Cpu` always works. `CoreMl` registers when built
+/// with the `coreml` feature on macOS aarch64. `XnnPack` registers with the
+/// `xnnpack` feature. `Nnapi` and `Cuda` are reserved — they warn and fall
+/// back to CPU until wired. Uncompiled / unwired choices never fail the build.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ExecutionProvider {
+    /// Always available. No EP registration; ort uses its built-in CPU path.
     Cpu,
+    /// CoreML on macOS aarch64 when the `coreml` feature is enabled; else CPU + warn.
     CoreMl,
+    /// Reserved for Android NNAPI — **not wired yet** (CPU + warn).
     Nnapi,
+    /// Reserved for NVIDIA CUDA — **not wired yet** (CPU + warn).
     Cuda,
+    /// XNNPACK when the `xnnpack` feature is enabled; else CPU + warn.
     XnnPack,
 }
 
 impl ExecutionProvider {
     /// Best default for the current target: CoreML on Apple Silicon, XNNPACK on
-    /// aarch64 Linux, plain CPU elsewhere. Unwired providers fall back to CPU
-    /// with a warning at session-build time.
+    /// aarch64 Linux, plain CPU elsewhere. Unwired / uncompiled providers fall
+    /// back to CPU with a warning at session-build time.
     pub fn auto() -> Self {
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         return Self::CoreMl;
@@ -61,6 +71,20 @@ impl ExecutionProvider {
             all(target_os = "linux", target_arch = "aarch64"),
         )))]
         return Self::Cpu;
+    }
+
+    /// Whether this variant can register under the **current** build + target.
+    /// `Nnapi` / `Cuda` always return `false` until wired. `CoreMl` / `XnnPack`
+    /// require their cargo features (and CoreML also needs macOS aarch64).
+    pub fn is_available(self) -> bool {
+        match self {
+            Self::Cpu => true,
+            Self::CoreMl => {
+                cfg!(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))
+            }
+            Self::XnnPack => cfg!(feature = "xnnpack"),
+            Self::Nnapi | Self::Cuda => false,
+        }
     }
 }
 
@@ -78,12 +102,12 @@ impl ExecutionProvider {
 /// (the fbank embedder uses 1 because it parallelises across a session pool).
 /// Ignored by tract.
 ///
-/// EP behavior (ort only): `Cpu` registers nothing. `CoreMl` registers CoreML
-/// when the build carries the `coreml` feature on macOS aarch64, else warns
-/// and runs on CPU. `Nnapi`/`Cuda`/`XnnPack` are not wired yet — they warn
-/// and run on CPU. EP registration failure is deliberately not an error:
-/// ort's built-in CPU fallback keeps inference correct. tract always uses
-/// pure-Rust CPU and ignores EP.
+/// EP behavior (ort only): `Cpu` registers nothing. `CoreMl` / `XnnPack`
+/// register when their cargo features (and CoreML target) match, else warn
+/// and run on CPU. `Nnapi` / `Cuda` are not wired yet — they warn and run on
+/// CPU. EP registration failure is deliberately not an error: ort's built-in
+/// CPU fallback keeps inference correct. tract always uses pure-Rust CPU and
+/// ignores EP.
 pub fn build_session_with_ep(
     model_path: &Path,
     ep: ExecutionProvider,
@@ -338,6 +362,22 @@ mod tests {
         let copied = auto;
         assert_eq!(copied, auto);
         assert!(!format!("{auto:?}").is_empty());
+    }
+
+    #[test]
+    fn execution_provider_is_available_matches_wiring() {
+        assert!(ExecutionProvider::Cpu.is_available());
+        assert!(!ExecutionProvider::Nnapi.is_available());
+        assert!(!ExecutionProvider::Cuda.is_available());
+        // CoreMl / XnnPack track their feature flags (and CoreML target).
+        assert_eq!(
+            ExecutionProvider::CoreMl.is_available(),
+            cfg!(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))
+        );
+        assert_eq!(
+            ExecutionProvider::XnnPack.is_available(),
+            cfg!(feature = "xnnpack")
+        );
     }
 
     #[test]

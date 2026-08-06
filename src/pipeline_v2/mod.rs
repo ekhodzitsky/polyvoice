@@ -13,6 +13,7 @@ compile_error!(
 );
 
 pub mod builder;
+mod clusterer_factory;
 pub mod config;
 
 #[allow(clippy::unwrap_used)]

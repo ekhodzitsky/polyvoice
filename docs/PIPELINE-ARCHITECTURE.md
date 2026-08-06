@@ -27,10 +27,23 @@ For the **development process** checklist (spec → types → verify), see
 |----------|------|
 | CLI `polyvoice` | **v2 + VBx** default; `--legacy` → BYO offline stack |
 | FFI | v2 only |
-| Python | v2 (VBx when PLDA configured) |
+| Python | **v2 + VBx** default (same as CLI); `clusterer="ahc"` opt-out |
 | MCP `polyvoice-mcp` | v2 + VBx default (`clusterer=ahc` opt-out) |
 | `polyvoice-bench` | **v2 + VBx** default; `--pipeline legacy` for comparison |
 | Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |
+| Library ONNX | `features = ["pipeline-full", "vbx"]` → crate-root `Pipeline` |
+
+## Config defaults (do not mix blindly)
+
+| Knob | Legacy (`DiarizationConfig` / `ClusterConfig`) | v2 (`PipelineConfig`) |
+|------|-----------------------------------------------|------------------------|
+| Default clusterer (CLI/Python) | AHC when `--legacy` | **VBx** |
+| AHC threshold | `DEFAULT_AHC_THRESHOLD` (0.45) | same constant when AHC is selected |
+| `min_cluster_size` | **2** (prunes singletons on the dense-window path) | **1** (no prune; powerset + short clips) |
+
+v2 leaves `min_cluster_size = 1` because pruning was net-negative on the powerset
+pipeline (short clips collapsed to one speaker). Raise it only for split-heavy
+files; VBx skips the min-size wrapper entirely (prior-driven speaker count).
 
 ## Stage graphs
 

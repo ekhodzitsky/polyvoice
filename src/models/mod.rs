@@ -10,6 +10,7 @@ pub use adapter::{AdapterError, AdapterFactory, AdapterRegistry, AdapterStage, B
 pub use download::{
     DownloadError, download_with_checksum, download_with_checksum_and_signature, verify_sha256,
 };
+use download::{download_with_checksum_signature_and_cap, max_download_bytes};
 pub use manifest::{
     Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1, SCHEMA_V2, is_supported_schema,
 };
@@ -283,11 +284,14 @@ impl ModelRegistry {
                 model_id: model_id.to_owned(),
             })?;
         let dest = self.cache_dir.join(&entry.filename);
-        download_with_checksum_and_signature(
+        // Prefer a per-entry cap when the manifest declares size; otherwise the
+        // global 1 GiB ceiling still bounds a hostile endpoint.
+        download_with_checksum_signature_and_cap(
             &entry.url,
             &entry.sha256,
             entry.signature.as_deref(),
             &dest,
+            max_download_bytes(entry.size),
         )?;
         Ok(dest)
     }

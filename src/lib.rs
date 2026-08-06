@@ -105,7 +105,7 @@ pub mod embedder;
 pub use embedder::{DummyExtractor, Embedder, EmbedderError, apply_overlap_mask};
 
 #[cfg(all(feature = "onnx", feature = "embedder"))]
-pub use embedder::{CamPlusPlusExtractor, ResNet34Adapter};
+pub use embedder::{CamPlusPlusExtractor, ERes2NetV2Extractor, ResNet34Adapter};
 
 #[cfg(feature = "clusterer")]
 pub mod clusterer;
@@ -187,6 +187,11 @@ pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
 /// translation, pipeline construction, and bench-dataset walking, so each
 /// binary stays a thin wrapper. Compiled with `cli` or `mcp` — both imply the
 /// full ONNX pipeline stack this module builds on.
+///
+/// Hidden from docs: not a supported library API (bin wiring only). Kept
+/// `pub` (not `pub(crate)`) so field uses from bin targets do not trip
+/// `dead_code` when building the lib alone.
+#[doc(hidden)]
 #[cfg(any(feature = "cli", feature = "mcp"))]
 pub mod cli_common;
 

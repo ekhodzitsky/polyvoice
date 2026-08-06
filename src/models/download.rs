@@ -91,6 +91,18 @@ pub fn download_with_checksum_and_signature(
 /// weights are ~250 MiB), so legitimate downloads are unaffected.
 pub(crate) const DEFAULT_MAX_MODEL_BYTES: u64 = 1024 * 1024 * 1024;
 
+/// Streaming size cap for one model given an optional manifest-declared size.
+///
+/// When `declared_size` is set and positive, the cap is `2 × size` (slack for
+/// upstream drift) still clamped to [`DEFAULT_MAX_MODEL_BYTES`]. Missing or
+/// zero size falls back to the global 1 GiB ceiling.
+pub(crate) fn max_download_bytes(declared_size: Option<u64>) -> u64 {
+    match declared_size {
+        Some(n) if n > 0 => n.saturating_mul(2).min(DEFAULT_MAX_MODEL_BYTES),
+        _ => DEFAULT_MAX_MODEL_BYTES,
+    }
+}
+
 /// Like [`download_with_checksum_and_signature`] but with an explicit streaming
 /// size cap and an enforced `https://` scheme.
 ///
@@ -825,6 +837,19 @@ mod tests {
         let mut h = Sha256::new();
         h.update(fs::read(path).unwrap());
         format!("{:x}", h.finalize())
+    }
+
+    #[test]
+    fn max_download_bytes_uses_declared_size_with_slack() {
+        assert_eq!(max_download_bytes(None), DEFAULT_MAX_MODEL_BYTES);
+        assert_eq!(max_download_bytes(Some(0)), DEFAULT_MAX_MODEL_BYTES);
+        assert_eq!(max_download_bytes(Some(1_000_000)), 2_000_000);
+        // 600 MiB declared → 1.2 GiB would exceed the global ceiling → clamp.
+        let six_hundred_mib = 600 * 1024 * 1024;
+        assert_eq!(
+            max_download_bytes(Some(six_hundred_mib)),
+            DEFAULT_MAX_MODEL_BYTES
+        );
     }
 
     #[test]
