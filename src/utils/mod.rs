@@ -288,6 +288,8 @@ fn mean_confidence(sum: f32, count: u32) -> Option<f32> {
 #[cfg(any(test, feature = "onnx"))]
 pub(crate) struct ObjectPool<T> {
     items: std::sync::Mutex<Vec<T>>,
+    /// Fixed construction size; not affected by checkouts.
+    capacity: usize,
 }
 
 /// RAII guard: the pooled item is returned on drop.
@@ -300,9 +302,16 @@ pub(crate) struct PooledGuard<'a, T> {
 #[cfg(any(test, feature = "onnx"))]
 impl<T> ObjectPool<T> {
     pub(crate) fn new(items: Vec<T>) -> Self {
+        let capacity = items.len();
         Self {
             items: std::sync::Mutex::new(items),
+            capacity,
         }
+    }
+
+    /// Number of items the pool was constructed with (max useful concurrency).
+    pub(crate) fn capacity(&self) -> usize {
+        self.capacity
     }
 
     /// Blocking checkout. Spins with yield until an item is free.
@@ -678,10 +687,13 @@ mod tests {
     #[test]
     fn object_pool_checkout_deref_and_return_on_drop() {
         let pool = ObjectPool::new(vec![1u32, 2, 3]);
+        assert_eq!(pool.capacity(), 3);
         {
             let mut guard = pool.checkout();
             *guard += 10;
             assert!(*guard >= 11);
+            // Capacity is construction-time, not free-list length.
+            assert_eq!(pool.capacity(), 3);
         }
         // The mutated item is back in the pool after the guard dropped.
         let guard = pool.checkout();

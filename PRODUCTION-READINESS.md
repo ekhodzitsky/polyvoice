@@ -269,7 +269,7 @@ Until every box is checked, the honest status remains:
 
 | Blocker | Why it blocks 1.0 / public GO |
 |---------|-------------------------------|
-| Dual default pipeline | Split gates, split docs, split user trust |
+| Dual pipeline families (BYO vs ONNX) | Intentional; still doubles docs/gates if not documented |
 | `ort` RC-only + single backend | Supply-chain and upgrade risk |
 | Thin multi-corpus DER | Unknown behavior outside Vox/AMI |
 | Pre-1.0 API | Breaking changes without major bump |
