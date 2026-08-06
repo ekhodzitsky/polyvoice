@@ -1,7 +1,6 @@
 //! Integration test for the streaming pipeline: drives feed()/flush() over a
 //! many-small-chunk stream (microphone-style) and asserts the cumulative
-//! turns() contract end-to-end. This is the integration target referenced by
-//! src/streaming/MODULE_CONTRACT.md's verification block.
+//! turns() contract end-to-end.
 //!
 //! Regression guard: on the pre-fix streaming bug (turns() stayed empty while
 //! per-call returns were non-empty), the `turns() == concatenation` assertion

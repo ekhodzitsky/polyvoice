@@ -45,8 +45,8 @@ let mut pipeline = StreamingPipeline::with_latency_preset(
 
 Turns may carry `stable: false` while a speaker is still provisional; once
 `stable: true`, that speaker ID is immutable for the session. See
-`src/streaming/README.md` and `docs/BENCHMARKS.md` (latency + RTF + DER
-reported separately). CLI: `--latency-preset realtime|balanced|accurate`.
+`docs/BENCHMARKS.md` (latency + RTF + DER reported separately) and the
+`streaming` module rustdoc. CLI: `--latency-preset realtime|balanced|accurate`.
 
 ## Core Types
 

@@ -286,19 +286,6 @@ jobs:
           tool: cargo-deny
       - run: cargo deny check advisories licenses bans sources
 
-  contract-drift:
-    runs-on: ubuntu-latest
-    # Advisory nudge only: warns when a module's mod.rs changes without its
-    # MODULE_CONTRACT.md. Never fails the build (the script always exits 0; the
-    # continue-on-error is belt-and-suspenders). Opt out with [skip-contract-drift].
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Contract-drift nudge
-        run: bash scripts/check-contract-drift.sh "origin/${{ github.base_ref || 'master' }}"
-
   hack:
     runs-on: ubuntu-latest
     steps:

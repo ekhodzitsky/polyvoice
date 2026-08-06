@@ -21,12 +21,11 @@ repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "clustering", "onnx", "streaming"]
 categories = ["multimedia::audio", "science"]
 # Allowlist: ship only what a consumer needs to build/use the crate.
-# Everything else — per-module COAD docs (MODULE_CONTRACT/README/TODO), docs/,
-# scripts/, tests/, benchmarks/, demo.gif, models/*.onnx — is excluded
-# automatically. NOTE: src/models/{manifest.toml,signing.pub.base64} and
-# schema/diarization-result-v1.json are include_str!'d at compile time, and
-# benches/der_ami.rs is a declared target — all MUST stay listed or the
-# published crate fails to build/package.
+# Everything else — docs/, scripts/, tests/, benchmarks/, demo.gif,
+# models/*.onnx — is excluded automatically. NOTE: src/models/{manifest.toml,
+# signing.pub.base64} and schema/diarization-result-v1.json are include_str!'d
+# at compile time, and benches/der_ami.rs is a declared target — all MUST stay
+# listed or the published crate fails to build/package.
 include = [
   "src/**/*.rs",
   "src/models/manifest.toml",
@@ -35,7 +34,7 @@ include = [
   "benches/der_ami.rs",
   "include/*.h",
   # Leading slash anchors to the package root — a bare name matches at ANY depth
-  # (gitignore globbing), which would drag in every per-module README.md etc.
+  # (gitignore globbing).
   "/Cargo.toml",
   "/README.md",
   "/LICENSE",
