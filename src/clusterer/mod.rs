@@ -254,7 +254,10 @@ pub struct KmeansClusterer {
 }
 
 /// Deprecated alias for the pre-rename name; use [`KmeansClusterer`].
-#[deprecated(note = "renamed to KmeansClusterer")]
+#[deprecated(
+    since = "0.12.0",
+    note = "renamed to KmeansClusterer; alias removed at 1.0"
+)]
 pub type KMeansClusterer = KmeansClusterer;
 
 impl KmeansClusterer {

@@ -2,17 +2,16 @@
 
 ## Problem
 
-`models.silero_vad` in `src/models/manifest.toml` downloads from upstream:
+`models.silero_vad` in `src/models/manifest.toml` downloads from upstream,
+**commit-pinned** (not floating `master`):
 
 ```
-https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx
+https://github.com/snakers4/silero-vad/raw/bfdc0193023f121ea5b3cc7b176dbed570a68a59/src/silero_vad/data/silero_vad.onnx
 ```
 
-That URL tracks **master**. Upstream force-pushes or replaces the file under
-the same path break fresh installs: the download succeeds or fails, but the
-pinned SHA-256 check fails closed. The weights we ship against are
-**v6-generation** Silero VAD (upstream v6.0 replaced the master ONNX on
-2025-08-25; later 6.x releases keep the same architecture).
+Floating `master` would break fresh installs when upstream replaces the file
+under the same path (SHA-256 fails closed). The weights we ship against are
+**v6.2-generation** Silero VAD at commit `bfdc019` (hash verified).
 
 Pinned hash (source of truth — do not invent a new one without re-signing):
 
@@ -86,6 +85,6 @@ mirror URL in the manifest.
 
 ## Status
 
-Mirror **not yet published** from this hygiene pass. Manifest still points at
-upstream master with the pinned hash; this document is the runbook for the
+Upstream URL is **commit-pinned** (`bfdc019`) with the pinned hash. First-party
+release-asset mirror is **not yet published**; this document is the runbook for the
 human publish step.

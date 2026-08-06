@@ -47,8 +47,8 @@ DEFAULT_PROPS: Dict[str, Dict[str, str]] = {
         "version": "1.0",
         "sample_rate": "16000",
         "license": "MIT",
-        "license_url": "https://github.com/snakers4/silero-vad/blob/master/LICENSE",
-        "provenance": "snakers4/silero-vad upstream ONNX",
+        "license_url": "https://github.com/snakers4/silero-vad/blob/bfdc0193023f121ea5b3cc7b176dbed570a68a59/LICENSE",
+        "provenance": "snakers4/silero-vad upstream ONNX @ bfdc019 (v6.2 weights)",
     },
     "wespeaker_resnet34": {
         "model_type": "embedder",

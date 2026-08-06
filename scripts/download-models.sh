@@ -6,7 +6,8 @@ MODEL_DIR="${SCRIPT_DIR}/../models"
 mkdir -p "$MODEL_DIR"
 
 WESPEAKER_URL="https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/main/voxceleb_resnet34.onnx?download=true"
-SILERO_URL="https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx"
+# Commit-pinned (same blob as src/models/manifest.toml silero_vad entry).
+SILERO_URL="https://github.com/snakers4/silero-vad/raw/bfdc0193023f121ea5b3cc7b176dbed570a68a59/src/silero_vad/data/silero_vad.onnx"
 POWERSET_URL="https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx"
 CAM_PP_URL="https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus/resolve/main/voxceleb_CAM%2B%2B.onnx?download=true"
 

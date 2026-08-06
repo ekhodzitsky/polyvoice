@@ -37,13 +37,15 @@ embedder  = "resnet34_int8"
 # Legacy v0.5 entries — kept for back-compat callers that pass the model id
 # directly to ModelRegistry::ensure(). Profiles do not reference them anymore.
 [models.silero_vad]
-url      = "https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx"
+# Commit-pinned (not floating master) so availability and content stay bound to
+# the sha256 below. Hash verified against this commit's silero_vad.onnx blob.
+url      = "https://github.com/snakers4/silero-vad/raw/bfdc0193023f121ea5b3cc7b176dbed570a68a59/src/silero_vad/data/silero_vad.onnx"
 sha256   = "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
 size     = 2327524
 filename = "silero_vad.onnx"
 license  = "MIT"
-license_url = "https://github.com/snakers4/silero-vad/blob/master/LICENSE"
-provenance = "snakers4/silero-vad upstream ONNX"
+license_url = "https://github.com/snakers4/silero-vad/blob/bfdc0193023f121ea5b3cc7b176dbed570a68a59/LICENSE"
+provenance = "snakers4/silero-vad upstream ONNX @ bfdc019 (v6.2 weights)"
 adapter_type = "silero"
 version  = "1.0"
 sample_rate = 16000

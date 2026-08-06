@@ -1,17 +1,38 @@
 # Contributing to polyvoice
 
-Thanks for your interest! Here's how to get started.
+Thanks for your interest. This guide matches the **0.15** tree.
 
 ## Setup
 
 ```bash
 git clone https://github.com/ekhodzitsky/polyvoice.git
 cd polyvoice
-cargo test                           # run unit + integration tests
-cargo test --features onnx           # include ONNX tests (no models needed)
-bash scripts/download-models.sh      # download ONNX models (~27 MB)
-POLYVOICE_MODEL_DIR=models cargo test --features onnx --test test_e2e_onnx  # e2e tests
+
+# Ort-free core (default features are empty)
+cargo test
+
+# Full ONNX production stack (crate-root Pipeline = pipeline v2)
+cargo test --features "pipeline-full,vbx"
+
+# CLI binary
+cargo build --features cli
+
+# Download profile models (~30 MB FP32 balanced; signed in release)
+cargo run --features cli --bin polyvoice -- download-models --profile balanced
+# or: bash scripts/download-models.sh
 ```
+
+
+### Feature recipes
+
+| Goal | Features |
+|------|----------|
+| BYO embedder / library mode | `--no-default-features` (+ optional `clusterer`, `vbx`) — see [docs/library-mode.md](docs/library-mode.md) |
+| Production ONNX library | `pipeline-full` (+ `vbx` for the CLI-parity default) |
+| CLI / FFI / MCP | `cli` / `ffi` / `mcp` (each is `pipeline-full` + `vbx` + extras) |
+| Multi-format audio decode | `audio-io` (with `cli` for the binary) |
+
+Architecture map: [docs/PIPELINE-ARCHITECTURE.md](docs/PIPELINE-ARCHITECTURE.md).
 
 ### Python bindings
 
@@ -25,35 +46,52 @@ pytest tests/ -v
 
 ## Making changes
 
-1. Fork the repo and create a feature branch
-2. Write tests first — we use TDD
-3. Run `cargo fmt` and `cargo clippy --all-features -- -D warnings`
+1. Fork and create a feature branch from `master`
+2. Prefer tests first for behavior changes
+3. `cargo fmt` and `cargo clippy --features "pipeline-full,vbx" -- -D warnings`
 4. Keep PRs focused — one feature or fix per PR
 5. Update docs if you change public API
+6. Do **not** put internal roadmap task numbers in source, commits, or shipped docs (see [AGENTS.md](AGENTS.md))
 
 ## Code style
 
-- No comments unless the *why* is non-obvious
-- Match existing patterns in the codebase
-- `#[cfg(feature = "onnx")]` gates all ONNX-dependent code
+- Comment only when the *why* is non-obvious
+- Match existing patterns
+- ONNX-dependent code stays behind `onnx` / stage feature gates
+- Lib code: domain `thiserror` errors; no `unwrap`/`expect` outside tests (crate deny)
 
 ## Testing
 
 | Command | What it tests |
 |---------|---------------|
-| `cargo test` | Unit + integration (no ONNX) |
-| `cargo test --features onnx` | Includes ONNX compilation |
-| `cargo test --test loom_pool` | Concurrency (Loom) |
+| `cargo test` | Ort-free unit + integration |
+| `cargo test --features "pipeline-full,vbx"` | Production stack lib tests |
+| `cargo test --features cli --bin polyvoice` | CLI-related (when applicable) |
 | `cargo test --features ffi` | C FFI bindings |
+| Full DER gates | CI / `polyvoice-bench` with datasets — not default unit tests |
+
+Ignored tests that need models or network are intentional; release DER gates live in CI.
 
 ## Areas for contribution
 
-Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues) labeled `good first issue`. High-impact areas:
+Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues) and the local `roadmap/` tracker. High-impact directions (as of 0.15):
 
-- **Spectral clustering** — alternative to AHC for better accuracy
-- **RTTM parser** — read ground-truth annotations for DER evaluation
-- **More VAD backends** — WebRTC VAD, custom models
-- **Benchmarks** — DER on AMI, VoxConverse, DIHARD datasets
+- **Cross-corpus DER** — CALLHOME / DIHARD-style gates beyond VoxConverse + AMI
+- **Second inference backend** — tract / load-dynamic ORT parity with measured DER
+- **EP wiring** — Nnapi / Cuda (CoreML and XNNPACK already feature-gated)
+- **VBx PLDA signing** — minisign for default-path PLDA artifacts
+- **Streaming productization** — powerset-quality online path (batch v2 is production)
+- **Docs / DX** — keep README feature recipes and readiness version truth current
+
+Already shipped (not open scaffolding): spectral/NME-SC clusterer, RTTM I/O, VoxConverse/AMI bench harness, AS-norm domain profiles, attribution join.
+
+## Deprecated API (remove at 1.0)
+
+| Symbol | Prefer |
+|--------|--------|
+| `cluster::SpeakerCluster` | `clusterer::Clusterer` / `streaming::ArrivalOrderSpeakerCache` |
+| `pipeline::Pipeline` / `PipelineError` | `pipeline::LegacyPipeline` / crate-root `Pipeline` (v2) |
+| `KMeansClusterer` | `KmeansClusterer` |
 
 ## License
 

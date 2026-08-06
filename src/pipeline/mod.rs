@@ -79,12 +79,16 @@ impl LegacyPipelineError {
 /// Backwards-compatible alias for the pre-rename v1 pipeline. Not used by
 /// in-crate code; new code should name [`LegacyPipeline`] explicitly (or the
 /// crate-root `Pipeline` from `pipeline_v2` when the ONNX features are on).
-#[deprecated(note = "renamed to LegacyPipeline; the crate-root `Pipeline` is now pipeline v2")]
+#[deprecated(
+    since = "0.12.0",
+    note = "renamed to LegacyPipeline; crate-root `Pipeline` is pipeline v2. Alias removed at 1.0"
+)]
 pub type Pipeline = LegacyPipeline;
 
 /// Backwards-compatible alias for the pre-rename v1 pipeline error.
 #[deprecated(
-    note = "renamed to LegacyPipelineError; the crate-root `PipelineError` is now pipeline v2"
+    since = "0.12.0",
+    note = "renamed to LegacyPipelineError; crate-root `PipelineError` is pipeline v2. Alias removed at 1.0"
 )]
 pub type PipelineError = LegacyPipelineError;
 
