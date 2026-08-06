@@ -70,11 +70,11 @@ crate-type = ["cdylib", "rlib"]
 default = []
 # ONNX-based embedding extractors (pulls ort).
 onnx = ["dep:ort"]
-# Internal bundle: the full ONNX diarization stack (runtime, model downloads,
-# segmentation, embeddings, clustering, resegmentation) shared by the
-# ffi/cli/mcp front doors. src/pipeline_v2 is cfg-gated on the same set (with
-# a compile_error! backstop), so half-wired feature combos simply exclude it.
-# Not a consumer-facing entry point — enable one of the front doors instead.
+# Full ONNX diarization stack (runtime, model downloads, segmentation,
+# embeddings, clustering, resegmentation). Exports crate-root `Pipeline`
+# (pipeline_v2). Use for library ONNX consumers; front doors (cli/ffi/mcp)
+# are `pipeline-full` + `vbx`. Half-wired combos exclude pipeline_v2 (with a
+# compile_error! backstop if the module is forced).
 pipeline-full = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"]
 # C FFI bindings (ABI v3). Requires the full pipeline stack. Includes VBx so the
 # C ABI ships the same production default (pipeline v2 + VBx) as the CLI/MCP.

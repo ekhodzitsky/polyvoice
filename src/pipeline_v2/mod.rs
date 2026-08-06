@@ -147,10 +147,22 @@ fn window_confidence_sum(
     (sum, n)
 }
 
+/// Hard cap on PCM length accepted by [`Pipeline::run`] / [`Pipeline::run_with_timings`].
+/// Matches the C FFI (`MAX_SAMPLES`) and the WAV loader's ~1-hour policy so library
+/// and Python callers cannot unbounded-allocate on untrusted buffers.
+pub const MAX_AUDIO_SAMPLES: usize = 16_000 * 3_600;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PipelineError {
     #[error("audio sample rate {actual} unsupported, expected 16000")]
     UnsupportedSampleRate { actual: u32 },
+    #[error(
+        "audio too long: {actual_samples} samples exceeds max {max_samples} (~1 hour at 16 kHz)"
+    )]
+    AudioTooLong {
+        actual_samples: usize,
+        max_samples: usize,
+    },
     #[error("segmentation failed: {0}")]
     Segmentation(#[from] SegmentationError),
     #[error("embedding failed: {0}")]
@@ -212,6 +224,12 @@ impl Pipeline {
     ) -> Result<(DiarizationResult, StageTimings), PipelineError> {
         if sr.get() != self.config.sample_rate.get() {
             return Err(PipelineError::UnsupportedSampleRate { actual: sr.get() });
+        }
+        if samples.len() > MAX_AUDIO_SAMPLES {
+            return Err(PipelineError::AudioTooLong {
+                actual_samples: samples.len(),
+                max_samples: MAX_AUDIO_SAMPLES,
+            });
         }
         let mut timings = StageTimings::default();
 
@@ -651,6 +669,12 @@ mod tests {
             err,
             PipelineError::UnsupportedSampleRate { actual: 8000 }
         ));
+    }
+
+    #[test]
+    fn max_audio_samples_matches_one_hour_at_16khz() {
+        // Parity with FFI (`MAX_SAMPLES`) and the WAV ~1 h policy.
+        assert_eq!(MAX_AUDIO_SAMPLES, 16_000 * 3_600);
     }
 
     #[test]
@@ -1431,6 +1455,13 @@ mod tests {
             (
                 PipelineError::UnsupportedSampleRate { actual: 8000 },
                 "8000",
+            ),
+            (
+                PipelineError::AudioTooLong {
+                    actual_samples: MAX_AUDIO_SAMPLES + 1,
+                    max_samples: MAX_AUDIO_SAMPLES,
+                },
+                "too long",
             ),
             (
                 PipelineError::Segmentation(SegmentationError::AudioTooShort {

@@ -15,7 +15,7 @@ C FFI, and a CLI. MIT, ungated models, ~30 MB (8.4 MB with the INT8 profile).
 
 ![polyvoice CLI demo — real diarization run](docs/assets/demo.gif)
 
-## Numbers (v0.14.0, Apple M1 Pro, one file at a time)
+## Numbers (measured on v0.14.0; still the published figures for v0.15.x, Apple M1 Pro, one file at a time)
 
 | Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed |
 |---|---:|---:|---:|
@@ -61,7 +61,7 @@ A 1-hour meeting diarizes in about a minute on a laptop.
 | Platform | Get it |
 |---|---|
 | Linux x86_64 / ARM64, macOS, Windows | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) — put them on your `PATH` |
-| Rust library | `cargo add polyvoice --features "onnx,download"` |
+| Rust library (ONNX production) | `cargo add polyvoice --features "pipeline-full,vbx"` — exports crate-root `Pipeline` (v2 + VBx) |
 | Rust, no ONNX (BYO embedder) | `cargo add polyvoice --no-default-features` (extras: `clusterer,vbx`) — [library mode](docs/library-mode.md) |
 | Python | `pip install polyvoice` |
 | From source | `cargo install polyvoice --features cli` · `"cli,audio-io"` (mp3/flac/ogg, any sample rate) · `ffi` (C ABI v3) |

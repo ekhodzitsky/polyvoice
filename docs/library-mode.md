@@ -8,9 +8,9 @@ not want the ONNX Runtime (`ort`) native dylib.
 ```toml
 # Cargo.toml
 [dependencies]
-polyvoice = { version = "0.12", default-features = false }
+polyvoice = { version = "0.15", default-features = false }
 # optional pure-Rust extras:
-# polyvoice = { version = "0.12", default-features = false, features = ["clusterer", "vbx"] }
+# polyvoice = { version = "0.15", default-features = false, features = ["clusterer", "vbx"] }
 ```
 
 CI enforces that `ort` never appears in the normal dependency graph for
@@ -62,9 +62,9 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | `FbankOnnxExtractor` | ONNX fbank embedder (`Embedder`; feature `onnx`) |
 | `CamPlusPlusExtractor`, `ResNet34Adapter` | Need `onnx` + `embedder` |
 | `PowersetSegmenter` | Need `onnx` + `segmentation` |
-| `pipeline_v2` | Full stack: `onnx` + `download` + `segmentation` + `embedder` + `clusterer` + `resegmentation` |
+| `pipeline_v2` / crate-root `Pipeline` | Full stack: needs `pipeline-full` (or the six flags below) |
 | `ModelRegistry` / `download` | HTTP model registry (no `ort` by itself, but production ONNX path uses it with `onnx`) |
-| `pipeline-full` | Internal bundle of the full ONNX stack above; not a consumer entry point — enable a front door instead |
+| `pipeline-full` | Consumer bundle for the ONNX library path: `onnx` + `download` + `segmentation` + `embedder` + `clusterer` + `resegmentation`. Add `vbx` for the production VBx default. |
 | `cli`, `ffi`, `mcp` | App / binding surfaces: each is `pipeline-full` + `vbx` (VBx ships by default) |
 | `sortformer` | Optional E2E diarizer (`onnx`-gated, never default) |
 | EP features (`coreml`, `nnapi`, `xnnpack`), `backend-tract` | Inference backends |

@@ -102,7 +102,7 @@ surface:
     kind: enum
     visibility: public
     contract: >
-      Error type for build/run: UnsupportedSampleRate, Segmentation, Embedding,
+      Error type for build/run: UnsupportedSampleRate, AudioTooLong, Segmentation, Embedding,
       Clustering, Resegment, Config, Registry.
     proof:
       kind: unit-test
@@ -191,6 +191,8 @@ invariants:
       command: rg -n "v2 \\+ VBx|CLI default" src/bin/polyvoice.rs CHANGELOG.md
   - id: sample-rate-guard
     rule: run() returns UnsupportedSampleRate when sr != config.sample_rate.
+  - id: audio-length-cap
+    rule: run() returns AudioTooLong when samples.len() > MAX_AUDIO_SAMPLES (1 h @ 16 kHz).
     proof:
       kind: unit-test
       target: src/pipeline_v2::mod::tests::pipeline_run_unsupported_sample_rate_returns_err

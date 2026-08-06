@@ -60,7 +60,11 @@ impl Default for PipelineConfig {
         Self {
             profile: Profile::Balanced,
             sample_rate: SampleRate::new(16000).unwrap_or_default(),
-            clusterer: ClustererKind::Ahc { threshold: 0.5 },
+            // Match Profile::Balanced / CLI AHC / DiarizationConfig — single source
+            // is `DEFAULT_AHC_THRESHOLD` so library builders and CLI stay aligned.
+            clusterer: ClustererKind::Ahc {
+                threshold: crate::types::DEFAULT_AHC_THRESHOLD,
+            },
             max_speakers: 20,
             // v2 ships unpruned: min-cluster pruning is net-negative for the
             // powerset pipeline and collapses short clips (a 26 s clip has every
@@ -119,7 +123,9 @@ mod tests {
         assert_eq!(cfg.sample_rate.get(), 16000);
         assert!(matches!(
             cfg.clusterer,
-            ClustererKind::Ahc { threshold: 0.5 }
+            ClustererKind::Ahc {
+                threshold
+            } if (threshold - crate::types::DEFAULT_AHC_THRESHOLD).abs() < f32::EPSILON
         ));
         assert_eq!(cfg.max_speakers, 20);
         assert_eq!(cfg.min_cluster_size, 1);
@@ -132,6 +138,18 @@ mod tests {
         assert!(cfg.embedder_pool_size <= 4);
         assert!(cfg.as_norm.is_none());
         assert!(cfg.domain.is_none());
+    }
+
+    #[test]
+    fn default_ahc_threshold_matches_shared_constant() {
+        let cfg = PipelineConfig::default();
+        match cfg.clusterer {
+            ClustererKind::Ahc { threshold } => {
+                assert!((threshold - crate::types::DEFAULT_AHC_THRESHOLD).abs() < f32::EPSILON);
+                assert!((threshold - Profile::Balanced.default_threshold()).abs() < f32::EPSILON);
+            }
+            other => panic!("expected default AHC clusterer, got {other:?}"),
+        }
     }
 
     #[test]

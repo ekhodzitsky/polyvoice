@@ -70,6 +70,7 @@ with a `compile_error!` backstop) — half-wired combos simply exclude it. The
 ## Safety guards in `run`
 
 - Sample rate must match the config (`UnsupportedSampleRate` otherwise).
+- Audio longer than `MAX_AUDIO_SAMPLES` (~1 hour at 16 kHz) is rejected (`AudioTooLong`).
 - Segments shorter than `MIN_EMBED_SECS` (0.20s) are skipped — ResNet34's
   ~8× temporal downsampling makes shorter slices collapse to NaN.
 - Non-finite embeddings are dropped before clustering (NaN-collapse defense).

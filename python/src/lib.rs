@@ -9,9 +9,22 @@ use polyvoice::pipeline_v2::{
     ClustererKind, Pipeline as RustPipeline, PipelineConfig, PipelineError,
 };
 use polyvoice::types::{DiarizationResult as RustDiarizationResult, Profile, SampleRate};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+
+/// Reject cache paths that contain `..` components (parity with CLI/FFI).
+fn reject_path_traversal(path: &str) -> PyResult<()> {
+    if Path::new(path)
+        .components()
+        .any(|c| matches!(c, Component::ParentDir))
+    {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "models_cache path traversal rejected",
+        ));
+    }
+    Ok(())
+}
 
 /// Typed diarization result — the canonical `DiarizationResult` v1, projectable
 /// to JSON/RTTM/SRT/VTT/TXT with field-for-field parity with the CLI.
@@ -229,6 +242,9 @@ impl Pipeline {
         clusterer: Option<&str>,
         vbx_plda_dir: Option<&str>,
     ) -> PyResult<Self> {
+        if let Some(path) = models_cache {
+            reject_path_traversal(path)?;
+        }
         let registry = match models_cache {
             Some(path) => ModelRegistry::with_cache_dir(path),
             None => ModelRegistry::default(),
@@ -289,6 +305,12 @@ impl Pipeline {
                     "unsupported sample rate {actual} (expected 16000)"
                 ))
             }
+            PipelineError::AudioTooLong {
+                actual_samples,
+                max_samples,
+            } => pyo3::exceptions::PyValueError::new_err(format!(
+                "audio too long: {actual_samples} samples exceeds max {max_samples} (~1 hour at 16 kHz)"
+            )),
             PipelineError::Registry(_) |
             PipelineError::Segmentation(_) |
             PipelineError::Embedding(_) => {
