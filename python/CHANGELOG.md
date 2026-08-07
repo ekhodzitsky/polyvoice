@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.15.0] - 2026-08-05
+
+### Changed
+
+- Lockstep with core **0.15.0**: AS-norm / domain profiles and related CLI
+  flags live on the Rust side; Python continues to default to **VBx**
+  (`clusterer=None` → VBx; pass `clusterer="ahc"` to opt out).
+- Path traversal guard on `models_cache`; pipeline `AudioTooLong` mapped to
+  `ValueError` when PCM exceeds the one-hour@16 kHz cap.
+
+## [0.14.0] - 2026-07-31
+
+### Changed
+
+- Lockstep version bump with core 0.14.0; no python-side API changes.
+  Headline DER figures (VoxConverse-test 15.2 % no-collar) track core.
+
 ## [0.13.0] - 2026-07-30
 
 ### Changed

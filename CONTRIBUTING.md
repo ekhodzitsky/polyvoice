@@ -87,11 +87,14 @@ Already shipped (not open scaffolding): spectral/NME-SC clusterer, RTTM I/O, Vox
 
 ## Deprecated API (remove at 1.0)
 
-| Symbol | Prefer |
-|--------|--------|
-| `cluster::SpeakerCluster` | `clusterer::Clusterer` / `streaming::ArrivalOrderSpeakerCache` |
-| `pipeline::Pipeline` / `PipelineError` | `pipeline::LegacyPipeline` / crate-root `Pipeline` (v2) |
-| `KMeansClusterer` | `KmeansClusterer` |
+| Symbol | Prefer | Since |
+|--------|--------|-------|
+| `cluster::SpeakerCluster` (whole module) | `clusterer::Clusterer` / `streaming::ArrivalOrderSpeakerCache` | 0.12 |
+| `pipeline::Pipeline` / `PipelineError` | `pipeline::LegacyPipeline` / crate-root `Pipeline` (v2) | 0.12 |
+| `KMeansClusterer` | `KmeansClusterer` | 0.12 |
+
+Do not remove these until **1.0** without a CHANGELOG major callout. Library
+docs: [docs/API.md](docs/API.md).
 
 ## License
 

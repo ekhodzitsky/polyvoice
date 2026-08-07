@@ -43,7 +43,7 @@ numbers live in [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
 
 ### Contributors
 - [../CONTRIBUTING.md](../CONTRIBUTING.md) — feature recipes, deprecations toward 1.0
-- [PIPELINE.md](PIPELINE.md) — **development process** (not runtime architecture)
+- [DEVELOPMENT-PROCESS.md](DEVELOPMENT-PROCESS.md) — **development process** (not runtime architecture)
 - [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md) — **runtime** architecture
 - [GLOSSARY.md](GLOSSARY.md) · [FORMALISM.md](FORMALISM.md) · [SEVERITY.md](SEVERITY.md)
 - [ort-ep-migration.md](ort-ep-migration.md)
@@ -60,7 +60,7 @@ numbers live in [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
 | File | About |
 |------|--------|
 | `PIPELINE-ARCHITECTURE.md` | Diarization runtime: stages, consumers, config defaults |
-| `PIPELINE.md` | How we develop (spec → types → verify) |
+| `DEVELOPMENT-PROCESS.md` | How we develop (spec → types → verify); stub at `PIPELINE.md` |
 
 ## Feature quick map
 

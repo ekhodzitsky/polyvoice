@@ -3,7 +3,7 @@
 Who calls whom in polyvoice, and which path is the production default.
 
 For the **development process** checklist (spec → types → verify), see
-[PIPELINE.md](PIPELINE.md).
+[DEVELOPMENT-PROCESS.md](DEVELOPMENT-PROCESS.md) (stub: [PIPELINE.md](PIPELINE.md)).
 
 ## Two families (intentional)
 

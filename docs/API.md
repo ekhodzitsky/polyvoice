@@ -171,10 +171,70 @@ the conversion.
 
 > **Since 0.11:** CLI, FFI, Python, and MCP default to `pipeline_v2` with the
 > **VBx** clusterer. Escape hatches: CLI `--legacy` / `--clusterer ahc`.
+>
+> **Library trap:** `PipelineConfig::default().clusterer` is **AHC**
+> (`DEFAULT_AHC_THRESHOLD` = 0.45). Front doors set `ClustererKind::Vbx`
+> themselves. For CLI parity in library code, set `clusterer: ClustererKind::Vbx`.
+
+Features: `pipeline-full` (or the six stage flags) exports crate-root
+`Pipeline` / `PipelineConfig` / `PipelineError`. Add `vbx` for the VBx type and
+CLI-parity default path.
+
+### `PipelineConfig` (selected fields)
+
+| Field | Default | Notes |
+|-------|---------|--------|
+| `profile` | `Balanced` | `Mobile` / `Balanced` / `Fast` (INT8) / `Custom` |
+| `clusterer` | **AHC @ 0.45** | Front doors override to **VBx** |
+| `min_cluster_size` | **1** | No prune on powerset; legacy path uses **2** |
+| `max_speakers` | 20 | Ceiling for AHC / NME-SC; VBx is prior-driven |
+| `vbx_plda_dir` | `None` | Else `POLYVOICE_VBX_PLDA_DIR` → registry download |
+| `embed_window_secs` | `None` | `Some(w)` = dense windows inside segments |
+| `as_norm` | `None` | **AHC only** — AS-norm z-scores vs imposter cohort |
+| `domain` | `None` | **AHC only** — calibrated profile (`voxconverse` / `ami` / `callhome`) |
+| `execution_provider` | `auto()` | CoreML / XNNPACK when compiled in; else CPU |
+
+`run` rejects sample rates other than the config rate and audio longer than
+`MAX_AUDIO_SAMPLES` (~1 hour @ 16 kHz) with `PipelineError::AudioTooLong`.
+
+### AS-norm and domain profiles (0.15)
+
+Optional **AHC** scoring upgrades (ignored when `clusterer` is VBx / NME-SC):
+
+- **`as_norm: Some(AsNormConfig { top_n, cohort })`** — pairwise cosine scores
+  are z-normalized against an imposter cohort before AHC merge. Threshold is a
+  **z-score** (calibrated domains use roughly z = 4–5), not raw cosine.
+  Cohort: explicit path, or registry model id / `POLYVOICE_ASNORM_COHORT`.
+- **`domain: Some(DomainProfile)`** — data-driven thresholds (and AS-norm
+  knobs) for `voxconverse`, `ami`, `callhome`. On the library path,
+  `PipelineConfig.domain` **overrides** the AHC threshold at build time.
+  CLI inverts that precedence: an explicit `--threshold` clears the domain
+  so the flag wins.
+
+```rust
+use polyvoice::clusterer::{AsNormConfig, CohortSource};
+use polyvoice::pipeline_v2::ClustererKind;
+// ...
+cfg.clusterer = ClustererKind::Ahc { threshold: 0.45 }; // ignored if domain set
+cfg.domain = Some(polyvoice::clusterer::domain::AMI);
+cfg.as_norm = Some(AsNormConfig {
+    top_n: 50,
+    cohort: CohortSource::ModelId("asnorm_cohort".into()),
+});
+```
+
+### CLI flags (feature `cli`)
+
+| Flag | Effect |
+|------|--------|
+| `--clusterer vbx\|ahc\|…` | Default **`vbx`** |
+| `--threshold T` | AHC raw-cosine threshold; with `--as-norm` treat as z-score |
+| `--as-norm` | Enable AS-norm (requires `--clusterer ahc`) |
+| `--cohort PATH` | Imposter cohort `.npy` (implies / pairs with `--as-norm`) |
+| `--domain-profile voxconverse\|ami\|callhome` | Calibrated AHC profile (AHC only) |
+| `--legacy` | Offline BYO stack (Silero + AHC), not pipeline v2 |
 
 ### `PipelineBuilder` (v2 — production)
-
-Profile-based builder for the full v2 pipeline (segmenter → embedder → clusterer → resegmenter):
 
 ```rust
 use polyvoice::models::ModelRegistry;
@@ -182,9 +242,9 @@ use polyvoice::pipeline_v2::ClustererKind;
 use polyvoice::types::{Profile, SampleRate};
 use polyvoice::{Pipeline, PipelineConfig};
 
-let mut cfg = PipelineConfig {
+let cfg = PipelineConfig {
     profile: Profile::Balanced,
-    clusterer: ClustererKind::Vbx,
+    clusterer: ClustererKind::Vbx, // CLI parity
     ..PipelineConfig::default()
 };
 let pipeline = Pipeline::builder()
@@ -207,10 +267,10 @@ defaults itself.
 
 ### Shared CLI wiring (`cli_common`)
 
-With features `cli` / `mcp`, `polyvoice::cli_common` holds the flag-to-config
-translation, pipeline construction, and bench-dataset walking shared by the
-`polyvoice` / `polyvoice-bench` / `polyvoice-measure` / `polyvoice-mcp`
-binaries, so each binary stays a thin wrapper.
+With features `cli` / `mcp`, `polyvoice::cli_common` is a **`#[doc(hidden)]`**
+helper for the `polyvoice` / `polyvoice-bench` / `polyvoice-measure` /
+`polyvoice-mcp` binaries (flag-to-config, pipeline build, dataset walking).
+Not a supported public library API.
 
 ## Overlap Detection
 
@@ -247,15 +307,15 @@ ort-free graph on every PR.
 
 ## WebAssembly
 
-The pure-Rust algorithmic core compiles for `wasm32-unknown-unknown` when the
-ONNX-backed default features are disabled:
+The algorithmic core compiles for `wasm32-unknown-unknown` with **empty
+default features** (ort-free). Production ONNX is not the default feature set:
 
 ```bash
 cargo check --target wasm32-unknown-unknown --no-default-features --lib
 ```
 
-ONNX-based profiles require an execution provider that supports the target
-platform. The CI job `wasm32-smoke` verifies this build on every push.
+ONNX-based profiles need an execution provider for the target. CI job
+`wasm32-smoke` verifies the ort-free build on every push.
 
 ## Performance Tuning
 

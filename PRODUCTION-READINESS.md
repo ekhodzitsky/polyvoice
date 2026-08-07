@@ -214,7 +214,7 @@ audit remain active.
 | README | Install, usage, links, honest accuracy framing |
 | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Canonical DER / RTF with collar protocol |
 | [`docs/PIPELINE-ARCHITECTURE.md`](docs/PIPELINE-ARCHITECTURE.md) | Pipeline who-calls-whom |
-| [`docs/PIPELINE.md`](docs/PIPELINE.md) | Development process checklist |
+| [`docs/DEVELOPMENT-PROCESS.md`](docs/DEVELOPMENT-PROCESS.md) | Development process checklist |
 | Security provenance | ORT native binary + model signing story |
 | `CONTRIBUTING.md` | Setup and contribution guidelines |
 | FFI | C header + examples / smoke tests |

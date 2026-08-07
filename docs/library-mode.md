@@ -54,20 +54,25 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | `vad-earshot` | `EarshotVad` | Optional pure-Rust VAD (`earshot` crate) |
 | `audio-io` | multi-format decode + resample via `wav::load_audio` | `symphonia` + `rubato`; no `ort` |
 
-### Requires `onnx`
+### Requires `onnx` (native ORT / tract)
 
 | Surface | Notes |
 |---------|-------|
 | `SileroVad` | ONNX Silero VAD |
 | `FbankOnnxExtractor` | ONNX fbank embedder (`Embedder`; feature `onnx`) |
-| `CamPlusPlusExtractor`, `ResNet34Adapter` | Need `onnx` + `embedder` |
+| `CamPlusPlusExtractor`, `ResNet34Adapter`, `ERes2NetV2Extractor` | Need `onnx` + `embedder` |
 | `PowersetSegmenter` | Need `onnx` + `segmentation` |
-| `pipeline_v2` / crate-root `Pipeline` | Full stack: needs `pipeline-full` (or the six flags below) |
-| `ModelRegistry` / `download` | HTTP model registry (no `ort` by itself, but production ONNX path uses it with `onnx`) |
-| `pipeline-full` | Consumer bundle for the ONNX library path: `onnx` + `download` + `segmentation` + `embedder` + `clusterer` + `resegmentation`. Add `vbx` for the production VBx default. |
-| `cli`, `ffi`, `mcp` | App / binding surfaces: each is `pipeline-full` + `vbx` (VBx ships by default) |
+| `pipeline_v2` / crate-root `Pipeline` | Full stack: needs `pipeline-full` (or the six stage flags) |
 | `sortformer` | Optional E2E diarizer (`onnx`-gated, never default) |
 | EP features (`coreml`, `nnapi`, `xnnpack`), `backend-tract` | Inference backends |
+
+### Download / front doors (may pull `ort` only when `onnx` is also enabled)
+
+| Feature / surface | Notes |
+|-------------------|--------|
+| `download` / `ModelRegistry` | HTTP registry + SHA-256 / minisign; **no ort by itself** |
+| `pipeline-full` | `onnx` + `download` + stage markers — ONNX library bundle |
+| `cli`, `ffi`, `mcp` | `pipeline-full` + `vbx` (+ extras). Front doors **set** VBx; library `PipelineConfig::default()` is still AHC |
 
 ## Reference consumer pattern
 

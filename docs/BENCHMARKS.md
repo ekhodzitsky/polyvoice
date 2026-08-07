@@ -15,6 +15,17 @@ The `benchmarks/` runners are wired to re-measure them like-for-like once their
 (often gated) stacks are installed; until then, compare only within a matched
 collar.
 
+### Source of truth (VoxConverse-test, v2+VBx, collar 0 micro)
+
+| Figure | Role | Artifact |
+|------|------|----------|
+| **15.24 %** | **Published headline** (README / this file tables) | hop-2.0 remeasure 2026-07-30/31 — `benchmarks/results/powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json` |
+| **15.37 %** | **CI gate-day baseline** (do not “win” by drifting below without re-running the gate) | `tests/der_baseline.json` → `voxconverse_test.der_no_collar` from full-split 2026-07-25 |
+| **15.22 %** | Same scorer H2H vs speakrs (2026-08-03) | `benchmarks/results/speakrs-h2h-2026-08-03/` |
+
+When marketing and gates disagree slightly, **cite which row you mean**. The
+product still ships the hop-2.0 configuration that produced **15.24 %**.
+
 ## At a glance
 
 | | polyvoice (v2+VBx, default) | pyannote 3.1 | WhisperX | NeMo Sortformer |
@@ -23,15 +34,16 @@ collar.
 | **Model size** | **~30 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
 | **Runtime** | **CPU, 53–68× realtime** (~83× INT8 `fast`) | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
-| **Dependencies** | **pure Rust, no Python** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
+| **Dependencies** | **Rust API, optional ONNX Runtime; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
 | **Streaming** | **Yes** | No | No | No |
 
 ¹ VoxConverse-test, **no forgiveness collar (collar 0), overlap scored** — the
 strict protocol pyannote 3.1 reports against, so these two are collar-matched.
 polyvoice trails the accuracy leader by ~4 DER points and trades that for
-deployability: a pure-Rust, CPU, MIT, **ungated** engine with four bindings and
-streaming. It is **not** the accuracy leader.
+deployability: a Rust-native, CPU, MIT, **ungated** engine (ONNX Runtime for
+the production path) with four bindings and streaming. It is **not** the
+accuracy leader.
 
 ## The collar caveat (read this first)
 
@@ -304,7 +316,14 @@ python benchmark.py --dataset voxconverse_test --runners all
 - ² pyannote 3.1 (VoxConverse, AMI, DIHARD; protocol; MIT; gated): https://huggingface.co/pyannote/speaker-diarization-3.1 — footprint: [segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) 5.91 MB + [wespeaker-resnet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM) 26.6 MB
 - ³ diart (Coria et al., ASRU 2021; collar 0, overlap scored): https://arxiv.org/abs/2109.06483
 - ⁴ 3D-Speaker toolkit (VoxConverse 11.75, AMI_SDM 21.76; collar unstated): https://github.com/modelscope/3D-Speaker
-- ⁵ polyvoice: [`tests/der_baseline.json`](../tests/der_baseline.json) (schema `polyvoice-der-baseline-v2`), full-split gate [`benchmarks/results/full-der-2026-07-25/`](../benchmarks/results/full-der-2026-07-25/), hop-2.0 re-measurement [`benchmarks/results/powerset-hop2-2026-07-30/`](../benchmarks/results/powerset-hop2-2026-07-30/) and [`benchmarks/results/voxconverse-test-232-2026-07-31.json`](../benchmarks/results/voxconverse-test-232-2026-07-31.json). Default (0.11+): pipeline v2 + VBx + WeSpeaker ResNet34; legacy numbers via `--legacy`
+- ⁵ polyvoice **published** tables use hop-2.0 remeasure (**15.24 %** Vox
+  no-collar micro). CI gate-day micro in
+  [`tests/der_baseline.json`](../tests/der_baseline.json) is **15.37 %**
+  (2026-07-25 full-split). Artifacts:
+  [`benchmarks/results/full-der-2026-07-25/`](../benchmarks/results/full-der-2026-07-25/),
+  [`powerset-hop2-2026-07-30/`](../benchmarks/results/powerset-hop2-2026-07-30/),
+  [`voxconverse-test-232-2026-07-31.json`](../benchmarks/results/voxconverse-test-232-2026-07-31.json).
+  Default (0.11+): pipeline v2 + VBx + WeSpeaker ResNet34; legacy via `--legacy`
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
 - ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands
 - ⁸ speakrs CoreML warm on Apple M1 Pro, full VoxConverse-test 232, scored with `benchmarks/der.py` (collar 0, overlap scored): DER 11.08% micro (miss 3.35 / FA 4.10 / conf 3.63), RTFx ~144×. Artifact `benchmarks/results/speakrs-h2h-2026-08-03/full-232-matched-score.json` (2026-08-03/04). speakrs code Apache-2.0: https://github.com/avencera/speakrs. polyvoice on the **same** scorer/split: 15.22% no-collar micro (conf 8.04) — gap **4.14 pp**, confusion-dominated. speakrs' own README quotes 11.1% / 631× on M4 Pro; do not mix hardware for RTFx.
@@ -341,7 +360,7 @@ Release build on **Apple M1 Pro (10 cores)**. Full artifact:
 delay emission — see streaming module docs). Reproduce:
 
 ```bash
-cargo run --release --features "cli,onnx,download" --bin polyvoice-measure -- streaming \
+cargo run --release --features cli --bin polyvoice-measure -- streaming \
   --dataset data/voxconverse-test --max-files 10 \
   --output benchmarks/results/streaming-latency-measured.json
 ```
@@ -367,7 +386,7 @@ Vendor “40× faster / more accurate” claims remain **unverified / not suppor
 by this DER gate (RTF nearly tied; accuracy worse).
 
 ```bash
-cargo run --release --features "cli,vad-earshot,onnx,download" --bin polyvoice-measure -- vad-parity \
+cargo run --release --features "cli,vad-earshot" --bin polyvoice-measure -- vad-parity \
   --dataset data/voxconverse-test --max-files 10 \
   --output benchmarks/results/vad-parity-earshot-silero.json
 ```
@@ -403,7 +422,7 @@ paths; do **not** make it default. A VoxCeleb-English ERes2Net export (if
 ungated Apache) would need a separate measurement before any accuracy claim.
 
 ```bash
-cargo run --release --features "cli,embedder,onnx,download" --bin polyvoice-measure -- embedder-short \
+cargo run --release --features cli --bin polyvoice-measure -- embedder-short \
   --veri-list data/voxceleb1-subset/lists/veri_test.txt \
   --wav-root data/voxceleb1-subset \
   --der-dataset data/voxconverse-test --der-max-files 10 \
