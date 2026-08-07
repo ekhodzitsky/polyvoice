@@ -26,7 +26,8 @@ public APIs or unattended production services, because:
    minisign signatures are still pending a release-key sign step (optional
    override: `POLYVOICE_VBX_PLDA_DIR` / `--vbx-plda-dir`).
 4. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
-   CALLHOME / DIHARD (and similar) not gated for release.
+   NOTSOFAR-1 has a measured micro-gate (3-meeting subset) but CALLHOME /
+   DIHARD (and similar) are not release-gated.
 
 **Suitable for:** controlled internal services, desktop apps, and edge pilots
 where audio conditions are known and operators can pin versions and re-verify
@@ -271,7 +272,7 @@ Until every box is checked, the honest status remains:
 |---------|-------------------------------|
 | Dual pipeline families (BYO vs ONNX) | Intentional; still doubles docs/gates if not documented |
 | `ort` RC-only + single backend | Supply-chain and upgrade risk |
-| Thin multi-corpus DER | Unknown behavior outside Vox/AMI |
+| Thin multi-corpus DER | Outside Vox/AMI only NOTSOFAR micro-gate; no CALLHOME/DIHARD |
 | Pre-1.0 API | Breaking changes without major bump |
 | Accuracy gap vs leaders | ~4 pp no-collar on VoxConverse; speaker counting still dominant error |
 

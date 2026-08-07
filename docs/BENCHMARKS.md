@@ -190,23 +190,20 @@ retained below for history only — prefer the full-split rows above.
 | v2 + VBx (subset) | 17.0 [13.5–20.8] | 13.6 [10.6–16.9] | 37.0 [31.0–43.1] |
 | **v2 + VBx (full split, default)** | **15.83 macro / 15.37 micro** | — | **24.12 macro / 25.17 micro** |
 
-**Honest reading:**
+**Honest reading (historical 60-file subset era, pre–full-split gate):**
 
-- **v2 + AHC over-clusters on held-out test** — confusion (11.73) is the dominant
-  error and it trails legacy. The powerset front-end lowers miss/FA but produces
-  many embeddings that fixed-threshold AHC splits into spurious speakers.
-- **v2 + VBx fixes most of that.** Its automatic speaker count cuts test
-  confusion 11.73 → 8.35 and lands at **17.0 % no-collar [13.5–20.8]**, whose CI
-  overlaps legacy's 18.54 % — i.e. VBx is **competitive with legacy** on
-  conversational audio and is the best v2 clusterer. (On the dev subset the two
-  v2 clusterers tie; VBx's edge shows on the held-out test.)
-- **AMI (long-form, heavy overlap) still favours legacy.** Both v2 variants trail
-  it; miss dominates and automatic speaker counting does not help here.
-- **Caveat:** v2/VBx are 60-file subsets with wide CIs; "competitive" means
-  overlapping CIs, not a measured win. Legacy remains the robust default; VBx is
-  the most promising path on conversational audio and the focus of ongoing
-  accuracy work. Reproduce with
-  [`benchmarks/bench_subset.py`](../benchmarks/bench_subset.py).
+- These subset numbers motivated shipping **v2 + VBx** as the product default
+  (since 0.11). They are **not** the current leaderboard — use the full-split
+  tables above (Vox 232 / AMI 16) and the at-a-glance section.
+- On that older subset, v2 + AHC over-clustered (high confusion); VBx cut
+  confusion and became competitive with legacy on conversational audio.
+- **Superseded on AMI:** full-split AMI-test now favors **v2 + VBx (23.42 %
+  no-collar)** over legacy (32.87 %), not the reverse. Do not treat the
+  “legacy remains the robust default” sentence from early subset notes as
+  current product policy.
+- Reproduce subset-style runs with
+  [`benchmarks/bench_subset.py`](../benchmarks/bench_subset.py) only for
+  historical comparison.
 
 ## Speed — real-time factor (RTF, CPU; lower = faster)
 

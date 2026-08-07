@@ -61,22 +61,25 @@ A 1-hour meeting diarizes in about a minute on a laptop.
 | Platform | Get it |
 |---|---|
 | Linux x86_64 / ARM64, macOS, Windows | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) — put them on your `PATH` |
-| Rust library (ONNX production) | `cargo add polyvoice --features "pipeline-full,vbx"` — exports crate-root `Pipeline` (v2 + VBx) |
+| Rust library (ONNX production) | `cargo add polyvoice --features "pipeline-full,vbx"` — crate-root `Pipeline` (v2); set `clusterer: Vbx` for CLI parity |
 | Rust, no ONNX (BYO embedder) | `cargo add polyvoice --no-default-features` (extras: `clusterer,vbx`) — [library mode](docs/library-mode.md) |
-| Python | `pip install polyvoice` |
+| Python | `pip install polyvoice` — [python/README.md](python/README.md) |
 | From source | `cargo install polyvoice --features cli` · `"cli,audio-io"` (mp3/flac/ogg, any sample rate) · `ffi` (C ABI v3) |
 
 ## Library usage
 
 ```rust,no_run
 use polyvoice::models::ModelRegistry;
+use polyvoice::pipeline_v2::ClustererKind;
 use polyvoice::types::{Profile, SampleRate};
 use polyvoice::{Pipeline, PipelineConfig};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // CLI / Python / FFI default is VBx. PipelineConfig::default() alone is AHC.
     let pipeline = Pipeline::builder()
         .config(PipelineConfig {
             profile: Profile::Balanced, // or Profile::Fast for the INT8 pair
+            clusterer: ClustererKind::Vbx,
             ..PipelineConfig::default()
         })
         .with_models_from(ModelRegistry::default()?) // models auto-download
@@ -90,14 +93,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Python usage and the full API live on [docs.rs](https://docs.rs/polyvoice).
+Python: [python/README.md](python/README.md). Full Rust API: [docs.rs](https://docs.rs/polyvoice)
+and [docs/API.md](docs/API.md).
 
 ## Why polyvoice
 
 - **Fast on CPU.** 53–68× realtime on a laptop M1 Pro (~83× with the INT8
   `fast` profile) — no GPU, no batching tricks.
-- **Pure Rust, four surfaces.** Rust + Python + C FFI + CLI from a single
-  crate; no PyTorch, no Python runtime, `sherpa-rs` is archived.
+- **Rust-native, four surfaces.** Rust + Python + C FFI + CLI from one crate;
+  no PyTorch stack. Production ONNX path uses ONNX Runtime (`ort`); the default
+  feature set is empty (ort-free BYO core).
 - **MIT, ungated.** No HF token, no non-commercial rider, no gated weights.
   Streaming included.
 - **Honest trade-off.** Not the accuracy leader: pyannote 3.1 is ~4 DER
@@ -126,10 +131,10 @@ version in production. Deployment guidance and known gaps:
 
 ## Documentation
 
+- **[docs/README.md](docs/README.md)** — full index by audience (CLI, Rust, Python, FFI, security)
 - [Benchmarks](docs/BENCHMARKS.md) — DER per corpus, speed, collar protocols, competitor context
 - [API](docs/API.md) · [Pipeline architecture](docs/PIPELINE-ARCHITECTURE.md) · [Library mode (no ONNX)](docs/library-mode.md)
 - [Production readiness](PRODUCTION-READINESS.md) — deployment guidance (GO / NO-GO)
-- [Migrating from 0.5](docs/MIGRATING-FROM-0.5.md) · [Glossary](docs/GLOSSARY.md)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## License

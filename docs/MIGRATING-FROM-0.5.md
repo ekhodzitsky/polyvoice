@@ -1,21 +1,22 @@
-# Migrating from polyvoice 0.5 to 1.0
+# Migrating from polyvoice 0.5 → 0.6 (archival)
 
-`polyvoice 0.6.0` introduces the v1.0 architecture: a single
-`pipeline_v2::Pipeline::builder()` API, profile-based model selection, and
-INT8-quantized ONNX bundles. This is intentionally a breaking change.
+> **Archival guide.** This is **not** a migration to product 1.0 (crate is
+> still pre-1.0; current line is **0.15.x**). It documents the **0.5 → 0.6**
+> API break. For what ships **today**, use [README](../README.md),
+> [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md), and
+> [CHANGELOG.md](../CHANGELOG.md).
 
-> **Status box (read first):** this guide documents the **0.5 → 0.6** migration
-> and is partially outdated — sections marked *archival* below describe APIs
-> that have since been removed (`HybridPipeline`, `OnlineDiarizer`,
+`polyvoice 0.6.0` introduced the pipeline-v2 builder API, profile-based model
+selection, and INT8-quantized ONNX bundles — intentionally a breaking change
+from 0.5.
+
+> **Status box (read first):** sections marked *archival* describe APIs that
+> have since been removed (`HybridPipeline`, `OnlineDiarizer`,
 > `OnnxEmbeddingExtractor`, FFI ABI v2). As of **0.11+**, CLI, FFI, Python, and
 > MCP default to **`pipeline_v2` + VBx**; the crate-root `Pipeline` is the v2
 > pipeline (re-exported under the full ONNX feature gate), and the ort-free /
 > BYO library surface is `pipeline::LegacyPipeline` (also the CLI `--legacy`
-> escape hatch). Architecture map:
-> [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md).
->
-> The sections below retain historical 0.6.x narrative for context; prefer this
-> status box and the README for what ships today.
+> escape hatch).
 
 ## Rust API
 

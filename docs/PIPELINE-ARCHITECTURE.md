@@ -33,11 +33,15 @@ For the **development process** checklist (spec → types → verify), see
 | Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |
 | Library ONNX | `features = ["pipeline-full", "vbx"]` → crate-root `Pipeline` |
 
+**Library vs front doors:** CLI / Python / FFI / MCP **set** `ClustererKind::Vbx`.
+`PipelineConfig::default()` is still **AHC** — library callers must set
+`clusterer: ClustererKind::Vbx` for CLI parity (see crate-root README example).
+
 ## Config defaults (do not mix blindly)
 
 | Knob | Legacy (`DiarizationConfig` / `ClusterConfig`) | v2 (`PipelineConfig`) |
 |------|-----------------------------------------------|------------------------|
-| Default clusterer (CLI/Python) | AHC when `--legacy` | **VBx** |
+| Default clusterer (CLI/Python/FFI) | AHC when `--legacy` | **VBx** (front doors); library `default()` is **AHC** |
 | AHC threshold | `DEFAULT_AHC_THRESHOLD` (0.45) | same constant when AHC is selected |
 | `min_cluster_size` | **2** (prunes singletons on the dense-window path) | **1** (no prune; powerset + short clips) |
 
