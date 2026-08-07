@@ -56,6 +56,9 @@ numbers live in [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
 ### Archival
 - [MIGRATING-FROM-0.5.md](MIGRATING-FROM-0.5.md) — **0.5 → 0.6 only**, not “to 1.0”
 
+### Internal only (not shipped / not linked)
+- `docs/superpowers/` is **gitignored** agent plan debris — not part of the product doc set.
+
 ## Naming note
 
 | File | About |

@@ -50,9 +50,10 @@ pytest tests/ -v
 1. Fork and create a feature branch from `master`
 2. Prefer tests first for behavior changes
 3. `cargo fmt` and `cargo clippy --features "pipeline-full,vbx" -- -D warnings`
-4. Keep PRs focused — one feature or fix per PR
-5. Update docs if you change public API
-6. Do **not** put internal roadmap task numbers in source, commits, or shipped docs (see [AGENTS.md](AGENTS.md))
+4. If you touch markdown links: `bash scripts/check-docs-links.sh`
+5. Keep PRs focused — one feature or fix per PR
+6. Update docs if you change public API
+7. Do **not** put internal roadmap task numbers in source, commits, or shipped docs (see [AGENTS.md](AGENTS.md))
 
 ## Code style
 

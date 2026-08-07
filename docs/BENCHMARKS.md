@@ -237,7 +237,7 @@ A 1-hour meeting diarizes in about a minute.
 
 | Engine | RTF | Notes |
 |---|---|---|
-| **polyvoice (default)** | **0.015–0.019** (53–68× realtime) | pure-Rust, CPU; see table above |
+| **polyvoice (default)** | **0.015–0.019** (53–68× realtime) | Rust + ONNX Runtime, CPU; see table above |
 | **polyvoice (`--profile fast`)** | **~0.012** (~83× realtime) | INT8 pair; DER caveat below |
 | pyannote 3.1 | not published | PyTorch; GPU recommended for throughput |
 | WhisperX | > 1 on CPU | Whisper + pyannote; GPU recommended |
@@ -257,7 +257,7 @@ are steady-state in-process numbers.
 
 | Engine | Deployable size | License | Gated weights? | Runtime |
 |---|---|---|---|---|
-| **polyvoice** | **~30 MB** (INT8 `fast`: ~8.4 MB) | **MIT** | **No** | pure Rust, CPU |
+| **polyvoice** | **~30 MB** (INT8 `fast`: ~8.4 MB) | **MIT** | **No** | Rust + ONNX Runtime, CPU |
 | pyannote 3.1 | ~32.5 MB (seg 5.9 + embed 26.6) | MIT code | **Yes** (HF token + accept) | PyTorch, CPU/GPU |
 | WhisperX | ~32.5 MB + Whisper model | BSD code | Yes (pyannote) | PyTorch, GPU |
 | sherpa-onnx | seg ~5.9 MB + embed (int8 avail.) | Apache-2.0 | No | ONNX, CPU |
@@ -266,7 +266,7 @@ are steady-state in-process numbers.
 
 polyvoice's footprint is **comparable** to pyannote's (both ~30 MB) — not a size
 win there — but it is far smaller than the WhisperX/NeMo stacks, and uniquely
-**MIT + ungated + pure-Rust + CPU**. sherpa-onnx is the closest architectural
+**MIT + ungated + Rust-native + CPU**. sherpa-onnx is the closest architectural
 peer (ONNX, CPU) but publishes **no DER**.
 
 ## Datasets

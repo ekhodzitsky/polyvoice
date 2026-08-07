@@ -2,7 +2,10 @@
 
 > Research snapshot: 2026-06-23. Stars are approximate and change daily.
 
-Polyvoice positions itself as a **pure-Rust, CPU-only, MIT-licensed, ungated** speaker diarization engine with first-class streaming and a small (~30 MB) footprint. The list below compares the main open-source alternatives and what polyvoice can learn from them.
+Polyvoice positions itself as a **Rust-native, CPU-first, MIT-licensed, ungated**
+speaker diarization engine (ort-free core; production path uses ONNX Runtime)
+with first-class streaming and a small (~30 MB) footprint. The list below
+compares the main open-source alternatives and what polyvoice can learn from them.
 
 ## Polyvoice baseline
 
@@ -23,10 +26,10 @@ Polyvoice positions itself as a **pure-Rust, CPU-only, MIT-licensed, ungated** s
 | **speakrs** | ~★ growing | Rust / ONNX+CoreML | Apache-2.0 | ungated HF models | **pyannote-level DER (11.08% Vox test, our scorer)**; CoreML speed | streaming surfaces, multi-bindings, MIT end-to-end, measured multi-corpus story |
 | **pyannote.audio** | 10 160 | Python / PyTorch | MIT | Gated (HuggingFace token + terms) | SOTA accuracy (DER ~11.2% on VoxConverse), mature pipelines, fine-tuning | CPU-only, no Python, no HF token, streaming, ~30 MB |
 | **WhisperX** | 22 620 | Python / faster-whisper / PyTorch | BSD-2-Clause | pyannote gated + Whisper MIT | ASR + diarization + word-level timestamps in one CLI, 99 languages | Pure diarization, Rust-native, CPU, MIT without gated models |
-| **NVIDIA NeMo** | 17 459 | Python / PyTorch / CUDA | Apache-2.0 | NGC / Riva terms (not pure OSS) | GPU SOTA (MSDD, Sortformer), enterprise ecosystem, ASR/TTS/LLM | Pure-Rust, CPU, MIT, simple deploy |
+| **NVIDIA NeMo** | 17 459 | Python / PyTorch / CUDA | Apache-2.0 | NGC / Riva terms (not pure OSS) | GPU SOTA (MSDD, Sortformer), enterprise ecosystem, ASR/TTS/LLM | Rust-native, CPU, MIT, simple deploy |
 | **FunASR** | ~18 500 | Python / PyTorch (+ C++ runtime) | MIT | Custom FunASR Model License | Industrial ASR+VAD+diarization, 50+ languages, Docker/API | Size, license simplicity, Rust integration |
 | **Kaldi** | 15 418 | C++ / Shell / Python | Apache-2.0 | Apache-2.0, some models trained on LDC data | Research standard, x-vector + PLDA recipes, ASR+speaker | Ready pipeline, streaming, no C++ build |
-| **sherpa-onnx** | 13 132 | C++ / ONNX | Apache-2.0 | pyannote gated / 3D-Speaker Apache / Silero MIT | Offline SDK, 12 language bindings, ASR+TTS+VAD+diarization, edge platforms | Pure-Rust core, streaming diarization, fewer dependencies |
+| **sherpa-onnx** | 13 132 | C++ / ONNX | Apache-2.0 | pyannote gated / 3D-Speaker Apache / Silero MIT | Offline SDK, 12 language bindings, ASR+TTS+VAD+diarization, edge platforms | Rust core + streaming diarization, fewer app deps |
 | **SpeechBrain** | 11 644 | Python / PyTorch | Apache-2.0 | Apache-2.0 | Universal speech toolkit, 200+ recipes, embedding training | CPU-only deploy, Rust, size, streaming |
 | **diart** | 1 988 | Python / PyTorch / RxPY | MIT | pyannote gated | Real-time streaming diarization, DER 16.8% on VoxConverse | CPU-first, no Python/HF token, Rust-native |
 | **Resemblyzer** | 3 274 | Python / PyTorch | Apache-2.0 | Apache-2.0 / MIT | Popular embeddings, multi-task use cases | Ready diarization pipeline, streaming, Rust |
@@ -69,7 +72,12 @@ Polyvoice positions itself as a **pure-Rust, CPU-only, MIT-licensed, ungated** s
 
 **Should polyvoice continue? Yes.**
 
-Polyvoice owns a defensible niche that the Python/C++ incumbents do not serve well: a **pure-Rust, CPU-only, MIT-licensed, ungated, streaming diarization engine** that embeds into Rust applications without a Python runtime. Competitors are stronger on accuracy, ecosystem, and bindings, but they are heavier, GPU-oriented, and often gated or commercially restricted.
+Polyvoice owns a defensible niche that the Python/C++ incumbents do not serve
+well: a **Rust-native, CPU-first, MIT-licensed, ungated, streaming diarization
+engine** that embeds into apps without a PyTorch stack (production ONNX path
+still uses the `ort` native runtime). Competitors are stronger on accuracy,
+ecosystem, and bindings, but they are heavier, GPU-oriented, and often gated
+or commercially restricted.
 
 The main **peer threat** is **speakrs** (same Rust/ONNX niche): measured **11.08%** vs our **15.22%** on VoxConverse-test under one scorer (gap ~4 pp, confusion-dominated). VBx + PLDA already cut an earlier ~7 pp gap to pyannote (~11.2%); if the residual stalls, accuracy-sensitive users will pick speakrs or the heavier Python stacks. The roadmap already targets the rest with better segmentation, embeddings, and EEND/Sortformer spikes. The priority should be:
 

@@ -7,8 +7,9 @@ via feature flag + manifest entry without changing the default pipeline.
 ## Enablement
 
 ```toml
-# Cargo.toml
-polyvoice = { version = "...", features = ["sortformer", "onnx", "download"] }
+# Cargo.toml — sortformer pulls onnx; download is optional for ModelRegistry
+polyvoice = { version = "0.15", features = ["sortformer", "download"] }
+# equivalent if you prefer explicit flags: ["sortformer", "onnx", "download"]
 ```
 
 ```bash

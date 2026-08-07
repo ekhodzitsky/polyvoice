@@ -85,6 +85,6 @@ application code (`pipeline::LegacyPipeline` vs crate-root `Pipeline`).
 ## Related docs
 
 - [library-mode.md](library-mode.md) — ort-free surface inventory
-- [BENCHMARKS.md](BENCHMARKS.md) — DER protocol and 0.11 gate numbers
+- [BENCHMARKS.md](BENCHMARKS.md) — DER protocol and full-split numbers
 - [API.md](API.md) — public API reference
 - Module docs live in rustdoc on the source modules (`pipeline`, `pipeline_v2`, …)

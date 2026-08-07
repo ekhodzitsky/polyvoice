@@ -286,6 +286,14 @@ jobs:
           tool: cargo-deny
       - run: cargo deny check advisories licenses bans sources
 
+  # Relative markdown links under README/docs/python/examples (no network).
+  docs-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check internal markdown links
+        run: bash scripts/check-docs-links.sh
+
   hack:
     runs-on: ubuntu-latest
     steps:
