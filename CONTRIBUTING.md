@@ -33,6 +33,7 @@ cargo run --features cli --bin polyvoice -- download-models --profile balanced
 | Multi-format audio decode | `audio-io` (with `cli` for the binary) |
 
 Architecture map: [docs/PIPELINE-ARCHITECTURE.md](docs/PIPELINE-ARCHITECTURE.md).
+Full doc index: [docs/README.md](docs/README.md). C FFI: [docs/FFI.md](docs/FFI.md).
 
 ### Python bindings
 

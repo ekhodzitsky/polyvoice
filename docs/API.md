@@ -289,10 +289,11 @@ for ov in overlaps {
 Build with `--features ffi` to generate C symbols:
 
 ```bash
-cargo build --features ffi
+cargo build --release --features ffi
 ```
 
-See `include/polyvoice.h` and `examples/ffi_usage.c` for usage.
+Full C guide: **[FFI.md](FFI.md)**. Header and example:
+`include/polyvoice.h`, `examples/ffi_usage.c`.
 
 ## Library mode (no ONNX)
 

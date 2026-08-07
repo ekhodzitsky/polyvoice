@@ -134,6 +134,7 @@ version in production. Deployment guidance and known gaps:
 - **[docs/README.md](docs/README.md)** — full index by audience (CLI, Rust, Python, FFI, security)
 - [Benchmarks](docs/BENCHMARKS.md) — DER per corpus, speed, collar protocols, competitor context
 - [API](docs/API.md) · [Pipeline architecture](docs/PIPELINE-ARCHITECTURE.md) · [Library mode (no ONNX)](docs/library-mode.md)
+- [C FFI](docs/FFI.md) · [Python](python/README.md)
 - [Production readiness](PRODUCTION-READINESS.md) — deployment guidance (GO / NO-GO)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 

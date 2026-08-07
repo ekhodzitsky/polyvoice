@@ -361,7 +361,7 @@ embedder error enums are now `#[non_exhaustive]`.
   unlimited ceiling (matches free AHC); the BYO `pipeline` routes through
   `AhcClusterer` when the `clusterer` feature is on.
 - **Embedder stack collapse (in-tree).** `FbankOnnxExtractor` is a first-class
-  [`Embedder`](src/ecapa/mod.rs) (no longer soft-deprecated, no longer goes
+  [`Embedder`](src/fbank_onnx/mod.rs) (no longer soft-deprecated, no longer goes
   through `EmbeddingExtractor`). ONNX adapters (`ResNet34Adapter`, CAM++,
   ERes2NetV2) call `Embedder::embed` on the shared engine. Soft-deprecate
   `SpeakerCluster` (not on offline/streaming production paths) and

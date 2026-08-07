@@ -319,10 +319,9 @@ python benchmark.py --dataset voxconverse_test --runners all
 - ⁵ polyvoice **published** tables use hop-2.0 remeasure (**15.24 %** Vox
   no-collar micro). CI gate-day micro in
   [`tests/der_baseline.json`](../tests/der_baseline.json) is **15.37 %**
-  (2026-07-25 full-split). Artifacts:
-  [`benchmarks/results/full-der-2026-07-25/`](../benchmarks/results/full-der-2026-07-25/),
-  [`powerset-hop2-2026-07-30/`](../benchmarks/results/powerset-hop2-2026-07-30/),
-  [`voxconverse-test-232-2026-07-31.json`](../benchmarks/results/voxconverse-test-232-2026-07-31.json).
+  (2026-07-25 full-split). Artifacts under
+  [`benchmarks/results/`](../benchmarks/results/) (`full-der-2026-07-25/`,
+  `powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json`).
   Default (0.11+): pipeline v2 + VBx + WeSpeaker ResNet34; legacy via `--legacy`
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
 - ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands

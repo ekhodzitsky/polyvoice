@@ -24,6 +24,7 @@ numbers live in [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
 - [../python/README.md](../python/README.md) — install, API, defaults (VBx)
 
 ### C FFI
+- [FFI.md](FFI.md) — build, lifecycle, status codes, audio caps
 - [../include/polyvoice.h](../include/polyvoice.h) — ABI v3
 - [../examples/ffi_usage.c](../examples/ffi_usage.c)
 

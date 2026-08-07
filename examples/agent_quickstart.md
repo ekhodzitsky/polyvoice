@@ -5,6 +5,10 @@ from polyvoice, for AI agents and scripted integrations. Every command below
 keeps stdout clean: the result is the only thing printed there; progress and
 logs go to stderr.
 
+Docs index: [`docs/README.md`](../docs/README.md) · schema:
+[`schema/diarization-result-v1.json`](../schema/diarization-result-v1.json) ·
+C embedding: [`docs/FFI.md`](../docs/FFI.md).
+
 ## 1. CLI: one-shot JSON
 
 ```sh
