@@ -88,3 +88,6 @@ kimi-score.svg
 mutants.out/
 benchmark_kmeans*
 cobertura.xml
+
+# local quant experiment outputs (not release artifacts)
+models/int8/candidates/
