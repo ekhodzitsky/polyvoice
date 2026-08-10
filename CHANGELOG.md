@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   N=8 is ~25–30% faster on CPU segmentation but +0.14 pp AMI-16 DER₀. See
   `benchmarks/results/powerset-batch8-cpu-2026-08-10/`.
 
+### Research
+
+- Explored **batch-invariant re-quant** of `powerset_int8` (static QDQ /
+  frozen DQL scales). Best static candidate is N=1/N=8 identical but
+  **+0.54 pp AMI-16 DER** vs shipping dynamic INT8 and slower — **not
+  shipped**. Notes:
+  `benchmarks/results/powerset-int8-batch-invariant-2026-08-10/`.
+
 ## [0.17.0] - 2026-08-10
 
 ### Breaking / product
