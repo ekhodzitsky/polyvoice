@@ -1,10 +1,6 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 #![cfg_attr(not(test), deny(clippy::expect_used))]
 #![cfg_attr(not(test), deny(clippy::panic))]
-// The generated test harness registers every #[test] fn from the crate root,
-// so tests living inside a deprecated module trip `deprecated` there; allow
-// it crate-wide in test builds only.
-#![cfg_attr(test, allow(deprecated))]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 //! # polyvoice
@@ -45,21 +41,11 @@
 //!   this offline path with Silero + AHC.
 //! - **Shared math:** `ahc`, `kmeans`, `spectral`, `features`, `der`, `utils`.
 //! - **Online centroids:** production streaming uses
-//!   `streaming::ArrivalOrderSpeakerCache`; `cluster::SpeakerCluster` is
-//!   deprecated (not on any production path).
+//!   [`streaming::ArrivalOrderSpeakerCache`].
 
 pub mod ahc;
 pub mod asr;
 pub use asr::{Asr, AsrError};
-/// Online incremental speaker centroids. Kept for the fuzz target and
-/// experiments; not on any production path (offline clustering is
-/// `clusterer::Clusterer`, streaming uses
-/// [`streaming::ArrivalOrderSpeakerCache`]).
-#[deprecated(
-    since = "0.12.0",
-    note = "not on the production offline or streaming path; use clusterer::Clusterer (offline) or streaming::StreamingPipeline / ArrivalOrderSpeakerCache (online)"
-)]
-pub mod cluster;
 pub mod der;
 pub mod features;
 #[cfg(feature = "ffi")]
@@ -110,10 +96,6 @@ pub use embedder::{CamPlusPlusExtractor, ERes2NetV2Extractor, ResNet34Adapter};
 #[cfg(feature = "clusterer")]
 pub mod clusterer;
 
-/// Deprecated alias for the pre-rename name; use [`KmeansClusterer`].
-#[cfg(feature = "clusterer")]
-#[allow(deprecated)]
-pub use clusterer::KMeansClusterer;
 #[cfg(feature = "clusterer")]
 pub use clusterer::{
     AhcClusterer, AsNormClusterer, Clusterer, ClustererError, KmeansClusterer,

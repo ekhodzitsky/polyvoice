@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-10
+
+### Breaking
+
+- **Removed soft-deprecated public API** (deprecated since 0.12):
+  - `cluster` module / `SpeakerCluster` — use `clusterer::Clusterer` (offline)
+    or `streaming::ArrivalOrderSpeakerCache` (online).
+  - Type aliases `pipeline::Pipeline` / `pipeline::PipelineError` — use
+    `pipeline::LegacyPipeline` / `LegacyPipelineError` (crate-root `Pipeline` /
+    `PipelineError` remain the production v2 types under the ONNX feature gate).
+  - Type alias `KMeansClusterer` — use `KmeansClusterer`.
+- Fuzz target `fuzz_cluster_assign` now exercises `ArrivalOrderSpeakerCache`.
+
+### Documentation
+
+- CONTRIBUTING and library-mode updated for the removal; docs index 0.16.
+
 ## [0.15.0] - 2026-08-05
 
 ### Added

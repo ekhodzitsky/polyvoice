@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.0] - 2026-08-10
+
+### Changed
+
+- Lockstep with core **0.16.0**. Python API unchanged; core removed soft-deprecated
+  Rust aliases (`cluster` / `KMeansClusterer` / `pipeline::Pipeline` rename aliases)
+  that the Python bindings did not expose.
+
 ## [0.15.0] - 2026-08-05
 
 ### Changed

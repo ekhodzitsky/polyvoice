@@ -1,5 +1,4 @@
 //! Speaker identity and remapping tables.
-#![allow(deprecated)] // doc-links to soft-deprecated SpeakerCluster
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -9,11 +8,11 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SpeakerId(pub u32);
 
-/// A remapping table produced by [`SpeakerCluster::merge`](crate::cluster::SpeakerCluster::merge).
+/// A remapping table for speaker IDs after a merge or renumbering step.
 ///
-/// When two speaker centroids are merged, all indices after the removed one shift
-/// left by one. This struct captures the old → new mapping so that callers can
-/// update any stored [`SpeakerId`]s (e.g. in segments or speaker turns).
+/// When two speaker labels are collapsed, callers can record old → new pairs
+/// here and apply them to stored [`SpeakerId`]s (segments, turns, etc.) via
+/// [`SpeakerIdRemap::remap`] or `remap_segments` / `remap_turns`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpeakerIdRemap {
     /// Mapping from old SpeakerId to new SpeakerId.

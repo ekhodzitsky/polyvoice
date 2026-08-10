@@ -1,6 +1,6 @@
-# Documentation index (polyvoice 0.15)
+# Documentation index (polyvoice 0.16)
 
-Crate version: **0.15.x** ([CHANGELOG](../CHANGELOG.md)). Canonical accuracy
+Crate version: **0.16.x** ([CHANGELOG](../CHANGELOG.md)). Canonical accuracy
 numbers live in [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
 [PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md).
 

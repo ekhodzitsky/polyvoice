@@ -8,9 +8,9 @@ not want the ONNX Runtime (`ort`) native dylib.
 ```toml
 # Cargo.toml
 [dependencies]
-polyvoice = { version = "0.15", default-features = false }
+polyvoice = { version = "0.16", default-features = false }
 # optional pure-Rust extras:
-# polyvoice = { version = "0.15", default-features = false, features = ["clusterer", "vbx"] }
+# polyvoice = { version = "0.16", default-features = false, features = ["clusterer", "vbx"] }
 ```
 
 CI enforces that `ort` never appears in the normal dependency graph for
@@ -28,7 +28,7 @@ CI enforces that `ort` never appears in the normal dependency graph for
 | Energy VAD | `EnergyVad`, `VadConfig`, `VoiceActivityDetector`, `segment_speech` | Pure-Rust energy VAD |
 | Embedding | `Embedder`, `EmbedderError`, `DummyExtractor` | Implement `Embedder` for BYO encoders |
 | Config / result types | `DiarizationConfig`, `ClusterConfig`, `SpeakerTurn`, `DiarizationResult`, `Segment`, `SampleRate`, … | `types` |
-| AHC / k-means math | `ahc`, `kmeans` (+ deprecated `cluster::SpeakerCluster`) | Pure-Rust clustering primitives |
+| AHC / k-means math | `ahc`, `kmeans` | Pure-Rust clustering primitives |
 | DER helpers | `compute_der`, `compute_wder`, … | Evaluation |
 | Window / overlap / RTTM / WAV | `window`, `overlap`, `rttm`, `wav`, `format` | I/O and post-processing |
 | Fbank features | `FbankConfig`, `FbankExtractor` | Pure-Rust front-end features |

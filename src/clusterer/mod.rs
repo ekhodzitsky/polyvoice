@@ -253,13 +253,6 @@ pub struct KmeansClusterer {
     fast_mode: bool,
 }
 
-/// Deprecated alias for the pre-rename name; use [`KmeansClusterer`].
-#[deprecated(
-    since = "0.12.0",
-    note = "renamed to KmeansClusterer; alias removed at 1.0"
-)]
-pub type KMeansClusterer = KmeansClusterer;
-
 impl KmeansClusterer {
     /// Create a new K-means clusterer with automatic k selection.
     /// `max_clusters` is the upper bound on the number of clusters.

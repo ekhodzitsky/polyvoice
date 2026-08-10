@@ -87,16 +87,17 @@ Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues) and the loc
 
 Already shipped (not open scaffolding): spectral/NME-SC clusterer, RTTM I/O, VoxConverse/AMI bench harness, AS-norm domain profiles, attribution join.
 
-## Deprecated API (remove at 1.0)
+## Removed public API (0.16)
 
-| Symbol | Prefer | Since |
-|--------|--------|-------|
-| `cluster::SpeakerCluster` (whole module) | `clusterer::Clusterer` / `streaming::ArrivalOrderSpeakerCache` | 0.12 |
-| `pipeline::Pipeline` / `PipelineError` | `pipeline::LegacyPipeline` / crate-root `Pipeline` (v2) | 0.12 |
-| `KMeansClusterer` | `KmeansClusterer` | 0.12 |
+These soft-deprecated (since 0.12) names were **deleted** in 0.16:
 
-Do not remove these until **1.0** without a CHANGELOG major callout. Library
-docs: [docs/API.md](docs/API.md).
+| Removed | Use instead |
+|---------|-------------|
+| `cluster` / `SpeakerCluster` | `clusterer::Clusterer` / `streaming::ArrivalOrderSpeakerCache` |
+| `pipeline::Pipeline` / `pipeline::PipelineError` | `pipeline::LegacyPipeline` / `LegacyPipelineError` (crate-root `Pipeline` is v2) |
+| `KMeansClusterer` | `KmeansClusterer` |
+
+Library docs: [docs/API.md](docs/API.md).
 
 ## License
 

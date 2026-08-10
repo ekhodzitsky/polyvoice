@@ -58,12 +58,12 @@ For long-form multi-speaker audio, use the hybrid pipeline which treats
 use polyvoice::pipeline_v2::hybrid::HybridPipeline;
 use polyvoice::segmentation::PowersetSegmenter;
 use polyvoice::embedder::ResNet34Adapter;
-use polyvoice::clusterer::KMeansClusterer;
+use polyvoice::clusterer::KmeansClusterer;
 use polyvoice::types::SampleRate;
 
 let segmenter = PowersetSegmenter::new("models/powerset_fp32.onnx")?;
 let embedder = ResNet34Adapter::new("models/wespeaker_resnet34.onnx", 4)?;
-let clusterer = KMeansClusterer::new(20);
+let clusterer = KmeansClusterer::new(20);
 let pipeline = HybridPipeline::new(Box::new(segmenter), Box::new(embedder), Box::new(clusterer));
 let sr = SampleRate::new(16000).unwrap();
 let result = pipeline.run(&samples, sr)?;

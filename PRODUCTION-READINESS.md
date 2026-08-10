@@ -1,17 +1,17 @@
 # Production Readiness Assessment
 
-> **Version:** 0.15.x | **Date:** 2026-08-06 | **Scope:** Rust library + Python bindings + FFI + CLI
+> **Version:** 0.16.x | **Date:** 2026-08-10 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
-> **Last updated:** 2026-08-06 — version truth refreshed to match crate **0.15.0**.
-> Pipeline v2+VBx has been the default since 0.11. Canonical accuracy numbers
-> live in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md); this file is the
-> deployment GO / NO-GO judgment, not a second leaderboard.
+> **Last updated:** 2026-08-10 — crate **0.16.0** (hard-removed soft-deprecated
+> public aliases). Pipeline v2+VBx has been the default since 0.11. Canonical
+> accuracy numbers live in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md); this file
+> is the deployment GO / NO-GO judgment, not a second leaderboard.
 
 ## Executive Summary
 
 **Status: NOT GO for public unattended production. OK for controlled internal use.**
 
-As of **0.15.x**, polyvoice is a hardened pre-1.0 engine: model signing is
+As of **0.16.x**, polyvoice is a hardened pre-1.0 engine: model signing is
 enforced on release builds for profile-resolved models, the ONNX Runtime native
 binary is hash-pinned and documented, CI covers the main desktop targets, and a
 **full VoxConverse-test + AMI-test DER gate** keeps **pipeline v2 + VBx** as the
@@ -39,11 +39,11 @@ proof.
 
 ---
 
-## Current surface (0.15.x truth)
+## Current surface (0.16.x truth)
 
 | Area | State |
 |------|--------|
-| Crate version | `0.15.0` (0.15.x line) |
+| Crate version | `0.16.0` (0.16.x line) |
 | CLI default | **v2 + VBx** (powerset → ResNet34 → VB-HMM/PLDA); `--legacy` / `--clusterer ahc` opt out |
 | Python default | Pipeline v2 + **VBx** (same as CLI); pass `clusterer="ahc"` to opt out |
 | Full-split DER (no-collar micro, measured 0.14) | Vox **15.24%**, AMI **23.42%** — see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
@@ -64,12 +64,12 @@ needs multi-corpus gates, a stable ort, and signed PLDA distribution.
 
 | Item | Status | Risk |
 |------|--------|------|
-| Semantic version | `0.15.0` | Pre-1.0 — API may change between `0.x` minors |
+| Semantic version | `0.16.0` | Pre-1.0 — API may change between `0.x` minors |
 | `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
-| CHANGELOG | Maintained | Tracks 0.11→0.15; CLI default flip to v2+VBx was 0.11 |
+| CHANGELOG | Maintained | Tracks 0.11→0.16; CLI default flip to v2+VBx was 0.11 |
 
 **Gap:** No commitment to backward compatibility until `1.0.0`. Consumers should
-pin a `0.15.x` (or tighter) and read the CHANGELOG before upgrading.
+pin a `0.16.x` (or tighter) and read the CHANGELOG before upgrading.
 
 **Remediation:** Freeze the public API, publish a semver policy, then ship
 `1.0.0`.
@@ -165,7 +165,7 @@ still trails pyannote-class systems by roughly ~4 pp no-collar on VoxConverse
 
 ### 6. Pipeline story (honest dual path) ⚠️
 
-| Path | How to run | Role in 0.15.x |
+| Path | How to run | Role in 0.16.x |
 |------|------------|----------------|
 | **v2 + VBx (default)** | CLI default (`--v2` is a hidden no-op kept for old scripts); PLDA dir/env/registry | Production accuracy path; won the full-split Vox + AMI DER gate |
 | **Legacy** | CLI `--legacy` / `--clusterer ahc` | Supported escape hatch; former default (Silero + AHC) |
@@ -223,7 +223,7 @@ audit remain active.
 
 ## Go/No-Go Matrix
 
-_As of 0.15.x — `ort` remains `2.0.0-rc.12`, v2+VBx is the default with legacy
+_As of 0.16.x — `ort` remains `2.0.0-rc.12`, v2+VBx is the default with legacy
 as an escape hatch, and multi-corpus DER is incomplete. Public unattended stays
 NO-GO._
 
@@ -278,11 +278,11 @@ Until every box is checked, the honest status remains:
 
 ---
 
-## Metrics (snapshot, 0.15.x)
+## Metrics (snapshot, 0.16.x)
 
 | Metric | Value |
 |--------|-------|
-| Crate version | 0.15.0 |
+| Crate version | 0.16.0 |
 | Deployable footprint | ~30 MB class (INT8 `fast` profile: ~8.4 MB) |
 | Speed (CPU, v2 default, M1 Pro) | 53–68× realtime (RTF 0.015–0.019; ~83× with `--profile fast`) |
 | VoxConverse-test DER (v2+VBx default, 232, collar 0) | **15.24%** |
