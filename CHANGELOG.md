@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Powerset ONNX **micro-batch** path (`[N,1,T]` multi-window `run`) with
+  `PowersetConfig::batch_size` and `POLYVOICE_POWERSET_BATCH_SIZE`. Default
+  remains **N=1** (DER-safe): shipping `powerset_int8` is not batch-invariant;
+  N=8 is ~25–30% faster on CPU segmentation but +0.14 pp AMI-16 DER₀. See
+  `benchmarks/results/powerset-batch8-cpu-2026-08-10/`.
+
 ## [0.17.0] - 2026-08-10
 
 ### Breaking / product

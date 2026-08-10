@@ -25,6 +25,11 @@ pub struct PowersetConfig {
     /// Number of pooled inference sessions; windows fan out across them.
     /// `0` is treated as 1. Default: `clamp(available_parallelism, 1, 4)`.
     pub pool_size: usize,
+    /// How many sliding windows to pack into one ONNX `run` (`[N, 1, T]`).
+    /// The powerset graph is dynamic-batch; N>1 is bit-identical to N×1 on
+    /// CPU EP and typically faster. `0` is treated as 1. Default: 8.
+    /// Override at runtime with `POLYVOICE_POWERSET_BATCH_SIZE`.
+    pub batch_size: usize,
 }
 
 /// Default session-pool size: a few parallel windows without oversubscribing
@@ -34,6 +39,27 @@ fn default_pool_size() -> usize {
         .map(|n| n.get())
         .unwrap_or(1)
         .clamp(1, 4)
+}
+
+/// Default ONNX micro-batch size for multi-window `run`s.
+///
+/// **1** is the shipping default: production `powerset_int8` (models-int8-v2)
+/// is not batch-invariant (N>1 changes logits vs N×1). Full AMI-16 CPU gate:
+/// N=8 is ~20–30% faster on segmentation but +0.13 pp DER₀ — rejected under
+/// the no-regression policy. Override with `POLYVOICE_POWERSET_BATCH_SIZE`
+/// only for experiments that re-run the DER gate.
+fn default_batch_size() -> usize {
+    1
+}
+
+/// Resolve batch size: `POLYVOICE_POWERSET_BATCH_SIZE` env (if >0) → config → 1.
+fn resolve_batch_size(configured: usize) -> usize {
+    std::env::var("POLYVOICE_POWERSET_BATCH_SIZE")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(configured.max(1))
+        .max(1)
 }
 
 impl Default for PowersetConfig {
@@ -48,6 +74,7 @@ impl Default for PowersetConfig {
             sample_rate: 16000,
             aggregation: AggregationConfig::default(),
             pool_size: default_pool_size(),
+            batch_size: default_batch_size(),
         }
     }
 }
@@ -79,6 +106,7 @@ impl PowersetConfig {
             sample_rate: self.sample_rate,
             aggregation: self.aggregation.clone(),
             pool_size: self.pool_size,
+            batch_size: self.batch_size,
         };
         if candidate.validate_geometry().is_ok() {
             self.window_secs = candidate.window_secs;
@@ -223,28 +251,43 @@ impl PowersetSegmenter {
         self.config.hop_samples()
     }
 
-    /// Run inference on a single 10-second window.
-    /// Returns (logits_flat_row_major, num_frames).
-    fn infer_window(
+    /// Run inference on `windows.len()` sliding windows in one ONNX call.
+    ///
+    /// Input layout is `[N, 1, T]` (dynamic batch on the shipped powerset
+    /// graph). Output is `[N, num_frames, 7]`, split into N row-major logit
+    /// buffers. Order matches `windows`. Partial (short) windows are
+    /// zero-padded to `T = window_samples()`.
+    ///
+    /// Packs windows into one `run`. On some ONNX graphs (e.g. older local
+    /// FP32 / certain INT8 exports) N-batch is bit-identical to N×1; the
+    /// shipping `powerset_int8` (models-int8-v2) is **not** — treat N as a
+    /// measured accuracy/speed knob, not a pure scheduling flag.
+    fn infer_windows_batch(
         &self,
         session: &mut RuntimeSession,
-        window: &[f32],
-        window_idx: usize,
-    ) -> Result<(Vec<f32>, usize), SegmentationError> {
+        windows: &[&[f32]],
+        first_window_idx: usize,
+    ) -> Result<Vec<(Vec<f32>, usize)>, SegmentationError> {
+        let batch = windows.len();
+        if batch == 0 {
+            return Ok(Vec::new());
+        }
         let win_samples = self.window_samples();
-        // Zero-pad short audio to the full window length.
-        let mut buf = vec![0.0_f32; win_samples];
-        let n = window.len().min(win_samples);
-        buf[..n].copy_from_slice(&window[..n]);
+        // Pack N zero-padded windows into a contiguous [N, 1, T] buffer.
+        let mut buf = vec![0.0_f32; batch * win_samples];
+        for (i, window) in windows.iter().enumerate() {
+            let n = window.len().min(win_samples);
+            let start = i * win_samples;
+            buf[start..start + n].copy_from_slice(&window[..n]);
+        }
 
-        // Shape [1, 1, win_samples] matching the model's "waveform" input.
-        let input_tensor = InferenceTensor::f32(vec![1, 1, win_samples], buf);
+        let input_tensor = InferenceTensor::f32(vec![batch, 1, win_samples], buf);
 
         let outputs = session
             .run(&[NamedTensor::new(self.input_name.as_str(), &input_tensor)])
             .map_err(|e| SegmentationError::InferenceFailed {
-                window_idx,
-                detail: format!("session.run: {e}"),
+                window_idx: first_window_idx,
+                detail: format!("session.run (batch={batch}): {e}"),
             })?;
 
         let first =
@@ -252,7 +295,7 @@ impl PowersetSegmenter {
                 .into_iter()
                 .next()
                 .ok_or_else(|| SegmentationError::InferenceFailed {
-                    window_idx,
+                    window_idx: first_window_idx,
                     detail: "model produced no outputs".to_string(),
                 })?;
 
@@ -260,18 +303,39 @@ impl PowersetSegmenter {
         let data = first
             .into_f32()
             .map_err(|e| SegmentationError::InferenceFailed {
-                window_idx,
+                window_idx: first_window_idx,
                 detail: format!("extract f32: {e}"),
             })?;
 
-        // Expected shape: [1, num_frames, 7].
-        if shape_vec.len() != 3 || shape_vec[0] != 1 || shape_vec[2] != 7 {
+        // Expected shape: [N, num_frames, 7].
+        if shape_vec.len() != 3 || shape_vec[0] != batch || shape_vec[2] != 7 {
             return Err(SegmentationError::InvalidOutputShape {
                 actual_shape: shape_vec,
             });
         }
         let num_frames = shape_vec[1];
-        Ok((data, num_frames))
+        let row = num_frames
+            .checked_mul(7)
+            .ok_or_else(|| SegmentationError::InferenceFailed {
+                window_idx: first_window_idx,
+                detail: format!("num_frames*7 overflow: frames={num_frames}"),
+            })?;
+        if data.len() != batch * row {
+            return Err(SegmentationError::InferenceFailed {
+                window_idx: first_window_idx,
+                detail: format!(
+                    "output len {} != batch ({batch}) * frames*7 ({row})",
+                    data.len()
+                ),
+            });
+        }
+
+        let mut out = Vec::with_capacity(batch);
+        for i in 0..batch {
+            let start = i * row;
+            out.push((data[start..start + row].to_vec(), num_frames));
+        }
+        Ok(out)
     }
 }
 
@@ -290,10 +354,10 @@ impl Segmenter for PowersetSegmenter {
 
         // Window starts are computed up front so worker threads only borrow
         // `audio` immutably. Each window is independent (the segmenter keeps
-        // no state across windows), so chunks fan out across scoped threads
-        // that check out pooled sessions; results are flattened in window
-        // order, keeping the aggregated output bit-identical to the
-        // sequential version.
+        // no state across windows), so work fans out across scoped threads
+        // that check out pooled sessions. Within a worker, windows are packed
+        // into ONNX micro-batches of `batch_size` (`[N,1,T]`) — bit-identical
+        // to N sequential runs on CPU EP, faster on pure CPU.
         let specs: Vec<(usize, usize)> =
             crate::window::WindowIter::new(audio.len(), win_samples, hop_samples)
                 .include_partial()
@@ -302,28 +366,42 @@ impl Segmenter for PowersetSegmenter {
                 .collect();
 
         let n = specs.len();
-        let num_threads = self.config.pool_size.max(1).min(n).max(1);
+        // Use the same env-resolved pool size as construction for fan-out.
+        let pool = crate::onnx::resolve_session_pool_size(self.config.pool_size);
+        let num_threads = pool.max(1).min(n).max(1);
         let chunk_size = n.div_ceil(num_threads);
+        let batch_size = resolve_batch_size(self.config.batch_size);
 
         let windows: Vec<WindowOutput> = std::thread::scope(|s| {
             let handles: Vec<_> = specs
                 .chunks(chunk_size.max(1))
                 .map(|chunk| {
-                    s.spawn(move || {
+                    s.spawn(move || -> Result<Vec<WindowOutput>, SegmentationError> {
                         let mut session = self.pool.checkout();
-                        chunk
-                            .iter()
-                            .map(|&(window_idx, start_sample)| {
-                                let slice = &audio
-                                    [start_sample..(start_sample + win_samples).min(audio.len())];
-                                let (logits, num_frames) =
-                                    self.infer_window(&mut session, slice, window_idx)?;
-                                let start_t = start_sample as f32 / self.config.sample_rate as f32;
+                        let mut results = Vec::with_capacity(chunk.len());
+                        for sub in chunk.chunks(batch_size) {
+                            let slices: Vec<&[f32]> = sub
+                                .iter()
+                                .map(|&(_window_idx, start_sample)| {
+                                    &audio[start_sample
+                                        ..(start_sample + win_samples).min(audio.len())]
+                                })
+                                .collect();
+                            let first_idx = sub[0].0;
+                            let batch_out =
+                                self.infer_windows_batch(&mut session, &slices, first_idx)?;
+                            for (i, (logits, num_frames)) in batch_out.into_iter().enumerate() {
+                                let (_window_idx, start_sample) = sub[i];
+                                let start_t =
+                                    start_sample as f32 / self.config.sample_rate as f32;
                                 let end_t = (start_sample + win_samples) as f32
                                     / self.config.sample_rate as f32;
-                                WindowOutput::new(start_t, end_t, logits, num_frames)
-                            })
-                            .collect::<Vec<_>>()
+                                results.push(WindowOutput::new(
+                                    start_t, end_t, logits, num_frames,
+                                )?);
+                            }
+                        }
+                        Ok(results)
                     })
                 })
                 .collect();
@@ -331,10 +409,10 @@ impl Segmenter for PowersetSegmenter {
             let mut windows = Vec::with_capacity(n);
             for h in handles {
                 // A panicking worker panics here too, as in the sequential version.
-                let chunk_results = h.join().unwrap_or_else(|e| std::panic::resume_unwind(e));
+                let chunk_results = h.join().unwrap_or_else(|e| std::panic::resume_unwind(e))?;
                 windows.extend(chunk_results);
             }
-            windows.into_iter().collect::<Result<Vec<_>, _>>()
+            Ok::<Vec<WindowOutput>, SegmentationError>(windows)
         })?;
 
         let agg = Aggregator::new(self.config.aggregation.clone());
@@ -615,6 +693,64 @@ mod tests {
         let segments = seg.segment(&audio).expect("segment runs");
         for s in &segments {
             assert!(s.local_speaker_idx < 3);
+        }
+    }
+
+    #[test]
+    fn resolve_batch_size_is_at_least_one() {
+        assert!(resolve_batch_size(0) >= 1);
+        assert!(resolve_batch_size(8) >= 1);
+    }
+
+    /// Batched and sequential logits must match on CPU (bit-identical on
+    /// powerset_int8/fp32). This is the DER-safety contract for the batch path.
+    #[test]
+    fn infer_batch_matches_sequential_on_cpu() {
+        let path = local_model_path();
+        if !path.exists() {
+            eprintln!("skip: local powerset ONNX missing");
+            return;
+        }
+        let config = PowersetConfig {
+            window_secs: 2.0,
+            hop_secs: 1.0,
+            pool_size: 1,
+            batch_size: 4,
+            ..Default::default()
+        };
+        let seg = PowersetSegmenter::with_config(
+            path,
+            config,
+            crate::onnx::ExecutionProvider::Cpu,
+        )
+        .expect("load");
+        let win = seg.window_samples();
+        // Three synthetic windows (last one short → zero-pad path).
+        let w0: Vec<f32> = (0..win).map(|i| (i as f32 * 0.001).sin()).collect();
+        let w1: Vec<f32> = (0..win).map(|i| (i as f32 * 0.002).cos()).collect();
+        let w2: Vec<f32> = (0..win / 2).map(|i| (i as f32 * 0.003).sin()).collect();
+        let mut session = seg.pool.checkout();
+        let seq: Vec<(Vec<f32>, usize)> = [&w0[..], &w1[..], &w2[..]]
+            .iter()
+            .enumerate()
+            .map(|(i, w)| {
+                seg.infer_windows_batch(&mut session, &[*w], i)
+                    .expect("seq")
+                    .into_iter()
+                    .next()
+                    .expect("N=1 row")
+            })
+            .collect();
+        let batch = seg
+            .infer_windows_batch(&mut session, &[&w0, &w1, &w2], 0)
+            .expect("batch");
+        assert_eq!(seq.len(), batch.len());
+        for (i, ((s_logits, s_nf), (b_logits, b_nf))) in seq.iter().zip(batch.iter()).enumerate() {
+            assert_eq!(s_nf, b_nf, "window {i} frame count");
+            assert_eq!(
+                s_logits, b_logits,
+                "window {i} logits must be bit-identical batch vs sequential"
+            );
         }
     }
 }
