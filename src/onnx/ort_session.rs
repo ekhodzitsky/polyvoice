@@ -40,6 +40,16 @@ impl OrtSession {
             builder = builder
                 .with_intra_threads(n)
                 .map_err(|e| build(format!("intra threads: {e}")))?;
+            // App-level session pools already fan out windows/embeds. On the
+            // pure CPU EP, pin inter-op to 1 so pool workers do not
+            // oversubscribe. Do NOT set this for CoreML/XNNPACK: those EPs
+            // own their own parallelism and inter_threads=1 has been observed
+            // to change CoreML outputs (DER + RTF) on Apple Silicon.
+            if matches!(ep, ExecutionProvider::Cpu) {
+                builder = builder
+                    .with_inter_threads(1)
+                    .map_err(|e| build(format!("inter threads: {e}")))?;
+            }
         }
         match ep {
             ExecutionProvider::Cpu => {}

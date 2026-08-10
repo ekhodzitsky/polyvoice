@@ -67,13 +67,14 @@ impl FbankOnnxExtractor {
         if pool_size == 0 {
             return Err(FbankExtractorError::EmptyPool);
         }
+        // Env can raise/lower fan-out without a rebuild (CPU tuning).
+        let pool_size = crate::onnx::resolve_session_pool_size(pool_size);
         let mut sessions = Vec::with_capacity(pool_size);
         // Each pool session gets a fair share of the machine's cores: a
         // single-session extractor (the common CLI case) uses all of them,
         // while a loaded pool does not oversubscribe.
-        let intra = std::thread::available_parallelism()
-            .map(|n| (n.get() / pool_size).max(1))
-            .unwrap_or(1);
+        // Overridable via POLYVOICE_INTRA_THREADS.
+        let intra = crate::onnx::resolve_intra_threads(pool_size);
         for i in 0..pool_size {
             let session =
                 crate::onnx::build_session_with_ep(model_path, ep, Some(intra)).map_err(|e| {

@@ -98,9 +98,10 @@ impl ExecutionProvider {
 /// [`InferenceBackend`] / `POLYVOICE_INFERENCE_BACKEND=tract`. Callers must
 /// depend only on [`InferenceRuntime`], not on underlying `ort` / tract types.
 ///
-/// `intra_threads`: `Some(n)` pins the session's intra-op thread count for ort
-/// (the fbank embedder uses 1 because it parallelises across a session pool).
-/// Ignored by tract.
+/// `intra_threads`: `Some(n)` pins the session's intra-op thread count for ort.
+/// On the pure CPU EP this also sets inter-op threads to 1 so app-level
+/// session pools do not oversubscribe; CoreML/XNNPACK keep their own
+/// parallelism. Ignored by tract.
 ///
 /// EP behavior (ort only): `Cpu` registers nothing. `CoreMl` / `XnnPack`
 /// register when their cargo features (and CoreML target) match, else warn
@@ -114,6 +115,38 @@ pub fn build_session_with_ep(
     intra_threads: Option<usize>,
 ) -> Result<RuntimeSession, OnnxError> {
     RuntimeSession::from_path(model_path, ep, intra_threads)
+}
+
+/// Resolve the ONNX session-pool size for segmenter / embedder.
+///
+/// Order: `POLYVOICE_SESSION_POOL_SIZE` env (if positive) → `configured` → 1.
+/// Used so operators can tune CPU fan-out without a rebuild; defaults stay
+/// DER-identical (same math, different scheduling only).
+pub fn resolve_session_pool_size(configured: usize) -> usize {
+    std::env::var("POLYVOICE_SESSION_POOL_SIZE")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(configured.max(1))
+        .max(1)
+}
+
+/// Intra-op threads per pooled session: share cores across the pool so N
+/// sessions do not request N×cores workers.
+///
+/// Override with `POLYVOICE_INTRA_THREADS` (positive integer) for host tuning.
+pub fn resolve_intra_threads(pool_size: usize) -> usize {
+    if let Ok(s) = std::env::var("POLYVOICE_INTRA_THREADS") {
+        if let Ok(n) = s.parse::<usize>() {
+            if n > 0 {
+                return n;
+            }
+        }
+    }
+    let pool = pool_size.max(1);
+    std::thread::available_parallelism()
+        .map(|n| (n.get() / pool).max(1))
+        .unwrap_or(1)
 }
 
 /// Read ONNX `metadata_props` (custom metadata key/value pairs) from `path`.
@@ -344,6 +377,19 @@ mod tests {
         assert!(build_session_with_ep(path, ExecutionProvider::CoreMl, None).is_ok());
         assert!(build_session_with_ep(path, ExecutionProvider::XnnPack, None).is_ok());
         InferenceBackend::force(None);
+    }
+
+    #[test]
+    fn resolve_session_pool_size_is_at_least_one() {
+        // Ambient POLYVOICE_SESSION_POOL_SIZE may be set; still never zero.
+        assert!(resolve_session_pool_size(0) >= 1);
+        assert!(resolve_session_pool_size(4) >= 1);
+    }
+
+    #[test]
+    fn resolve_intra_threads_is_at_least_one() {
+        assert!(resolve_intra_threads(1) >= 1);
+        assert!(resolve_intra_threads(4) >= 1);
     }
 
     #[test]

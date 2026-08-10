@@ -167,12 +167,11 @@ impl PowersetSegmenter {
         ep: crate::onnx::ExecutionProvider,
     ) -> Result<Self, SegmentationError> {
         let path = model_path.as_ref().to_path_buf();
-        let pool_size = config.pool_size.max(1);
+        let pool_size = crate::onnx::resolve_session_pool_size(config.pool_size);
         // Each pool session gets a fair share of the machine's cores so a
         // loaded pool does not oversubscribe (same policy as the embedder).
-        let intra = std::thread::available_parallelism()
-            .map(|n| (n.get() / pool_size).max(1))
-            .unwrap_or(1);
+        // Overridable via POLYVOICE_INTRA_THREADS.
+        let intra = crate::onnx::resolve_intra_threads(pool_size);
         let mut sessions = Vec::with_capacity(pool_size);
         let mut input_name = None;
         for _ in 0..pool_size {

@@ -224,6 +224,9 @@ impl PipelineBuilder {
                 tracing::info!("pipeline v2 execution provider: {ep:?}");
                 let mut seg_cfg = crate::segmentation::PowersetConfig::default();
                 seg_cfg.aggregation.binarization = self.config.binarization;
+                // Same session-pool budget as the embedder so one config knob
+                // (and POLYVOICE_SESSION_POOL_SIZE) controls both hot stages.
+                seg_cfg.pool_size = self.config.embedder_pool_size;
                 let segmenter: Box<dyn Segmenter> = Box::new(
                     crate::segmentation::PowersetSegmenter::with_config(
                         &profile_models.segmenter_path,
