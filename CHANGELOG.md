@@ -19,8 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- README and download-models.sh describe the INT8 default; FP32-era DER tables
-  are labelled as such until a full INT8 remeasure is published.
+- README and download-models.sh describe the INT8 default.
+- **Full INT8 DER remeasure published** (2026-08-10, CoreML, M1 Pro, v2+VBx):
+  VoxConverse-test 232 **15.02 %** / **10.33 %** (collar 0 / 0.25);
+  AMI-test 16 **24.50 %** / **16.82 %**. Gate
+  [`tests/der_baseline.json`](tests/der_baseline.json), README, and
+  [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) updated. Artifacts:
+  `benchmarks/results/int8-full-der-2026-08-10/`.
 
 ## [0.16.0] - 2026-08-10
 

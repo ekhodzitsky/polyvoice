@@ -1,0 +1,101 @@
+{
+  "config": {
+    "profile": "balanced",
+    "models": "powerset_int8 + resnet34_int8",
+    "pipeline": "v2+vbx",
+    "ep": "CoreML auto",
+    "host": "Apple M1 Pro",
+    "crate": "0.17.0",
+    "date": "2026-08-10"
+  },
+  "runs": [
+    {
+      "name": "ami-test-16-collar0",
+      "files": 16,
+      "audio_h": 9.06,
+      "wall_s": 250.0,
+      "rtfx": 130.48,
+      "rtf": 0.0077,
+      "der_collar_micro": 24.5,
+      "der_collar_macro": 23.6,
+      "der_no_collar_micro": 24.5,
+      "der_no_collar_macro": 23.6,
+      "miss": 11.17,
+      "false_alarm": 3.62,
+      "confusion": 8.8,
+      "ep": "CoreMl",
+      "models": [
+        "powerset_int8",
+        "resnet34_int8"
+      ],
+      "crate_version": "0.17.0",
+      "primary_collar": 0.0
+    },
+    {
+      "name": "ami-test-16-collar025",
+      "files": 16,
+      "audio_h": 9.06,
+      "wall_s": 299.7,
+      "rtfx": 108.86,
+      "rtf": 0.0092,
+      "der_collar_micro": 16.82,
+      "der_collar_macro": 16.26,
+      "der_no_collar_micro": 24.5,
+      "der_no_collar_macro": 23.6,
+      "miss": 7.61,
+      "false_alarm": 1.73,
+      "confusion": 6.92,
+      "ep": "CoreMl",
+      "models": [
+        "powerset_int8",
+        "resnet34_int8"
+      ],
+      "crate_version": "0.17.0",
+      "primary_collar": 0.25
+    },
+    {
+      "name": "voxconverse-test-232-collar0",
+      "files": 232,
+      "audio_h": 43.54,
+      "wall_s": 1417.0,
+      "rtfx": 110.61,
+      "rtf": 0.009,
+      "der_collar_micro": 15.02,
+      "der_collar_macro": 15.12,
+      "der_no_collar_micro": 15.02,
+      "der_no_collar_macro": 15.12,
+      "miss": 3.54,
+      "false_alarm": 3.95,
+      "confusion": 7.62,
+      "ep": "CoreMl",
+      "models": [
+        "powerset_int8",
+        "resnet34_int8"
+      ],
+      "crate_version": "0.17.0",
+      "primary_collar": 0.0
+    },
+    {
+      "name": "voxconverse-test-232-collar025",
+      "files": 232,
+      "audio_h": 43.54,
+      "wall_s": 1283.9,
+      "rtfx": 122.07,
+      "rtf": 0.0082,
+      "der_collar_micro": 10.33,
+      "der_collar_macro": 10.67,
+      "der_no_collar_micro": 15.02,
+      "der_no_collar_macro": 15.12,
+      "miss": 2.2,
+      "false_alarm": 1.66,
+      "confusion": 6.8,
+      "ep": "CoreMl",
+      "models": [
+        "powerset_int8",
+        "resnet34_int8"
+      ],
+      "crate_version": "0.17.0",
+      "primary_collar": 0.25
+    }
+  ]
+}

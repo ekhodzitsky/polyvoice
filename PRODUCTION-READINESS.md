@@ -46,7 +46,7 @@ proof.
 | Production models | **INT8 only** (`powerset_int8` + `resnet34_int8`, ~8.4 MB) |
 | CLI default | **v2 + VBx** (powerset → ResNet34 → VB-HMM/PLDA); `--legacy` / `--clusterer ahc` opt out |
 | Python default | Pipeline v2 + **VBx** (same as CLI); pass `clusterer="ahc"` to opt out |
-| Full-split DER (no-collar micro, measured 0.14) | Vox **15.24%**, AMI **23.42%** — see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
+| Full-split DER (no-collar micro, INT8 0.17) | Vox **15.02%**, AMI **24.50%** — see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
 | Inference | `InferenceRuntime` trait exists; **only `OrtSession` (ort) is a production impl** |
 | Models | Profile segmenter/embedder minisign-signed in release; VBx PLDA is SHA-256 only |
 | Native ORT binary | Hash-pinned via ort-sys `dist.txt`; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
@@ -144,12 +144,12 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | e2e smoke (legacy) | 1 | 14.52% | 6.62% | Yes |
 | AMI test Mix-Headset (legacy) | 16 | **32.87%** | 25.20% | Full split tracked; long-form floor via single-meeting gate |
 | AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
-| pipeline v2 + VBx (Vox / AMI, **default**) | 232 / 16 | **15.24%** / **23.42%** | 10.52% / 15.71% | Default since 0.11; full-split numbers release-canonical |
+| pipeline v2 + VBx **INT8** (Vox / AMI, **default**) | 232 / 16 | **15.02%** / **24.50%** | 10.33% / 16.82% | Default models since 0.17; full-split 2026-08-10 |
 | CALLHOME | — | — | — | **Not measured / not gated** |
 | DIHARD | — | — | — | **Not measured / not gated** |
 
-**Gap:** The default v2+VBx path now has full-split VoxConverse (15.24%) and
-AMI (23.42%) numbers next to the legacy baselines above, but **multi-corpus DER
+**Gap:** The default v2+VBx INT8 path has full-split VoxConverse (15.02%) and
+AMI (24.50%) numbers next to the legacy baselines above, but **multi-corpus DER
 beyond Vox/AMI remains absent**: no CALLHOME/DIHARD release gate. Accuracy
 still trails pyannote-class systems by roughly ~4 pp no-collar on VoxConverse
 (see benchmarks).
@@ -230,7 +230,7 @@ NO-GO._
 | Scenario | Verdict | Rationale |
 |----------|---------|-----------|
 | Internal microservice (controlled audio, ops on-call) | **GO with caveats** | Pin crate + `ort` RC, monitor memory, re-run DER after upgrades, no public SLA |
-| Desktop app (local processing) | **GO** | User owns hardware; ~30 MB class footprint; tolerate pre-1.0 API |
+| Desktop app (local processing) | **GO** | User owns hardware; ~8.4 MB INT8 footprint; tolerate pre-1.0 API |
 | Public cloud API (multi-tenant, unattended) | **NO-GO** | RC runtime, dual pipeline, thin multi-corpus proof, pre-1.0 API |
 | Embedded / edge (aarch64) | **GO with testing** | Cross-compile works; measure DER/RTF on target hardware |
 | Security-critical (government, finance) | **NO-GO** | Needs stable runtime story + broader audit + multi-corpus validation |
@@ -284,12 +284,12 @@ Until every box is checked, the honest status remains:
 |--------|-------|
 | Crate version | 0.17.0 |
 | Deployable footprint | **~8.4 MB** INT8 production pair (FP32 ids optional / not profile-default) |
-| Speed (CPU, v2 default, M1 Pro) | 53–68× realtime (RTF 0.015–0.019; ~83× with `--profile fast`) |
-| VoxConverse-test DER (v2+VBx default, 232, collar 0) | **15.24%** |
-| VoxConverse-test DER (v2+VBx default, 232, collar 0.25) | 10.52% |
+| Speed (INT8 default, CoreML, M1 Pro) | ~111–130× realtime (RTF ~0.008–0.009) |
+| VoxConverse-test DER (v2+VBx INT8, 232, collar 0) | **15.02%** |
+| VoxConverse-test DER (v2+VBx INT8, 232, collar 0.25) | 10.33% |
 | VoxConverse-test DER (legacy, 232, collar 0) | 18.54% |
-| AMI-test DER (v2+VBx default, 16, collar 0) | **23.42%** |
-| AMI-test DER (v2+VBx default, 16, collar 0.25) | 15.71% |
+| AMI-test DER (v2+VBx INT8, 16, collar 0) | **24.50%** |
+| AMI-test DER (v2+VBx INT8, 16, collar 0.25) | 16.82% |
 | AMI-test DER (legacy, 16, collar 0) | 32.87% |
 | Default pipeline | v2 + VBx |
 | Escape hatch | legacy (`--legacy` / `--clusterer ahc`) |

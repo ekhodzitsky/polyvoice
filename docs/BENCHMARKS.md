@@ -15,24 +15,24 @@ The `benchmarks/` runners are wired to re-measure them like-for-like once their
 (often gated) stacks are installed; until then, compare only within a matched
 collar.
 
-### Source of truth (VoxConverse-test, v2+VBx, collar 0 micro)
+### Source of truth (VoxConverse-test, v2+VBx INT8 default, collar 0 micro)
 
 | Figure | Role | Artifact |
 |------|------|----------|
-| **15.24 %** | **Published headline** (README / this file tables) | hop-2.0 remeasure 2026-07-30/31 — `benchmarks/results/powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json` |
-| **15.37 %** | **CI gate-day baseline** (do not “win” by drifting below without re-running the gate) | `tests/der_baseline.json` → `voxconverse_test.der_no_collar` from full-split 2026-07-25 |
-| **15.22 %** | Same scorer H2H vs speakrs (2026-08-03) | `benchmarks/results/speakrs-h2h-2026-08-03/` |
+| **15.02 %** | **Published headline + CI gate** (README / this file / `der_baseline.json`) | INT8 full-split 2026-08-10 — `benchmarks/results/int8-full-der-2026-08-10/` |
+| **15.24 %** | Historical FP32 hop-2.0 published (pre-0.17) | `benchmarks/results/powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json` |
+| **15.22 %** | Same-scorer H2H vs speakrs (FP32-era CLI, 2026-08-03) | `benchmarks/results/speakrs-h2h-2026-08-03/` |
 
-When marketing and gates disagree slightly, **cite which row you mean**. The
-product still ships the hop-2.0 configuration that produced **15.24 %**.
+**Default since 0.17.0** is the INT8 pair (`powerset_int8` + `resnet34_int8`)
+on every profile. Cite the **15.02 %** row for current product truth.
 
 ## At a glance
 
-| | polyvoice (v2+VBx, default) | pyannote 3.1 | WhisperX | NeMo Sortformer |
+| | polyvoice (v2+VBx, INT8 default) | pyannote 3.1 | WhisperX | NeMo Sortformer |
 |--|--|--|--|--|
-| **VoxConverse-test DER** | **15.2 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
-| **Model size** | **~30 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
-| **Runtime** | **CPU, 53–68× realtime** (~83× INT8 `fast`) | CPU/GPU (PyTorch) | GPU recommended | GPU |
+| **VoxConverse-test DER** | **15.0 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
+| **Model size** | **~8.4 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
+| **Runtime** | **CPU/CoreML, ~111–130× realtime** (M1 Pro) | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
 | **Dependencies** | **Rust API, optional ONNX Runtime; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
@@ -64,7 +64,8 @@ pyannote we use polyvoice's **no-collar** number.
 | **speakrs CoreML (warm)** | **11.08** | 3.35 | 4.10 | 3.63 | 0 | this repo H2H ⁸ |
 | VBx (offline baseline) | 11.1 | 4.6 | 3.1 | 3.4 | 0 | diart paper ³ |
 | 3D-Speaker toolkit | 11.75 | — | — | — | unstated | repo ⁴ |
-| **polyvoice (v2+VBx, default)** | **15.24** | 2.14 | 1.73 | 7.16 | 0 | this repo ⁵ |
+| **polyvoice (v2+VBx, INT8 default)** | **15.02** | 3.54 | 3.95 | 7.62 | 0 | this repo ⁵ |
+| polyvoice (v2+VBx, FP32 historical) | 15.24 | 2.14 | 1.73 | 7.16 | 0 | hop-2.0 ⁵ |
 | diart (online, 5 s latency) | 16.8 | 4.9 | 3.8 | 8.2 | 0 | diart paper ³ |
 | polyvoice (legacy, `--legacy`) | 18.54 | 4.49 | 3.19 | 4.99 | 0 | this repo ⁵ |
 | diart (online, 1 s latency) | 20.1 | 3.3 | 5.1 | 11.7 | 0 | diart paper ³ |
@@ -84,9 +85,10 @@ VoxConverse-test 232, collar 0, overlap scored, `benchmarks/der.py`, Apple M1 Pr
 not miss/FA. Full protocol and RTTMs:
 [`benchmarks/results/speakrs-h2h-2026-08-03/`](../benchmarks/results/speakrs-h2h-2026-08-03/).
 
-For reference, polyvoice (v2+VBx) at the **0.25 s collar** is **10.52 %** micro
-(macro 11.03). Legacy at collar 0.25 is **12.91 %** micro. No collar-0.25
-pyannote number is published, so do not compare that figure across systems.
+For reference, polyvoice INT8 default at the **0.25 s collar** is **10.33 %**
+micro (macro 10.67). FP32-era hop-2.0 was **10.52 %** micro. Legacy at collar
+0.25 is **12.91 %** micro. No collar-0.25 pyannote number is published, so do
+not compare that figure across systems.
 
 ## Accuracy — VoxConverse dev (216 files)
 
@@ -111,8 +113,9 @@ dominates, and speaker mis-counting drives confusion.
 | pyannote community-1 (SDM) | 19.9 | — | — | — | SDM | pyannote benchmark ⁷ |
 | 3D-Speaker toolkit | 21.76 | — | — | — | SDM | repo ⁴ |
 | pyannote 3.1 (SDM) | 22.4 | 11.2 | 3.8 | 7.5 | array1-ch1 | model card ² |
-| **polyvoice (v2+VBx, default)** | **23.42** | 7.44 | 1.75 | 6.05 | Mix-Headset | this repo ⁵ |
+| polyvoice (v2+VBx, FP32 historical) | 23.42 | 7.44 | 1.75 | 6.05 | Mix-Headset | hop-2.0 ⁵ |
 | VBx (offline baseline) | 24.1 | 17.2 | 3.1 | 3.8 | — | diart paper ³ |
+| **polyvoice (v2+VBx, INT8 default)** | **24.50** | 11.17 | 3.62 | 8.80 | Mix-Headset | this repo ⁵ |
 | diart (online, 5 s) | 27.5 | 10.0 | 5.0 | 12.4 | headset | diart paper ³ |
 | polyvoice (legacy, `--legacy`) | 32.87 | 17.09 | 2.44 | 5.21 | Mix-Headset | this repo ⁵ |
 
@@ -129,8 +132,9 @@ AMI-test 16 Mix-Headset, collar 0, `benchmarks/der.py`, Apple M1 Pro (2026-08-04
 (exact 2/16 vs speakrs 11/16). Artifact:
 [`benchmarks/results/speakrs-h2h-2026-08-03/ami-16-matched-score.json`](../benchmarks/results/speakrs-h2h-2026-08-03/ami-16-matched-score.json).
 
-polyvoice (v2+VBx) at the 0.25 s collar: **15.71 %** micro (macro 15.24).
-Legacy at collar 0.25: **25.20 %** micro (macro 24.75).
+polyvoice INT8 default at the 0.25 s collar: **16.82 %** micro (macro 16.26).
+FP32-era hop-2.0: **15.71 %** micro (macro 15.24). Legacy at collar 0.25:
+**25.20 %** micro (macro 24.75).
 
 ## Accuracy — NOTSOFAR-1 dev-set-1 (36 meetings, single far-field channel)
 
@@ -160,9 +164,11 @@ A low DER can hide bad speaker counting; we report it explicitly.
 
 | Split | DER (collar 0) | miss | FA | conf | spk exact | spk ±1 | spk off-by-2+ |
 |---|---|---|---|---|---|---|---|
-| VoxConverse-test (232, v2+VBx) | 15.24 % | 2.14 | 1.73 | 7.16 | 84 | 67 | 81 |
-| VoxConverse-dev (216, v2+VBx) | 11.36 % | 1.55 | 1.07 | 5.47 | 125 | 52 | 39 |
-| AMI-test (16, v2+VBx) | 23.42 % | 7.44 | 1.75 | 6.05 | 2 | 3 | 11 |
+| VoxConverse-test (232, v2+VBx **INT8**) | **15.02 %** | 3.54 | 3.95 | 7.62 | 83 | 62 | 87 |
+| AMI-test (16, v2+VBx **INT8**) | **24.50 %** | 11.17 | 3.62 | 8.80 | 1 | 3 | 12 |
+| VoxConverse-test (232, v2+VBx FP32 hist.) | 15.24 % | 2.14 | 1.73 | 7.16 | 84 | 67 | 81 |
+| VoxConverse-dev (216, v2+VBx FP32 hist.) | 11.36 % | 1.55 | 1.07 | 5.47 | 125 | 52 | 39 |
+| AMI-test (16, v2+VBx FP32 hist.) | 23.42 % | 7.44 | 1.75 | 6.05 | 2 | 3 | 11 |
 | VoxConverse-test (232, legacy) | 18.54 % | 4.49 | 3.19 | 4.99 | 57 | 46 | 129 |
 | AMI-test (16, legacy) | 32.87 % | 17.09 | 2.44 | 5.21 | 1 | 0 | 15 |
 
@@ -180,8 +186,8 @@ gate (2026-07-25): no-collar micro DER ≤ legacy on **both** VoxConverse-test
 
 | Path | CLI | Vox no-collar micro | AMI no-collar micro |
 |---|---|---:|---:|
-| **v2 + VBx (default)** | `polyvoice file.wav` (+ PLDA) | **15.24** | **23.42** |
-| v2 + VBx, INT8 (`fast`) | `polyvoice --profile fast file.wav` | (see § Speed) | (see § Speed) |
+| **v2 + VBx INT8 (default, 0.17+)** | `polyvoice file.wav` (+ PLDA) | **15.02** | **24.50** |
+| v2 + VBx FP32 (historical, pre-0.17) | model ids `powerset_fp32` / `wespeaker_resnet34` | 15.24 | 23.42 |
 | legacy | `polyvoice --legacy file.wav` | 18.54 | 32.87 |
 | v2 + AHC | `polyvoice --clusterer ahc file.wav` | (subset; see archive) | (subset) |
 
@@ -209,45 +215,50 @@ retained below for history only — prefer the full-split rows above.
   tables above (Vox 232 / AMI 16) and the at-a-glance section.
 - On that older subset, v2 + AHC over-clustered (high confusion); VBx cut
   confusion and became competitive with legacy on conversational audio.
-- **Superseded on AMI:** full-split AMI-test now favors **v2 + VBx (23.42 %
-  no-collar)** over legacy (32.87 %), not the reverse. Do not treat the
-  “legacy remains the robust default” sentence from early subset notes as
-  current product policy.
+- **Superseded on AMI:** full-split AMI-test favors **v2 + VBx** (INT8
+  **24.50 %** / FP32 historical 23.42 % no-collar) over legacy (32.87 %), not
+  the reverse. Do not treat the “legacy remains the robust default” sentence
+  from early subset notes as current product policy.
 - Reproduce subset-style runs with
   [`benchmarks/bench_subset.py`](../benchmarks/bench_subset.py) only for
   historical comparison.
 
-## Speed — real-time factor (RTF, CPU; lower = faster)
+## Speed — real-time factor (RTF; lower = faster)
 
 Measured end-to-end with `polyvoice-bench` on **Apple M1 Pro (10 cores)**,
-release build, CPU execution provider, single file stream at a time
-(2026-07-30/31, v0.14.0).
+release build, single file stream at a time.
+
+### Current default — INT8, CoreML (2026-08-10, v0.17.0)
 
 | Configuration | Corpus | RTFx (× realtime) | RTF |
 |---|---|---:|---:|
-| **v2 + VBx (default, fp32)** | AMI-test (16) | **68.1×** | 0.015 |
-| **v2 + VBx (default, fp32)** | VoxConverse-dev (216) | **56.3×** | 0.018 |
-| **v2 + VBx (default, fp32)** | VoxConverse-test (232) | **53.5×** | 0.019 |
-| **v2 + VBx, INT8 `--profile fast`** | AMI EN2002a (single) | **83.3×** | 0.012 |
-| legacy (`--legacy`, steady state) | VoxConverse subset | ~33× | ~0.03 |
+| **v2 + VBx INT8 (default)** | VoxConverse-test (232) | **~111–122×** | ~0.008–0.009 |
+| **v2 + VBx INT8 (default)** | AMI-test (16) | **~109–130×** | ~0.008–0.009 |
 
-Stage decomposition (fp32 default, AMI-test 16 meetings, 9.1 h audio):
-segmentation 207 s + embedding 272 s; clustering (VBx+PLDA) is sub-second.
-A 1-hour meeting diarizes in about a minute.
+Artifact: [`benchmarks/results/int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
+A 1-hour meeting diarizes in well under a minute on this host.
+
+### Historical — FP32, CPU EP (2026-07-30/31, v0.14.0)
+
+| Configuration | Corpus | RTFx (× realtime) | RTF |
+|---|---|---:|---:|
+| v2 + VBx (fp32) | AMI-test (16) | 68.1× | 0.015 |
+| v2 + VBx (fp32) | VoxConverse-dev (216) | 56.3× | 0.018 |
+| v2 + VBx (fp32) | VoxConverse-test (232) | 53.5× | 0.019 |
+| v2 + VBx INT8 single-file probe | AMI EN2002a | 83.3× | 0.012 |
+| legacy (`--legacy`, steady state) | VoxConverse subset | ~33× | ~0.03 |
 
 | Engine | RTF | Notes |
 |---|---|---|
-| **polyvoice (default)** | **0.015–0.019** (53–68× realtime) | Rust + ONNX Runtime, CPU; see table above |
-| **polyvoice (`--profile fast`)** | **~0.012** (~83× realtime) | INT8 pair; DER caveat below |
+| **polyvoice (INT8 default, CoreML)** | **~0.008–0.009** (~111–130×) | Rust + ONNX Runtime; full-split 2026-08-10 |
+| polyvoice (FP32 historical, CPU) | 0.015–0.019 (53–68×) | pre-0.17 default models |
 | pyannote 3.1 | not published | PyTorch; GPU recommended for throughput |
 | WhisperX | > 1 on CPU | Whisper + pyannote; GPU recommended |
 | NeMo Sortformer | GPU-only | ~48 GB GPU for ~12-min recordings |
 
-**`fast` profile DER caveat:** the INT8 pair is at DER parity on
-VoxConverse-style audio (+0.2 pp on the dev split) but regresses ~+2 pp on
-AMI-style meeting audio, which is why it is opt-in. On AMI EN2002a specifically
-it *improves* DER (24.27 → 23.08 collar 0.25) — single files vary; check your
-domain before adopting it.
+**INT8 accuracy note:** full-split INT8 is **parity on VoxConverse** (−0.2 pp
+vs FP32 published) and about **+1.1 pp on AMI** vs FP32 hop-2.0. That is the
+shipping tradeoff as of 0.17.0 — not an opt-in `fast` caveat anymore.
 
 The cross-engine harness measures polyvoice end-to-end through its CLI (which
 cold-loads the model per file), a conservative lower bound; the figures above
@@ -257,17 +268,17 @@ are steady-state in-process numbers.
 
 | Engine | Deployable size | License | Gated weights? | Runtime |
 |---|---|---|---|---|
-| **polyvoice** | **~30 MB** (INT8 `fast`: ~8.4 MB) | **MIT** | **No** | Rust + ONNX Runtime, CPU |
+| **polyvoice** | **~8.4 MB** INT8 production pair (+ PLDA for VBx) | **MIT** | **No** | Rust + ONNX Runtime, CPU/CoreML |
 | pyannote 3.1 | ~32.5 MB (seg 5.9 + embed 26.6) | MIT code | **Yes** (HF token + accept) | PyTorch, CPU/GPU |
 | WhisperX | ~32.5 MB + Whisper model | BSD code | Yes (pyannote) | PyTorch, GPU |
 | sherpa-onnx | seg ~5.9 MB + embed (int8 avail.) | Apache-2.0 | No | ONNX, CPU |
 | NeMo Sortformer | 123 M params | **CC-BY-NC** | No token, **non-commercial** | PyTorch, GPU |
 | diart | pyannote@2021 models | MIT code | Yes (pyannote) | streaming, CPU/GPU |
 
-polyvoice's footprint is **comparable** to pyannote's (both ~30 MB) — not a size
-win there — but it is far smaller than the WhisperX/NeMo stacks, and uniquely
-**MIT + ungated + Rust-native + CPU**. sherpa-onnx is the closest architectural
-peer (ONNX, CPU) but publishes **no DER**.
+polyvoice's production footprint is **~8.4 MB** (INT8 default since 0.17) —
+smaller than pyannote's ~32.5 MB stack — and uniquely **MIT + ungated +
+Rust-native + CPU**. sherpa-onnx is the closest architectural peer (ONNX, CPU)
+but publishes **no DER**.
 
 ## Datasets
 
@@ -316,13 +327,15 @@ python benchmark.py --dataset voxconverse_test --runners all
 - ² pyannote 3.1 (VoxConverse, AMI, DIHARD; protocol; MIT; gated): https://huggingface.co/pyannote/speaker-diarization-3.1 — footprint: [segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) 5.91 MB + [wespeaker-resnet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM) 26.6 MB
 - ³ diart (Coria et al., ASRU 2021; collar 0, overlap scored): https://arxiv.org/abs/2109.06483
 - ⁴ 3D-Speaker toolkit (VoxConverse 11.75, AMI_SDM 21.76; collar unstated): https://github.com/modelscope/3D-Speaker
-- ⁵ polyvoice **published** tables use hop-2.0 remeasure (**15.24 %** Vox
-  no-collar micro). CI gate-day micro in
-  [`tests/der_baseline.json`](../tests/der_baseline.json) is **15.37 %**
-  (2026-07-25 full-split). Artifacts under
-  [`benchmarks/results/`](../benchmarks/results/) (`full-der-2026-07-25/`,
-  `powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json`).
-  Default (0.11+): pipeline v2 + VBx + WeSpeaker ResNet34; legacy via `--legacy`
+- ⁵ polyvoice **published** tables (0.17+) use the INT8 full-split remeasure
+  (**15.02 %** Vox / **24.50 %** AMI no-collar micro; CoreML, M1 Pro,
+  2026-08-10). Gate + README match
+  [`tests/der_baseline.json`](../tests/der_baseline.json). Artifact:
+  [`benchmarks/results/int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
+  Historical FP32 hop-2.0 (15.24 / 23.42) remains under
+  `powerset-hop2-2026-07-30/` and early full-split under `full-der-2026-07-25/`.
+  Default (0.11+ pipeline): v2 + VBx; models INT8 since 0.17; legacy via
+  `--legacy`
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
 - ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands
 - ⁸ speakrs CoreML warm on Apple M1 Pro, full VoxConverse-test 232, scored with `benchmarks/der.py` (collar 0, overlap scored): DER 11.08% micro (miss 3.35 / FA 4.10 / conf 3.63), RTFx ~144×. Artifact `benchmarks/results/speakrs-h2h-2026-08-03/full-232-matched-score.json` (2026-08-03/04). speakrs code Apache-2.0: https://github.com/avencera/speakrs. polyvoice on the **same** scorer/split: 15.22% no-collar micro (conf 8.04) — gap **4.14 pp**, confusion-dominated. speakrs' own README quotes 11.1% / 631× on M4 Pro; do not mix hardware for RTFx.

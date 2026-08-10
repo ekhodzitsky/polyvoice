@@ -18,20 +18,19 @@ C FFI, and a CLI. MIT, ungated **INT8** models (~8.4 MB production pair).
 ## Numbers
 
 **Default stack is INT8** (`powerset_int8` + `resnet34_int8`) for every
-profile (`balanced` / `mobile` / `fast`). Published DER tables below were
-measured on the earlier FP32 pair (v0.14 full-split); re-measure INT8 on your
-domain — expect ~parity on VoxConverse-style audio and about **+2 pp DER** on
-AMI-style meetings, with **~83× realtime** class speed on M1 Pro. Protocol:
-[Benchmarks](docs/BENCHMARKS.md).
+profile (`balanced` / `mobile` / `fast`). Full-split numbers below are the
+INT8 shipping path (pipeline v2 + VBx, CoreML, Apple M1 Pro, crate 0.17.0).
+Protocol: [Benchmarks](docs/BENCHMARKS.md).
 
-| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed (FP32-era table) |
+| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed (INT8, CoreML) |
 |---|---:|---:|---:|
-| VoxConverse-test (232 files) | **10.5 %** | **15.2 %** | **53× realtime** |
-| VoxConverse-dev (216 files) | **7.7 %** | 11.4 % | 56× realtime |
-| AMI-test (16 meetings) | **15.7 %** | 23.4 % | **68× realtime** |
+| VoxConverse-test (232 files) | **10.3 %** | **15.0 %** | **~111× realtime** |
+| AMI-test (16 meetings) | **16.8 %** | **24.5 %** | **~109–130× realtime** |
 
-Like-for-like (strict collar 0) VoxConverse-test **15.2 %** vs pyannote 3.1
+Like-for-like (strict collar 0) VoxConverse-test **15.0 %** vs pyannote 3.1
 **11.3 %** — accuracy traded for a CPU-only, MIT, **ungated** INT8 deploy.
+(VoxConverse-dev FP32-era 11.4 / 7.7 % is retained in the benchmarks doc; not
+re-measured on INT8 in this gate.)
 
 ## 60 seconds to first result
 

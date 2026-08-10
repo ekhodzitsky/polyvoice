@@ -4,7 +4,7 @@
 
 Polyvoice positions itself as a **Rust-native, CPU-first, MIT-licensed, ungated**
 speaker diarization engine (ort-free core; production path uses ONNX Runtime)
-with first-class streaming and a small (~30 MB) footprint. The list below
+with first-class streaming and a small (~8.4 MB INT8) footprint. The list below
 compares the main open-source alternatives and what polyvoice can learn from them.
 
 ## Polyvoice baseline
@@ -14,7 +14,7 @@ compares the main open-source alternatives and what polyvoice can learn from the
 | Repository | https://github.com/ekhodzitsky/polyvoice |
 | Language | Rust (pure-Rust core, ONNX via `ort`) |
 | License | MIT (code and shipped models) |
-| Deployment | CPU-first, ~30 MB, no Python runtime |
+| Deployment | CPU-first, ~8.4 MB INT8, no Python runtime |
 | Bindings | Rust library, Python (maturin), C FFI, CLI, MCP server |
 | Streaming | First-class `streaming::StreamingPipeline` |
 | DER benchmark | 15.22% on VoxConverse-test (collar 0, overlap-scored; v2+VBx, H2H 2026-08 vs speakrs 11.08%) |
@@ -24,7 +24,7 @@ compares the main open-source alternatives and what polyvoice can learn from the
 | Competitor | Stars | Stack | Code license | Model license | Main advantage over polyvoice | Where polyvoice wins |
 |---|---|---|---|---|---|---|
 | **speakrs** | ~★ growing | Rust / ONNX+CoreML | Apache-2.0 | ungated HF models | **pyannote-level DER (11.08% Vox test, our scorer)**; CoreML speed | streaming surfaces, multi-bindings, MIT end-to-end, measured multi-corpus story |
-| **pyannote.audio** | 10 160 | Python / PyTorch | MIT | Gated (HuggingFace token + terms) | SOTA accuracy (DER ~11.2% on VoxConverse), mature pipelines, fine-tuning | CPU-only, no Python, no HF token, streaming, ~30 MB |
+| **pyannote.audio** | 10 160 | Python / PyTorch | MIT | Gated (HuggingFace token + terms) | SOTA accuracy (DER ~11.2% on VoxConverse), mature pipelines, fine-tuning | CPU-only, no Python, no HF token, streaming, ~8.4 MB INT8 |
 | **WhisperX** | 22 620 | Python / faster-whisper / PyTorch | BSD-2-Clause | pyannote gated + Whisper MIT | ASR + diarization + word-level timestamps in one CLI, 99 languages | Pure diarization, Rust-native, CPU, MIT without gated models |
 | **NVIDIA NeMo** | 17 459 | Python / PyTorch / CUDA | Apache-2.0 | NGC / Riva terms (not pure OSS) | GPU SOTA (MSDD, Sortformer), enterprise ecosystem, ASR/TTS/LLM | Rust-native, CPU, MIT, simple deploy |
 | **FunASR** | ~18 500 | Python / PyTorch (+ C++ runtime) | MIT | Custom FunASR Model License | Industrial ASR+VAD+diarization, 50+ languages, Docker/API | Size, license simplicity, Rust integration |
