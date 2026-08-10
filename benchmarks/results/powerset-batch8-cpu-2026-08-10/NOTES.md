@@ -22,11 +22,12 @@ FP32 exports can be bit-identical; the production graph is not.
 Δ DER = **+0.14 pp** (worse). Δ RTFx ≈ **+26%**. Seg time ≈ **−32%**.
 
 Under the no-regression policy, **default stays N=1**. N=8 is opt-in via
-`POLYVOICE_POWERSET_BATCH_SIZE=8` when a re-baseline is acceptable.
+`POLYVOICE_POWERSET_BATCH_SIZE=8` was experimental here; **shipped as product
+default** after full-split gates (see `../int8-batch8-default-2026-08-10/`).
 
 ## Implementation
 
-- `PowersetConfig::batch_size` (default 1)
+- `PowersetConfig::batch_size` (product default **8**; CoreML clamps to 1)
 - `POLYVOICE_POWERSET_BATCH_SIZE` env override
 - Workers still fan out across the session pool; each worker packs
   `batch_size` windows per `run`

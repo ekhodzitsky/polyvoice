@@ -7,13 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- Powerset ONNX **micro-batch** path (`[N,1,T]` multi-window `run`) with
-  `PowersetConfig::batch_size` and `POLYVOICE_POWERSET_BATCH_SIZE`. Default
-  remains **N=1** (DER-safe): shipping `powerset_int8` is not batch-invariant;
-  N=8 is ~25–30% faster on CPU segmentation but +0.14 pp AMI-16 DER₀. See
-  `benchmarks/results/powerset-batch8-cpu-2026-08-10/`.
+- Powerset ONNX **micro-batch** default is **N=8** (`PowersetConfig::batch_size`,
+  override with `POLYVOICE_POWERSET_BATCH_SIZE`). Shipping `powerset_int8` is
+  not bit-identical for N>1 vs N×1, but full-split CPU gates are a net win:
+  VoxConverse-test **14.64 %** DER₀ (was 15.02 % CoreML N=1), AMI-test
+  **24.63 %** (+0.14 pp), RTFx **~121× / ~137×** on M1 Pro CPU. **CoreML
+  clamps to N=1** and a single session pool — N=8 is fine on short runs but
+  long VoxConverse passes hit embedder sequence-resize failures mid-corpus.
+  Artifacts: `benchmarks/results/int8-batch8-default-2026-08-10/`.
 
 ### Research
 

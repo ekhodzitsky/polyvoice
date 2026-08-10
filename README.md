@@ -19,13 +19,14 @@ C FFI, and a CLI. MIT, ungated **INT8** models (~8.4 MB production pair).
 
 **Default stack is INT8** (`powerset_int8` + `resnet34_int8`) for every
 profile (`balanced` / `mobile` / `fast`). Full-split numbers below are the
-INT8 shipping path (pipeline v2 + VBx, CoreML, Apple M1 Pro, crate 0.17.0).
-Protocol: [Benchmarks](docs/BENCHMARKS.md).
+INT8 shipping path (pipeline v2 + VBx, Apple M1 Pro, crate 0.17+). Protocol:
+[Benchmarks](docs/BENCHMARKS.md). Mac CoreML DER is the published gate;
+CPU uses powerset micro-batch N=8 for higher RTFx.
 
-| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed (INT8, CoreML) |
+| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed (INT8) |
 |---|---:|---:|---:|
-| VoxConverse-test (232 files) | **10.3 %** | **15.0 %** | **~111× realtime** |
-| AMI-test (16 meetings) | **16.8 %** | **24.5 %** | **~109–130× realtime** |
+| VoxConverse-test (232 files) | **10.3 %** | **15.0 %** | **~111× CoreML / ~121× CPU** |
+| AMI-test (16 meetings) | **16.8 %** | **24.5 %** | **~109–130× CoreML / ~137× CPU** |
 
 Like-for-like (strict collar 0) VoxConverse-test **15.0 %** vs pyannote 3.1
 **11.3 %** — accuracy traded for a CPU-only, MIT, **ungated** INT8 deploy.
@@ -97,8 +98,9 @@ and [docs/API.md](docs/API.md).
 
 ## Why polyvoice
 
-- **Fast on CPU.** INT8 production models (~8.4 MB); order-of **tens× realtime**
-  on a laptop CPU — no GPU, no batching tricks.
+- **Fast on CPU.** INT8 production models (~8.4 MB); order-of **tens–hundreds×
+  realtime** on a laptop CPU — no GPU. Powerset windows micro-batch (N=8)
+  on non-CoreML EPs.
 - **Rust-native, four surfaces.** Rust + Python + C FFI + CLI from one crate;
   no PyTorch stack. Production ONNX path uses ONNX Runtime (`ort`); the default
   feature set is empty (ort-free BYO core).

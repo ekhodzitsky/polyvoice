@@ -222,11 +222,20 @@ impl PipelineBuilder {
                 let profile_models = registry.ensure_for_profile(self.config.profile)?;
                 let ep = self.config.execution_provider;
                 tracing::info!("pipeline v2 execution provider: {ep:?}");
+                // CoreML: single session per stage. Multi-session CoreML pools
+                // have been observed to trip "dynamically resizing for sequence
+                // length" failures on long corpora (embedder), especially with
+                // powerset micro-batching.
+                let pool = if matches!(ep, crate::onnx::ExecutionProvider::CoreMl) {
+                    1
+                } else {
+                    self.config.embedder_pool_size
+                };
                 let mut seg_cfg = crate::segmentation::PowersetConfig::default();
                 seg_cfg.aggregation.binarization = self.config.binarization;
                 // Same session-pool budget as the embedder so one config knob
                 // (and POLYVOICE_SESSION_POOL_SIZE) controls both hot stages.
-                seg_cfg.pool_size = self.config.embedder_pool_size;
+                seg_cfg.pool_size = pool;
                 let segmenter: Box<dyn Segmenter> = Box::new(
                     crate::segmentation::PowersetSegmenter::with_config(
                         &profile_models.segmenter_path,
@@ -241,7 +250,7 @@ impl PipelineBuilder {
                 let embedder: Box<dyn Embedder> = Box::new(
                     crate::embedder::ResNet34Adapter::new(
                         &profile_models.embedder_path,
-                        self.config.embedder_pool_size,
+                        pool,
                         ep,
                     )
                     .map_err(|e| ConfigError::Load {

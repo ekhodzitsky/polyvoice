@@ -47,7 +47,8 @@ Keep:
 
 - production dynamic INT8 as default accuracy/size tradeoff
 - micro-batch path with **default N=1**
-- `POLYVOICE_POWERSET_BATCH_SIZE=8` opt-in only when a re-baseline is accepted
+- Product later shipped dynamic-INT8 N=8 on CPU (see
+  `../int8-batch8-default-2026-08-10/`); this static re-quant remains unshipped
 
 ## Next research (not done)
 

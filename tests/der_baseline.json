@@ -28,7 +28,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — full 232-file VoxConverse-test gate 2026-08-10; pipeline v2 + VBx; INT8 shipping pair (powerset_int8 + resnet34_int8), CoreML EP, crate 0.17.0. micro no-collar 15.02% / collar 10.33%. Supersedes FP32 gate-day 15.37% (2026-07-25) and hop-2.0 published 15.24% (2026-07-30/31).",
+    "_status": "operational — full 232-file VoxConverse-test gate 2026-08-10; pipeline v2 + VBx; INT8 shipping pair (powerset_int8 + resnet34_int8), CoreML EP (powerset micro-batch N=1 clamp), crate 0.17.0. micro no-collar 15.02% / collar 10.33%. CPU N=8 path is 14.64% (int8-batch8-default-2026-08-10) and is not this gate row. Supersedes FP32 gate-day 15.37% (2026-07-25) and hop-2.0 published 15.24% (2026-07-30/31).",
     "_filled_by": "benchmarks/results/int8-full-der-2026-08-10/voxconverse-test-232-collar0.json (+ collar025 for der_collar_*)"
   },
   "ami_test": {
@@ -56,7 +56,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — full 16-meeting AMI Mix-Headset gate 2026-08-10; pipeline v2 + VBx; INT8 shipping pair, CoreML EP, crate 0.17.0. micro no-collar 24.50% / collar 16.82%. Supersedes FP32 hop-2.0 23.42% / 15.71% (2026-07-30).",
+    "_status": "operational — full 16-meeting AMI Mix-Headset gate 2026-08-10; pipeline v2 + VBx; INT8 shipping pair, CoreML EP (powerset micro-batch N=1 clamp), crate 0.17.0. micro no-collar 24.50% / collar 16.82%. CPU N=8 path is 24.63% (int8-batch8-default-2026-08-10). Supersedes FP32 hop-2.0 23.42% / 15.71% (2026-07-30).",
     "_filled_by": "benchmarks/results/int8-full-der-2026-08-10/ami-test-16-collar0.json (+ collar025 for der_collar_*)"
   },
   "voxconverse_dev": {

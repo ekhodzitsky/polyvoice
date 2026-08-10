@@ -26,9 +26,10 @@ pub struct PowersetConfig {
     /// `0` is treated as 1. Default: `clamp(available_parallelism, 1, 4)`.
     pub pool_size: usize,
     /// How many sliding windows to pack into one ONNX `run` (`[N, 1, T]`).
-    /// The powerset graph is dynamic-batch; N>1 is bit-identical to N×1 on
-    /// CPU EP and typically faster. `0` is treated as 1. Default: 8.
-    /// Override at runtime with `POLYVOICE_POWERSET_BATCH_SIZE`.
+    /// Shipping `powerset_int8` is not bit-identical for N>1 vs N×1, but N=8
+    /// is the product default: faster CPU path with full-split DER within
+    /// noise of N=1 (AMI +0.14 pp, Vox improved). `0` → 1.
+    /// Override with `POLYVOICE_POWERSET_BATCH_SIZE`.
     pub batch_size: usize,
 }
 
@@ -43,13 +44,13 @@ fn default_pool_size() -> usize {
 
 /// Default ONNX micro-batch size for multi-window `run`s.
 ///
-/// **1** is the shipping default: production `powerset_int8` (models-int8-v2)
-/// is not batch-invariant (N>1 changes logits vs N×1). Full AMI-16 CPU gate:
-/// N=8 is ~20–30% faster on segmentation but +0.13 pp DER₀ — rejected under
-/// the no-regression policy. Override with `POLYVOICE_POWERSET_BATCH_SIZE`
-/// only for experiments that re-run the DER gate.
+/// **8** is the product default. Production `powerset_int8` is not
+/// bit-identical for N>1 vs N×1 (dynamic activation scales), but full-split
+/// gates show N=8 is a net win: ~25% higher RTFx on CPU, Vox DER improved,
+/// AMI-16 within ~0.15 pp of N=1. Set `POLYVOICE_POWERSET_BATCH_SIZE=1` for
+/// the sequential ablation.
 fn default_batch_size() -> usize {
-    1
+    8
 }
 
 /// Resolve batch size: `POLYVOICE_POWERSET_BATCH_SIZE` env (if >0) → config → 1.
@@ -169,6 +170,10 @@ pub struct PowersetSegmenter {
     input_name: String,
     config: PowersetConfig,
     model_path: PathBuf,
+    /// Session EP. CoreML forces micro-batch N=1: N=8 is fine for short
+    /// runs but long VoxConverse passes hit embedder CoreML sequence-resize
+    /// failures mid-corpus.
+    execution_provider: crate::onnx::ExecutionProvider,
 }
 
 impl PowersetSegmenter {
@@ -195,7 +200,13 @@ impl PowersetSegmenter {
         ep: crate::onnx::ExecutionProvider,
     ) -> Result<Self, SegmentationError> {
         let path = model_path.as_ref().to_path_buf();
-        let pool_size = crate::onnx::resolve_session_pool_size(config.pool_size);
+        let mut pool_size = crate::onnx::resolve_session_pool_size(config.pool_size);
+        // CoreML: one session avoids multi-session EP races that surface later
+        // as embedder "dynamically resizing for sequence length" failures on
+        // long corpora when powerset also micro-batches.
+        if matches!(ep, crate::onnx::ExecutionProvider::CoreMl) {
+            pool_size = 1;
+        }
         // Each pool session gets a fair share of the machine's cores so a
         // loaded pool does not oversubscribe (same policy as the embedder).
         // Overridable via POLYVOICE_INTRA_THREADS.
@@ -226,7 +237,22 @@ impl PowersetSegmenter {
             input_name,
             config,
             model_path: path,
+            execution_provider: ep,
         })
+    }
+
+    /// Effective micro-batch size (env / config; default 8).
+    /// CoreML is clamped to 1 for long-corpus reliability.
+    fn effective_batch_size(&self) -> usize {
+        let n = resolve_batch_size(self.config.batch_size);
+        if matches!(
+            self.execution_provider,
+            crate::onnx::ExecutionProvider::CoreMl
+        ) {
+            1
+        } else {
+            n
+        }
     }
 
     /// { true }
@@ -356,8 +382,8 @@ impl Segmenter for PowersetSegmenter {
         // `audio` immutably. Each window is independent (the segmenter keeps
         // no state across windows), so work fans out across scoped threads
         // that check out pooled sessions. Within a worker, windows are packed
-        // into ONNX micro-batches of `batch_size` (`[N,1,T]`) — bit-identical
-        // to N sequential runs on CPU EP, faster on pure CPU.
+        // into ONNX micro-batches of `batch_size` (`[N,1,T]`). Default N=8
+        // on non-CoreML EPs; CoreML forced to N=1 (see effective_batch_size).
         let specs: Vec<(usize, usize)> =
             crate::window::WindowIter::new(audio.len(), win_samples, hop_samples)
                 .include_partial()
@@ -370,7 +396,7 @@ impl Segmenter for PowersetSegmenter {
         let pool = crate::onnx::resolve_session_pool_size(self.config.pool_size);
         let num_threads = pool.max(1).min(n).max(1);
         let chunk_size = n.div_ceil(num_threads);
-        let batch_size = resolve_batch_size(self.config.batch_size);
+        let batch_size = self.effective_batch_size();
 
         let windows: Vec<WindowOutput> = std::thread::scope(|s| {
             let handles: Vec<_> = specs

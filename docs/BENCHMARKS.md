@@ -24,7 +24,11 @@ collar.
 | **15.22 %** | Same-scorer H2H vs speakrs (FP32-era CLI, 2026-08-03) | `benchmarks/results/speakrs-h2h-2026-08-03/` |
 
 **Default since 0.17.0** is the INT8 pair (`powerset_int8` + `resnet34_int8`)
-on every profile. Cite the **15.02 %** row for current product truth.
+on every profile. Cite the **15.02 %** row for current Mac CoreML product
+truth. On CPU/XNNPACK the powerset micro-batch default is **N=8** (Vox
+**14.64 %** / AMI **24.63 %**, higher RTFx); CoreML stays at N=1 for
+long-corpus reliability — see
+[`int8-batch8-default-2026-08-10/`](../benchmarks/results/int8-batch8-default-2026-08-10/).
 
 ## At a glance
 
@@ -228,15 +232,22 @@ retained below for history only — prefer the full-split rows above.
 Measured end-to-end with `polyvoice-bench` on **Apple M1 Pro (10 cores)**,
 release build, single file stream at a time.
 
-### Current default — INT8, CoreML (2026-08-10, v0.17.0)
+### Current default — INT8 (2026-08-10, v0.17+)
 
 | Configuration | Corpus | RTFx (× realtime) | RTF |
 |---|---|---:|---:|
-| **v2 + VBx INT8 (default)** | VoxConverse-test (232) | **~111–122×** | ~0.008–0.009 |
-| **v2 + VBx INT8 (default)** | AMI-test (16) | **~109–130×** | ~0.008–0.009 |
+| **v2 + VBx INT8 CoreML (N=1)** | VoxConverse-test (232) | **~111–122×** | ~0.008–0.009 |
+| **v2 + VBx INT8 CoreML (N=1)** | AMI-test (16) | **~109–130×** | ~0.008–0.009 |
+| **v2 + VBx INT8 CPU (N=8 micro-batch)** | VoxConverse-test (232) | **~121×** | ~0.008 |
+| **v2 + VBx INT8 CPU (N=8 micro-batch)** | AMI-test (16) | **~137×** | ~0.007 |
 
-Artifact: [`benchmarks/results/int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
-A 1-hour meeting diarizes in well under a minute on this host.
+CoreML artifacts:
+[`benchmarks/results/int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
+CPU N=8:
+[`benchmarks/results/int8-batch8-default-2026-08-10/`](../benchmarks/results/int8-batch8-default-2026-08-10/).
+A 1-hour meeting diarizes in well under a minute on this host. CoreML
+forces powerset micro-batch **N=1** (and a single-session pool); N=8 is
+the default on CPU.
 
 ### Historical — FP32, CPU EP (2026-07-30/31, v0.14.0)
 
@@ -250,7 +261,8 @@ A 1-hour meeting diarizes in well under a minute on this host.
 
 | Engine | RTF | Notes |
 |---|---|---|
-| **polyvoice (INT8 default, CoreML)** | **~0.008–0.009** (~111–130×) | Rust + ONNX Runtime; full-split 2026-08-10 |
+| **polyvoice (INT8 default, CoreML N=1)** | **~0.008–0.009** (~111–130×) | Rust + ONNX Runtime; full-split 2026-08-10 |
+| polyvoice (INT8 default, CPU N=8) | **~0.007–0.008** (~121–137×) | powerset micro-batch; 2026-08-10 |
 | polyvoice (FP32 historical, CPU) | 0.015–0.019 (53–68×) | pre-0.17 default models |
 | pyannote 3.1 | not published | PyTorch; GPU recommended for throughput |
 | WhisperX | > 1 on CPU | Whisper + pyannote; GPU recommended |
@@ -328,14 +340,15 @@ python benchmark.py --dataset voxconverse_test --runners all
 - ³ diart (Coria et al., ASRU 2021; collar 0, overlap scored): https://arxiv.org/abs/2109.06483
 - ⁴ 3D-Speaker toolkit (VoxConverse 11.75, AMI_SDM 21.76; collar unstated): https://github.com/modelscope/3D-Speaker
 - ⁵ polyvoice **published** tables (0.17+) use the INT8 full-split remeasure
-  (**15.02 %** Vox / **24.50 %** AMI no-collar micro; CoreML, M1 Pro,
+  (**15.02 %** Vox / **24.50 %** AMI no-collar micro; CoreML N=1, M1 Pro,
   2026-08-10). Gate + README match
   [`tests/der_baseline.json`](../tests/der_baseline.json). Artifact:
   [`benchmarks/results/int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
-  Historical FP32 hop-2.0 (15.24 / 23.42) remains under
-  `powerset-hop2-2026-07-30/` and early full-split under `full-der-2026-07-25/`.
-  Default (0.11+ pipeline): v2 + VBx; models INT8 since 0.17; legacy via
-  `--legacy`
+  CPU powerset micro-batch N=8 (product default off CoreML): Vox **14.64 %** /
+  AMI **24.63 %** — `int8-batch8-default-2026-08-10/`. Historical FP32 hop-2.0
+  (15.24 / 23.42) remains under `powerset-hop2-2026-07-30/` and early full-split
+  under `full-der-2026-07-25/`. Default (0.11+ pipeline): v2 + VBx; models INT8
+  since 0.17; legacy via `--legacy`
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
 - ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands
 - ⁸ speakrs CoreML warm on Apple M1 Pro, full VoxConverse-test 232, scored with `benchmarks/der.py` (collar 0, overlap scored): DER 11.08% micro (miss 3.35 / FA 4.10 / conf 3.63), RTFx ~144×. Artifact `benchmarks/results/speakrs-h2h-2026-08-03/full-232-matched-score.json` (2026-08-03/04). speakrs code Apache-2.0: https://github.com/avencera/speakrs. polyvoice on the **same** scorer/split: 15.22% no-collar micro (conf 8.04) — gap **4.14 pp**, confusion-dominated. speakrs' own README quotes 11.1% / 631× on M4 Pro; do not mix hardware for RTFx.
