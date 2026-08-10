@@ -1,0 +1,3 @@
+Darwin MacBook-Pro.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:41 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T6000 arm64
+Apple M1 Pro
+polyvoice: polyvoice 0.14.0

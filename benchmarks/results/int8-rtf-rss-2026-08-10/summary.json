@@ -1,0 +1,92 @@
+{
+  "host": [
+    "Darwin MacBook-Pro.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:41 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T6000 arm64",
+    "Apple M1 Pro",
+    "polyvoice: polyvoice 0.14.0"
+  ],
+  "config": {
+    "profile": "balanced",
+    "pipeline": "v2",
+    "clusterer": "vbx",
+    "models": "powerset_int8 + resnet34_int8",
+    "collar_for_der": 0.0,
+    "note": "rt_factor_avg from polyvoice-bench is RTFx (= audio/wall). RTF = 1/RTFx."
+  },
+  "rtf_runs": [
+    {
+      "run": "ami-test-16",
+      "files": 16,
+      "audio_secs": 32623.9,
+      "wall_secs": 242.0,
+      "rtfx": 134.83,
+      "rtf": 0.0074,
+      "der0_micro": 24.5,
+      "ep": "CoreMl",
+      "models": [
+        "powerset_int8",
+        "resnet34_int8"
+      ],
+      "stage_totals_s": {
+        "segmentation_secs": 162.31,
+        "embedding_secs": 79.34,
+        "clustering_secs": 0.3,
+        "resegmentation_secs": 0.0
+      },
+      "crate_version": "0.17.0"
+    },
+    {
+      "run": "ami-test-single",
+      "files": 1,
+      "audio_secs": 2142.7,
+      "wall_secs": 14.7,
+      "rtfx": 145.9,
+      "rtf": 0.0069,
+      "der0_micro": 42.0,
+      "ep": "CoreMl",
+      "models": [
+        "powerset_int8",
+        "resnet34_int8"
+      ],
+      "stage_totals_s": {
+        "segmentation_secs": 10.47,
+        "embedding_secs": 4.18,
+        "clustering_secs": 0.03,
+        "resegmentation_secs": 0.0
+      },
+      "crate_version": "0.17.0"
+    },
+    {
+      "run": "voxconverse-test-10",
+      "files": 10,
+      "audio_secs": 6700.9,
+      "wall_secs": 60.9,
+      "rtfx": 110.0,
+      "rtf": 0.0091,
+      "der0_micro": 22.71,
+      "ep": "CoreMl",
+      "models": [
+        "powerset_int8",
+        "resnet34_int8"
+      ],
+      "stage_totals_s": {
+        "segmentation_secs": 38.67,
+        "embedding_secs": 22.19,
+        "clustering_secs": 0.05,
+        "resegmentation_secs": 0.0
+      },
+      "crate_version": "0.17.0"
+    }
+  ],
+  "rss_runs": [
+    {
+      "run": "ami-EN2002a",
+      "peak_rss_mib": 748.9,
+      "peak_rss_bytes": 785317888
+    },
+    {
+      "run": "vox-sample",
+      "peak_rss_mib": 488.9,
+      "peak_rss_bytes": 512655360
+    }
+  ]
+}
