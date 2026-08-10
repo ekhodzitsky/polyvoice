@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0] - 2026-08-10
+
+### Changed
+
+- Lockstep with core **0.17.0**: default `Pipeline.balanced()` / `.mobile()`
+  download the **INT8** production pair (same as CLI `--profile balanced`).
+
 ## [0.16.0] - 2026-08-10
 
 ### Changed

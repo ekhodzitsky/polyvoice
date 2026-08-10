@@ -11,27 +11,27 @@
 
 Built for meeting-notes pipelines, voice agents, and on-prem deployments that
 can't ship a PyTorch stack. One crate, four surfaces: Rust library, Python,
-C FFI, and a CLI. MIT, ungated models, ~30 MB (8.4 MB with the INT8 profile).
+C FFI, and a CLI. MIT, ungated **INT8** models (~8.4 MB production pair).
 
 ![polyvoice CLI demo — real diarization run](docs/assets/demo.gif)
 
-## Numbers (measured on v0.14.0; still the published figures for v0.15.x, Apple M1 Pro, one file at a time)
+## Numbers
 
-| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed |
+**Default stack is INT8** (`powerset_int8` + `resnet34_int8`) for every
+profile (`balanced` / `mobile` / `fast`). Published DER tables below were
+measured on the earlier FP32 pair (v0.14 full-split); re-measure INT8 on your
+domain — expect ~parity on VoxConverse-style audio and about **+2 pp DER** on
+AMI-style meetings, with **~83× realtime** class speed on M1 Pro. Protocol:
+[Benchmarks](docs/BENCHMARKS.md).
+
+| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed (FP32-era table) |
 |---|---:|---:|---:|
 | VoxConverse-test (232 files) | **10.5 %** | **15.2 %** | **53× realtime** |
 | VoxConverse-dev (216 files) | **7.7 %** | 11.4 % | 56× realtime |
 | AMI-test (16 meetings) | **15.7 %** | 23.4 % | **68× realtime** |
 
-INT8 `--profile fast`: **~83× realtime** — DER at parity on VoxConverse-style
-audio (+0.2 pp), ~+2 pp caveat on meeting audio; see
-[Benchmarks](docs/BENCHMARKS.md). Competitors don't publish CPU RTF figures;
-for orientation, WhisperX runs slower than real time (RTF > 1) on CPU.
-
-Like-for-like (strict collar 0, overlap scored) VoxConverse-test DER is
-**15.2 %** versus pyannote 3.1's **11.3 %** — a few DER points traded for a
-CPU-only, MIT, **ungated** engine that needs no Python. Full protocols and
-provenance: [Benchmarks](docs/BENCHMARKS.md).
+Like-for-like (strict collar 0) VoxConverse-test **15.2 %** vs pyannote 3.1
+**11.3 %** — accuracy traded for a CPU-only, MIT, **ungated** INT8 deploy.
 
 ## 60 seconds to first result
 
@@ -40,7 +40,7 @@ provenance: [Benchmarks](docs/BENCHMARKS.md).
 curl -LO https://github.com/ekhodzitsky/polyvoice/releases/latest/download/polyvoice-macos-arm64
 chmod +x polyvoice-macos-arm64
 
-# 2. Fetch the models (~30 MB, MIT, no token)
+# 2. Fetch the INT8 models (~8.4 MB, MIT, no token)
 ./polyvoice-macos-arm64 download-models --profile balanced
 
 # 3. Diarize
@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // CLI / Python / FFI default is VBx. PipelineConfig::default() alone is AHC.
     let pipeline = Pipeline::builder()
         .config(PipelineConfig {
-            profile: Profile::Balanced, // or Profile::Fast for the INT8 pair
+            profile: Profile::Balanced, // INT8 pair (mobile/fast are the same models)
             clusterer: ClustererKind::Vbx,
             ..PipelineConfig::default()
         })
@@ -98,8 +98,8 @@ and [docs/API.md](docs/API.md).
 
 ## Why polyvoice
 
-- **Fast on CPU.** 53–68× realtime on a laptop M1 Pro (~83× with the INT8
-  `fast` profile) — no GPU, no batching tricks.
+- **Fast on CPU.** INT8 production models (~8.4 MB); order-of **tens× realtime**
+  on a laptop CPU — no GPU, no batching tricks.
 - **Rust-native, four surfaces.** Rust + Python + C FFI + CLI from one crate;
   no PyTorch stack. Production ONNX path uses ONNX Runtime (`ort`); the default
   feature set is empty (ort-free BYO core).

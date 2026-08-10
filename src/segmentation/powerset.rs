@@ -456,9 +456,14 @@ mod tests {
         assert!((config.hop_secs - 0.5).abs() < 1e-6);
     }
 
-    /// Path to the powerset model checked into the repo (no network needed).
+    /// Path to a local powerset model (INT8 preferred; FP32 fallback for quant trees).
     fn local_model_path() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32.onnx")
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
+        let int8 = root.join("int8/powerset_int8.onnx");
+        if int8.is_file() {
+            return int8;
+        }
+        root.join("powerset_fp32.onnx")
     }
 
     fn sine_audio(secs: f32, sample_rate: u32) -> Vec<f32> {
@@ -476,7 +481,7 @@ mod tests {
     fn load_test_segmenter(pool_size: usize) -> Option<PowersetSegmenter> {
         let path = local_model_path();
         if !path.exists() {
-            eprintln!("skip: models/powerset_fp32.onnx missing");
+            eprintln!("skip: local powerset ONNX missing");
             return None;
         }
         let config = PowersetConfig {
@@ -510,12 +515,16 @@ mod tests {
 
     #[test]
     fn new_loads_local_model_and_exposes_accessors() {
-        if !local_model_path().exists() {
-            eprintln!("skip: models/powerset_fp32.onnx missing");
+        let path = local_model_path();
+        if !path.exists() {
+            eprintln!("skip: local powerset ONNX missing");
             return;
         }
-        let seg = PowersetSegmenter::new(local_model_path()).expect("local powerset model loads");
-        assert!(seg.model_path().ends_with("powerset_fp32.onnx"));
+        let seg = PowersetSegmenter::new(&path).expect("local powerset model loads");
+        assert!(
+            seg.model_path().ends_with("powerset_int8.onnx")
+                || seg.model_path().ends_with("powerset_fp32.onnx")
+        );
         let cfg = seg.config();
         assert!((cfg.window_secs - 10.0).abs() < 1e-6);
         assert!((cfg.hop_secs - 2.0).abs() < 1e-6);

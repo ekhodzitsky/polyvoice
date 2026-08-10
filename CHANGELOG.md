@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-10
+
+### Breaking / product
+
+- **INT8-only shipping profiles.** `mobile`, `balanced`, and `fast` all resolve
+  `powerset_int8` + `resnet34_int8` (~8.4 MB). Stage aliases `latest`/`v1` point
+  at the INT8 ids. FP32 artifacts remain in the manifest for
+  `ModelRegistry::ensure("powerset_fp32")` / quant scripts only.
+- `Profile::Mobile` embedding dim is **256** (ResNet34 INT8), not 512 (old CAM++).
+
+### Documentation
+
+- README and download-models.sh describe the INT8 default; FP32-era DER tables
+  are labelled as such until a full INT8 remeasure is published.
+
 ## [0.16.0] - 2026-08-10
 
 ### Breaking

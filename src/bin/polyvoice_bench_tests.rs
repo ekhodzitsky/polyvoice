@@ -101,10 +101,10 @@ fn micro_der_zero_reference_frames_is_zero() {
 #[test]
 fn model_hashes_reports_segmenter_and_profile_embedder() {
     let registry = ModelRegistry::default().unwrap();
-    let hashes = model_hashes(&registry, Profile::Balanced, "powerset_fp32");
+    let hashes = model_hashes(&registry, Profile::Balanced, "powerset_int8");
     assert_eq!(hashes.len(), 2);
-    assert_eq!(hashes[0].model_id, "powerset_fp32");
-    assert_eq!(hashes[1].model_id, "wespeaker_resnet34");
+    assert_eq!(hashes[0].model_id, "powerset_int8");
+    assert_eq!(hashes[1].model_id, "resnet34_int8");
     for h in &hashes {
         assert_eq!(h.sha256.len(), 64, "{} sha256 must be hex", h.model_id);
     }
@@ -116,7 +116,7 @@ fn model_hashes_skips_models_absent_from_manifest() {
     // Unknown segmenter id: only the embedder entry survives the lookup.
     let hashes = model_hashes(&registry, Profile::Balanced, "no_such_model");
     assert_eq!(hashes.len(), 1);
-    assert_eq!(hashes[0].model_id, "wespeaker_resnet34");
+    assert_eq!(hashes[0].model_id, "resnet34_int8");
 }
 
 #[test]

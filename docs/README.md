@@ -1,7 +1,8 @@
-# Documentation index (polyvoice 0.16)
+# Documentation index (polyvoice 0.17)
 
-Crate version: **0.16.x** ([CHANGELOG](../CHANGELOG.md)). Canonical accuracy
-numbers live in [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
+Crate version: **0.17.x** ([CHANGELOG](../CHANGELOG.md)). Production profiles
+use **INT8** models only. Canonical accuracy protocol:
+[BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
 [PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md).
 
 ## By audience

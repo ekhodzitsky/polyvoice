@@ -1,14 +1,12 @@
 //! Model profile bundles (Mobile / Balanced / Fast / Custom).
 use serde::{Deserialize, Serialize};
 
-/// Pre-configured model bundles trading off accuracy and footprint.
+/// Pre-configured model bundles.
 ///
-/// `Mobile` targets weak/embedded ARM CPUs (≤10 MB total models, ≤200 MB peak RAM).
-/// `Balanced` targets modern phone/laptop ARM CPUs (≤35 MB total models, ≤400 MB peak RAM).
-/// `Fast` is the opt-in INT8 pair: several times faster than `Balanced`, at DER
-/// parity on VoxConverse-style audio but ~+2 pp DER on AMI-style meetings.
-/// `Custom` defers all model selection to the caller and is used by `PipelineBuilder`
-/// when individual `Segmenter`/`Embedder`/`Clusterer` instances are supplied directly.
+/// As of 0.17 every shipping profile (`Mobile`, `Balanced`, `Fast`) resolves
+/// the same **INT8** pair (`powerset_int8` + `resnet34_int8`, ~8.4 MB total).
+/// `Fast` remains a CLI/manifest alias of that pair. `Custom` defers model
+/// selection to the caller (`PipelineBuilder` with injected stages).
 ///
 /// Added in v0.6.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -24,9 +22,8 @@ impl Profile {
     /// Returns 0 for `Custom` (caller must resolve dimension explicitly).
     pub const fn embedding_dim(self) -> usize {
         match self {
-            Profile::Mobile => 512,   // CAM++ output dim (voxceleb_CAM++.onnx)
-            Profile::Balanced => 256, // WeSpeaker ResNet34 output dim
-            Profile::Fast => 256,     // INT8 ResNet34 output dim
+            // INT8 WeSpeaker ResNet34 (same for mobile/balanced/fast).
+            Profile::Mobile | Profile::Balanced | Profile::Fast => 256,
             Profile::Custom => 0,
         }
     }
@@ -120,7 +117,7 @@ mod tests {
 
     #[test]
     fn embedding_dims_and_thresholds_match_model_bundles() {
-        assert_eq!(Profile::Mobile.embedding_dim(), 512);
+        assert_eq!(Profile::Mobile.embedding_dim(), 256);
         assert_eq!(Profile::Balanced.embedding_dim(), 256);
         assert_eq!(Profile::Fast.embedding_dim(), 256);
         assert_eq!(Profile::Custom.embedding_dim(), 0);

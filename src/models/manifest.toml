@@ -3,33 +3,31 @@ schema = "polyvoice-models-v2"
 # Stage-scoped version aliases (Deepgram diarize_model=latest|v1 pattern).
 # Resolution is logged so DER reports record the pin that was actually used.
 [aliases.segmenter]
-latest = "powerset_fp32"
-v1 = "powerset_fp32"
+latest = "powerset_int8"
+v1 = "powerset_int8"
 
 [aliases.embedder]
-latest = "wespeaker_resnet34"
-v1 = "wespeaker_resnet34"
+latest = "resnet34_int8"
+v1 = "resnet34_int8"
 
 [aliases.vad]
 latest = "silero_vad"
 v1 = "silero_vad"
 
-# Shipping profiles. Both default to the proven FP32 pair: the recalibrated
-# INT8 pair is much faster (~7x embedding stage, ~2x segmentation stage) but
-# regresses DER on AMI meetings (+2.0/+2.8 pp), so it ships as the opt-in
-# `fast` profile. The FP32 models stay available via their model ids for
-# direct ModelRegistry::ensure() callers.
+# Shipping profiles — INT8-only production pair (powerset weights-only dynamic
+# + ResNet34 static QDQ). ~8.4 MB total vs ~32 MB FP32; several× faster on
+# CPU. DER ~parity on VoxConverse-style audio; expect ~+2 pp on AMI meetings.
+# FP32 artifacts remain in [models.*] for direct ensure("powerset_fp32") /
+# quant tooling only — no profile resolves them.
 [profiles.mobile]
-segmenter = "powerset_fp32"
-embedder  = "wespeaker_resnet34"
+segmenter = "powerset_int8"
+embedder  = "resnet34_int8"
 
 [profiles.balanced]
-segmenter = "powerset_fp32"
-embedder  = "wespeaker_resnet34"
+segmenter = "powerset_int8"
+embedder  = "resnet34_int8"
 
-# Opt-in speed profile: recalibrated INT8 pair (powerset weights-only dynamic
-# + ResNet34 static QDQ). At DER parity on VoxConverse-style audio (+0.2 pp
-# on the dev split); expect ~+2 pp DER on AMI-style meeting audio.
+# Alias of balanced (same INT8 pair); kept so --profile fast keeps working.
 [profiles.fast]
 segmenter = "powerset_int8"
 embedder  = "resnet34_int8"

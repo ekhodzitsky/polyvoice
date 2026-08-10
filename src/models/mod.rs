@@ -469,11 +469,11 @@ mod tests {
         // latest aliases resolve to pinned model ids.
         assert_eq!(
             m.resolve_model_ref("segmenter", "latest"),
-            Some("powerset_fp32")
+            Some("powerset_int8")
         );
         assert_eq!(
             m.resolve_model_ref("embedder", "latest"),
-            Some("wespeaker_resnet34")
+            Some("resnet34_int8")
         );
         assert_eq!(m.resolve_model_ref("vad", "latest"), Some("silero_vad"));
     }
@@ -486,19 +486,21 @@ mod tests {
     }
 
     #[test]
-    fn profiles_share_segmenter_and_embedder_in_v2_hotfix() {
-        // V2 hotfix (2026-05-18): both Mobile and Balanced use ResNet34 + AHC
-        // because CAM++ ONNX produces near-identical embeddings (cosine sim ~0.85
-        // between different speakers). NME-SC also falls back to AHC on small n.
-        // Revert this test once CAM++ is re-converted and NME-SC is fixed.
+    fn profiles_share_segmenter_and_embedder_int8() {
+        // 0.17: all shipping profiles use the same INT8 pair.
         let m = default_manifest();
         let mob = m.profile("mobile").unwrap();
         let bal = m.profile("balanced").unwrap();
-        assert_eq!(mob.segmenter, bal.segmenter, "both use powerset");
+        let fast = m.profile("fast").unwrap();
+        assert_eq!(mob.segmenter, bal.segmenter, "both use powerset_int8");
+        assert_eq!(mob.embedder, bal.embedder);
+        assert_eq!(bal.segmenter, "powerset_int8");
+        assert_eq!(bal.embedder, "resnet34_int8");
         assert_eq!(
-            mob.embedder, bal.embedder,
-            "both use resnet34 (CAM++ broken)"
+            fast.segmenter, bal.segmenter,
+            "fast is an INT8 alias of balanced"
         );
+        assert_eq!(fast.embedder, bal.embedder);
     }
 
     #[test]

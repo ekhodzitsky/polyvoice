@@ -63,8 +63,8 @@ mod profile_tests {
     use super::*;
 
     #[test]
-    fn mobile_profile_uses_cam_pp_dim() {
-        assert_eq!(Profile::Mobile.embedding_dim(), 512);
+    fn mobile_profile_uses_resnet34_int8_dim() {
+        assert_eq!(Profile::Mobile.embedding_dim(), 256);
     }
 
     #[test]

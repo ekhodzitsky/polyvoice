@@ -1,6 +1,6 @@
 [package]
 name = "polyvoice-python"
-version = "0.16.0"
+version = "0.17.0"
 edition = "2024"
 # Tracks the core crate's MSRV (the path dependency on polyvoice requires 1.88);
 # pyo3 itself is fine with older toolchains.

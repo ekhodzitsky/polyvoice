@@ -575,10 +575,17 @@ mod tests {
     /// Registry rooted at the checked-in model files (SHA-256-verified cache
     /// hits, no network). `None` when the local models are absent.
     fn local_models_registry() -> Option<ModelRegistry> {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
-        for f in ["powerset_fp32.onnx", "wespeaker_resnet34.onnx"] {
+        // Prefer models/int8 (checked-in quant outputs); fall back to models/.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
+        let int8 = root.join("int8");
+        let dir = if int8.join("powerset_int8.onnx").is_file() {
+            int8
+        } else {
+            root.clone()
+        };
+        for f in ["powerset_int8.onnx", "resnet34_int8.onnx"] {
             if !dir.join(f).is_file() {
-                eprintln!("models/{f} not found — skipping model-backed test");
+                eprintln!("{} not found — skipping model-backed test", dir.join(f).display());
                 return None;
             }
         }
@@ -588,9 +595,19 @@ mod tests {
     #[test]
     fn load_legacy_stack_loads_sessions_from_local_models() {
         let models = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
-        let embedder = models.join("wespeaker_resnet34.onnx");
+        let embedder = [
+            models.join("int8/resnet34_int8.onnx"),
+            models.join("resnet34_int8.onnx"),
+            models.join("wespeaker_resnet34.onnx"),
+        ]
+        .into_iter()
+        .find(|p| p.is_file());
         let vad = models.join("silero_vad.onnx");
-        if !embedder.is_file() || !vad.is_file() {
+        let Some(embedder) = embedder else {
+            eprintln!("local embedder ONNX not found — skipping");
+            return;
+        };
+        if !vad.is_file() {
             eprintln!("local ONNX models not found — skipping");
             return;
         }
@@ -599,13 +616,20 @@ mod tests {
 
     #[test]
     fn load_legacy_stack_rejects_missing_vad() {
-        let embedder = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/wespeaker_resnet34.onnx");
-        if !embedder.is_file() {
-            eprintln!("models/wespeaker_resnet34.onnx not found — skipping");
+        let models = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
+        let embedder = [
+            models.join("int8/resnet34_int8.onnx"),
+            models.join("resnet34_int8.onnx"),
+            models.join("wespeaker_resnet34.onnx"),
+        ]
+        .into_iter()
+        .find(|p| p.is_file());
+        let Some(embedder) = embedder else {
+            eprintln!("local embedder ONNX not found — skipping");
             return;
-        }
+        };
         let err = load_legacy_stack(
-            &embedder,
+            embedder.as_path(),
             256,
             ExecutionProvider::Cpu,
             Path::new("/nonexistent/vad.onnx"),

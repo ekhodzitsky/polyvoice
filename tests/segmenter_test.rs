@@ -38,7 +38,7 @@ fn powerset_segmenter_emits_segments_on_real_model() {
     let tmp = TempDir::new().expect("temp dir");
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
     let model_path = registry
-        .ensure("powerset_fp32")
+        .ensure("powerset_int8")
         .expect("model download must succeed");
 
     let segmenter = PowersetSegmenter::new(&model_path).expect("segmenter loads");
@@ -63,7 +63,7 @@ fn powerset_segmenter_emits_segments_on_real_model() {
 fn powerset_segmenter_rejects_short_audio() {
     let tmp = TempDir::new().expect("temp dir");
     let registry = ModelRegistry::with_cache_dir(tmp.path()).expect("registry");
-    let model_path = registry.ensure("powerset_fp32").expect("model download");
+    let model_path = registry.ensure("powerset_int8").expect("model download");
 
     let segmenter = PowersetSegmenter::new(&model_path).expect("segmenter loads");
     let too_short = vec![0.0_f32; 100]; // 6.25 ms < 100 ms minimum
