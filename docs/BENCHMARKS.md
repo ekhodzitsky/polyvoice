@@ -19,16 +19,18 @@ collar.
 
 | Figure | Role | Artifact |
 |------|------|----------|
-| **15.02 %** | **Published headline + CI gate** (README / this file / `der_baseline.json`) | INT8 full-split 2026-08-10 — `benchmarks/results/int8-full-der-2026-08-10/` |
+| **14.94 %** | **Linux / CPU product truth** (server deploys) | `scripts/linux-cpu-der-gate.sh` → [`linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/) |
+| **15.02 %** | Mac CoreML headline + historical CI gate | INT8 full-split 2026-08-10 — `benchmarks/results/int8-full-der-2026-08-10/` |
 | **15.24 %** | Historical FP32 hop-2.0 published (pre-0.17) | `benchmarks/results/powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json` |
 | **15.22 %** | Same-scorer H2H vs speakrs (FP32-era CLI, 2026-08-03) | `benchmarks/results/speakrs-h2h-2026-08-03/` |
 
 **Default since 0.17.0** is the INT8 pair (`powerset_int8` + `resnet34_int8`)
-on every profile. Cite the **15.02 %** row for current Mac CoreML product
-truth. On CPU/XNNPACK the powerset micro-batch default is **N=8** (Vox
-**14.64 %** / AMI **24.63 %**, higher RTFx); CoreML stays at N=1 for
-long-corpus reliability — see
-[`int8-batch8-default-2026-08-10/`](../benchmarks/results/int8-batch8-default-2026-08-10/).
+on every profile. **Cite 14.94 % for Linux/CPU deploys** (powerset micro-batch
+N=8, EP=cpu). Cite **15.02 %** for Mac CoreML (N=1 clamp). Reproduce Linux:
+
+```bash
+DOCKER=1 bash scripts/linux-cpu-der-gate.sh   # or native Linux host
+```
 
 ## At a glance
 
@@ -36,7 +38,7 @@ long-corpus reliability — see
 |--|--|--|--|--|
 | **VoxConverse-test DER** | **15.0 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
 | **Model size** | **~8.4 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
-| **Runtime** | **CPU/CoreML, ~111–130× realtime** (M1 Pro) | CPU/GPU (PyTorch) | GPU recommended | GPU |
+| **Runtime** | **CPU ~80–95× (Linux aarch64) / CoreML ~111–130× (M1)** | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
 | **Dependencies** | **Rust API, optional ONNX Runtime; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
@@ -232,22 +234,24 @@ retained below for history only — prefer the full-split rows above.
 Measured end-to-end with `polyvoice-bench` on **Apple M1 Pro (10 cores)**,
 release build, single file stream at a time.
 
-### Current default — INT8 (2026-08-10, v0.17+)
+### Current default — INT8 (2026-08-10/11, v0.17+)
 
-| Configuration | Corpus | RTFx (× realtime) | RTF |
-|---|---|---:|---:|
-| **v2 + VBx INT8 CoreML (N=1)** | VoxConverse-test (232) | **~111–122×** | ~0.008–0.009 |
-| **v2 + VBx INT8 CoreML (N=1)** | AMI-test (16) | **~109–130×** | ~0.008–0.009 |
-| **v2 + VBx INT8 CPU (N=8 micro-batch)** | VoxConverse-test (232) | **~121×** | ~0.008 |
-| **v2 + VBx INT8 CPU (N=8 micro-batch)** | AMI-test (16) | **~137×** | ~0.007 |
+| Configuration | Corpus | RTFx (× realtime) | RTF | DER₀ micro |
+|---|---|---:|---:|---:|
+| **v2 + VBx INT8 Linux CPU (N=8)** | VoxConverse-test (232) | **~82×** | ~0.012 | **14.94 %** |
+| **v2 + VBx INT8 Linux CPU (N=8)** | AMI-test (16) | **~95×** | ~0.011 | **24.19 %** |
+| **v2 + VBx INT8 CoreML (N=1)** | VoxConverse-test (232) | **~111–122×** | ~0.008–0.009 | 15.02 % |
+| **v2 + VBx INT8 CoreML (N=1)** | AMI-test (16) | **~109–130×** | ~0.008–0.009 | 24.50 % |
+| **v2 + VBx INT8 Mac CPU (N=8)** | VoxConverse-test (232) | **~121×** | ~0.008 | 14.64 % |
+| **v2 + VBx INT8 Mac CPU (N=8)** | AMI-test (16) | **~137×** | ~0.007 | 24.63 % |
 
-CoreML artifacts:
-[`benchmarks/results/int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
-CPU N=8:
-[`benchmarks/results/int8-batch8-default-2026-08-10/`](../benchmarks/results/int8-batch8-default-2026-08-10/).
-A 1-hour meeting diarizes in well under a minute on this host. CoreML
-forces powerset micro-batch **N=1** (and a single-session pool); N=8 is
-the default on CPU.
+Linux CPU (product path for servers):
+[`benchmarks/results/linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/)
+via [`scripts/linux-cpu-der-gate.sh`](../scripts/linux-cpu-der-gate.sh).
+CoreML: [`int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
+Mac CPU N=8:
+[`int8-batch8-default-2026-08-10/`](../benchmarks/results/int8-batch8-default-2026-08-10/).
+CoreML forces powerset micro-batch **N=1**; **N=8 is the default on CPU**.
 
 ### Historical — FP32, CPU EP (2026-07-30/31, v0.14.0)
 

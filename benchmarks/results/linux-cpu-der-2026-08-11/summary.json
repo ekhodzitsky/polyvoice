@@ -1,0 +1,88 @@
+{
+  "schema": "polyvoice-linux-cpu-der-gate-v1",
+  "protocol": {
+    "profile": "balanced",
+    "pipeline": "v2+vbx",
+    "execution_provider": "cpu",
+    "powerset_batch": 8,
+    "collar_request": 0.25,
+    "note": "collar 0.25 JSON also carries no-collar micro/macro"
+  },
+  "host": {
+    "system": "Linux",
+    "machine": "aarch64",
+    "platform": "Linux-6.10.14-linuxkit-aarch64-with-glibc2.39"
+  },
+  "runs": {
+    "ami-test": {
+      "files_processed": 16,
+      "resolved_execution_provider": "Cpu",
+      "der_no_collar_micro": 24.194381425332306,
+      "der_no_collar_macro": 23.215950514559818,
+      "der_collar_micro": 16.597602821684816,
+      "der_collar_macro": 15.972940663193928,
+      "miss": 7.585636875398377,
+      "false_alarm": 1.6809649325948028,
+      "confusion": 6.7063388552007455,
+      "rt_factor_avg": 94.9057242903268,
+      "speaker_count": {
+        "exact": 3,
+        "plus_minus_1": 4,
+        "off_by_2_or_more": 9
+      },
+      "crate_version": "0.17.0",
+      "git_sha": "8013949e2d3630747861cd40ce4a78702a674f19",
+      "model_hashes": [
+        {
+          "model_id": "powerset_int8",
+          "sha256": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+        },
+        {
+          "model_id": "resnet34_int8",
+          "sha256": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+        }
+      ],
+      "stage_totals": {
+        "segmentation_secs": 221.373546601,
+        "embedding_secs": 121.43706168099997,
+        "clustering_secs": 0.9103180029999999,
+        "resegmentation_secs": 0.000650584
+      }
+    },
+    "voxconverse-test": {
+      "files_processed": 232,
+      "resolved_execution_provider": "Cpu",
+      "der_no_collar_micro": 14.937207311608988,
+      "der_no_collar_macro": 15.196941703571898,
+      "der_collar_micro": 10.272496906951254,
+      "der_collar_macro": 10.747956770928283,
+      "miss": 2.2008755818750476,
+      "false_alarm": 1.6353177986955534,
+      "confusion": 6.911763390357671,
+      "rt_factor_avg": 81.51911106763633,
+      "speaker_count": {
+        "exact": 78,
+        "plus_minus_1": 64,
+        "off_by_2_or_more": 90
+      },
+      "crate_version": "0.17.0",
+      "git_sha": "8013949e2d3630747861cd40ce4a78702a674f19",
+      "model_hashes": [
+        {
+          "model_id": "powerset_int8",
+          "sha256": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+        },
+        {
+          "model_id": "resnet34_int8",
+          "sha256": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+        }
+      ],
+      "stage_totals": {
+        "segmentation_secs": 1136.228711177,
+        "embedding_secs": 783.527900642,
+        "clustering_secs": 2.6406622079999997,
+        "resegmentation_secs": 0.14147565899999995
+      }
+    }
+  }
+}

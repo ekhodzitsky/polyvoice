@@ -1,0 +1,12 @@
+date: 2026-08-11T19:59:56Z
+uname: Linux 56febd8495ec 6.10.14-linuxkit #1 SMP Tue Apr 15 16:00:54 UTC 2025 aarch64 aarch64 aarch64 GNU/Linux
+os: Linux
+arch: aarch64
+distro: Ubuntu 24.04.4 LTS
+cpus: 10
+ep: cpu
+profile: balanced
+pipeline: v2 + vbx
+powerset_batch: 8
+git: 8013949e2d3630747861cd40ce4a78702a674f19
+polyvoice: polyvoice 0.17.0

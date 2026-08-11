@@ -19,14 +19,14 @@ C FFI, and a CLI. MIT, ungated **INT8** models (~8.4 MB production pair).
 
 **Default stack is INT8** (`powerset_int8` + `resnet34_int8`) for every
 profile (`balanced` / `mobile` / `fast`). Full-split numbers below are the
-INT8 shipping path (pipeline v2 + VBx, Apple M1 Pro, crate 0.17+). Protocol:
-[Benchmarks](docs/BENCHMARKS.md). Mac CoreML DER is the published gate;
-CPU uses powerset micro-batch N=8 for higher RTFx.
+INT8 shipping path (pipeline v2 + VBx, crate 0.17+). Protocol:
+[Benchmarks](docs/BENCHMARKS.md). **Linux/CPU** is the product path for
+servers (powerset micro-batch N=8); Mac CoreML is a separate headline.
 
 | Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed (INT8) |
 |---|---:|---:|---:|
-| VoxConverse-test (232 files) | **10.3 %** | **15.0 %** | **~111× CoreML / ~121× CPU** |
-| AMI-test (16 meetings) | **16.8 %** | **24.5 %** | **~109–130× CoreML / ~137× CPU** |
+| VoxConverse-test (232 files) | **10.3 %** | **14.9 % Linux / 15.0 % CoreML** | **~82× Linux CPU / ~111× CoreML** |
+| AMI-test (16 meetings) | **16.6 % Linux / 16.8 % CoreML** | **24.2 % Linux / 24.5 % CoreML** | **~95× Linux CPU / ~110–130× CoreML** |
 
 Like-for-like (strict collar 0) VoxConverse-test **15.0 %** vs pyannote 3.1
 **11.3 %** — accuracy traded for a CPU-only, MIT, **ungated** INT8 deploy.

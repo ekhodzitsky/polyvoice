@@ -1,0 +1,82 @@
+name: Linux CPU DER gate
+
+# Official non-Apple product-truth DER on CPU (INT8, powerset N=8).
+# Full Vox-232 is optional (needs a pre-populated full split); default smoke
+# uses the 10-file Vox subset + full AMI-test when available.
+on:
+  workflow_dispatch:
+    inputs:
+      max_vox:
+        description: "Max VoxConverse-test files (0 = all present)"
+        required: false
+        default: "10"
+      max_ami:
+        description: "Max AMI-test files (0 = all present)"
+        required: false
+        default: "16"
+  schedule:
+    # Weekly Sunday 04:00 UTC — keeps Linux CPU numbers from rotting.
+    - cron: "0 4 * * 0"
+
+concurrency:
+  group: linux-cpu-der-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-cpu-der:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ort.pyke.io
+            ~/Library/Caches/ort.pyke.io
+          key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/polyvoice/models
+          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
+      - uses: actions/cache@v4
+        with:
+          path: data/ami-test
+          key: ami-test-${{ hashFiles('scripts/download-ami-test.sh') }}
+      - uses: actions/cache@v4
+        with:
+          path: data/voxconverse-test
+          key: voxconverse-test-${{ hashFiles('scripts/download-voxconverse-test.sh') }}
+
+      - name: Datasets
+        run: |
+          bash scripts/download-ami-test.sh || true
+          bash scripts/download-voxconverse-test.sh || true
+          echo "AMI wavs: $(find data/ami-test/audio -name '*.wav' 2>/dev/null | wc -l)"
+          echo "Vox wavs: $(find data/voxconverse-test/audio -name '*.wav' 2>/dev/null | wc -l)"
+
+      - name: Models
+        run: cargo run --release --features cli --bin polyvoice -- download-models --profile balanced
+
+      - name: Linux CPU DER gate
+        env:
+          MAX_VOX: ${{ github.event.inputs.max_vox || '10' }}
+          MAX_AMI: ${{ github.event.inputs.max_ami || '16' }}
+          OUT: benchmarks/results/linux-cpu-der-ci
+          EP: cpu
+          POLYVOICE_POWERSET_BATCH_SIZE: "8"
+          POLYVOICE_VBX_PLDA_DIR: ${{ github.workspace }}/fixtures/vbx-plda
+        run: bash scripts/linux-cpu-der-gate.sh
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-cpu-der-reports
+          path: |
+            benchmarks/results/linux-cpu-der-ci/
+          if-no-files-found: warn

@@ -28,7 +28,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — full 232-file VoxConverse-test gate 2026-08-10; pipeline v2 + VBx; INT8 shipping pair (powerset_int8 + resnet34_int8), CoreML EP (powerset micro-batch N=1 clamp), crate 0.17.0. micro no-collar 15.02% / collar 10.33%. CPU N=8 path is 14.64% (int8-batch8-default-2026-08-10) and is not this gate row. Supersedes FP32 gate-day 15.37% (2026-07-25) and hop-2.0 published 15.24% (2026-07-30/31).",
+    "_status": "operational — full 232-file VoxConverse-test gate 2026-08-10; pipeline v2 + VBx; INT8 shipping pair (powerset_int8 + resnet34_int8), CoreML EP (powerset micro-batch N=1 clamp), crate 0.17.0. micro no-collar 15.02% / collar 10.33%. Linux CPU N=8 product path is voxconverse_test_linux_cpu (14.94%). Supersedes FP32 gate-day 15.37% (2026-07-25) and hop-2.0 published 15.24% (2026-07-30/31).",
     "_filled_by": "benchmarks/results/int8-full-der-2026-08-10/voxconverse-test-232-collar0.json (+ collar025 for der_collar_*)"
   },
   "ami_test": {
@@ -56,8 +56,70 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — full 16-meeting AMI Mix-Headset gate 2026-08-10; pipeline v2 + VBx; INT8 shipping pair, CoreML EP (powerset micro-batch N=1 clamp), crate 0.17.0. micro no-collar 24.50% / collar 16.82%. CPU N=8 path is 24.63% (int8-batch8-default-2026-08-10). Supersedes FP32 hop-2.0 23.42% / 15.71% (2026-07-30).",
+    "_status": "operational — full 16-meeting AMI Mix-Headset gate 2026-08-10; pipeline v2 + VBx; INT8 shipping pair, CoreML EP (powerset micro-batch N=1 clamp), crate 0.17.0. micro no-collar 24.50% / collar 16.82%. Linux CPU N=8 product path is ami_test_linux_cpu (24.19%). Supersedes FP32 hop-2.0 23.42% / 15.71% (2026-07-30).",
     "_filled_by": "benchmarks/results/int8-full-der-2026-08-10/ami-test-16-collar0.json (+ collar025 for der_collar_*)"
+  },
+  "voxconverse_test_linux_cpu": {
+    "files": 232,
+    "profile": "balanced",
+    "pipeline": "v2",
+    "clusterer": "vbx",
+    "execution_provider": "cpu",
+    "powerset_batch": 8,
+    "der_collar_0_25": 10.27,
+    "der_no_collar": 14.94,
+    "der_collar_macro": 10.75,
+    "der_collar_micro": 10.27,
+    "der_no_collar_macro": 15.2,
+    "der_no_collar_micro": 14.94,
+    "miss": 2.2,
+    "false_alarm": 1.64,
+    "confusion": 6.91,
+    "rt_factor_avg": 81.52,
+    "speaker_count": {
+      "exact": 78,
+      "plus_minus_1": 64,
+      "off_by_2_or_more": 90
+    },
+    "tolerance": 1.0,
+    "model_versions": {
+      "segmenter": "powerset_int8",
+      "embedder": "resnet34_int8",
+      "clusterer": "vbx_plda"
+    },
+    "_status": "operational — Linux aarch64 CPU product gate 2026-08-11 (Ubuntu 24.04 Docker/linuxkit, 10 CPUs); v2+VBx INT8; powerset micro-batch N=8. micro no-collar 14.94% / collar 10.27% / RTFx ~81.5×. Primary non-Apple deploy truth; Mac CoreML remains voxconverse_test.",
+    "_filled_by": "benchmarks/results/linux-cpu-der-2026-08-11/voxconverse-test.json via scripts/linux-cpu-der-gate.sh"
+  },
+  "ami_test_linux_cpu": {
+    "files": 16,
+    "profile": "balanced",
+    "pipeline": "v2",
+    "clusterer": "vbx",
+    "execution_provider": "cpu",
+    "powerset_batch": 8,
+    "der_collar_0_25": 16.6,
+    "der_no_collar": 24.19,
+    "der_collar_macro": 15.97,
+    "der_collar_micro": 16.6,
+    "der_no_collar_macro": 23.22,
+    "der_no_collar_micro": 24.19,
+    "miss": 7.59,
+    "false_alarm": 1.68,
+    "confusion": 6.71,
+    "rt_factor_avg": 94.91,
+    "speaker_count": {
+      "exact": 3,
+      "plus_minus_1": 4,
+      "off_by_2_or_more": 9
+    },
+    "tolerance": 1.5,
+    "model_versions": {
+      "segmenter": "powerset_int8",
+      "embedder": "resnet34_int8",
+      "clusterer": "vbx_plda"
+    },
+    "_status": "operational — Linux aarch64 CPU product gate 2026-08-11; v2+VBx INT8; powerset N=8. micro no-collar 24.19% / collar 16.60% / RTFx ~94.9×. Primary non-Apple deploy truth; Mac CoreML remains ami_test.",
+    "_filled_by": "benchmarks/results/linux-cpu-der-2026-08-11/ami-test.json via scripts/linux-cpu-der-gate.sh"
   },
   "voxconverse_dev": {
     "files": null,

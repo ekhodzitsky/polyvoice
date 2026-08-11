@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Linux / CPU full-split DER gate** (`scripts/linux-cpu-der-gate.sh`,
+  optional `DOCKER=1`, CI workflow `linux-cpu-der.yml`). Official non-Apple
+  product numbers (INT8, v2+VBx, EP=cpu, powerset N=8): VoxConverse-test 232
+  **14.94 %** DER₀ / **10.27 %** @0.25 / **~82×** RTFx; AMI-test 16
+  **24.19 %** / **16.60 %** / **~95×**. Artifacts:
+  `benchmarks/results/linux-cpu-der-2026-08-11/`. Rows
+  `voxconverse_test_linux_cpu` / `ami_test_linux_cpu` in
+  `tests/der_baseline.json`.
+
 ## [0.17.0] - 2026-08-11
 
 ### Breaking / product
