@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-11
+
+### Breaking / product
+
+- **INT8-only shipping profiles.** `mobile`, `balanced`, and `fast` all resolve
+  `powerset_int8` + `resnet34_int8` (~8.4 MB). Stage aliases `latest`/`v1` point
+  at the INT8 ids. FP32 artifacts remain in the manifest for
+  `ModelRegistry::ensure("powerset_fp32")` / quant scripts only.
+- `Profile::Mobile` embedding dim is **256** (ResNet34 INT8), not 512 (old CAM++).
+
 ### Changed
 
 - Powerset ONNX **micro-batch** default is **N=8** (`PowersetConfig::batch_size`,
@@ -17,24 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clamps to N=1** and a single session pool — N=8 is fine on short runs but
   long VoxConverse passes hit embedder sequence-resize failures mid-corpus.
   Artifacts: `benchmarks/results/int8-batch8-default-2026-08-10/`.
+- CPU session-pool knobs (`POLYVOICE_SESSION_POOL_SIZE`,
+  `POLYVOICE_INTRA_THREADS`) and a no-regression gate script for multi-objective
+  CPU tuning (DER / RTFx / RSS).
 
-### Research
+### Fixed
 
-- Explored **batch-invariant re-quant** of `powerset_int8` (static QDQ /
-  frozen DQL scales). Best static candidate is N=1/N=8 identical but
-  **+0.54 pp AMI-16 DER** vs shipping dynamic INT8 and slower — **not
-  shipped**. Notes:
-  `benchmarks/results/powerset-int8-batch-invariant-2026-08-10/`.
-
-## [0.17.0] - 2026-08-10
-
-### Breaking / product
-
-- **INT8-only shipping profiles.** `mobile`, `balanced`, and `fast` all resolve
-  `powerset_int8` + `resnet34_int8` (~8.4 MB). Stage aliases `latest`/`v1` point
-  at the INT8 ids. FP32 artifacts remain in the manifest for
-  `ModelRegistry::ensure("powerset_fp32")` / quant scripts only.
-- `Profile::Mobile` embedding dim is **256** (ResNet34 INT8), not 512 (old CAM++).
+- Set `autobins = false` so CLI `*_tests.rs` siblings under `src/bin/` are not
+  auto-discovered as standalone binaries (they are `#[path]` modules of the
+  real bins under `cfg(test)`). Restores `cargo clippy --all-targets
+  --all-features`.
 
 ### Documentation
 
@@ -45,6 +47,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [`tests/der_baseline.json`](tests/der_baseline.json), README, and
   [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) updated. Artifacts:
   `benchmarks/results/int8-full-der-2026-08-10/`.
+  CPU micro-batch N=8 path documented alongside CoreML N=1 headline numbers.
+
+### Research (not shipped)
+
+- Explored **batch-invariant re-quant** of `powerset_int8` (static QDQ /
+  frozen DQL scales). Best static candidate is N=1/N=8 identical but
+  **+0.54 pp AMI-16 DER** vs shipping dynamic INT8 and slower — **not
+  shipped**. Notes:
+  `benchmarks/results/powerset-int8-batch-invariant-2026-08-10/`.
 
 ## [0.16.0] - 2026-08-10
 

@@ -512,8 +512,7 @@ fn from_registry_loads_fixture_cache() {
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
-    let fixture_dir =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
+    let fixture_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
     for art in VBX_PLDA_ARTIFACTS {
         std::fs::copy(
             fixture_dir.join(art.filename),

@@ -80,7 +80,11 @@ impl ExecutionProvider {
         match self {
             Self::Cpu => true,
             Self::CoreMl => {
-                cfg!(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))
+                cfg!(all(
+                    feature = "coreml",
+                    target_os = "macos",
+                    target_arch = "aarch64"
+                ))
             }
             Self::XnnPack => cfg!(feature = "xnnpack"),
             Self::Nnapi | Self::Cuda => false,
@@ -136,12 +140,12 @@ pub fn resolve_session_pool_size(configured: usize) -> usize {
 ///
 /// Override with `POLYVOICE_INTRA_THREADS` (positive integer) for host tuning.
 pub fn resolve_intra_threads(pool_size: usize) -> usize {
-    if let Ok(s) = std::env::var("POLYVOICE_INTRA_THREADS") {
-        if let Ok(n) = s.parse::<usize>() {
-            if n > 0 {
-                return n;
-            }
-        }
+    if let Some(n) = std::env::var("POLYVOICE_INTRA_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&n| n > 0)
+    {
+        return n;
     }
     let pool = pool_size.max(1);
     std::thread::available_parallelism()
@@ -418,7 +422,11 @@ mod tests {
         // CoreMl / XnnPack track their feature flags (and CoreML target).
         assert_eq!(
             ExecutionProvider::CoreMl.is_available(),
-            cfg!(all(feature = "coreml", target_os = "macos", target_arch = "aarch64"))
+            cfg!(all(
+                feature = "coreml",
+                target_os = "macos",
+                target_arch = "aarch64"
+            ))
         );
         assert_eq!(
             ExecutionProvider::XnnPack.is_available(),

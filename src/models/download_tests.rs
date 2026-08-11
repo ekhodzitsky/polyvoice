@@ -83,8 +83,7 @@ fn download_with_checksum_no_signature_fallback() {
     assert!(!result.unwrap(), "should be cached (no download)");
 
     // Calling the old wrapper should behave identically.
-    let result2 =
-        download_with_checksum("http://[invalid:definitely:not:a:real:url]", &sha, &dest);
+    let result2 = download_with_checksum("http://[invalid:definitely:not:a:real:url]", &sha, &dest);
     assert!(
         result2.is_ok(),
         "wrapper should succeed: {:?}",

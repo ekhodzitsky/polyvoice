@@ -170,12 +170,7 @@ use super::*;
 
 /// Helper: build a window where every frame is a single class (like 0=silence,
 /// 1=speaker 0, etc.) with the listed class as logit 10 and others as logit 0.
-fn synthetic_window(
-    start: f32,
-    end: f32,
-    num_frames: usize,
-    classes: &[usize],
-) -> WindowOutput {
+fn synthetic_window(start: f32, end: f32, num_frames: usize, classes: &[usize]) -> WindowOutput {
     assert_eq!(classes.len(), num_frames);
     let mut logits = Vec::with_capacity(num_frames * 7);
     for &c in classes {
@@ -249,8 +244,7 @@ fn staggered_speaker_change_is_labelled_consistently() {
         "the two speakers must stay distinct across the seam"
     );
     // Exactly two global speakers across the file.
-    let unique: std::collections::HashSet<u8> =
-        segs.iter().map(|s| s.local_speaker_idx).collect();
+    let unique: std::collections::HashSet<u8> = segs.iter().map(|s| s.local_speaker_idx).collect();
     assert_eq!(unique.len(), 2, "expected 2 speakers, got {}", unique.len());
 }
 
@@ -345,8 +339,8 @@ fn two_windows_requiring_permutation_get_aligned() {
         5.0,
         50,
         &[
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
         ],
     );
     let b = synthetic_window(
@@ -354,8 +348,8 @@ fn two_windows_requiring_permutation_get_aligned() {
         9.0,
         50,
         &[
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
         ],
     );
     let agg = Aggregator::new(AggregationConfig::default());
@@ -390,8 +384,8 @@ fn three_windows_keep_global_speaker_indices_consistent() {
         5.0,
         50,
         &[
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
         ],
     );
     // Window 1 overlaps 4-5s. In the overlap it swaps local indices
@@ -403,8 +397,8 @@ fn three_windows_keep_global_speaker_indices_consistent() {
         9.0,
         50,
         &[
-            2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-            2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
+            2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
         ],
     );
     // Window 2 overlaps 8-9s. In the overlap it swaps local indices
@@ -415,8 +409,8 @@ fn three_windows_keep_global_speaker_indices_consistent() {
         13.0,
         50,
         &[
-            2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         ],
     );
 
@@ -491,8 +485,7 @@ fn window_perm_ignores_inactive_third_speaker() {
         ..AggregationConfig::default()
     });
     let segs = agg.stitch(&[a, b]).unwrap();
-    let unique: std::collections::HashSet<u8> =
-        segs.iter().map(|s| s.local_speaker_idx).collect();
+    let unique: std::collections::HashSet<u8> = segs.iter().map(|s| s.local_speaker_idx).collect();
     // Only two speakers exist in the file — the inactive third slot must not
     // produce a third global identity.
     assert!(

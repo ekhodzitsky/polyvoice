@@ -241,8 +241,8 @@ fn load_verification_pairs_falls_back_to_wav_root_dataset() {
     let ds = make_rttm_dataset();
     let tmp = tempfile::tempdir().unwrap();
     // wav_root itself is a dataset directory (has audio/) → used directly.
-    let pairs = load_verification_pairs(&tmp.path().join("veri.txt"), ds.path(), 100, None, 10)
-        .unwrap();
+    let pairs =
+        load_verification_pairs(&tmp.path().join("veri.txt"), ds.path(), 100, None, 10).unwrap();
     assert_eq!(pairs.len(), 2);
 }
 

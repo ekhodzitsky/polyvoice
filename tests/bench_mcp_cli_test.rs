@@ -94,7 +94,7 @@ fn bench_skip_overlap_rejects_uem() {
 #[cfg(feature = "cli")]
 #[test]
 fn bench_rejects_unknown_pipeline() {
-    if !require_models(&["powerset_fp32.onnx", "wespeaker_resnet34.onnx"]) {
+    if !require_models(&["powerset_int8.onnx", "resnet34_int8.onnx"]) {
         return;
     }
     bench_cmd()
@@ -118,7 +118,7 @@ fn bench_rejects_unknown_profile() {
 #[cfg(feature = "cli")]
 #[test]
 fn bench_v2_end_to_end_writes_json_report() {
-    if !require_models(&["powerset_fp32.onnx", "wespeaker_resnet34.onnx"]) {
+    if !require_models(&["powerset_int8.onnx", "resnet34_int8.onnx"]) {
         return;
     }
     let dataset = make_dataset();
@@ -185,7 +185,7 @@ fn bench_v2_end_to_end_writes_json_report() {
 #[cfg(feature = "cli")]
 #[test]
 fn bench_v2_skip_overlap_mode_runs() {
-    if !require_models(&["powerset_fp32.onnx", "wespeaker_resnet34.onnx"]) {
+    if !require_models(&["powerset_int8.onnx", "resnet34_int8.onnx"]) {
         return;
     }
     let dataset = make_dataset();
@@ -213,7 +213,8 @@ fn bench_v2_skip_overlap_mode_runs() {
 #[cfg(feature = "cli")]
 #[test]
 fn bench_legacy_end_to_end_runs() {
-    if !require_models(&["silero_vad.onnx", "wespeaker_resnet34.onnx"]) {
+    // Balanced profile embedder is the INT8 shipping pair (0.17+).
+    if !require_models(&["silero_vad.onnx", "resnet34_int8.onnx"]) {
         return;
     }
     let dataset = make_dataset();
@@ -236,10 +237,10 @@ fn bench_legacy_end_to_end_runs() {
     // Legacy pipeline has no per-stage timings: the fields are omitted.
     assert!(json.get("stage_totals").is_none());
     assert!(json["per_file"][0].get("stage_timings").is_none());
-    // The legacy arm reports the Silero VAD as its segmenter.
+    // The legacy arm reports Silero VAD as segmenter + profile embedder.
     let hashes = json["model_hashes"].as_array().unwrap();
     assert!(hashes.iter().any(|h| h["model_id"] == "silero_vad"));
-    assert!(hashes.iter().any(|h| h["model_id"] == "wespeaker_resnet34"));
+    assert!(hashes.iter().any(|h| h["model_id"] == "resnet34_int8"));
 }
 
 // ---------------------------------------------------------------------------
@@ -433,7 +434,7 @@ fn mcp_unknown_tool_is_method_error() {
 #[cfg(feature = "mcp")]
 #[test]
 fn mcp_diarize_end_to_end_ahc() {
-    if !require_models(&["powerset_fp32.onnx", "wespeaker_resnet34.onnx"]) {
+    if !require_models(&["powerset_int8.onnx", "resnet34_int8.onnx"]) {
         return;
     }
     let dir = tempfile::tempdir().unwrap();

@@ -254,9 +254,8 @@ fn run_null_samples_returns_invalid_arg() {
     let mut out: *mut c_char = ptr::null_mut();
     let mut out_len: usize = 0;
     // SAFETY: handle is valid; null samples is the condition under test.
-    let rc = unsafe {
-        polyvoice_pipeline_run(handle, ptr::null(), 0, 16000, &mut out, &mut out_len)
-    };
+    let rc =
+        unsafe { polyvoice_pipeline_run(handle, ptr::null(), 0, 16000, &mut out, &mut out_len) };
     assert_eq!(rc, INVALID_ARG);
     assert!(out.is_null());
     // SAFETY: handle was created by mock_handle and is destroyed exactly once.

@@ -141,8 +141,7 @@ fn registry_with_local_models() -> Option<(tempfile::TempDir, ModelRegistry)> {
         }
         std::fs::copy(src, tmp.path().join(f)).expect("copy local model into cache");
     }
-    let manifest =
-        Manifest::from_toml_str(LOCAL_PROFILE_MANIFEST).expect("local manifest parses");
+    let manifest = Manifest::from_toml_str(LOCAL_PROFILE_MANIFEST).expect("local manifest parses");
     let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
     Some((tmp, registry))
 }
@@ -505,8 +504,7 @@ fn build_garbage_segmenter_reports_load_error() {
     std::fs::write(tmp.path().join("garbage.onnx"), GARBAGE_BYTES).expect("write garbage");
     std::fs::copy(embedder_src, tmp.path().join("wespeaker_resnet34.onnx"))
         .expect("copy embedder model");
-    let manifest =
-        Manifest::from_toml_str(GARBAGE_SEGMENTER_MANIFEST).expect("manifest parses");
+    let manifest = Manifest::from_toml_str(GARBAGE_SEGMENTER_MANIFEST).expect("manifest parses");
     let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
     let err = fresh()
         .profile(Profile::Balanced)
@@ -722,8 +720,7 @@ fn write_test_cohort(dir: &std::path::Path, rows: &[Vec<f32>]) -> PathBuf {
 fn resolve_clusterer_kind_domain_profile_overrides_ahc_threshold() {
     use crate::clusterer::domain;
 
-    let resolve = |clusterer: ClustererKind,
-                   domain: Option<crate::clusterer::DomainProfile>| {
+    let resolve = |clusterer: ClustererKind, domain: Option<crate::clusterer::DomainProfile>| {
         resolve_clusterer_kind(&PipelineConfig {
             clusterer,
             domain,

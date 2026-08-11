@@ -388,10 +388,7 @@ impl Embedder for FailingEmbedder {
 struct FailingResegmenter;
 
 impl Resegmenter for FailingResegmenter {
-    fn resegment(
-        &self,
-        _inputs: ResegmentInputs<'_>,
-    ) -> Result<Vec<SpeakerTurn>, ResegmentError> {
+    fn resegment(&self, _inputs: ResegmentInputs<'_>) -> Result<Vec<SpeakerTurn>, ResegmentError> {
         Err(ResegmentError::MissingPrimaryCentroid {
             index: 0,
             primary: SpeakerId(0),
@@ -587,10 +584,9 @@ fn build_overlap_inputs_both_mapped_uses_direct_assignment() {
         0u8,
         1u8,
     )];
-    let map: std::collections::HashMap<u8, SpeakerId> =
-        [(0u8, SpeakerId(3)), (1u8, SpeakerId(4))]
-            .into_iter()
-            .collect();
+    let map: std::collections::HashMap<u8, SpeakerId> = [(0u8, SpeakerId(3)), (1u8, SpeakerId(4))]
+        .into_iter()
+        .collect();
     let out = p
         .build_overlap_inputs(&overlaps, &[], &map, &vec![0.0_f32; 16000])
         .unwrap();
@@ -614,8 +610,7 @@ fn build_overlap_inputs_one_mapped_anchors_on_mapped_local() {
         0u8,
         2u8,
     )];
-    let map: std::collections::HashMap<u8, SpeakerId> =
-        [(2u8, SpeakerId(5))].into_iter().collect();
+    let map: std::collections::HashMap<u8, SpeakerId> = [(2u8, SpeakerId(5))].into_iter().collect();
     let out = p
         .build_overlap_inputs(&overlaps, &[], &map, &vec![0.0_f32; 16000])
         .unwrap();
@@ -703,8 +698,7 @@ fn build_overlap_inputs_unmapped_without_turns_defaults_to_zero() {
 #[test]
 fn build_overlap_inputs_skips_out_of_audio_and_too_short_ranges() {
     let p = overlap_inputs_pipeline(Box::new(MockEmbedder::default()));
-    let map: std::collections::HashMap<u8, SpeakerId> =
-        [(0u8, SpeakerId(0))].into_iter().collect();
+    let map: std::collections::HashMap<u8, SpeakerId> = [(0u8, SpeakerId(0))].into_iter().collect();
     let overlaps = vec![
         (
             TimeRange {
@@ -854,8 +848,7 @@ fn merge_with_confidence_handles_unsorted_sources() {
     let labels = vec![0usize, 1];
     let embeddings = vec![vec![1.0_f32, 0.0], vec![0.0_f32, 1.0]];
     let turns = vec![turn(0, 2.0, 3.0), turn(1, 0.0, 1.0)];
-    let (segments, merged_turns) =
-        p.merge_with_confidence(&turns, &sources, &labels, &embeddings);
+    let (segments, merged_turns) = p.merge_with_confidence(&turns, &sources, &labels, &embeddings);
     assert_eq!(segments.len(), 2);
     assert_eq!(merged_turns.len(), 2);
     assert!(segments.iter().all(|s| s.confidence.is_some()));

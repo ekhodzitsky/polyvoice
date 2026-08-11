@@ -585,7 +585,10 @@ mod tests {
         };
         for f in ["powerset_int8.onnx", "resnet34_int8.onnx"] {
             if !dir.join(f).is_file() {
-                eprintln!("{} not found — skipping model-backed test", dir.join(f).display());
+                eprintln!(
+                    "{} not found — skipping model-backed test",
+                    dir.join(f).display()
+                );
                 return None;
             }
         }

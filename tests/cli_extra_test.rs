@@ -36,10 +36,10 @@ fn write_tone_wav(path: &Path, secs: f32) {
     writer.finalize().unwrap();
 }
 
-const SEEDED_MODELS: [&str; 3] = [
-    "silero_vad.onnx",
-    "powerset_fp32.onnx",
-    "wespeaker_resnet34.onnx",
+const SEEDED_MODELS: [(&str, &str); 3] = [
+    ("silero_vad.onnx", "silero_vad.onnx"),
+    ("int8/powerset_int8.onnx", "powerset_int8.onnx"),
+    ("int8/resnet34_int8.onnx", "resnet34_int8.onnx"),
 ];
 
 /// A model cache dir populated from the checked-in `models/` files (hard link,
@@ -47,13 +47,16 @@ const SEEDED_MODELS: [&str; 3] = [
 /// diarization runs fully offline. `None` when the local models are absent.
 fn seeded_models_cache() -> Option<tempfile::TempDir> {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
-    if SEEDED_MODELS.iter().any(|f| !src.join(f).is_file()) {
+    if SEEDED_MODELS
+        .iter()
+        .any(|(rel, _)| !src.join(rel).is_file())
+    {
         eprintln!("checked-in ONNX models not found under models/ — skipping e2e");
         return None;
     }
     let tmp = tempfile::tempdir().unwrap();
-    for f in SEEDED_MODELS {
-        let (from, to) = (src.join(f), tmp.path().join(f));
+    for (rel, dest_name) in SEEDED_MODELS {
+        let (from, to) = (src.join(rel), tmp.path().join(dest_name));
         if std::fs::hard_link(&from, &to).is_err() {
             std::fs::copy(&from, &to).unwrap();
         }

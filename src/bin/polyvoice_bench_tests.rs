@@ -1,6 +1,7 @@
 use super::*;
 
 /// Shipped model file in the repo (content matches the embedded manifest).
+/// Paths may be nested (e.g. `int8/resnet34_int8.onnx`).
 fn repo_model(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("models")
@@ -148,8 +149,8 @@ fn check_model_sha256_rejects_corrupted_model() {
 #[test]
 fn check_model_sha256_unknown_model_id_errors() {
     let registry = ModelRegistry::default().unwrap();
-    let e = check_model_sha256(&registry, "no_such_model", &repo_model("silero_vad.onnx"))
-        .unwrap_err();
+    let e =
+        check_model_sha256(&registry, "no_such_model", &repo_model("silero_vad.onnx")).unwrap_err();
     assert!(format!("{e:#}").contains("not in manifest"));
 }
 
@@ -167,14 +168,15 @@ fn check_model_sha256_missing_file_errors() {
 
 #[test]
 fn verify_model_integrity_accepts_shipped_pair() {
-    if !has_model("wespeaker_resnet34.onnx") || !has_model("silero_vad.onnx") {
+    // Balanced profile embedder is resnet34_int8 (0.17+); VAD is still silero.
+    if !has_model("int8/resnet34_int8.onnx") || !has_model("silero_vad.onnx") {
         return;
     }
     let registry = ModelRegistry::default().unwrap();
     verify_model_integrity(
         &registry,
         Profile::Balanced,
-        &repo_model("wespeaker_resnet34.onnx"),
+        &repo_model("int8/resnet34_int8.onnx"),
         &repo_model("silero_vad.onnx"),
     )
     .unwrap();
@@ -182,7 +184,7 @@ fn verify_model_integrity_accepts_shipped_pair() {
 
 #[test]
 fn verify_model_integrity_rejects_swapped_vad() {
-    if !has_model("wespeaker_resnet34.onnx") {
+    if !has_model("int8/resnet34_int8.onnx") {
         return;
     }
     let registry = ModelRegistry::default().unwrap();
@@ -190,8 +192,8 @@ fn verify_model_integrity_rejects_swapped_vad() {
     let e = verify_model_integrity(
         &registry,
         Profile::Balanced,
-        &repo_model("wespeaker_resnet34.onnx"),
-        &repo_model("wespeaker_resnet34.onnx"),
+        &repo_model("int8/resnet34_int8.onnx"),
+        &repo_model("int8/resnet34_int8.onnx"),
     )
     .unwrap_err();
     assert!(format!("{e:#}").contains("integrity FAIL"));

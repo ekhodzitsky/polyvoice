@@ -177,8 +177,8 @@ fn speaker_embeddings_opt_in_are_l2_normalized() {
         assert!((n - 1.0).abs() < 1e-5, "norm {n}");
     }
     // Deterministic.
-    let again = attribute_and_fill(&[word("hi", 1.0, 1.5, 1.0)], &turns)
-        .with_speaker_embeddings(&means);
+    let again =
+        attribute_and_fill(&[word("hi", 1.0, 1.5, 1.0)], &turns).with_speaker_embeddings(&means);
     assert_eq!(wsw.speaker_embeddings, again.speaker_embeddings);
 }
 

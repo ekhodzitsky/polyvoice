@@ -50,28 +50,24 @@ fn int8_sha256_is_real_not_placeholder() {
 }
 
 #[test]
-fn mobile_profile_resolves_to_fp32() {
-    // Mobile defaults to the proven FP32 pair; the recalibrated INT8 pair
-    // is the opt-in `fast` profile (AMI DER regression, see manifest).
+fn mobile_profile_resolves_to_int8() {
+    // Since 0.17 every shipping profile uses the INT8 pair.
     let m = parse();
     let prof = m.profile("mobile").expect("mobile profile present");
-    assert_eq!(prof.segmenter, "powerset_fp32");
-    assert_eq!(prof.embedder, "wespeaker_resnet34");
+    assert_eq!(prof.segmenter, "powerset_int8");
+    assert_eq!(prof.embedder, "resnet34_int8");
 }
 
 #[test]
-fn balanced_profile_resolves_to_fp32() {
-    // Balanced ships the same FP32 pair as Mobile.
+fn balanced_profile_resolves_to_int8() {
     let m = parse();
     let prof = m.profile("balanced").expect("balanced profile present");
-    assert_eq!(prof.segmenter, "powerset_fp32");
-    assert_eq!(prof.embedder, "wespeaker_resnet34");
+    assert_eq!(prof.segmenter, "powerset_int8");
+    assert_eq!(prof.embedder, "resnet34_int8");
 }
 
 #[test]
 fn fast_profile_resolves_to_int8() {
-    // The opt-in `fast` profile ships the recalibrated INT8 pair:
-    // dynamic-quant powerset + static-QDQ ResNet34.
     let m = parse();
     let prof = m.profile("fast").expect("fast profile present");
     assert_eq!(prof.segmenter, "powerset_int8");

@@ -248,15 +248,11 @@ impl PipelineBuilder {
                     })?,
                 );
                 let embedder: Box<dyn Embedder> = Box::new(
-                    crate::embedder::ResNet34Adapter::new(
-                        &profile_models.embedder_path,
-                        pool,
-                        ep,
-                    )
-                    .map_err(|e| ConfigError::Load {
-                        model_id: "resnet34",
-                        source: Box::new(e),
-                    })?,
+                    crate::embedder::ResNet34Adapter::new(&profile_models.embedder_path, pool, ep)
+                        .map_err(|e| ConfigError::Load {
+                            model_id: "resnet34",
+                            source: Box::new(e),
+                        })?,
                 );
                 let clusterer: Box<dyn Clusterer> =
                     build_profile_clusterer(&self.config, &registry)?;

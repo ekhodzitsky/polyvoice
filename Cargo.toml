@@ -20,6 +20,10 @@ license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "clustering", "onnx", "streaming"]
 categories = ["multimedia::audio", "science"]
+# Only the explicit [[bin]] targets below. Sibling `*_tests.rs` under src/bin/
+# are `#[path]` modules of the CLI bins under `cfg(test)`, not standalone bins
+# — autodiscovery would treat them as binaries and break clippy/test all-targets.
+autobins = false
 # Allowlist: ship only what a consumer needs to build/use the crate.
 # Everything else — docs/, scripts/, tests/, benchmarks/, demo.gif,
 # models/*.onnx — is excluded automatically. NOTE: src/models/{manifest.toml,

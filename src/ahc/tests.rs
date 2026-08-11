@@ -276,8 +276,7 @@ fn cahc_asc_min_secs_uses_durations() {
         tr(11.0, 12.0),
         tr(12.0, 13.0),
     ];
-    let asc =
-        agglomerative_cluster_asc(&embeddings, 0.0, 0, AscStop::MinSecs(2.5), Some(&times));
+    let asc = agglomerative_cluster_asc(&embeddings, 0.0, 0, AscStop::MinSecs(2.5), Some(&times));
     assert_eq!(ndistinct(&asc), 2);
     assert_ne!(asc[0], asc[3]);
 }

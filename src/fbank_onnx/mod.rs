@@ -94,7 +94,9 @@ impl FbankOnnxExtractor {
 
     /// Number of sessions in the pool — the maximum useful concurrency for
     /// batch embedding; spawning more threads than this just burns cores in
-    /// the pool's spin-checkout.
+    /// the pool's spin-checkout. Called by the embedder adapters; silent when
+    /// the crate is built without the `embedder` feature.
+    #[cfg_attr(not(any(test, feature = "embedder")), allow(dead_code))]
     pub(crate) fn pool_size(&self) -> usize {
         self.pool.capacity()
     }

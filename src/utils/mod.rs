@@ -289,6 +289,9 @@ fn mean_confidence(sum: f32, count: u32) -> Option<f32> {
 pub(crate) struct ObjectPool<T> {
     items: std::sync::Mutex<Vec<T>>,
     /// Fixed construction size; not affected by checkouts.
+    /// Live via [`Self::capacity`] (embedder / unit tests); allowed when the
+    /// lib is built without those callers (e.g. `onnx,download` DER bins).
+    #[cfg_attr(not(any(test, feature = "embedder")), allow(dead_code))]
     capacity: usize,
 }
 
@@ -310,6 +313,7 @@ impl<T> ObjectPool<T> {
     }
 
     /// Number of items the pool was constructed with (max useful concurrency).
+    #[cfg_attr(not(any(test, feature = "embedder")), allow(dead_code))]
     pub(crate) fn capacity(&self) -> usize {
         self.capacity
     }

@@ -104,17 +104,17 @@
   "ami_test_single": {
     "files": 1,
     "profile": "balanced",
-    "der_collar_0_25": 34.62,
-    "der_no_collar": 42.9,
+    "der_collar_0_25": 35.8,
+    "der_no_collar": 43.97,
     "der_single_speaker": null,
     "der_single_speaker_tolerance": 2.0,
     "_der_single_speaker_status": "PLACEHOLDER — overlap-excluded (single-speaker-region) DER. Run the AMI regression test with --ignored, read the printed 'overlap-excluded DER', then set this value to activate the long-form numeric floor.",
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "silero_vad",
-      "embedder": "wespeaker_resnet34"
+      "embedder": "resnet34_int8"
     },
-    "_status": "operational — EN2002a single meeting, legacy pipeline (threshold=0.45). Tightened on crate 0.9.0 (master 9bbcdcd) after singleton-pruning improvements: collar 36.30 -> 34.62, no-collar 44.73 -> 42.90.",
+    "_status": "operational — EN2002a single meeting, legacy pipeline (threshold=0.45). Re-baselined for 0.17 INT8 balanced embedder (resnet34_int8): collar 35.80 / no-collar 43.97. Prior FP32 wespeaker_resnet34 was 34.62 / 42.90.",
     "_filled_by": "cargo nextest run --run-ignored only --test der_regression_test --features onnx,download der_regression_ami_test_single --no-capture"
   },
   "v2_e2e_smoke": {

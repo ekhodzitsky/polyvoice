@@ -20,8 +20,7 @@ fn pipeline() -> StreamingPipeline<EnergyVad, DummyExtractor> {
 fn pipeline_preset(preset: LatencyPreset) -> StreamingPipeline<EnergyVad, DummyExtractor> {
     let vad = EnergyVad::new(-40.0, 16000, 512);
     let extractor = DummyExtractor::new(256);
-    StreamingPipeline::with_latency_preset(vad, extractor, preset, default_vad_config())
-        .unwrap()
+    StreamingPipeline::with_latency_preset(vad, extractor, preset, default_vad_config()).unwrap()
 }
 
 /// Loud samples that should trigger speech detection.

@@ -33,10 +33,7 @@ impl InferenceRuntime for ZeroMock {
     fn output_names(&self) -> &[String] {
         &self.output_names
     }
-    fn run(
-        &mut self,
-        inputs: &[NamedTensor<'_>],
-    ) -> Result<Vec<InferenceTensor>, InferenceError> {
+    fn run(&mut self, inputs: &[NamedTensor<'_>]) -> Result<Vec<InferenceTensor>, InferenceError> {
         // Derive spkcache/fifo lengths from inputs so shapes stay consistent.
         let mut spk = 0usize;
         let mut fifo = 0usize;
@@ -193,10 +190,7 @@ impl InferenceRuntime for ScriptedMock {
     fn output_names(&self) -> &[String] {
         &self.output_names
     }
-    fn run(
-        &mut self,
-        inputs: &[NamedTensor<'_>],
-    ) -> Result<Vec<InferenceTensor>, InferenceError> {
+    fn run(&mut self, inputs: &[NamedTensor<'_>]) -> Result<Vec<InferenceTensor>, InferenceError> {
         self.runs += 1;
         if self.fail_on_run == Some(self.runs) {
             return Err(InferenceError::Run("scripted failure".into()));
