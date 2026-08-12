@@ -18,9 +18,9 @@ path**, and progressively shrink the production path toward the same.
 | `backend-tract` embedders (ResNet34 FP32/INT8, CAM++) | **Yes** (tract is pure Rust) | Numerical parity with ort within tol |
 | `backend-tract` + Silero ONNX | **No (load fail)** | Nested `If` / analyse |
 | `backend-tract` + powerset **shipping** ONNX | **No (load fail)** | nested `If` + `InstanceNormalization` |
-| `backend-tract` + **tract-friendly rewrite** (`export-powerset-tract.py`) | **Yes (load+run pipeline)** | concrete T (10 s); remaps → `powerset_fp32_tract.onnx`; batch/pool N=1 |
-| Tract full pipeline DER (smoke) | **No (accuracy)** | ~9× slower RTFx; **+35 pp DER** on 3-file Vox smoke — not product-ready. Notes: [`powerset-tract-rtf-der-2026-08-12`](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md) |
-| Production CLI / pipeline v2 (`onnx` + powerset + ResNet34) | **No** (default ort) | Opt-in pure-Rust load path only; default remains ort |
+| `backend-tract` + rewrite + **FP32** ResNet | **Yes (smoke DER)** | remaps powerset; builder forces `wespeaker_resnet34` (INT8 ResNet unsafe under tract); ~9× slower RTFx; 3-file Vox DER ≈ ort |
+| `backend-tract` + INT8 ResNet | **No (accuracy)** | ort↔tract cosine ~0; speakers collapse — **not used** when tract is selected |
+| Production CLI / pipeline v2 default | **No** (ort + INT8) | Opt-in: `POLYVOICE_INFERENCE_BACKEND=tract` + `backend-tract` + rewrite ONNX |
 
 CI freezes the pure-Rust **invariants** via:
 
@@ -44,14 +44,14 @@ A shipping profile where:
    `[1,1,160000]`. See
    [`benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md).
 2. ~~**Wire pipeline**~~ — **done** (opt-in remap + N=1).
-3. ~~**Release RTF + DER smoke**~~ — **measured** (2026-08-12, M1 Pro,
-   3 short Vox files): RTFx ~11 vs ~108 ort (~9× slower); DER₀ 42.9% vs
-   7.4% (**not** product-ready). Rewrite under **ort** is DER-identical to
-   product — bug is tract full-window numerics / clustering, not the graph
-   export. See
+3. ~~**Release RTF + DER smoke**~~ — **measured + root-caused** (2026-08-12):
+   powerset rewrite OK; INT8 ResNet under tract collapses embeddings.
+   With builder FP32 embedder override: RTFx ~12 vs ~108; DER₀ **7.22% vs
+   7.41%** on 3-file Vox smoke. Notes:
    [`powerset-tract-rtf-der-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md).
-4. **Fix tract accuracy** before any pure-Rust product claim: 10 s ort/tract
-   logit agreement; then larger DER. Until then default stays ort.
+4. **Larger DER + RTF gate** on tract (AMI/Vox subset) before any product
+   pure-Rust default. INT8 ResNet under tract remains out of scope until
+   a safe quant path exists.
 5. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
 6. **Earshot** re-tune if legacy pure path is needed (current Δ fails 0.3 pp gate).
 7. **Optional rten spike** only if fixed-T tract remains too slow/limited after accuracy work.

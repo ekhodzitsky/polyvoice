@@ -41,10 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Optional pure-Rust powerset path**: with `backend-tract` and
   `POLYVOICE_INFERENCE_BACKEND=tract`, `PowersetSegmenter` remaps shipping
   powerset → `powerset_fp32_tract.onnx` when present and forces batch/pool
-  N=1. ResNet34 already uses the same backend switch. Not product default.
-  RTF/DER smoke (3 short Vox files, M1 Pro): ~9× slower than ort; DER not
-  competitive yet — rewrite is fine under ort; tract full-window path needs
-  more work. Notes: `benchmarks/results/powerset-tract-rtf-der-2026-08-12/`.
+  N=1. Pipeline builder loads **FP32** `wespeaker_resnet34` under tract
+  (INT8 ResNet is numerically unsafe on tract: speaker collapse). Smoke
+  (3 short Vox, M1 Pro): ~9× slower RTFx; DER₀ ≈ ort (7.22% vs 7.41%).
+  Not product default. Notes:
+  `benchmarks/results/powerset-tract-rtf-der-2026-08-12/`.
 
 ## [0.17.0] - 2026-08-11
 

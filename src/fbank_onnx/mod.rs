@@ -324,4 +324,100 @@ mod tests {
         }
         InferenceBackend::force(None);
     }
+
+    #[cfg(feature = "backend-tract")]
+    fn cosine(a: &[f32], b: &[f32]) -> f64 {
+        let mut dot = 0.0f64;
+        let mut na = 0.0f64;
+        let mut nb = 0.0f64;
+        for (&x, &y) in a.iter().zip(b.iter()) {
+            dot += f64::from(x) * f64::from(y);
+            na += f64::from(x) * f64::from(x);
+            nb += f64::from(y) * f64::from(y);
+        }
+        dot / (na.sqrt() * nb.sqrt()).max(1e-12)
+    }
+
+    /// Ort vs tract embeddings on real segment-length audio (variable fbank T).
+    #[cfg(feature = "backend-tract")]
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn embed_ort_vs_tract_real_segments() {
+        let fp32 = resnet34_path();
+        let int8 = {
+            let p = Path::new("models/int8/resnet34_int8.onnx");
+            p.is_file().then(|| p.to_path_buf())
+        };
+        let wav = Path::new(
+            "benchmarks/results/powerset-tract-rtf-der-2026-08-12/smoke-vox3/audio/fuzfh.wav",
+        );
+        let wav = if wav.is_file() {
+            wav
+        } else {
+            Path::new("data/voxconverse-test/audio/fuzfh.wav")
+        };
+        if !wav.is_file() {
+            eprintln!("skip embed_ort_vs_tract: fuzfh missing");
+            return;
+        }
+        let (audio, sr) = crate::wav::read_wav(wav).expect("wav");
+        assert_eq!(sr, 16_000);
+        // Segments from tract_vs_ort_segment dump (seconds).
+        let ranges = [(0.0f32, 12.78f32), (13.01, 15.53), (15.69, 26.01)];
+        let clips: Vec<Vec<f32>> = ranges
+            .iter()
+            .map(|&(a, b)| {
+                let s = (a * 16_000.0) as usize;
+                let e = ((b * 16_000.0) as usize).min(audio.len());
+                audio[s..e].to_vec()
+            })
+            .collect();
+
+        for (label, model) in [("fp32", fp32), ("int8", int8)] {
+            let Some(path) = model else {
+                eprintln!("skip {label}: model missing");
+                continue;
+            };
+            InferenceBackend::force(Some(InferenceBackend::Ort));
+            let ort_ext =
+                FbankOnnxExtractor::new(&path, RESNET34_DIM, 1, ExecutionProvider::Cpu).unwrap();
+            let ort_embs: Vec<_> = clips.iter().map(|c| ort_ext.embed(c).unwrap()).collect();
+            InferenceBackend::force(None);
+
+            InferenceBackend::force(Some(InferenceBackend::Tract));
+            let tract_ext =
+                FbankOnnxExtractor::new(&path, RESNET34_DIM, 1, ExecutionProvider::Cpu).unwrap();
+            let tract_embs: Vec<_> = clips.iter().map(|c| tract_ext.embed(c).unwrap()).collect();
+            InferenceBackend::force(None);
+
+            for i in 0..clips.len() {
+                let c = cosine(&ort_embs[i], &tract_embs[i]);
+                eprintln!("embed {label} seg{i}: ort↔tract cosine={c:.6} len={}", clips[i].len());
+                if label == "fp32" {
+                    assert!(
+                        c > 0.99,
+                        "FP32 ResNet ort↔tract cosine must be ~1, got {c} on seg{i}"
+                    );
+                }
+            }
+            // Pairwise speaker structure: local 1 vs 2 should stay separable.
+            let o12 = cosine(&ort_embs[0], &ort_embs[1]);
+            let t12 = cosine(&tract_embs[0], &tract_embs[1]);
+            let o02 = cosine(&ort_embs[0], &ort_embs[2]);
+            let t02 = cosine(&tract_embs[0], &tract_embs[2]);
+            eprintln!(
+                "embed {label} pairwise: ort 0↔1={o12:.4} 0↔2={o02:.4} | tract 0↔1={t12:.4} 0↔2={t02:.4}"
+            );
+            if label == "int8" {
+                // Documented: dynamic INT8 under tract collapses speaker space
+                // (pairwise cosines ~0.94+) while ort keeps them separable.
+                // Pipeline v2 therefore selects FP32 wespeaker_resnet34 on tract.
+                assert!(
+                    t12 > 0.8 && t02 > 0.8,
+                    "expected INT8 tract pairwise collapse (got {t12}, {t02}); \
+                     if this fails, INT8 tract may have become safe"
+                );
+            }
+        }
+    }
 }

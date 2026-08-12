@@ -336,6 +336,196 @@ fn powerset_fp32_tract_friendly_load_and_parity_if_present() {
     eprintln!("powerset_fp32_tract: 1s PARITY OK ort={ort_ms:.1}ms tract={tract_ms:.1}ms");
 }
 
+/// Diagnostic: product 10 s window ort vs tract on the rewrite graph.
+///
+/// Does **not** hard-fail the suite: reports max-abs / argmax agreement so we
+/// can track whether full-window drift explains the DER collapse. Run with
+/// `--nocapture`.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn powerset_fp32_tract_10s_parity_report() {
+    let Some(path) = model_path("powerset_fp32_tract.onnx") else {
+        eprintln!("skip powerset 10s report: missing rewrite");
+        return;
+    };
+    let t = 160_000usize;
+    // Deterministic non-constant signal (constant 0.01 was 1 s parity input).
+    let mut wave = vec![0.0f32; t];
+    for (i, s) in wave.iter_mut().enumerate() {
+        let x = i as f32 / 16_000.0;
+        *s = (2.0 * std::f32::consts::PI * 220.0 * x).sin() * 0.2
+            + (2.0 * std::f32::consts::PI * 440.0 * x).sin() * 0.1;
+    }
+    let input = InferenceTensor::f32(vec![1, 1, t], wave);
+
+    let mut ort = try_open(&path, InferenceBackend::Ort).expect("ort load");
+    let mut tract = try_open(&path, InferenceBackend::Tract).expect("tract load");
+    eprintln!(
+        "powerset 10s inputs: ort={:?} tract={:?}",
+        ort.input_names(),
+        tract.input_names()
+    );
+
+    let ort_out = ort.run_ordered(&[&input]).expect("ort run");
+    let tract_out = tract.run_ordered(&[&input]).expect("tract run");
+    assert_eq!(ort_out[0].shape, tract_out[0].shape, "shape");
+    let o = ort_out[0].as_f32_slice().unwrap();
+    let tr = tract_out[0].as_f32_slice().unwrap();
+    let (max_abs, max_rel) = max_abs_rel(o, tr);
+
+    // Logits layout [1, F, 7] or [F, 7] — last dim is powerset classes.
+    let shape = &ort_out[0].shape;
+    let n_classes = *shape.last().unwrap_or(&7);
+    assert_eq!(n_classes, 7, "expected 7 powerset classes, shape={shape:?}");
+    let n_frames = o.len() / n_classes;
+    let mut argmax_agree = 0usize;
+    let mut max_frame_abs = 0.0f32;
+    for f in 0..n_frames {
+        let base = f * n_classes;
+        let o_row = &o[base..base + n_classes];
+        let t_row = &tr[base..base + n_classes];
+        let o_arg = o_row
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .map(|(i, _)| i)
+            .unwrap();
+        let t_arg = t_row
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .map(|(i, _)| i)
+            .unwrap();
+        if o_arg == t_arg {
+            argmax_agree += 1;
+        }
+        for c in 0..n_classes {
+            max_frame_abs = max_frame_abs.max((o_row[c] - t_row[c]).abs());
+        }
+    }
+    let agree_pct = 100.0 * argmax_agree as f64 / n_frames.max(1) as f64;
+    eprintln!(
+        "powerset 10s ort/tract: shape={shape:?} max_abs={max_abs:.6e} max_rel={max_rel:.6e} \
+         argmax_agree={argmax_agree}/{n_frames} ({agree_pct:.1}%) max_frame_abs={max_frame_abs:.6e}"
+    );
+    // Soft signal: product DER needs high argmax agreement. Keep as report unless
+    // both sides are garbage (non-finite already checked by run).
+    assert!(o.iter().all(|v| v.is_finite()) && tr.iter().all(|v| v.is_finite()));
+}
+
+/// Real-speech 10 s window (first window of a short Vox file if present).
+#[test]
+#[cfg_attr(miri, ignore)]
+fn powerset_fp32_tract_10s_real_audio_report() {
+    let Some(path) = model_path("powerset_fp32_tract.onnx") else {
+        eprintln!("skip real-audio powerset: missing rewrite");
+        return;
+    };
+    // Prefer committed smoke path, then full corpus, then skip.
+    let wav_candidates = [
+        "benchmarks/results/powerset-tract-rtf-der-2026-08-12/smoke-vox3/audio/fuzfh.wav",
+        "data/voxconverse-test/audio/fuzfh.wav",
+    ];
+    let mut samples: Option<Vec<f32>> = None;
+    for w in wav_candidates {
+        let p = Path::new(w);
+        if !p.is_file() {
+            continue;
+        }
+        match crate::wav::read_wav(p) {
+            Ok((s, sr)) => {
+                assert_eq!(sr, 16_000, "expected 16 kHz, got {sr}");
+                let n = s.len().min(160_000);
+                let mut buf = vec![0.0f32; 160_000];
+                buf[..n].copy_from_slice(&s[..n]);
+                samples = Some(buf);
+                eprintln!("real-audio window from {w} (padded to 10s if short)");
+                break;
+            }
+            Err(e) => eprintln!("read_wav {w}: {e}"),
+        }
+    }
+    let Some(wave) = samples else {
+        eprintln!("skip real-audio powerset: no fuzfh.wav");
+        return;
+    };
+    let input = InferenceTensor::f32(vec![1, 1, 160_000], wave);
+    let mut ort = try_open(&path, InferenceBackend::Ort).expect("ort");
+    let mut tract = try_open(&path, InferenceBackend::Tract).expect("tract");
+    let o = ort.run_ordered(&[&input]).expect("ort")[0].clone();
+    let t = tract.run_ordered(&[&input]).expect("tract")[0].clone();
+    let os = o.as_f32_slice().unwrap();
+    let ts = t.as_f32_slice().unwrap();
+    let (max_abs, max_rel) = max_abs_rel(os, ts);
+    let n_classes = 7usize;
+    let n_frames = os.len() / n_classes;
+    let mut argmax_agree = 0usize;
+    let mut hist_o = [0u32; 7];
+    let mut hist_t = [0u32; 7];
+    for f in 0..n_frames {
+        let base = f * n_classes;
+        let o_arg = (0..n_classes)
+            .max_by(|&a, &b| os[base + a].partial_cmp(&os[base + b]).unwrap())
+            .unwrap();
+        let t_arg = (0..n_classes)
+            .max_by(|&a, &b| ts[base + a].partial_cmp(&ts[base + b]).unwrap())
+            .unwrap();
+        hist_o[o_arg] += 1;
+        hist_t[t_arg] += 1;
+        if o_arg == t_arg {
+            argmax_agree += 1;
+        }
+    }
+    let agree_pct = 100.0 * argmax_agree as f64 / n_frames.max(1) as f64;
+    eprintln!(
+        "powerset 10s REAL ort/tract: max_abs={max_abs:.6e} max_rel={max_rel:.6e} \
+         argmax_agree={argmax_agree}/{n_frames} ({agree_pct:.1}%) \
+         hist_ort={hist_o:?} hist_tract={hist_t:?}"
+    );
+}
+
+/// ResNet34 FP32 embedding cosine: ort vs tract on identical fbank-like input.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn resnet34_fp32_tract_cosine_report() {
+    let Some(path) = model_path("wespeaker_resnet34.onnx") else {
+        eprintln!("skip resnet cosine: missing wespeaker_resnet34.onnx");
+        return;
+    };
+    let time = 200usize;
+    let n_mels = 80usize;
+    let mut feats = vec![0.0f32; time * n_mels];
+    for (i, v) in feats.iter_mut().enumerate() {
+        *v = ((i % 97) as f32 * 0.01).sin() * 0.5;
+    }
+    let input = InferenceTensor::f32(vec![1, time, n_mels], feats);
+    let mut ort = try_open(&path, InferenceBackend::Ort).expect("ort");
+    let mut tract = try_open(&path, InferenceBackend::Tract).expect("tract");
+    let o = ort.run_ordered(&[&input]).expect("ort")[0]
+        .as_f32_slice()
+        .unwrap()
+        .to_vec();
+    let t = tract.run_ordered(&[&input]).expect("tract")[0]
+        .as_f32_slice()
+        .unwrap()
+        .to_vec();
+    let (max_abs, max_rel) = max_abs_rel(&o, &t);
+    let mut dot = 0.0f64;
+    let mut no = 0.0f64;
+    let mut nt = 0.0f64;
+    for (&a, &b) in o.iter().zip(t.iter()) {
+        dot += f64::from(a) * f64::from(b);
+        no += f64::from(a) * f64::from(a);
+        nt += f64::from(b) * f64::from(b);
+    }
+    let cos = dot / (no.sqrt() * nt.sqrt()).max(1e-12);
+    eprintln!(
+        "resnet34_fp32 ort/tract: dim={} max_abs={max_abs:.6e} max_rel={max_rel:.6e} cosine={cos:.8}",
+        o.len()
+    );
+    assert!(cos > 0.99, "FP32 ResNet ort/tract cosine should be high, got {cos}");
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn tract_rejects_garbage_before_parse() {

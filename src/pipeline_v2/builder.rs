@@ -228,6 +228,22 @@ impl PipelineBuilder {
                 // powerset micro-batching.
                 // Tract: powerset rewrite binds concrete [1,1,T]; PowersetSegmenter
                 // also clamps pool/batch to 1 when POLYVOICE_INFERENCE_BACKEND=tract.
+                // INT8 ResNet34 is not numerically safe under tract (ort↔tract
+                // cosine ~0 on real segments; pairwise speakers collapse) — use
+                // FP32 wespeaker_resnet34 when the pure-Rust backend is active.
+                let use_tract = {
+                    #[cfg(feature = "backend-tract")]
+                    {
+                        matches!(
+                            crate::onnx::InferenceBackend::resolve(),
+                            crate::onnx::InferenceBackend::Tract
+                        )
+                    }
+                    #[cfg(not(feature = "backend-tract"))]
+                    {
+                        false
+                    }
+                };
                 let pool = if matches!(ep, crate::onnx::ExecutionProvider::CoreMl) {
                     1
                 } else {
@@ -250,12 +266,30 @@ impl PipelineBuilder {
                         source: Box::new(e),
                     })?,
                 );
-                let embedder: Box<dyn Embedder> = Box::new(
-                    crate::embedder::ResNet34Adapter::new(&profile_models.embedder_path, pool, ep)
-                        .map_err(|e| ConfigError::Load {
-                            model_id: "resnet34",
+                let embedder_path = if use_tract {
+                    tracing::info!(
+                        "tract backend: loading FP32 wespeaker_resnet34 (INT8 unsafe under tract)"
+                    );
+                    registry.ensure("wespeaker_resnet34").map_err(|e| {
+                        ConfigError::Load {
+                            model_id: "wespeaker_resnet34",
                             source: Box::new(e),
-                        })?,
+                        }
+                    })?
+                } else {
+                    profile_models.embedder_path
+                };
+                let embedder: Box<dyn Embedder> = Box::new(
+                    crate::embedder::ResNet34Adapter::new(&embedder_path, pool, ep).map_err(
+                        |e| ConfigError::Load {
+                            model_id: if use_tract {
+                                "wespeaker_resnet34"
+                            } else {
+                                "resnet34"
+                            },
+                            source: Box::new(e),
+                        },
+                    )?,
                 );
                 let clusterer: Box<dyn Clusterer> =
                     build_profile_clusterer(&self.config, &registry)?;

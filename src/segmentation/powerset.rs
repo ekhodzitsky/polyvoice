@@ -831,6 +831,94 @@ mod tests {
         assert_eq!(resolved, rewrite);
     }
 
+    /// Ort vs tract: segment counts / local speakers on a real short file.
+    /// Explains whether the DER collapse is in segmentation vs later stages.
+    #[cfg(feature = "backend-tract")]
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn tract_vs_ort_segment_real_short_file() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let wav = root.join(
+            "benchmarks/results/powerset-tract-rtf-der-2026-08-12/smoke-vox3/audio/fuzfh.wav",
+        );
+        let wav = if wav.is_file() {
+            wav
+        } else {
+            root.join("data/voxconverse-test/audio/fuzfh.wav")
+        };
+        if !wav.is_file() {
+            eprintln!("skip tract_vs_ort_segment: fuzfh.wav missing");
+            return;
+        }
+        let rewrite = root.join("models/powerset_fp32_tract.onnx");
+        if !rewrite.is_file() {
+            eprintln!("skip: powerset_fp32_tract.onnx missing");
+            return;
+        }
+        let (audio, sr) = crate::wav::read_wav(&wav).expect("read wav");
+        assert_eq!(sr, 16_000);
+
+        let cfg = PowersetConfig {
+            batch_size: 1,
+            pool_size: 1,
+            ..Default::default()
+        };
+
+        crate::onnx::InferenceBackend::force(Some(crate::onnx::InferenceBackend::Ort));
+        let ort_segs = PowersetSegmenter::with_config(
+            &rewrite,
+            cfg.clone(),
+            crate::onnx::ExecutionProvider::Cpu,
+        )
+        .expect("ort load")
+        .segment(&audio)
+        .expect("ort segment");
+        crate::onnx::InferenceBackend::force(None);
+
+        crate::onnx::InferenceBackend::force(Some(crate::onnx::InferenceBackend::Tract));
+        let tract_segs = PowersetSegmenter::with_config(
+            &rewrite,
+            cfg,
+            crate::onnx::ExecutionProvider::Cpu,
+        )
+        .expect("tract load")
+        .segment(&audio)
+        .expect("tract segment");
+        crate::onnx::InferenceBackend::force(None);
+
+        let summarize = |name: &str, segs: &[RawSegment]| {
+            let mut locals = [0u32; 4];
+            for s in segs {
+                let i = s.local_speaker_idx as usize;
+                if i < locals.len() {
+                    locals[i] += 1;
+                }
+            }
+            eprintln!(
+                "{name}: n_segs={} locals={locals:?} first3={:?}",
+                segs.len(),
+                segs.iter()
+                    .take(3)
+                    .map(|s| (s.time.start, s.time.end, s.local_speaker_idx, s.is_overlap))
+                    .collect::<Vec<_>>()
+            );
+        };
+        summarize("ort", &ort_segs);
+        summarize("tract", &tract_segs);
+
+        // Soft report: lengths should be close if logits match.
+        let n_o = ort_segs.len() as i64;
+        let n_t = tract_segs.len() as i64;
+        eprintln!(
+            "tract_vs_ort_segment: Δn_segs={} (ort={n_o} tract={n_t})",
+            n_t - n_o
+        );
+        assert!(
+            (n_o - n_t).unsigned_abs() <= 2 || n_o.max(n_t) <= 1,
+            "segment count diverged too much: ort={n_o} tract={n_t}"
+        );
+    }
+
     #[cfg(feature = "backend-tract")]
     #[test]
     #[cfg_attr(miri, ignore)]
