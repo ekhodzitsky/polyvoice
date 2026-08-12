@@ -270,12 +270,12 @@ impl PipelineBuilder {
                     tracing::info!(
                         "tract backend: loading FP32 wespeaker_resnet34 (INT8 unsafe under tract)"
                     );
-                    registry.ensure("wespeaker_resnet34").map_err(|e| {
-                        ConfigError::Load {
+                    registry
+                        .ensure("wespeaker_resnet34")
+                        .map_err(|e| ConfigError::Load {
                             model_id: "wespeaker_resnet34",
                             source: Box::new(e),
-                        }
-                    })?
+                        })?
                 } else {
                     profile_models.embedder_path
                 };

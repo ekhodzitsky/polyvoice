@@ -108,14 +108,13 @@ fn der_baseline_linux_cpu_matches_committed_artifacts() {
         .join("benchmarks/results/linux-cpu-der-2026-08-11");
 
     let vox_art: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(root.join("voxconverse-test.json"))
-            .expect("linux vox artifact"),
+        &std::fs::read_to_string(root.join("voxconverse-test.json")).expect("linux vox artifact"),
     )
-    .unwrap();
+    .expect("parse linux vox artifact JSON");
     let ami_art: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(root.join("ami-test.json")).expect("linux ami artifact"),
     )
-    .unwrap();
+    .expect("parse linux ami artifact JSON");
 
     let vox_bl = parsed
         .voxconverse_test_linux_cpu
@@ -125,8 +124,12 @@ fn der_baseline_linux_cpu_matches_committed_artifacts() {
         .ami_test_linux_cpu
         .der_no_collar_micro
         .expect("baseline");
-    let vox_m = vox_art["der_no_collar_micro"].as_f64().unwrap();
-    let ami_m = ami_art["der_no_collar_micro"].as_f64().unwrap();
+    let vox_m = vox_art["der_no_collar_micro"]
+        .as_f64()
+        .expect("vox der_no_collar_micro f64");
+    let ami_m = ami_art["der_no_collar_micro"]
+        .as_f64()
+        .expect("ami der_no_collar_micro f64");
     assert!(
         (vox_m - vox_bl).abs() < 0.02,
         "vox artifact {vox_m} vs baseline {vox_bl}"

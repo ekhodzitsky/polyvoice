@@ -392,7 +392,10 @@ mod tests {
 
             for i in 0..clips.len() {
                 let c = cosine(&ort_embs[i], &tract_embs[i]);
-                eprintln!("embed {label} seg{i}: ort↔tract cosine={c:.6} len={}", clips[i].len());
+                eprintln!(
+                    "embed {label} seg{i}: ort↔tract cosine={c:.6} len={}",
+                    clips[i].len()
+                );
                 if label == "fp32" {
                     assert!(
                         c > 0.99,

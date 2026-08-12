@@ -271,8 +271,9 @@ fn resnet34_int8_tract_load_and_run_if_present() {
         eprintln!("skip resnet34_int8 tract: models/int8/resnet34_int8.onnx missing");
         return;
     };
-    let mut tract = try_open(&path, InferenceBackend::Tract)
-        .unwrap_or_else(|e| panic!("resnet34_int8 must load on tract (zero-deps embedder path): {e}"));
+    let mut tract = try_open(&path, InferenceBackend::Tract).unwrap_or_else(|e| {
+        panic!("resnet34_int8 must load on tract (zero-deps embedder path): {e}")
+    });
     let time = 200usize;
     let n_mels = 80usize;
     let input = InferenceTensor::f32(vec![1, time, n_mels], vec![0.05f32; time * n_mels]);
@@ -330,9 +331,13 @@ fn powerset_fp32_tract_friendly_load_and_parity_if_present() {
     let t_short = 16_000usize;
     let input_short = InferenceTensor::f32(vec![1, 1, t_short], vec![0.01f32; t_short]);
     // Re-open: concrete plan may be for T=160k; short window may need T=16k plan.
-    let (ort_ms, tract_ms) =
-        compare_ordered("powerset_fp32_tract_1s", &path, &[input_short], Tol::DEFAULT)
-            .unwrap_or_else(|e| panic!("powerset_fp32_tract 1s ort/tract parity failed: {e}"));
+    let (ort_ms, tract_ms) = compare_ordered(
+        "powerset_fp32_tract_1s",
+        &path,
+        &[input_short],
+        Tol::DEFAULT,
+    )
+    .unwrap_or_else(|e| panic!("powerset_fp32_tract 1s ort/tract parity failed: {e}"));
     eprintln!("powerset_fp32_tract: 1s PARITY OK ort={ort_ms:.1}ms tract={tract_ms:.1}ms");
 }
 
@@ -523,7 +528,10 @@ fn resnet34_fp32_tract_cosine_report() {
         "resnet34_fp32 ort/tract: dim={} max_abs={max_abs:.6e} max_rel={max_rel:.6e} cosine={cos:.8}",
         o.len()
     );
-    assert!(cos > 0.99, "FP32 ResNet ort/tract cosine should be high, got {cos}");
+    assert!(
+        cos > 0.99,
+        "FP32 ResNet ort/tract cosine should be high, got {cos}"
+    );
 }
 
 #[test]

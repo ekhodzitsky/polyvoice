@@ -272,8 +272,7 @@ impl PowersetSegmenter {
     ) -> Result<Self, SegmentationError> {
         let path = resolve_powerset_path_for_backend(model_path.as_ref());
         let is_tract = inference_backend_is_tract();
-        let force_batch_one =
-            is_tract || matches!(ep, crate::onnx::ExecutionProvider::CoreMl);
+        let force_batch_one = is_tract || matches!(ep, crate::onnx::ExecutionProvider::CoreMl);
         let mut pool_size = crate::onnx::resolve_session_pool_size(config.pool_size);
         // CoreML: one session avoids multi-session EP races that surface later
         // as embedder "dynamically resizing for sequence length" failures on
@@ -876,14 +875,11 @@ mod tests {
         crate::onnx::InferenceBackend::force(None);
 
         crate::onnx::InferenceBackend::force(Some(crate::onnx::InferenceBackend::Tract));
-        let tract_segs = PowersetSegmenter::with_config(
-            &rewrite,
-            cfg,
-            crate::onnx::ExecutionProvider::Cpu,
-        )
-        .expect("tract load")
-        .segment(&audio)
-        .expect("tract segment");
+        let tract_segs =
+            PowersetSegmenter::with_config(&rewrite, cfg, crate::onnx::ExecutionProvider::Cpu)
+                .expect("tract load")
+                .segment(&audio)
+                .expect("tract segment");
         crate::onnx::InferenceBackend::force(None);
 
         let summarize = |name: &str, segs: &[RawSegment]| {
@@ -930,7 +926,9 @@ mod tests {
         let shipping = root.join("powerset_fp32.onnx");
         let rewrite = root.join("powerset_fp32_tract.onnx");
         if !rewrite.is_file() {
-            eprintln!("skip: models/powerset_fp32_tract.onnx missing — run export-powerset-tract.py");
+            eprintln!(
+                "skip: models/powerset_fp32_tract.onnx missing — run export-powerset-tract.py"
+            );
             return;
         }
         let model = if shipping.is_file() {
