@@ -226,6 +226,8 @@ impl PipelineBuilder {
                 // have been observed to trip "dynamically resizing for sequence
                 // length" failures on long corpora (embedder), especially with
                 // powerset micro-batching.
+                // Tract: powerset rewrite binds concrete [1,1,T]; PowersetSegmenter
+                // also clamps pool/batch to 1 when POLYVOICE_INFERENCE_BACKEND=tract.
                 let pool = if matches!(ep, crate::onnx::ExecutionProvider::CoreMl) {
                     1
                 } else {
@@ -235,6 +237,7 @@ impl PipelineBuilder {
                 seg_cfg.aggregation.binarization = self.config.binarization;
                 // Same session-pool budget as the embedder so one config knob
                 // (and POLYVOICE_SESSION_POOL_SIZE) controls both hot stages.
+                // (Tract remaps segmenter path to powerset_fp32_tract.onnx if present.)
                 seg_cfg.pool_size = pool;
                 let segmenter: Box<dyn Segmenter> = Box::new(
                     crate::segmentation::PowersetSegmenter::with_config(

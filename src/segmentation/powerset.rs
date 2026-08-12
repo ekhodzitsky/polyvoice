@@ -170,10 +170,75 @@ pub struct PowersetSegmenter {
     input_name: String,
     config: PowersetConfig,
     model_path: PathBuf,
-    /// Session EP. CoreML forces micro-batch N=1: N=8 is fine for short
-    /// runs but long VoxConverse passes hit embedder CoreML sequence-resize
-    /// failures mid-corpus.
-    execution_provider: crate::onnx::ExecutionProvider,
+    /// When true, micro-batch N is forced to 1 (CoreML reliability on long
+    /// corpora, or pure-Rust tract concrete `[1,1,T]` binding from the
+    /// tract-friendly rewrite).
+    force_batch_one: bool,
+}
+
+/// True when the active inference backend is pure-Rust tract.
+fn inference_backend_is_tract() -> bool {
+    #[cfg(feature = "backend-tract")]
+    {
+        matches!(
+            crate::onnx::InferenceBackend::resolve(),
+            crate::onnx::InferenceBackend::Tract
+        )
+    }
+    #[cfg(not(feature = "backend-tract"))]
+    {
+        false
+    }
+}
+
+/// Prefer a tract-friendly powerset rewrite next to the requested path.
+///
+/// Shipping powerset graphs (nested `If` + `InstanceNormalization`) do not
+/// load under tract. `scripts/export-powerset-tract.py` writes
+/// `powerset_fp32_tract.onnx`; when `POLYVOICE_INFERENCE_BACKEND=tract` (or
+/// [`crate::onnx::InferenceBackend::force`]), construction remaps a powerset
+/// path to that sibling if present. Returns the original path when no rewrite
+/// is found (load will fail with a hint).
+fn resolve_powerset_path_for_backend(requested: &Path) -> PathBuf {
+    if !inference_backend_is_tract() {
+        return requested.to_path_buf();
+    }
+    let Some(name) = requested.file_name().and_then(|s| s.to_str()) else {
+        return requested.to_path_buf();
+    };
+    if !name.starts_with("powerset") || !name.ends_with(".onnx") {
+        return requested.to_path_buf();
+    }
+    // Already a rewrite (or user-supplied tract graph).
+    if name.contains("tract") {
+        return requested.to_path_buf();
+    }
+    if let Some(parent) = requested.parent() {
+        let sibling = parent.join("powerset_fp32_tract.onnx");
+        if sibling.is_file() {
+            tracing::info!(
+                requested = %requested.display(),
+                rewrite = %sibling.display(),
+                "using tract-friendly powerset rewrite"
+            );
+            return sibling;
+        }
+        // Registry INT8 lives under …/int8/; rewrite is next to models root.
+        if parent.file_name().and_then(|s| s.to_str()) == Some("int8")
+            && let Some(root) = parent.parent()
+        {
+            let candidate = root.join("powerset_fp32_tract.onnx");
+            if candidate.is_file() {
+                tracing::info!(
+                    requested = %requested.display(),
+                    rewrite = %candidate.display(),
+                    "using tract-friendly powerset rewrite (parent of int8/)"
+                );
+                return candidate;
+            }
+        }
+    }
+    requested.to_path_buf()
 }
 
 impl PowersetSegmenter {
@@ -194,17 +259,27 @@ impl PowersetSegmenter {
     /// `pub fn with_config( model_path: impl AsRef<Path>, config: PowersetConfig, ep: ExecutionProvider, ) -> Result<Self, SegmentationError>`
     /// { true }
     /// Load with explicit configuration and execution provider.
+    ///
+    /// When the active inference backend is tract (`POLYVOICE_INFERENCE_BACKEND=tract`
+    /// or [`crate::onnx::InferenceBackend::force`]), this remaps a shipping
+    /// powerset path to `powerset_fp32_tract.onnx` if present beside it, and
+    /// forces session pool size and micro-batch N to 1 (tract binds concrete
+    /// `[1,1,T]` for the rewrite; product window is 10 s @ 16 kHz = 160000).
     pub fn with_config(
         model_path: impl AsRef<Path>,
         config: PowersetConfig,
         ep: crate::onnx::ExecutionProvider,
     ) -> Result<Self, SegmentationError> {
-        let path = model_path.as_ref().to_path_buf();
+        let path = resolve_powerset_path_for_backend(model_path.as_ref());
+        let is_tract = inference_backend_is_tract();
+        let force_batch_one =
+            is_tract || matches!(ep, crate::onnx::ExecutionProvider::CoreMl);
         let mut pool_size = crate::onnx::resolve_session_pool_size(config.pool_size);
         // CoreML: one session avoids multi-session EP races that surface later
         // as embedder "dynamically resizing for sequence length" failures on
         // long corpora when powerset also micro-batches.
-        if matches!(ep, crate::onnx::ExecutionProvider::CoreMl) {
+        // Tract: rewrite is optimized for N=1 (concrete batch dim); one plan.
+        if force_batch_one {
             pool_size = 1;
         }
         // Each pool session gets a fair share of the machine's cores so a
@@ -216,9 +291,21 @@ impl PowersetSegmenter {
         for _ in 0..pool_size {
             let session =
                 crate::onnx::build_session_with_ep(&path, ep, Some(intra)).map_err(|e| {
+                    let mut detail = e.to_string();
+                    let path_is_tract = path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|n| n.contains("tract"));
+                    if is_tract && !path_is_tract {
+                        detail.push_str(
+                            "; pure-Rust tract needs a rewrite graph — run \
+                             `python3 scripts/export-powerset-tract.py` to write \
+                             models/powerset_fp32_tract.onnx next to the shipping model",
+                        );
+                    }
                     SegmentationError::ModelIo {
                         path: path.clone(),
-                        detail: e.to_string(),
+                        detail,
                     }
                 })?;
             if input_name.is_none() {
@@ -237,22 +324,17 @@ impl PowersetSegmenter {
             input_name,
             config,
             model_path: path,
-            execution_provider: ep,
+            force_batch_one,
         })
     }
 
     /// Effective micro-batch size (env / config; default 8).
-    /// CoreML is clamped to 1 for long-corpus reliability.
+    /// CoreML and pure-Rust tract force N=1.
     fn effective_batch_size(&self) -> usize {
-        let n = resolve_batch_size(self.config.batch_size);
-        if matches!(
-            self.execution_provider,
-            crate::onnx::ExecutionProvider::CoreMl
-        ) {
-            1
-        } else {
-            n
+        if self.force_batch_one {
+            return 1;
         }
+        resolve_batch_size(self.config.batch_size)
     }
 
     /// { true }
@@ -724,6 +806,83 @@ mod tests {
     fn resolve_batch_size_is_at_least_one() {
         assert!(resolve_batch_size(0) >= 1);
         assert!(resolve_batch_size(8) >= 1);
+    }
+
+    #[test]
+    fn resolve_powerset_path_leaves_non_powerset_untouched() {
+        let p = PathBuf::from("/tmp/not_a_powerset.onnx");
+        assert_eq!(resolve_powerset_path_for_backend(&p), p);
+    }
+
+    #[cfg(feature = "backend-tract")]
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn resolve_powerset_path_remaps_to_tract_rewrite_when_present() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
+        let shipping = root.join("powerset_fp32.onnx");
+        let rewrite = root.join("powerset_fp32_tract.onnx");
+        if !shipping.is_file() || !rewrite.is_file() {
+            eprintln!("skip: powerset_fp32 / powerset_fp32_tract missing");
+            return;
+        }
+        crate::onnx::InferenceBackend::force(Some(crate::onnx::InferenceBackend::Tract));
+        let resolved = resolve_powerset_path_for_backend(&shipping);
+        crate::onnx::InferenceBackend::force(None);
+        assert_eq!(resolved, rewrite);
+    }
+
+    #[cfg(feature = "backend-tract")]
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn tract_backend_segments_product_window_with_rewrite() {
+        // Pure-Rust path: force tract, load via shipping path (remaps to rewrite),
+        // run product 10 s geometry on >10 s of audio. Windows are zero-padded
+        // to T=160000 which matches the concrete fact used at load time.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
+        let shipping = root.join("powerset_fp32.onnx");
+        let rewrite = root.join("powerset_fp32_tract.onnx");
+        if !rewrite.is_file() {
+            eprintln!("skip: models/powerset_fp32_tract.onnx missing — run export-powerset-tract.py");
+            return;
+        }
+        let model = if shipping.is_file() {
+            shipping
+        } else {
+            rewrite
+        };
+
+        crate::onnx::InferenceBackend::force(Some(crate::onnx::InferenceBackend::Tract));
+        let result = (|| {
+            let seg = PowersetSegmenter::with_config(
+                &model,
+                PowersetConfig {
+                    // Product geometry; batch/pool forced to 1 for tract.
+                    batch_size: 8,
+                    pool_size: 4,
+                    ..Default::default()
+                },
+                crate::onnx::ExecutionProvider::Cpu,
+            )?;
+            assert!(
+                seg.model_path()
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|n| n.contains("tract")),
+                "expected tract rewrite path, got {:?}",
+                seg.model_path()
+            );
+            assert!(seg.force_batch_one);
+            assert_eq!(seg.effective_batch_size(), 1);
+            // 12 s → one full window + partial hop coverage.
+            let audio = sine_audio(12.0, 16_000);
+            seg.segment(&audio)
+        })();
+        crate::onnx::InferenceBackend::force(None);
+        let segments = result.expect("tract powerset segment");
+        for s in &segments {
+            assert!(s.local_speaker_idx < 3);
+            assert!((0.0..=1.0).contains(&s.confidence.get()));
+        }
     }
 
     /// Batched and sequential runs share shape and produce finite logits.

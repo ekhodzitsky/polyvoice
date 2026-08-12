@@ -36,8 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Powerset tract-friendly rewrite** (`scripts/export-powerset-tract.py`):
   inline identical-branch `If`, expand `InstanceNormalization`; pure-Rust
   tract **loads and runs** product 10 s windows (concrete T) with 1 s
-  ort/tract parity. Not wired into the product pipeline yet. Notes:
+  ort/tract parity. Notes:
   `benchmarks/results/powerset-tract-export-2026-08-12/`.
+- **Optional pure-Rust powerset path**: with `backend-tract` and
+  `POLYVOICE_INFERENCE_BACKEND=tract`, `PowersetSegmenter` remaps shipping
+  powerset → `powerset_fp32_tract.onnx` when present and forces batch/pool
+  N=1. ResNet34 already uses the same backend switch. Not product default.
 
 ## [0.17.0] - 2026-08-11
 

@@ -18,8 +18,8 @@ path**, and progressively shrink the production path toward the same.
 | `backend-tract` embedders (ResNet34 FP32/INT8, CAM++) | **Yes** (tract is pure Rust) | Numerical parity with ort within tol |
 | `backend-tract` + Silero ONNX | **No (load fail)** | Nested `If` / analyse |
 | `backend-tract` + powerset **shipping** ONNX | **No (load fail)** | nested `If` + `InstanceNormalization` |
-| `backend-tract` + **tract-friendly rewrite** (`export-powerset-tract.py`) | **Yes (load+run)** | concrete T (10 s / 1 s); 1 s tight ort/tract parity; **not** pipeline-wired yet |
-| Production CLI / pipeline v2 (`onnx` + powerset + ResNet34) | **No** | Downloads ORT dylib via `ort` |
+| `backend-tract` + **tract-friendly rewrite** (`export-powerset-tract.py`) | **Yes (pipeline path)** | concrete T (10 s); remaps shipping powerset → `powerset_fp32_tract.onnx`; batch/pool N=1; ResNet34 already tract-capable |
+| Production CLI / pipeline v2 (`onnx` + powerset + ResNet34) | **No** (default ort) | Opt-in pure-Rust: `POLYVOICE_INFERENCE_BACKEND=tract` + rewrite model + `backend-tract` feature |
 
 CI freezes the pure-Rust **invariants** via:
 
@@ -38,12 +38,15 @@ A shipping profile where:
 
 ## Unblockers (ordered)
 
-1. ~~**Powerset ONNX re-export**~~ — **spike done** (`scripts/export-powerset-tract.py`):
+1. ~~**Powerset ONNX re-export**~~ — **done** (`scripts/export-powerset-tract.py`):
    inline identical `If`, expand InstanceNorm; tract loads with concrete
    `[1,1,160000]`. See
    [`benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md).
-2. **Wire pipeline** to optional tract powerset (fixed window pad to 10 s) +
-   tract ResNet34; measure release RTF + DER smoke.
+2. ~~**Wire pipeline**~~ — **done**: with `POLYVOICE_INFERENCE_BACKEND=tract`
+   (feature `backend-tract`), `PowersetSegmenter` remaps to
+   `powerset_fp32_tract.onnx` when present, forces batch/pool N=1; product
+   windows already pad to 10 s. ResNet34 uses the same backend switch.
+   Still need **release RTF + DER smoke** on a real corpus (not product default).
 3. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
 4. **Earshot** re-tune if legacy pure path is needed (current Δ fails 0.3 pp gate).
 5. **Optional rten spike** only if fixed-T tract powerset is too slow/limited.
@@ -60,7 +63,12 @@ cargo test --lib --features "onnx,backend-tract" onnx::parity -- --nocapture
 
 # Build tract-friendly powerset (needs models/powerset_fp32.onnx)
 python3 scripts/export-powerset-tract.py --verify
-cargo test --lib --features "onnx,backend-tract" powerset_fp32_tract_friendly -- --nocapture
+cargo test --lib --features "onnx,segmentation,backend-tract" powerset_fp32_tract_friendly -- --nocapture
+cargo test --lib --features "onnx,segmentation,backend-tract" tract_backend_segments -- --nocapture
+
+# Optional pure-Rust pipeline (not product default; needs rewrite + models):
+# POLYVOICE_INFERENCE_BACKEND=tract cargo run --release --features "cli,backend-tract" -- …
+
 
 # Earshot unit tests
 cargo test --lib --features vad-earshot earshot_vad

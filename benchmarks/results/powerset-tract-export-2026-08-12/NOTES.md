@@ -5,7 +5,7 @@
 Unblock pure-Rust **v2 segmentation** by making powerset ONNX loadable in
 `tract` (feature `backend-tract`).
 
-## Result: **PARTIAL SUCCESS**
+## Result: **PARTIAL SUCCESS** → pipeline wired (opt-in)
 
 | Check | Status |
 |-------|--------|
@@ -13,7 +13,8 @@ Unblock pure-Rust **v2 segmentation** by making powerset ONNX loadable in
 | tract **load** of rewrite | **PASS** (concrete `[1,1,160000]` fact) |
 | tract **run** + ort/tract parity | **PASS** (test profile) |
 | Dynamic T under tract symbols | **FAIL** (still needs concrete T) |
-| Shipping as product default | **No** (fixed-T plan; ~slower than ort; not wired into pipeline) |
+| Pipeline path (`POLYVOICE_INFERENCE_BACKEND=tract`) | **Wired** (remap + N=1; not product default) |
+| Shipping as product default | **No** (fixed-T; measure RTF/DER first) |
 
 ## Transforms (`scripts/export-powerset-tract.py`)
 
@@ -36,13 +37,28 @@ cargo test --lib --features "onnx,backend-tract" \
   powerset_fp32_tract_friendly -- --nocapture
 ```
 
+## Pipeline wiring (landed)
+
+With feature `backend-tract` and `POLYVOICE_INFERENCE_BACKEND=tract` (or
+`InferenceBackend::force(Tract)`):
+
+1. `PowersetSegmenter::with_config` remaps a shipping powerset path to sibling
+   `powerset_fp32_tract.onnx` when that file exists (also checks parent of
+   `int8/`).
+2. Forces session **pool=1** and micro-batch **N=1** (concrete `[1,1,T]`).
+3. Product windows already zero-pad to `window_samples()` (10 s → 160000).
+4. ResNet34 / other stages already go through `build_session_with_ep` → tract.
+
+```bash
+python3 scripts/export-powerset-tract.py --verify
+cargo test --lib --features "onnx,segmentation,backend-tract" tract_backend_segments -- --nocapture
+```
+
 ## Follow-ups
 
-1. Wire optional pipeline path: pad/crop every powerset window to 160000 and run
-   tract segmenter when `POLYVOICE_INFERENCE_BACKEND=tract`.
-2. Release-profile RTF table (test build is not product RTF).
-3. INT8 powerset rewrite (same graph ops before QDQ) if FP32 path productizes.
-4. Still out of scope: Silero nested `If` (legacy VAD only).
+1. Release-profile RTF table (test build is not product RTF) + DER smoke.
+2. INT8 powerset rewrite (same graph ops before QDQ) if FP32 path productizes.
+3. Still out of scope: Silero nested `If` (legacy VAD only).
 
 ## Artifacts
 
