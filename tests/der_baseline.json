@@ -75,6 +75,7 @@
     "miss": 2.2,
     "false_alarm": 1.64,
     "confusion": 6.91,
+    "miss_fa_conf_collar_secs": 0.25,
     "rt_factor_avg": 81.52,
     "speaker_count": {
       "exact": 78,
@@ -87,7 +88,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — Linux aarch64 CPU product gate 2026-08-11 (Ubuntu 24.04 Docker/linuxkit, 10 CPUs); v2+VBx INT8; powerset micro-batch N=8. micro no-collar 14.94% / collar 10.27% / RTFx ~81.5×. Primary non-Apple deploy truth; Mac CoreML remains voxconverse_test.",
+    "_status": "operational — Linux aarch64 CPU product gate 2026-08-11 (Ubuntu 24.04 Docker/linuxkit, 10 CPUs); v2+VBx INT8; powerset micro-batch N=8. micro no-collar 14.94% / collar 10.27% / RTFx ~81.5×. miss/FA/conf are @ collar 0.25 (see miss_fa_conf_collar_secs). Primary non-Apple deploy truth; Mac CoreML remains voxconverse_test. Asserted by scripts/linux-cpu-der-gate.sh when files=232.",
     "_filled_by": "benchmarks/results/linux-cpu-der-2026-08-11/voxconverse-test.json via scripts/linux-cpu-der-gate.sh"
   },
   "ami_test_linux_cpu": {
@@ -106,6 +107,7 @@
     "miss": 7.59,
     "false_alarm": 1.68,
     "confusion": 6.71,
+    "miss_fa_conf_collar_secs": 0.25,
     "rt_factor_avg": 94.91,
     "speaker_count": {
       "exact": 3,
@@ -118,7 +120,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — Linux aarch64 CPU product gate 2026-08-11; v2+VBx INT8; powerset N=8. micro no-collar 24.19% / collar 16.60% / RTFx ~94.9×. Primary non-Apple deploy truth; Mac CoreML remains ami_test.",
+    "_status": "operational — Linux aarch64 CPU product gate 2026-08-11; v2+VBx INT8; powerset N=8. micro no-collar 24.19% / collar 16.60% / RTFx ~94.9×. miss/FA/conf are @ collar 0.25. Primary non-Apple deploy truth; Mac CoreML remains ami_test. Asserted by scripts/linux-cpu-der-gate.sh when files=16 (CI smoke + full).",
     "_filled_by": "benchmarks/results/linux-cpu-der-2026-08-11/ami-test.json via scripts/linux-cpu-der-gate.sh"
   },
   "voxconverse_dev": {

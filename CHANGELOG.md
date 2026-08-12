@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `voxconverse_test_linux_cpu` / `ami_test_linux_cpu` in
   `tests/der_baseline.json`.
 
+### Fixed
+
+- Linux CPU gate is a real gate: hard-fail on missing datasets / wrong file
+  counts / non-Cpu EP; asserts DER₀ micro against `*_linux_cpu` baselines when
+  the run is full-split; model download no longer soft-fails; CI smoke asserts
+  AMI-16 and only smokes Vox-10; `NOTES.auto.md` no longer clobbers hand-written
+  `NOTES.md`. Baseline loader + tests cover the Linux rows and lock artifacts.
+
 ## [0.17.0] - 2026-08-11
 
 ### Breaking / product

@@ -47,4 +47,9 @@ Smoke (subset):
 MAX_VOX=10 MAX_AMI=4 DOCKER=1 bash scripts/linux-cpu-der-gate.sh
 ```
 
-CI: `.github/workflows/linux-cpu-der.yml` (workflow_dispatch + weekly).
+CI: `.github/workflows/linux-cpu-der.yml` — **smoke** (weekly): Vox-10 + AMI-16
+with AMI DER assert; **full** (dispatch): requires 232 Vox files on disk.
+Script hard-fails on missing data / wrong EP / DER regression vs
+`tests/der_baseline.json` `*_linux_cpu` rows (`ASSERT_BASELINE=1`).
+
+Auto-generated run notes: `NOTES.auto.md` (this file is hand-maintained).

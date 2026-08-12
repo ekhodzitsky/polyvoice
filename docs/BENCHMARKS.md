@@ -247,7 +247,9 @@ release build, single file stream at a time.
 
 Linux CPU (product path for servers):
 [`benchmarks/results/linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/)
-via [`scripts/linux-cpu-der-gate.sh`](../scripts/linux-cpu-der-gate.sh).
+via [`scripts/linux-cpu-der-gate.sh`](../scripts/linux-cpu-der-gate.sh)
+(asserts DER against `*_linux_cpu` in `tests/der_baseline.json` when the run is
+full-split; CI weekly is **smoke**: Vox-10 + AMI-16 with AMI assert).
 CoreML: [`int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
 Mac CPU N=8:
 [`int8-batch8-default-2026-08-10/`](../benchmarks/results/int8-batch8-default-2026-08-10/).

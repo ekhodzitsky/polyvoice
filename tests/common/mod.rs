@@ -89,6 +89,10 @@ pub struct DerBaseline {
     pub command_line: String,
     pub voxconverse_test: DatasetBaseline,
     pub ami_test: DatasetBaseline,
+    /// Full-split Linux CPU product gate (EP=cpu, powerset N=8).
+    pub voxconverse_test_linux_cpu: DatasetBaseline,
+    /// Full-split Linux CPU product gate (EP=cpu, powerset N=8).
+    pub ami_test_linux_cpu: DatasetBaseline,
     pub voxconverse_dev: DatasetBaseline,
     pub voxconverse_test_10files: DatasetBaseline,
     pub e2e_smoke: DatasetBaseline,
@@ -115,6 +119,10 @@ pub struct DatasetBaseline {
     pub profile: String,
     pub pipeline: Option<String>,
     pub clusterer: Option<String>,
+    /// Recorded EP when the baseline was measured (`cpu`, `CoreMl`, …).
+    pub execution_provider: Option<String>,
+    /// Powerset ONNX micro-batch size used for the measurement (e.g. 8).
+    pub powerset_batch: Option<usize>,
     pub threshold: Option<f64>,
     pub min_cluster_size: Option<usize>,
     #[serde(rename = "der_collar_0_25")]
@@ -134,9 +142,14 @@ pub struct DatasetBaseline {
     pub der_single_speaker_tolerance: Option<f64>,
     #[serde(rename = "_der_single_speaker_status")]
     pub der_single_speaker_status: Option<String>,
+    /// Miss rate (%). Collar for this decomposition is `miss_fa_conf_collar_secs`
+    /// when set (Linux CPU gate uses 0.25); otherwise historically collar 0.
     pub miss: Option<f64>,
     pub false_alarm: Option<f64>,
     pub confusion: Option<f64>,
+    /// Collar seconds used for `miss` / `false_alarm` / `confusion` when known.
+    pub miss_fa_conf_collar_secs: Option<f64>,
+    pub rt_factor_avg: Option<f64>,
     pub speaker_count: Option<SpeakerCountBaseline>,
     pub tolerance: Option<f64>,
     pub model_versions: Option<ModelVersions>,
