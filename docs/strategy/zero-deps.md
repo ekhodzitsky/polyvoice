@@ -45,17 +45,26 @@ A shipping profile where:
    [`benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md).
 2. ~~**Wire pipeline**~~ — **done** (opt-in remap + N=1).
 3. ~~**Release RTF + DER smoke**~~ — **measured + root-caused** (2026-08-12):
-   powerset rewrite OK; INT8 ResNet under tract collapses embeddings.
-   With builder FP32 embedder override: RTFx ~12 vs ~108; DER₀ **7.22% vs
-   7.41%** on 3-file Vox smoke. Notes:
+   rewrite OK; INT8 ResNet under tract collapses; builder uses FP32 ResNet.
+4. ~~**Larger DER + RTF**~~ — **Vox-10 shortest** (≈560 s, M1 Pro): tract
+   DER₀ **8.86%** vs ort **9.18%** (Δ **−0.33 pp**); RTFx **11.2** vs **98.7**
+   (~**8.8×** slower). Notes:
    [`powerset-tract-rtf-der-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md).
-4. **Larger DER + RTF gate** on tract (AMI/Vox subset) before any product
-   pure-Rust default. INT8 ResNet under tract remains out of scope until
-   a safe quant path exists.
-5. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
-6. **Earshot** re-tune if legacy pure path is needed (current Δ fails 0.3 pp gate).
-7. **Optional rten spike** only if fixed-T tract remains too slow/limited after accuracy work.
-8. Do **not** bump crate MSRV solely for tract until productizing (tract MSRV 1.91 vs crate 1.88).
+   Still **not** full-split / not product default.
+5. **Ship rewrite via registry** (signed `powerset_fp32_tract`) so
+   `install-tract-models.sh` is not required for end users.
+6. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
+7. **Earshot** re-tune if legacy pure path is needed (current Δ fails 0.3 pp gate).
+8. **Optional rten spike** only if fixed-T tract remains too slow/limited after accuracy work.
+9. Do **not** bump crate MSRV solely for tract until productizing (tract MSRV 1.91 vs crate 1.88).
+
+## Install tract assets (local)
+
+```bash
+# Export rewrite + copy into ModelRegistry cache (not a signed release)
+bash scripts/install-tract-models.sh
+# or: bash scripts/install-tract-models.sh --skip-export
+```
 
 ## Commands
 
@@ -71,7 +80,8 @@ python3 scripts/export-powerset-tract.py --verify
 cargo test --lib --features "onnx,segmentation,backend-tract" powerset_fp32_tract_friendly -- --nocapture
 cargo test --lib --features "onnx,segmentation,backend-tract" tract_backend_segments -- --nocapture
 
-# Optional pure-Rust pipeline (not product default; needs rewrite + models):
+# Optional pure-Rust pipeline (not product default):
+# bash scripts/install-tract-models.sh
 # POLYVOICE_INFERENCE_BACKEND=tract cargo run --release --features "cli,backend-tract" -- …
 
 

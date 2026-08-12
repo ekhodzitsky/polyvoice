@@ -157,7 +157,8 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
 | pipeline v2 + VBx **INT8** (Vox / AMI, **default**) | 232 / 16 | **15.02%** / **24.50%** | 10.33% / 16.82% | Default models since 0.17; full-split 2026-08-10 |
 | pipeline v2 + VBx **INT8** **Linux/CPU** (Vox / AMI) | 232 / 16 | **14.94%** / **24.19%** | 10.27% / 16.60% | Official non-Apple protocol; gate + CI smoke |
-| tract pure-Rust smoke (3 short Vox, M1 Pro) | 3 | ~**7.22%** (vs ort ~7.41% on same set) | — | Opt-in only; not a release gate |
+| tract pure-Rust (3 short Vox, M1 Pro) | 3 | ~**7.22%** (vs ort ~7.41%) | — | Opt-in; not a release gate |
+| tract pure-Rust (10 shortest Vox, ≈560 s) | 10 | **8.86%** (vs ort **9.18%**) | — | RTFx ~11 vs ~99; still not full-split |
 | CALLHOME | — | — | — | **Not measured / not gated** |
 | DIHARD | — | — | — | **Not measured / not gated** |
 

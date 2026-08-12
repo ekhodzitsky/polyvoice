@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   python lockfiles (`--locked`); wired into CI and `scripts/release-check.sh`
   (plus zero-deps + dual clippy feature sets) so version bumps cannot silently
   break standalone workspaces.
+- **`scripts/install-tract-models.sh`** — local install of powerset rewrite +
+  FP32 ResNet into the model cache for opt-in tract runs (not registry-signed).
+- Tract **Vox-10** DER/RTF (shortest 10 VoxConverse-test, M1 Pro): DER₀
+  **8.86%** vs ort **9.18%**; RTFx ~**11×** vs ~**99×**. Notes:
+  `benchmarks/results/powerset-tract-rtf-der-2026-08-12/`.
 
 ### Fixed
 
