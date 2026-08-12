@@ -26,8 +26,8 @@ pub const DEFAULT_MANIFEST_TOML: &str = include_str!("manifest.toml");
 /// One VBx PLDA artifact: manifest id, on-disk filename, sha256, byte size.
 ///
 /// Not profile-resolved — only pulled when the `vbx` clusterer is selected
-/// without a local PLDA dir. SHA-256 only until minisign signatures land
-/// (same optional-model pattern as `sortformer_v2`).
+/// without a local PLDA dir. Integrity: SHA-256 + minisign when the manifest
+/// entry carries a signature (vbx_plda_* are signed).
 #[derive(Clone, Copy, Debug)]
 pub struct VbxPldaArtifact {
     pub id: &'static str,
@@ -674,11 +674,10 @@ mod tests {
             assert_eq!(entry.filename, art.filename, "{} filename mismatch", art.id);
             assert_eq!(entry.adapter_type.as_deref(), Some("vbx-plda"));
             assert_eq!(entry.license.as_deref(), Some("CC-BY-4.0"));
-            // Optional path: no minisign until a human signs the release assets.
+            // Optional download path: still minisign-signed for registry ensure.
             assert!(
-                entry.signature.is_none(),
-                "{} must stay unsigned until a release engineer signs it \
-                 (profile resolution never pulls these)",
+                entry.signature.is_some(),
+                "{} must carry a minisign signature for registry download authenticity",
                 art.id
             );
             assert!(

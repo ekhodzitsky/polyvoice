@@ -8,8 +8,9 @@
 #   2. Copies rewrite + wespeaker_resnet34.onnx into the polyvoice models cache
 #      (same directory ModelRegistry uses).
 #
-# Does **not** change product default (ort + INT8). Not a substitute for a
-# signed registry release of the rewrite graph.
+# Does **not** change product default (ort + INT8). Prefer the signed registry
+# path when online: ModelRegistry::ensure("powerset_fp32_tract") downloads from
+# the models-tract-v1 GitHub release. This script is the offline/dev shortcut.
 #
 # Usage:
 #   bash scripts/install-tract-models.sh

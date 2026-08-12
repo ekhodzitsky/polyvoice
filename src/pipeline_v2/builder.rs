@@ -253,16 +253,34 @@ impl PipelineBuilder {
                 seg_cfg.aggregation.binarization = self.config.binarization;
                 // Same session-pool budget as the embedder so one config knob
                 // (and POLYVOICE_SESSION_POOL_SIZE) controls both hot stages.
-                // (Tract remaps segmenter path to powerset_fp32_tract.onnx if present.)
                 seg_cfg.pool_size = pool;
+                // Tract: registry-signed rewrite (shipping powerset fails load).
+                // Sibling remap in PowersetSegmenter remains a local fallback.
+                let segmenter_path = if use_tract {
+                    tracing::info!(
+                        "tract backend: loading powerset_fp32_tract (shipping powerset unsupported)"
+                    );
+                    registry
+                        .ensure("powerset_fp32_tract")
+                        .map_err(|e| ConfigError::Load {
+                            model_id: "powerset_fp32_tract",
+                            source: Box::new(e),
+                        })?
+                } else {
+                    profile_models.segmenter_path
+                };
                 let segmenter: Box<dyn Segmenter> = Box::new(
                     crate::segmentation::PowersetSegmenter::with_config(
-                        &profile_models.segmenter_path,
+                        &segmenter_path,
                         seg_cfg,
                         ep,
                     )
                     .map_err(|e| ConfigError::Load {
-                        model_id: "powerset",
+                        model_id: if use_tract {
+                            "powerset_fp32_tract"
+                        } else {
+                            "powerset"
+                        },
                         source: Box::new(e),
                     })?,
                 );

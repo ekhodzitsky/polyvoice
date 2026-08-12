@@ -24,16 +24,14 @@ services, because:
 1. **Pre-1.0 API** — no backward-compatibility commitment until `1.0.0`.
 2. **`ort` is still a release candidate** (`2.0.0-rc.12`) and remains the only
    **product-default** inference backend.
-3. **VBx PLDA signatures deferred** — default clustering auto-downloads the
-   six PLDA `.npy` files via the model registry with SHA-256 verification;
-   minisign signatures are still pending a release-key sign step (optional
-   override: `POLYVOICE_VBX_PLDA_DIR` / `--vbx-plda-dir`).
+3. ~~**VBx PLDA signatures**~~ — registry PLDA entries are minisign-signed
+   (local `fixtures/vbx-plda/` override still works without network).
 4. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
    NOTSOFAR-1 has a measured micro-gate (3-meeting subset) but CALLHOME /
    DIHARD (and similar) are not release-gated.
 5. **Pure-Rust (tract) path is not product-ready** — opt-in only
-   (`backend-tract` + rewrite powerset + FP32 ResNet); ~9× slower than ort on
-   smoke; rewrite artifact not shipped via the registry; no large-corpus gate.
+   (`backend-tract` + signed `powerset_fp32_tract` + FP32 ResNet); ~9× slower
+   than ort; no full-split release gate.
 
 **Suitable for:** controlled internal services, desktop apps, and edge pilots
 where audio conditions are known and operators can pin versions and re-verify
@@ -56,8 +54,8 @@ proof.
 | Full-split DER (no-collar micro, INT8) | Host baseline Vox **15.02%** / AMI **24.50%** — [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
 | **Linux/CPU** full-split (product protocol) | Vox **14.94%** / **10.27%** @0.25 / ~**82×** RTFx; AMI **24.19%** / **16.60%** / ~**95×** — `tests/der_baseline.json` `*_linux_cpu`, `scripts/linux-cpu-der-gate.sh` |
 | Inference (product) | **`OrtSession` (ort)** only |
-| Inference (opt-in pure-Rust) | `POLYVOICE_INFERENCE_BACKEND=tract` + feature `backend-tract`: rewrite powerset + **FP32** ResNet; smoke DER only — **not** product default |
-| Models | Profile segmenter/embedder minisign-signed in release; VBx PLDA is SHA-256 only |
+| Inference (opt-in pure-Rust) | `POLYVOICE_INFERENCE_BACKEND=tract` + feature `backend-tract`: signed `powerset_fp32_tract` + **FP32** ResNet; smoke DER only — **not** product default |
+| Models | Profile segmenter/embedder minisign-signed in release; VBx PLDA registry downloads are minisign-signed; opt-in `powerset_fp32_tract` is minisign-signed (release `models-tract-v1`) |
 | Native ORT binary | Hash-pinned via ort-sys `dist.txt`; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
 | Library ONNX features | `pipeline-full` (+ optional `vbx`) exports crate-root `Pipeline` |
 

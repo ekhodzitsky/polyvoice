@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tract **Vox-10** DER/RTF (shortest 10 VoxConverse-test, M1 Pro): DER₀
   **8.86%** vs ort **9.18%**; RTFx ~**11×** vs ~**99×**. Notes:
   `benchmarks/results/powerset-tract-rtf-der-2026-08-12/`.
+- **Signed `powerset_fp32_tract`** in the model manifest (GitHub release
+  `models-tract-v1`); pipeline builder `ensure`s it under tract.
+- **VBx PLDA registry entries minisign-signed** (six `vbx_plda_*` artifacts);
+  local `fixtures/vbx-plda/` override unchanged.
 
 ### Fixed
 

@@ -51,17 +51,24 @@ A shipping profile where:
    (~**8.8×** slower). Notes:
    [`powerset-tract-rtf-der-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md).
    Still **not** full-split / not product default.
-5. **Ship rewrite via registry** (signed `powerset_fp32_tract`) so
-   `install-tract-models.sh` is not required for end users.
+5. ~~**Ship rewrite via registry**~~ — signed `powerset_fp32_tract` on release
+   `models-tract-v1`; builder `ensure`s it under tract. Local
+   `install-tract-models.sh` remains a dev shortcut.
 6. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
 7. **Earshot** re-tune if legacy pure path is needed (current Δ fails 0.3 pp gate).
 8. **Optional rten spike** only if fixed-T tract remains too slow/limited after accuracy work.
 9. Do **not** bump crate MSRV solely for tract until productizing (tract MSRV 1.91 vs crate 1.88).
 
-## Install tract assets (local)
+## Install tract assets
+
+**Preferred (registry):** with `download` + network, the pipeline builder calls
+`ModelRegistry::ensure("powerset_fp32_tract")` and `ensure("wespeaker_resnet34")`
+when `POLYVOICE_INFERENCE_BACKEND=tract`. Artifact release:
+`models-tract-v1` on GitHub.
+
+**Local dev shortcut** (offline / regenerate rewrite):
 
 ```bash
-# Export rewrite + copy into ModelRegistry cache (not a signed release)
 bash scripts/install-tract-models.sh
 # or: bash scripts/install-tract-models.sh --skip-export
 ```

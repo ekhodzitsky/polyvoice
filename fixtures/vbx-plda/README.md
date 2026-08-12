@@ -17,3 +17,8 @@ These fixtures are checked into the repo so the release gate and CLI DER
 regression tests can exercise the **default** v2+VBx path without a network
 host for the weights. Rebuild with `scripts/build-vbx-plda.py` if the
 upstream params change; do not hand-edit the `.npy` files.
+
+Registry downloads (`ModelRegistry` when `POLYVOICE_VBX_PLDA_DIR` is unset)
+verify **SHA-256 + minisign** against the embedded manifest. Companion
+`.minisig` files next to each fixture match the project model signing key
+(`models/signing.pub`).
