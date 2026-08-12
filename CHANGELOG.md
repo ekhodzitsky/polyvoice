@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   AMI-16 and only smokes Vox-10; `NOTES.auto.md` no longer clobbers hand-written
   `NOTES.md`. Baseline loader + tests cover the Linux rows and lock artifacts.
 
+### Added
+
+- **Zero-deps invariants gate** (`scripts/check-zero-deps.sh` + CI): no
+  `ort` / `earshot` / `tract` in pure-Rust default surfaces; documents that
+  production powerset+silero still need ort. Strategy:
+  [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md). Tract parity
+  probes cover shipping INT8 embedder / powerset_int8 load status.
+
 ## [0.17.0] - 2026-08-11
 
 ### Breaking / product

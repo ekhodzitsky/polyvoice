@@ -52,6 +52,7 @@ use **INT8** models only. Canonical accuracy protocol:
 
 ### Strategy / competitors (not product manuals)
 - [COMPETITORS.md](COMPETITORS.md)
+- [strategy/zero-deps.md](strategy/zero-deps.md) — pure-Rust / no native dylib path
 - [strategy/2026-06-20-wavlm-eend-spike.md](strategy/2026-06-20-wavlm-eend-spike.md)
 
 ### Archival

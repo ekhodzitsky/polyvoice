@@ -1,12 +1,12 @@
 # tract backend spike — verdict
 
-**Date:** 2026-07-24  
+**Date:** 2026-07-24 (re-probed INT8 + status gate 2026-08-12)  
 **Branch:** `feat/tract-backend`  
 **tract:** `tract-onnx` 0.23.4 (Sonos, MIT/Apache-2.0)  
 **Default backend:** unchanged — **ort** (`ort` 2.0.0-rc.12)  
 **Opt-in feature:** `backend-tract`  
-**Selection:** env `POLYVOICE_INFERENCE_BACKEND=tract` or `InferenceBackend::force(Some(Tract))`
-
+**Selection:** env `POLYVOICE_INFERENCE_BACKEND=tract` or `InferenceBackend::force(Some(Tract))`  
+**Strategy:** [`docs/strategy/zero-deps.md`](../../docs/strategy/zero-deps.md)
 ## Recommendation
 
 **Keep tract optional only.** Do **not** switch the default backend.
@@ -22,10 +22,11 @@
 |-------|--------------|-----|------------|-------|
 | `cam_pp_fp32.onnx` | OK | OK | **PASS** (abs≤1e-3 or rel≤1e-2) | Input `[1,T,80]` fbank |
 | `wespeaker_resnet34.onnx` | OK | OK | **PASS** (same tol) | Input `[1,T,80]` fbank |
+| `resnet34_int8.onnx` | OK | OK | n/a (INT8; load+run only) | Shipping INT8; pure-Rust embedder path; no ort bit-parity |
 | `silero_vad.onnx` | **FAIL** | — | n/a | Nested `If` / `Squeeze` analysis failure even with concrete LSTM I/O facts |
 | `powerset_fp32.onnx` | **FAIL** | — | n/a | `If_117` and/or `InstanceNormalization` analyse failure |
+| `powerset_int8.onnx` | **FAIL** | — | n/a | Same family as FP32 (re-probed 2026-08-12) |
 | `ecapa_tdnn_mel.onnx` | **FAIL** | — | n/a | External weight blob `ecapa_tdnn_mel.onnx.data` missing in this tree |
-
 Tests live in `src/onnx/parity.rs` (feature `backend-tract`). Missing `models/*.onnx` → tests skip cleanly. Known load failures for silero/powerset are asserted as *documented incompatibilities* (suite stays green).
 
 ## RTF (single forward, release profile)

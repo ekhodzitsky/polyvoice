@@ -392,8 +392,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: ort must not resolve under --no-default-features
-        run: bash scripts/check-ort-free.sh
+      - name: zero-deps invariants (no ort/earshot/tract in pure-Rust surfaces)
+        run: bash scripts/check-zero-deps.sh
       - run: cargo check --no-default-features --lib --locked
       - run: cargo test --no-default-features --lib --locked
       - run: cargo test --no-default-features --test byo_embedder_library --locked

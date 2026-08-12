@@ -33,8 +33,14 @@ impl Tol {
 }
 
 fn model_path(name: &str) -> Option<PathBuf> {
-    let p = Path::new("models").join(name);
-    if p.is_file() { Some(p) } else { None }
+    // Prefer `models/<name>`, then `models/int8/<name>` (shipping INT8 pair).
+    for base in ["models", "models/int8"] {
+        let p = Path::new(base).join(name);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    None
 }
 
 fn try_open(path: &Path, backend: InferenceBackend) -> Result<RuntimeSession, String> {
@@ -135,8 +141,10 @@ fn tract_per_model_load_status() {
     let models = [
         "silero_vad.onnx",
         "powerset_fp32.onnx",
+        "powerset_int8.onnx",
         "cam_pp_fp32.onnx",
         "wespeaker_resnet34.onnx",
+        "resnet34_int8.onnx",
         "ecapa_tdnn_mel.onnx",
     ];
     for name in models {
@@ -146,9 +154,10 @@ fn tract_per_model_load_status() {
         };
         match try_open(&path, InferenceBackend::Tract) {
             Ok(s) => eprintln!(
-                "load-status {name}: OK backend={:?} inputs={:?}",
+                "load-status {name}: OK backend={:?} inputs={:?} path={}",
                 s.backend(),
-                s.input_names()
+                s.input_names(),
+                path.display()
             ),
             Err(e) => eprintln!("load-status {name}: FAIL — {e}"),
         }
@@ -228,24 +237,58 @@ fn silero_tract_load_documents_status() {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn powerset_tract_load_documents_status() {
-    let Some(path) = model_path("powerset_fp32.onnx") else {
-        eprintln!("skip powerset status: models/powerset_fp32.onnx missing");
-        return;
-    };
-    match try_open(&path, InferenceBackend::Tract) {
-        Ok(_) => eprintln!("powerset_fp32: tract LOAD OK (unexpected win — update verdict)"),
-        Err(e) => {
-            eprintln!("powerset_fp32: tract LOAD FAIL (documented): {e}");
-            assert!(
-                e.contains("If")
-                    || e.contains("InstanceNorm")
-                    || e.contains("into_optimized")
-                    || e.contains("analyse")
-                    || e.contains("tract"),
-                "unexpected powerset load error shape: {e}"
-            );
+    for name in ["powerset_fp32.onnx", "powerset_int8.onnx"] {
+        let Some(path) = model_path(name) else {
+            eprintln!("skip powerset status: {name} missing");
+            continue;
+        };
+        match try_open(&path, InferenceBackend::Tract) {
+            Ok(_) => eprintln!("{name}: tract LOAD OK (unexpected win — update verdict)"),
+            Err(e) => {
+                eprintln!("{name}: tract LOAD FAIL (documented): {e}");
+                assert!(
+                    e.contains("If")
+                        || e.contains("InstanceNorm")
+                        || e.contains("into_optimized")
+                        || e.contains("analyse")
+                        || e.contains("tract"),
+                    "unexpected powerset load error shape: {e}"
+                );
+            }
         }
     }
+}
+
+/// Shipping INT8 embedder must **load and run** on pure-Rust tract.
+///
+/// Bit-parity with ort is **not** required: dynamic INT8 scales differ across
+/// runtimes (same reason powerset micro-batch N>1 is not bit-identical). FP32
+/// ResNet34 remains the numerical parity reference (`parity_wespeaker_resnet34`).
+#[test]
+#[cfg_attr(miri, ignore)]
+fn resnet34_int8_tract_load_and_run_if_present() {
+    let Some(path) = model_path("resnet34_int8.onnx") else {
+        eprintln!("skip resnet34_int8 tract: models/int8/resnet34_int8.onnx missing");
+        return;
+    };
+    let mut tract = try_open(&path, InferenceBackend::Tract)
+        .unwrap_or_else(|e| panic!("resnet34_int8 must load on tract (zero-deps embedder path): {e}"));
+    let time = 200usize;
+    let n_mels = 80usize;
+    let input = InferenceTensor::f32(vec![1, time, n_mels], vec![0.05f32; time * n_mels]);
+    let out = tract
+        .run_ordered(&[&input])
+        .unwrap_or_else(|e| panic!("resnet34_int8 tract run failed: {e}"));
+    assert!(!out.is_empty(), "expected at least one output tensor");
+    let emb = out[0].as_f32_slice().expect("f32 embedding");
+    assert!(
+        emb.iter().all(|v| v.is_finite()),
+        "resnet34_int8 tract output must be finite"
+    );
+    eprintln!(
+        "resnet34_int8: tract LOAD+RUN OK dim={} (ort bit-parity not required for INT8)",
+        emb.len()
+    );
 }
 
 #[test]
