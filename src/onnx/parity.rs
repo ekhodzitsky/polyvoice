@@ -291,6 +291,51 @@ fn resnet34_int8_tract_load_and_run_if_present() {
     );
 }
 
+/// Tract-friendly powerset rewrite (`scripts/export-powerset-tract.py`):
+/// InstanceNorm expanded + identical `If` inlined.
+///
+/// - **Load+run** at product window T=160000 (10 s @ 16 kHz).
+/// - **Tight ort parity** on a 1 s window (T=16000): long-window LSTM paths
+///   can diverge more under tract; rewrite vs original is verified by the
+///   export script's `--verify` (ort-only).
+#[test]
+#[cfg_attr(miri, ignore)]
+fn powerset_fp32_tract_friendly_load_and_parity_if_present() {
+    let Some(path) = model_path("powerset_fp32_tract.onnx") else {
+        eprintln!("skip powerset_fp32_tract: models/powerset_fp32_tract.onnx missing");
+        return;
+    };
+
+    // 10 s product window: must load+run (finite logits).
+    let t_long = 160_000usize;
+    let input_long = InferenceTensor::f32(vec![1, 1, t_long], vec![0.01f32; t_long]);
+    let mut tract = try_open(&path, InferenceBackend::Tract)
+        .unwrap_or_else(|e| panic!("powerset_fp32_tract load failed: {e}"));
+    let long_out = tract
+        .run_ordered(&[&input_long])
+        .unwrap_or_else(|e| panic!("powerset_fp32_tract run T={t_long} failed: {e}"));
+    assert!(!long_out.is_empty());
+    let logits = long_out[0].as_f32_slice().expect("f32");
+    assert!(
+        logits.iter().all(|v| v.is_finite()),
+        "powerset_fp32_tract long-window logits must be finite"
+    );
+    eprintln!(
+        "powerset_fp32_tract: LOAD+RUN OK T={t_long} out_shape={:?} values={}",
+        long_out[0].shape,
+        logits.len()
+    );
+
+    // Tight parity on 1 s window (export script verifies rewrite vs original on ort).
+    let t_short = 16_000usize;
+    let input_short = InferenceTensor::f32(vec![1, 1, t_short], vec![0.01f32; t_short]);
+    // Re-open: concrete plan may be for T=160k; short window may need T=16k plan.
+    let (ort_ms, tract_ms) =
+        compare_ordered("powerset_fp32_tract_1s", &path, &[input_short], Tol::DEFAULT)
+            .unwrap_or_else(|e| panic!("powerset_fp32_tract 1s ort/tract parity failed: {e}"));
+    eprintln!("powerset_fp32_tract: 1s PARITY OK ort={ort_ms:.1}ms tract={tract_ms:.1}ms");
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn tract_rejects_garbage_before_parse() {

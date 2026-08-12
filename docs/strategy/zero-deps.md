@@ -17,7 +17,8 @@ path**, and progressively shrink the production path toward the same.
 | `vad-earshot` (`EarshotVad`) | **Yes** (weights in crate) | Legacy VAD only; **+2.65 pp DER** vs Silero on measured subset — **opt-in only** |
 | `backend-tract` embedders (ResNet34 FP32/INT8, CAM++) | **Yes** (tract is pure Rust) | Numerical parity with ort within tol |
 | `backend-tract` + Silero ONNX | **No (load fail)** | Nested `If` / analyse |
-| `backend-tract` + powerset FP32/INT8 | **No (load fail)** | `If_*` and/or `InstanceNormalization` |
+| `backend-tract` + powerset **shipping** ONNX | **No (load fail)** | nested `If` + `InstanceNormalization` |
+| `backend-tract` + **tract-friendly rewrite** (`export-powerset-tract.py`) | **Yes (load+run)** | concrete T (10 s / 1 s); 1 s tight ort/tract parity; **not** pipeline-wired yet |
 | Production CLI / pipeline v2 (`onnx` + powerset + ResNet34) | **No** | Downloads ORT dylib via `ort` |
 
 CI freezes the pure-Rust **invariants** via:
@@ -37,11 +38,16 @@ A shipping profile where:
 
 ## Unblockers (ordered)
 
-1. **Powerset ONNX re-export** without nested `If` and with InstanceNorm shapes tract accepts — or upstream tract fix. **This is the critical path** for v2.
-2. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
-3. **Earshot** re-tune thresholds / hysteresis if legacy pure path is needed (current Δ fails 0.3 pp gate).
-4. **Optional rten spike** only if tract still blocked after re-export (see `benchmarks/results/tract-backend-verdict.md`).
-5. Do **not** bump crate MSRV solely for tract until productizing (tract MSRV 1.91 vs crate 1.88).
+1. ~~**Powerset ONNX re-export**~~ — **spike done** (`scripts/export-powerset-tract.py`):
+   inline identical `If`, expand InstanceNorm; tract loads with concrete
+   `[1,1,160000]`. See
+   [`benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md).
+2. **Wire pipeline** to optional tract powerset (fixed window pad to 10 s) +
+   tract ResNet34; measure release RTF + DER smoke.
+3. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
+4. **Earshot** re-tune if legacy pure path is needed (current Δ fails 0.3 pp gate).
+5. **Optional rten spike** only if fixed-T tract powerset is too slow/limited.
+6. Do **not** bump crate MSRV solely for tract until productizing (tract MSRV 1.91 vs crate 1.88).
 
 ## Commands
 
@@ -51,6 +57,10 @@ bash scripts/check-zero-deps.sh
 
 # Tract load / parity (needs models under models/ or models/int8/)
 cargo test --lib --features "onnx,backend-tract" onnx::parity -- --nocapture
+
+# Build tract-friendly powerset (needs models/powerset_fp32.onnx)
+python3 scripts/export-powerset-tract.py --verify
+cargo test --lib --features "onnx,backend-tract" powerset_fp32_tract_friendly -- --nocapture
 
 # Earshot unit tests
 cargo test --lib --features vad-earshot earshot_vad

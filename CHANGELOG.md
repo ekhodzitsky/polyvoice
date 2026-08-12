@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   production powerset+silero still need ort. Strategy:
   [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md). Tract parity
   probes cover shipping INT8 embedder / powerset_int8 load status.
+- **Powerset tract-friendly rewrite** (`scripts/export-powerset-tract.py`):
+  inline identical-branch `If`, expand `InstanceNormalization`; pure-Rust
+  tract **loads and runs** product 10 s windows (concrete T) with 1 s
+  ort/tract parity. Not wired into the product pipeline yet. Notes:
+  `benchmarks/results/powerset-tract-export-2026-08-12/`.
 
 ## [0.17.0] - 2026-08-11
 

@@ -62,6 +62,9 @@ impl TractSession {
 /// Load + optimize strategies:
 /// 1. Direct `into_optimized` (works for fixed / self-describing feed-forward).
 /// 2. Bind free ONNX dims to symbols, then optimize (helps dynamic B/T graphs).
+/// 3. Bind free dims to concrete `[1,1,T]` facts for powerset-style waveform
+///    inputs (rank-3). Fixed T unblocks Conv analyse that fails under symbols.
+///    Tries product window lengths: 10 s, then 1 s @ 16 kHz.
 fn load_runnable(model_path: &Path) -> anyhow::Result<Arc<TypedRunnableModel>> {
     let base = tract_onnx::onnx()
         .model_for_path(model_path)
@@ -69,15 +72,49 @@ fn load_runnable(model_path: &Path) -> anyhow::Result<Arc<TypedRunnableModel>> {
 
     match try_optimize_runnable(base.clone()) {
         Ok(m) => Ok(m),
-        Err(direct_err) => match try_optimize_with_symbols(base) {
+        Err(direct_err) => match try_optimize_with_symbols(base.clone()) {
             Ok(m) => Ok(m),
-            Err(sym_err) => Err(anyhow::anyhow!(
-                "tract load failed (direct: {direct_err}; with-symbols: {sym_err})"
-            )),
+            Err(sym_err) => {
+                let mut last = String::new();
+                // 10 s window (product default), then 1 s smoke window.
+                for t in [160_000usize, 16_000usize] {
+                    match try_optimize_with_concrete_nct(base.clone(), t) {
+                        Ok(m) => return Ok(m),
+                        Err(e) => last = format!("concrete-N1C1T{t}: {e}"),
+                    }
+                }
+                Err(anyhow::anyhow!(
+                    "tract load failed (direct: {direct_err}; with-symbols: {sym_err}; {last})"
+                ))
+            }
         },
     }
 }
 
+/// Bind the single rank-3 input to concrete `[1, 1, t]` (powerset waveform).
+fn try_optimize_with_concrete_nct(
+    mut model: InferenceModel,
+    t: usize,
+) -> anyhow::Result<Arc<TypedRunnableModel>> {
+    if model.inputs.len() != 1 {
+        anyhow::bail!("concrete-N1C1T only for single-input models");
+    }
+    let fact = model
+        .input_fact(0)
+        .map_err(|e| anyhow::anyhow!("input_fact: {e}"))?
+        .clone();
+    let Some(dt) = fact.datum_type.concretize() else {
+        anyhow::bail!("input datum type not concrete");
+    };
+    let rank = fact.shape.dims().count();
+    if rank != 3 {
+        anyhow::bail!("expected rank-3 input, got {rank}");
+    }
+    model
+        .set_input_fact(0, InferenceFact::dt_shape(dt, tvec!(1, 1, t)))
+        .map_err(|e| anyhow::anyhow!("set_input_fact concrete T={t}: {e}"))?;
+    try_optimize_runnable(model)
+}
 fn try_optimize_runnable(model: InferenceModel) -> anyhow::Result<Arc<TypedRunnableModel>> {
     // into_runnable() returns Arc in tract 0.23.
     model

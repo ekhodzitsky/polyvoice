@@ -103,5 +103,5 @@ Models are gitignored (`*.onnx`). Place or symlink blobs under `models/` for par
 |----------|--------|
 | Ship as default? | **No** |
 | Keep as opt-in hedge? | **Yes** — valuable for embedder-only / pure-Rust experiments |
-| Full pipeline on tract today? | **No** (silero + powerset blocked) |
-| Next unblockers | Upstream tract fixes or re-export models without fragile If/InstanceNorm patterns; optional rten spike later |
+| Full pipeline on tract today? | **Not product** — shipping powerset still blocked; **rewrite** loads (see powerset-tract-export-2026-08-12) |
+| Next unblockers | Wire rewrite + fixed 10 s windows into optional pipeline; release RTF; optional rten if too slow |

@@ -75,11 +75,12 @@ cat <<'EOF'
 | default = [] library            | no            | BYO embedder + EnergyVad |
 | vad-earshot                     | no            | pure-Rust VAD; DER Δ vs Silero ~+2.6pp (opt-in only) |
 | backend-tract (embedders)       | no tract dylib| pure-Rust ONNX; ResNet34/CAM++ OK |
-| backend-tract (silero/powerset) | n/a           | LOAD FAIL (If / InstanceNorm) |
-| features onnx / cli / pipeline  | yes (ort)     | production path until powerset re-export |
+| backend-tract + shipping powerset | n/a        | LOAD FAIL (If / InstanceNorm) |
+| backend-tract + powerset rewrite  | no         | export-powerset-tract.py; concrete T |
+| features onnx / cli / pipeline    | yes (ort)  | production until pipeline wires rewrite |
 EOF
 
 echo ""
 echo "OK: zero-deps invariants hold."
-echo "Full pure-Rust *production* pipeline still blocked on powerset(+silero) tract load."
+echo "Shipping powerset still needs rewrite + pipeline wiring for pure-Rust v2."
 echo "See docs/strategy/zero-deps.md"
