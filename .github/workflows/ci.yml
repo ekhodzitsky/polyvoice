@@ -58,13 +58,12 @@ jobs:
     # their own lockfiles — prove none of them drifted out of sync with its
     # manifest (a version bump or feature edit in the core crate invalidates
     # them silently). Resolution-only check; no compilation.
+    # Shared with scripts/release-check.sh via check-standalone-lockfiles.sh.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo metadata --locked --format-version 1 --manifest-path fuzz/Cargo.toml > /dev/null
-      - run: cargo metadata --locked --format-version 1 --manifest-path polyvoice-asr-sherpa/Cargo.toml > /dev/null
-      - run: cargo metadata --locked --format-version 1 --manifest-path python/Cargo.toml > /dev/null
+      - run: bash scripts/check-standalone-lockfiles.sh
 
   fmt:
     runs-on: ubuntu-latest

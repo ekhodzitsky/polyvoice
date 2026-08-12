@@ -20,10 +20,20 @@ if [ ! -f "${POLYVOICE_VBX_PLDA_DIR}/plda_transform.npy" ]; then
 fi
 
 echo "=== 1. Format check ==="
-cargo fmt -- --check
+cargo fmt --all -- --check
 
-echo "=== 2. Clippy ==="
+echo "=== 1b. Standalone lockfiles (fuzz / sherpa / python) ==="
+# Catches path-dep version drift after a core bump without re-running
+# scripts/bump-version.sh. Same gate as CI job standalone-lockfiles.
+bash scripts/check-standalone-lockfiles.sh
+
+echo "=== 1c. Zero-deps invariants (ort/earshot/tract stay opt-in) ==="
+bash scripts/check-zero-deps.sh
+
+echo "=== 2. Clippy (all-features + product front-door features) ==="
 cargo clippy --all-targets --all-features -- -D warnings
+# CI also gates onnx,ffi,cli without every optional EP; catch that shape too.
+cargo clippy --all-targets --features onnx,ffi,cli -- -D warnings
 
 echo "=== 2b. Supply-chain audit (advisories, licenses, bans, sources) ==="
 # Block publish on any advisory/license/source/ban violation — run early so it

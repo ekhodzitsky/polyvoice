@@ -17,22 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `benchmarks/results/linux-cpu-der-2026-08-11/`. Rows
   `voxconverse_test_linux_cpu` / `ami_test_linux_cpu` in
   `tests/der_baseline.json`.
-
-### Fixed
-
-- Linux CPU gate is a real gate: hard-fail on missing datasets / wrong file
-  counts / non-Cpu EP; asserts DER₀ micro against `*_linux_cpu` baselines when
-  the run is full-split; model download no longer soft-fails; CI smoke asserts
-  AMI-16 and only smokes Vox-10; `NOTES.auto.md` no longer clobbers hand-written
-  `NOTES.md`. Baseline loader + tests cover the Linux rows and lock artifacts.
-
-### Added
-
 - **Zero-deps invariants gate** (`scripts/check-zero-deps.sh` + CI): no
-  `ort` / `earshot` / `tract` in pure-Rust default surfaces; documents that
-  production powerset+silero still need ort. Strategy:
-  [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md). Tract parity
-  probes cover shipping INT8 embedder / powerset_int8 load status.
+  `ort` / `earshot` / `tract` in pure-Rust default surfaces. Strategy:
+  [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md).
 - **Powerset tract-friendly rewrite** (`scripts/export-powerset-tract.py`):
   inline identical-branch `If`, expand `InstanceNormalization`; pure-Rust
   tract **loads and runs** product 10 s windows (concrete T) with 1 s
@@ -46,6 +33,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (3 short Vox, M1 Pro): ~9× slower RTFx; DER₀ ≈ ort (7.22% vs 7.41%).
   Not product default. Notes:
   `benchmarks/results/powerset-tract-rtf-der-2026-08-12/`.
+- **`scripts/check-standalone-lockfiles.sh`** — shared gate for fuzz / sherpa /
+  python lockfiles (`--locked`); wired into CI and `scripts/release-check.sh`
+  (plus zero-deps + dual clippy feature sets) so version bumps cannot silently
+  break standalone workspaces.
+
+### Fixed
+
+- Linux CPU gate is a real gate: hard-fail on missing datasets / wrong file
+  counts / non-Cpu EP; asserts DER₀ micro against `*_linux_cpu` baselines when
+  the run is full-split; model download no longer soft-fails; CI smoke asserts
+  AMI-16 and only smokes Vox-10; `NOTES.auto.md` no longer clobbers hand-written
+  `NOTES.md`. Baseline loader + tests cover the Linux rows and lock artifacts.
+- Production-readiness and zero-deps status snapshots refreshed for Linux/CPU
+  DER protocol and tract opt-in truth (not product default).
 
 ## [0.17.0] - 2026-08-11
 

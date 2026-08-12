@@ -6,10 +6,10 @@
 #   2. No `earshot` without feature `vad-earshot`
 #   3. No `tract` without feature `backend-tract`
 #
-# This does **not** claim a full production diarization pipeline without native
-# ONNX Runtime — powerset + silero still require ort (see docs/strategy/zero-deps.md).
-# It freezes the *invariants* so regressions reintroduce native deps into the
-# BYO / optional pure-Rust surfaces.
+# This freezes *invariants* so regressions reintroduce native deps into the
+# BYO / optional pure-Rust surfaces. Production CLI default remains ort+INT8.
+# An **opt-in** pure-Rust v2 path exists (backend-tract + powerset rewrite +
+# FP32 ResNet) — see docs/strategy/zero-deps.md — but is not product default.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -70,17 +70,18 @@ require_pkg tract-onnx "--features backend-tract" --features backend-tract
 echo ""
 echo "=== 4. status snapshot (informational) ==="
 cat <<'EOF'
-| Surface                         | Native dylib? | Notes |
-|---------------------------------|---------------|-------|
-| default = [] library            | no            | BYO embedder + EnergyVad |
-| vad-earshot                     | no            | pure-Rust VAD; DER Δ vs Silero ~+2.6pp (opt-in only) |
-| backend-tract (embedders)       | no tract dylib| pure-Rust ONNX; ResNet34/CAM++ OK |
-| backend-tract + shipping powerset | n/a        | LOAD FAIL (If / InstanceNorm) |
-| backend-tract + powerset rewrite  | no         | export-powerset-tract.py; concrete T |
-| features onnx / cli / pipeline    | yes (ort)  | production until pipeline wires rewrite |
+| Surface                              | Native dylib? | Notes |
+|--------------------------------------|---------------|-------|
+| default = [] library                 | no            | BYO embedder + EnergyVad |
+| vad-earshot                          | no            | pure-Rust VAD; DER Δ vs Silero ~+2.6pp (opt-in only) |
+| backend-tract + ResNet FP32 / CAM++  | no tract dylib| pure-Rust ONNX; FP32 parity OK |
+| backend-tract + ResNet INT8          | no            | load/run only — cosine ~0 vs ort; **unsafe** for DER |
+| backend-tract + shipping powerset    | n/a           | LOAD FAIL (If / InstanceNorm) |
+| backend-tract + powerset rewrite     | no            | export-powerset-tract.py; pipeline remaps; N=1; smoke DER ≈ ort |
+| features onnx / cli / pipeline       | yes (ort)     | **product default** (INT8 v2+VBx) |
 EOF
 
 echo ""
 echo "OK: zero-deps invariants hold."
-echo "Shipping powerset still needs rewrite + pipeline wiring for pure-Rust v2."
+echo "Product default remains ort+INT8; pure-Rust v2 is opt-in (rewrite + FP32 ResNet)."
 echo "See docs/strategy/zero-deps.md"

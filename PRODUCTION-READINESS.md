@@ -1,10 +1,13 @@
 # Production Readiness Assessment
 
-> **Version:** 0.17.x | **Date:** 2026-08-10 | **Scope:** Rust library + Python bindings + FFI + CLI
+> **Version:** 0.17.x | **Date:** 2026-08-12 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
-> **Last updated:** 2026-08-10 — crate **0.17.0** ships **INT8-only** profiles
+> **Last updated:** 2026-08-12 — crate **0.17.0** ships **INT8-only** profiles
 > (`powerset_int8` + `resnet34_int8`). Pipeline v2+VBx default since 0.11.
-> Canonical accuracy protocol: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+> Linux/CPU full-split DER gate landed; pure-Rust tract path is **opt-in smoke
+> only**, not product default. Canonical accuracy protocol:
+> [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). Zero-deps strategy:
+> [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md).
 
 ## Executive Summary
 
@@ -12,14 +15,15 @@
 
 As of **0.17.x**, polyvoice is a hardened pre-1.0 engine: model signing is
 enforced on release builds for profile-resolved models, the ONNX Runtime native
-binary is hash-pinned and documented, CI covers the main desktop targets, and a
-**full VoxConverse-test + AMI-test DER gate** keeps **pipeline v2 + VBx** as the
-CLI / FFI / Python / MCP default. It is still **not** ready for multi-tenant
-public APIs or unattended production services, because:
+binary is hash-pinned and documented, CI covers the main desktop targets, and
+**full VoxConverse-test + AMI-test DER** (including an official **Linux/CPU**
+protocol) keeps **pipeline v2 + VBx** as the CLI / FFI / Python / MCP default.
+It is still **not** ready for multi-tenant public APIs or unattended production
+services, because:
 
 1. **Pre-1.0 API** — no backward-compatibility commitment until `1.0.0`.
 2. **`ort` is still a release candidate** (`2.0.0-rc.12`) and remains the only
-   production inference backend.
+   **product-default** inference backend.
 3. **VBx PLDA signatures deferred** — default clustering auto-downloads the
    six PLDA `.npy` files via the model registry with SHA-256 verification;
    minisign signatures are still pending a release-key sign step (optional
@@ -27,6 +31,9 @@ public APIs or unattended production services, because:
 4. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
    NOTSOFAR-1 has a measured micro-gate (3-meeting subset) but CALLHOME /
    DIHARD (and similar) are not release-gated.
+5. **Pure-Rust (tract) path is not product-ready** — opt-in only
+   (`backend-tract` + rewrite powerset + FP32 ResNet); ~9× slower than ort on
+   smoke; rewrite artifact not shipped via the registry; no large-corpus gate.
 
 **Suitable for:** controlled internal services, desktop apps, and edge pilots
 where audio conditions are known and operators can pin versions and re-verify
@@ -42,19 +49,23 @@ proof.
 
 | Area | State |
 |------|--------|
-| Crate version | `0.17.0` (0.17.x line) |
+| Crate version | `0.17.0` (0.17.x line; HEAD may be 0.17.0+commits) |
 | Production models | **INT8 only** (`powerset_int8` + `resnet34_int8`, ~8.4 MB) |
 | CLI default | **v2 + VBx** (powerset → ResNet34 → VB-HMM/PLDA); `--legacy` / `--clusterer ahc` opt out |
 | Python default | Pipeline v2 + **VBx** (same as CLI); pass `clusterer="ahc"` to opt out |
-| Full-split DER (no-collar micro, INT8 0.17) | Vox **15.02%**, AMI **24.50%** — see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
-| Inference | `InferenceRuntime` trait exists; **only `OrtSession` (ort) is a production impl** |
+| Full-split DER (no-collar micro, INT8) | Host baseline Vox **15.02%** / AMI **24.50%** — [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
+| **Linux/CPU** full-split (product protocol) | Vox **14.94%** / **10.27%** @0.25 / ~**82×** RTFx; AMI **24.19%** / **16.60%** / ~**95×** — `tests/der_baseline.json` `*_linux_cpu`, `scripts/linux-cpu-der-gate.sh` |
+| Inference (product) | **`OrtSession` (ort)** only |
+| Inference (opt-in pure-Rust) | `POLYVOICE_INFERENCE_BACKEND=tract` + feature `backend-tract`: rewrite powerset + **FP32** ResNet; smoke DER only — **not** product default |
 | Models | Profile segmenter/embedder minisign-signed in release; VBx PLDA is SHA-256 only |
 | Native ORT binary | Hash-pinned via ort-sys `dist.txt`; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
 | Library ONNX features | `pipeline-full` (+ optional `vbx`) exports crate-root `Pipeline` |
 
-Honest reading: v2+VBx is the **measured default** on full VoxConverse-test and
-AMI-test. Legacy remains a supported escape hatch. Public production still
-needs multi-corpus gates, a stable ort, and signed PLDA distribution.
+Honest reading: v2+VBx + ort INT8 is the **measured product default** on full
+VoxConverse-test and AMI-test (desktop + Linux/CPU gate). Legacy remains a
+supported escape hatch. Pure-Rust tract is an **opt-in research path**. Public
+production still needs multi-corpus gates, a stable ort (or measured pure-Rust
+default), and signed PLDA distribution.
 
 ---
 
@@ -145,21 +156,25 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | AMI test Mix-Headset (legacy) | 16 | **32.87%** | 25.20% | Full split tracked; long-form floor via single-meeting gate |
 | AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
 | pipeline v2 + VBx **INT8** (Vox / AMI, **default**) | 232 / 16 | **15.02%** / **24.50%** | 10.33% / 16.82% | Default models since 0.17; full-split 2026-08-10 |
+| pipeline v2 + VBx **INT8** **Linux/CPU** (Vox / AMI) | 232 / 16 | **14.94%** / **24.19%** | 10.27% / 16.60% | Official non-Apple protocol; gate + CI smoke |
+| tract pure-Rust smoke (3 short Vox, M1 Pro) | 3 | ~**7.22%** (vs ort ~7.41% on same set) | — | Opt-in only; not a release gate |
 | CALLHOME | — | — | — | **Not measured / not gated** |
 | DIHARD | — | — | — | **Not measured / not gated** |
 
-**Gap:** The default v2+VBx INT8 path has full-split VoxConverse (15.02%) and
-AMI (24.50%) numbers next to the legacy baselines above, but **multi-corpus DER
-beyond Vox/AMI remains absent**: no CALLHOME/DIHARD release gate. Accuracy
-still trails pyannote-class systems by roughly ~4 pp no-collar on VoxConverse
-(see benchmarks).
+**Gap:** The default v2+VBx INT8 path has full-split VoxConverse and AMI on both
+desktop baselines and the **Linux/CPU** gate, but **multi-corpus DER beyond
+Vox/AMI remains absent**: no CALLHOME/DIHARD release gate. Accuracy still trails
+pyannote-class systems by roughly ~4 pp no-collar on VoxConverse (see benchmarks).
+Tract pure-Rust is **not** release-gated at full-split size.
 
 **Remediation:**
 - Keep legacy published as the honesty baseline alongside the v2+VBx default
   (the 0.11 full-split gate already flipped the default).
+- Keep Linux/CPU as the non-Apple product truth (do not substitute CoreML RTF).
 - Add at least one additional corpus (CALLHOME and/or DIHARD subset) to the
   release DER matrix.
-- Re-measure full Vox + AMI after clustering upgrades land on the default path.
+- Before any pure-Rust product default: larger tract DER/RTF + shipped rewrite
+  artifact + MSRV policy for tract.
 
 ---
 
@@ -182,12 +197,18 @@ v2+VBx has broader multi-corpus proof.
 | Item | Status |
 |------|--------|
 | `InferenceRuntime` trait | **Exists** (`src/onnx/runtime.rs`) |
-| Production implementation | **`OrtSession` only** (`ort` 2.0.0-rc.12) |
-| Pure-Rust optional backend | Not shipped (spike/goal; full-pipeline pure-Rust parity not proven) |
+| Production implementation | **`OrtSession` only** (`ort` 2.0.0-rc.12) — product default |
+| Pure-Rust optional backend | **`TractSession`** behind `backend-tract` + `POLYVOICE_INFERENCE_BACKEND=tract` |
+| Tract powerset | Shipping graphs fail load; **rewrite** via `scripts/export-powerset-tract.py`; pipeline remaps when present |
+| Tract embedder | Builder forces **FP32** `wespeaker_resnet34` (INT8 ResNet under tract collapses speakers) |
+| Tract accuracy | 3-file Vox smoke DER ≈ ort; **not** full-split gated; ~9× slower RTFx on smoke host |
 | Execution providers | CoreML / XNNPACK (and related) wired as **ort-specific** config, not alternate runtimes |
 
-**Gap:** Runtime lock-in to ort remains a production risk even after the trait
-extraction. Trait existence is necessary but not sufficient for independence.
+**Gap:** Product still **locks to ort**. Tract is a real optional backend with
+smoke evidence, not trait-only scaffolding — but rewrite models are not registry
+shipped, INT8 embedder is unsafe under tract, and large-corpus DER/RTF is open.
+See [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md) and
+`benchmarks/results/powerset-tract-rtf-der-2026-08-12/`.
 
 ---
 
@@ -249,8 +270,9 @@ All items must be true before declaring production-ready / shipping `1.0.0` as
       silent breaking churn on the advertised surface for a freeze window; then
       `1.0.0`.
 - [ ] **Runtime story closed.** Either `ort` 2.x **stable** is integrated and
-      re-verified, **or** a documented pure-Rust optional backend exists with
-      measured parity on the default pipeline (not trait-only scaffolding).
+      re-verified, **or** the pure-Rust (tract) path is product-grade: shipped
+      rewrite + embedder assets, full-split DER/RTF gate, MSRV policy, and no
+      silent INT8 collapse (today: opt-in smoke only).
 - [ ] **Multi-corpus DER gate.** Release-blocking DER on VoxConverse **and** AMI
       **and** at least one additional corpus (CALLHOME and/or DIHARD subset),
       with collar and overlap policy published next to the numbers.
@@ -285,15 +307,17 @@ Until every box is checked, the honest status remains:
 | Crate version | 0.17.0 |
 | Deployable footprint | **~8.4 MB** INT8 production pair (FP32 ids optional / not profile-default) |
 | Speed (INT8 default, CoreML, M1 Pro) | ~111–130× realtime (RTF ~0.008–0.009) |
-| VoxConverse-test DER (v2+VBx INT8, 232, collar 0) | **15.02%** |
-| VoxConverse-test DER (v2+VBx INT8, 232, collar 0.25) | 10.33% |
+| Speed (INT8, Linux/CPU full-split) | Vox ~**82×** RTFx; AMI ~**95×** RTFx |
+| VoxConverse-test DER (v2+VBx INT8, 232, collar 0) | **15.02%** (host baseline) |
+| VoxConverse-test DER (v2+VBx INT8 Linux/CPU, 232, collar 0) | **14.94%** |
+| VoxConverse-test DER (v2+VBx INT8, 232, collar 0.25) | 10.33% host / **10.27%** Linux/CPU |
 | VoxConverse-test DER (legacy, 232, collar 0) | 18.54% |
-| AMI-test DER (v2+VBx INT8, 16, collar 0) | **24.50%** |
-| AMI-test DER (v2+VBx INT8, 16, collar 0.25) | 16.82% |
+| AMI-test DER (v2+VBx INT8, 16, collar 0) | **24.50%** host / **24.19%** Linux/CPU |
+| AMI-test DER (v2+VBx INT8, 16, collar 0.25) | 16.82% host / **16.60%** Linux/CPU |
 | AMI-test DER (legacy, 16, collar 0) | 32.87% |
 | Default pipeline | v2 + VBx |
 | Escape hatch | legacy (`--legacy` / `--clusterer ahc`) |
-| Inference backends | ort only (via `InferenceRuntime` → `OrtSession`) |
+| Inference backends | **Product:** ort (`OrtSession`). **Opt-in:** tract (`TractSession`, pure-Rust smoke) |
 | Model authenticity | Minisign; required on release profile resolution |
 | Security audit (cargo audit on green main) | 0 HIGH, 0 MEDIUM expected |
 
