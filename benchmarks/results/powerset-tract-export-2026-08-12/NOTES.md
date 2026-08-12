@@ -56,9 +56,12 @@ cargo test --lib --features "onnx,segmentation,backend-tract" tract_backend_segm
 
 ## Follow-ups
 
-1. Release-profile RTF table (test build is not product RTF) + DER smoke.
-2. INT8 powerset rewrite (same graph ops before QDQ) if FP32 path productizes.
-3. Still out of scope: Silero nested `If` (legacy VAD only).
+1. ~~Release-profile RTF + DER smoke~~ — see
+   [`../powerset-tract-rtf-der-2026-08-12/NOTES.md`](../powerset-tract-rtf-der-2026-08-12/NOTES.md)
+   (~9× slower RTFx; +35 pp DER on 3-file smoke; rewrite OK under ort).
+2. 10 s ort/tract logit agreement; then re-gate DER.
+3. INT8 powerset rewrite only if FP32 path productizes.
+4. Still out of scope: Silero nested `If` (legacy VAD only).
 
 ## Artifacts
 

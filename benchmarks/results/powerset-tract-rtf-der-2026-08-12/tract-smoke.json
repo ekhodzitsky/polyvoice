@@ -1,0 +1,152 @@
+{
+  "schema": "polyvoice-bench-v0.10",
+  "crate_version": "0.17.0",
+  "git_sha": "658e4bc88ec0ed338316de7fb71533dd00c9323c",
+  "host_arch": "aarch64",
+  "host_os": "macos",
+  "command_line": "target/release/polyvoice-bench benchmarks/results/powerset-tract-rtf-der-2026-08-12/smoke-vox3 --profile balanced --pipeline v2 --clusterer vbx --collar 0.0 --execution-provider cpu --output benchmarks/results/powerset-tract-rtf-der-2026-08-12/tract-smoke.json",
+  "dataset_name": "smoke-vox3",
+  "profile": "balanced",
+  "files_processed": 3,
+  "files_skipped": 0,
+  "der_collar_macro": 39.850209280644094,
+  "der_no_collar_macro": 39.850209280644094,
+  "der_collar_micro": 42.84580498866213,
+  "der_no_collar_micro": 42.84580498866213,
+  "collar_secs": 0.0,
+  "skip_overlap": false,
+  "averaging_policy": "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
+  "resolved_execution_provider": "Cpu",
+  "host_cpus": 10,
+  "stage_totals": {
+    "segmentation_secs": 4.366477499,
+    "embedding_secs": 4.880755458,
+    "clustering_secs": 0.000343916,
+    "resegmentation_secs": 1.2930000000000002e-6
+  },
+  "miss": 2.6412592787048483,
+  "false_alarm": 2.1905766963871702,
+  "confusion": 35.01837330555208,
+  "rt_factor_avg": 11.40527927478833,
+  "speaker_count": {
+    "exact": 1,
+    "plus_minus_1": 0,
+    "off_by_2_or_more": 2
+  },
+  "model_hashes": [
+    {
+      "model_id": "powerset_int8",
+      "sha256": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+    },
+    {
+      "model_id": "resnet34_int8",
+      "sha256": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+    }
+  ],
+  "per_file": [
+    {
+      "filename": "euqef",
+      "der_collar": 5.542359461599366,
+      "der_no_collar": 5.542359461599366,
+      "miss_rate": 4.47347585114806,
+      "false_alarm_rate": 1.0688836104513064,
+      "confusion_rate": 0.0,
+      "der_single_speaker": 5.542359461599366,
+      "der_overlap": 0.0,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.9552652414885194
+        }
+      ],
+      "rt_factor": 13.996353557407238,
+      "ref_speakers": 1,
+      "hyp_speakers": 1,
+      "num_turns": 3,
+      "audio_duration_secs": 41.152,
+      "runtime_secs": 2.940194375,
+      "stage_timings": {
+        "segmentation_secs": 1.594500208,
+        "embedding_secs": 1.345561625,
+        "clustering_secs": 0.000103875,
+        "resegmentation_secs": 3.75e-7
+      }
+    },
+    {
+      "filename": "fuzfh",
+      "der_collar": 52.72655943507257,
+      "der_no_collar": 52.72655943507257,
+      "miss_rate": 2.2754021184778344,
+      "false_alarm_rate": 4.354648881914476,
+      "confusion_rate": 46.09650843468027,
+      "der_single_speaker": 52.15075788611225,
+      "der_overlap": 50.0,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 1.0
+        },
+        {
+          "speaker": 1,
+          "recall": 0.0
+        },
+        {
+          "speaker": 2,
+          "recall": 0.0
+        }
+      ],
+      "rt_factor": 8.354424797387638,
+      "ref_speakers": 3,
+      "hyp_speakers": 1,
+      "num_turns": 1,
+      "audio_duration_secs": 26.048,
+      "runtime_secs": 3.11786875,
+      "stage_timings": {
+        "segmentation_secs": 1.13433725,
+        "embedding_secs": 1.983422,
+        "clustering_secs": 0.000090958,
+        "resegmentation_secs": 3.34e-7
+      }
+    },
+    {
+      "filename": "msbyq",
+      "der_collar": 61.28170894526035,
+      "der_no_collar": 61.28170894526035,
+      "miss_rate": 1.1748998664886516,
+      "false_alarm_rate": 1.1481975967957276,
+      "confusion_rate": 58.958611481975964,
+      "der_single_speaker": 61.30586031576131,
+      "der_overlap": 50.0,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.0
+        },
+        {
+          "speaker": 1,
+          "recall": 0.9848284960422163
+        },
+        {
+          "speaker": 2,
+          "recall": 0.0
+        },
+        {
+          "speaker": 3,
+          "recall": 0.0
+        }
+      ],
+      "rt_factor": 11.999056302062462,
+      "ref_speakers": 4,
+      "hyp_speakers": 1,
+      "num_turns": 2,
+      "audio_duration_secs": 38.272,
+      "runtime_secs": 3.189584167,
+      "stage_timings": {
+        "segmentation_secs": 1.637640041,
+        "embedding_secs": 1.551771833,
+        "clustering_secs": 0.000149083,
+        "resegmentation_secs": 5.84e-7
+      }
+    }
+  ]
+}

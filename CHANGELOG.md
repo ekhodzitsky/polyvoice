@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `POLYVOICE_INFERENCE_BACKEND=tract`, `PowersetSegmenter` remaps shipping
   powerset → `powerset_fp32_tract.onnx` when present and forces batch/pool
   N=1. ResNet34 already uses the same backend switch. Not product default.
+  RTF/DER smoke (3 short Vox files, M1 Pro): ~9× slower than ort; DER not
+  competitive yet — rewrite is fine under ort; tract full-window path needs
+  more work. Notes: `benchmarks/results/powerset-tract-rtf-der-2026-08-12/`.
 
 ## [0.17.0] - 2026-08-11
 
