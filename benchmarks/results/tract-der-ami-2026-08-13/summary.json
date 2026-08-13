@@ -1,0 +1,27 @@
+{
+  "dataset_note": "see host.txt",
+  "ort": {
+    "files": 16,
+    "rt_factor_avg": 153.46061557596195,
+    "der_no_collar_micro": 24.63432009818072,
+    "stage_totals": {
+      "segmentation_secs": 129.553166668,
+      "embedding_secs": 82.738530291,
+      "clustering_secs": 0.28607062699999997,
+      "resegmentation_secs": 0.00046912799999999997
+    }
+  },
+  "tract": {
+    "files": 16,
+    "rt_factor_avg": 18.803445733067953,
+    "der_no_collar_micro": 23.42125055447959,
+    "stage_totals": {
+      "segmentation_secs": 1090.598168334,
+      "embedding_secs": 644.086411789,
+      "clustering_secs": 0.2999174170000001,
+      "resegmentation_secs": 0.0003496259999999999
+    }
+  },
+  "delta_der0_pp": -1.2130695437011276,
+  "rtfx_ratio_tract_over_ort": 0.12252945592910369
+}

@@ -46,11 +46,13 @@ A shipping profile where:
 2. ~~**Wire pipeline**~~ — **done** (opt-in remap + N=1).
 3. ~~**Release RTF + DER smoke**~~ — **measured + root-caused** (2026-08-12):
    rewrite OK; INT8 ResNet under tract collapses; builder uses FP32 ResNet.
-4. ~~**Larger DER + RTF**~~ — **Vox-10 shortest** (≈560 s, M1 Pro): tract
-   DER₀ **8.86%** vs ort **9.18%** (Δ **−0.33 pp**); RTFx **11.2** vs **98.7**
-   (~**8.8×** slower). Notes:
-   [`powerset-tract-rtf-der-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md).
-   Still **not** full-split / not product default.
+4. ~~**Larger DER + RTF**~~ — Vox-10 short subset + **AMI-test full 16**
+   (M1 Pro): AMI DER₀ tract **23.42%** vs ort **24.63%** (Δ **−1.21 pp**);
+   RTFx **18.8** vs **153.5** (~**8.2×** slower). Helper:
+   `scripts/tract-der-gate.sh`. Notes:
+   [`tract-der-ami-2026-08-13`](../../benchmarks/results/tract-der-ami-2026-08-13/NOTES.md),
+   [`powerset-tract-rtf-der-2026-08-12`](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md).
+   Still **not** product default / not Linux full-split tract gate.
 5. ~~**Ship rewrite via registry**~~ — signed `powerset_fp32_tract` on release
    `models-tract-v1`; builder `ensure`s it under tract. Local
    `install-tract-models.sh` remains a dev shortcut.

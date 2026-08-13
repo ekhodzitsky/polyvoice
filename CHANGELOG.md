@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `models-tract-v1`); pipeline builder `ensure`s it under tract.
 - **VBx PLDA registry entries minisign-signed** (six `vbx_plda_*` artifacts);
   local `fixtures/vbx-plda/` override unchanged.
+- **`scripts/tract-der-gate.sh`** — ort vs tract DER/RTF compare helper.
+  AMI-test full 16 (M1 Pro): tract DER₀ **23.42%** vs ort **24.63%**
+  (Δ −1.2 pp); RTFx ~**19×** vs ~**154×**. Notes:
+  `benchmarks/results/tract-der-ami-2026-08-13/`.
 
 ### Fixed
 
