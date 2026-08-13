@@ -19,11 +19,13 @@ use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(name = "polyvoice-bench", about = "Run DER on a {audio,rttm} dataset")]
 struct Args {
     dataset: PathBuf,
@@ -41,6 +43,12 @@ struct Args {
     skip_overlap: bool,
     #[arg(long)]
     max_files: Option<usize>,
+    /// How many files to diarize in parallel (each worker owns a pipeline).
+    /// Default 1 keeps historical DER/RTF reports single-threaded. Window
+    /// parallelism inside a file is `POLYVOICE_SESSION_POOL_SIZE`. Prefer
+    /// `jobs × pool ≤ cores` so workers do not oversubscribe.
+    #[arg(long, default_value_t = 1)]
+    jobs: usize,
     /// AHC merge threshold on the active scorer's scale: raw cosine (default
     /// 0.45), or AS-norm z-score when `--as-norm` is set (default 4.0).
     /// An explicit value wins over `--domain-profile`'s calibrated threshold.
@@ -447,6 +455,101 @@ struct FileOutcome {
     runtime_secs: f64,
 }
 
+/// Process `wavs` with one pipeline (`jobs == 1`) or `jobs` independent
+/// pipelines (file-level parallelism). Window fan-out stays inside each
+/// pipeline (`POLYVOICE_SESSION_POOL_SIZE`).
+fn run_all_files(
+    args: &Args,
+    first: &mut BenchRunner,
+    wavs: &[PathBuf],
+    rttm_dir: &Path,
+    uem_map: Option<&HashMap<String, Vec<TimeRange>>>,
+) -> Result<Accum> {
+    let jobs = args.jobs.max(1).min(wavs.len().max(1));
+    if jobs == 1 {
+        let mut acc = Accum::default();
+        for wav in wavs {
+            match run_file(&mut first.runner, wav, rttm_dir, uem_map, args)? {
+                Some(outcome) => acc.record(outcome),
+                None => acc.files_skipped += 1,
+            }
+        }
+        return Ok(acc);
+    }
+
+    eprintln!("file-parallel jobs={jobs} (session pool still per worker)");
+    let mut extra: Vec<BenchRunner> = Vec::with_capacity(jobs.saturating_sub(1));
+    for _ in 1..jobs {
+        extra.push(build_runner(args)?);
+    }
+
+    let queue = Mutex::new(wavs.iter().cloned().collect::<VecDeque<_>>());
+    let collected = Mutex::new(Vec::new());
+    let skipped = AtomicUsize::new(0);
+    let err = Mutex::new(None::<String>);
+
+    let drain = |runner: &mut Runner| {
+        loop {
+            if err
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+            {
+                return;
+            }
+            let next = queue
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pop_front();
+            let Some(wav) = next else {
+                return;
+            };
+            match run_file(runner, &wav, rttm_dir, uem_map, args) {
+                Ok(Some(outcome)) => collected
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(outcome),
+                Ok(None) => {
+                    skipped.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(e) => {
+                    *err.lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(e.to_string());
+                    return;
+                }
+            }
+        }
+    };
+
+    std::thread::scope(|s| {
+        s.spawn(|| drain(&mut first.runner));
+        for br in &mut extra {
+            s.spawn(|| drain(&mut br.runner));
+        }
+    });
+
+    if let Some(msg) = err
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+    {
+        anyhow::bail!("{msg}");
+    }
+
+    let mut rows = collected
+        .into_inner()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    rows.sort_by(|a, b| a.row.filename.cmp(&b.row.filename));
+    let mut acc = Accum {
+        files_skipped: skipped.load(Ordering::Relaxed),
+        ..Accum::default()
+    };
+    for outcome in rows {
+        acc.record(outcome);
+    }
+    Ok(acc)
+}
+
 /// Run one wav through the pipeline and score it. `Ok(None)` means the file
 /// was skipped (no reference RTTM).
 fn run_file(
@@ -708,13 +811,7 @@ fn main() -> Result<()> {
         .unwrap_or("unknown")
         .to_owned();
 
-    let mut acc = Accum::default();
-    for wav in &wavs {
-        match run_file(&mut b.runner, wav, &rttm_dir, uem_map.as_ref(), &args)? {
-            Some(outcome) => acc.record(outcome),
-            None => acc.files_skipped += 1,
-        }
-    }
+    let acc = run_all_files(&args, &mut b, &wavs, &rttm_dir, uem_map.as_ref())?;
 
     let report = build_report(
         &args,

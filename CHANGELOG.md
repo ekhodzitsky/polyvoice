@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `benchmarks/results/tract-der-ami-2026-08-13/`.
 - Tract powerset **session pool>1** (micro-batch stays N=1: LSTM Scan cannot
   eval N>1). Same DER; Vox-3 M1 Pro RTFx **19.3** (pool=4) vs **8.1** (pool=1).
+- `polyvoice-bench --jobs N` — file-parallel workers (each owns a pipeline).
+  Default 1 preserves historical RTFx. `--jobs` cuts **corpus wall** (Vox-3
+  tract: 5.5 s @ jobs=3/pool=1 vs 6.9 s @ jobs=1/pool=4; same DER 7.22%).
 
 ### Fixed
 

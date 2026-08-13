@@ -8,6 +8,7 @@
 #   bash scripts/tract-der-gate.sh
 #   DATASET=data/ami-test OUT=benchmarks/results/tract-der-ami bash scripts/tract-der-gate.sh
 #   MAX_FILES=10 DATASET=data/voxconverse-test bash scripts/tract-der-gate.sh
+#   JOBS=4 DATASET=data/voxconverse-test bash scripts/tract-der-gate.sh
 #
 # Not a product release gate — product remains ort+INT8 (see
 # scripts/linux-cpu-der-gate.sh). Requires features cli,backend-tract and
@@ -25,6 +26,7 @@ PIPELINE="${PIPELINE:-v2}"
 CLUSTERER="${CLUSTERER:-vbx}"
 EP="${EP:-cpu}"
 MAX_FILES="${MAX_FILES:-0}"   # 0 = all files present
+JOBS="${JOBS:-1}"             # file-parallel workers (polyvoice-bench --jobs)
 export POLYVOICE_VBX_PLDA_DIR="${POLYVOICE_VBX_PLDA_DIR:-$ROOT/fixtures/vbx-plda}"
 
 if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
@@ -52,6 +54,9 @@ COMMON=(--profile "$PROFILE" --pipeline "$PIPELINE" --clusterer "$CLUSTERER"
         --collar 0.0 --execution-provider "$EP")
 if [[ "$MAX_FILES" != "0" ]]; then
   COMMON+=(--max-files "$MAX_FILES")
+fi
+if [[ "$JOBS" != "1" ]]; then
+  COMMON+=(--jobs "$JOBS")
 fi
 
 run_one() {

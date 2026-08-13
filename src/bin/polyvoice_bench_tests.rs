@@ -75,6 +75,18 @@ fn default_args() -> Args {
 }
 
 #[test]
+fn jobs_defaults_to_one() {
+    let args = default_args();
+    assert_eq!(args.jobs, 1);
+}
+
+#[test]
+fn jobs_flag_parses() {
+    let args = Args::try_parse_from(["polyvoice-bench", "/tmp/dataset", "--jobs", "4"]).unwrap();
+    assert_eq!(args.jobs, 4);
+}
+
+#[test]
 fn hex_lower_formats_bytes_as_two_digit_hex() {
     assert_eq!(hex_lower(&[0x00, 0x0f, 0xa5, 0xff]), "000fa5ff");
     assert_eq!(hex_lower(&[]), "");
