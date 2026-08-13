@@ -53,6 +53,9 @@ A shipping profile where:
    [`tract-der-ami-2026-08-13`](../../benchmarks/results/tract-der-ami-2026-08-13/NOTES.md),
    [`powerset-tract-rtf-der-2026-08-12`](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md).
    Still **not** product default / not Linux full-split tract gate.
+   Tract **cannot** micro-batch N>1 (LSTM `Scan` fails at eval). Parallelism
+   is session **pool>1** (N=1 per run): Vox-3 M1 Pro pool=4 vs 1 is
+   **19.3× vs 8.1×** RTFx, same DER.
 5. ~~**Ship rewrite via registry**~~ — signed `powerset_fp32_tract` on release
    `models-tract-v1`; builder `ensure`s it under tract. Local
    `install-tract-models.sh` remains a dev shortcut.

@@ -170,9 +170,9 @@ pub struct PowersetSegmenter {
     input_name: String,
     config: PowersetConfig,
     model_path: PathBuf,
-    /// When true, micro-batch N is forced to 1 (CoreML reliability on long
-    /// corpora, or pure-Rust tract concrete `[1,1,T]` binding from the
-    /// tract-friendly rewrite).
+    /// When true, micro-batch N is forced to 1.
+    /// CoreML: long-corpus reliability. Tract: the powerset LSTM `Scan` does
+    /// not evaluate N>1 (load may succeed; run fails inside Scan).
     force_batch_one: bool,
 }
 
@@ -263,8 +263,8 @@ impl PowersetSegmenter {
     /// When the active inference backend is tract (`POLYVOICE_INFERENCE_BACKEND=tract`
     /// or [`crate::onnx::InferenceBackend::force`]), this remaps a shipping
     /// powerset path to `powerset_fp32_tract.onnx` if present beside it, and
-    /// forces session pool size and micro-batch N to 1 (tract binds concrete
-    /// `[1,1,T]` for the rewrite; product window is 10 s @ 16 kHz = 160000).
+    /// forces micro-batch N to 1 (tract LSTM `Scan` cannot run N>1). Session
+    /// **pool** stays configurable — that is the tract parallelism knob.
     pub fn with_config(
         model_path: impl AsRef<Path>,
         config: PowersetConfig,
@@ -277,8 +277,8 @@ impl PowersetSegmenter {
         // CoreML: one session avoids multi-session EP races that surface later
         // as embedder "dynamically resizing for sequence length" failures on
         // long corpora when powerset also micro-batches.
-        // Tract: rewrite is optimized for N=1 (concrete batch dim); one plan.
-        if force_batch_one {
+        // Tract keeps the configured pool: N=1 per run, several windows in parallel.
+        if matches!(ep, crate::onnx::ExecutionProvider::CoreMl) {
             pool_size = 1;
         }
         // Each pool session gets a fair share of the machine's cores so a
@@ -328,7 +328,7 @@ impl PowersetSegmenter {
     }
 
     /// Effective micro-batch size (env / config; default 8).
-    /// CoreML and pure-Rust tract force N=1.
+    /// CoreML (reliability) and tract (LSTM Scan) force N=1.
     fn effective_batch_size(&self) -> usize {
         if self.force_batch_one {
             return 1;

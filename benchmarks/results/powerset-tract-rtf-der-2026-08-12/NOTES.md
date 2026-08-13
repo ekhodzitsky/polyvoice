@@ -80,6 +80,19 @@ POLYVOICE_INFERENCE_BACKEND=tract \
   ./target/release/polyvoice-bench smoke-vox10 "${COMMON[@]}" --output tract-vox10.json
 ```
 
+## Parallelism (pure-Rust product path)
+
+Tract **cannot** run powerset micro-batch N>1: LSTM `Scan` fails at eval
+(`powerset_fp32_tract_batch8_lstm_scan_documented`). Speedup is **session pool**
+(N=1 per `run`, several windows in parallel).
+
+| Tract pool | Vox-3 RTFx | DER₀ | wall (s) |
+|------------|------------|------|----------|
+| 1 | 8.1 | 7.22 | 14.9 |
+| **4** (default cap) | **19.3** | 7.22 | 7.6 |
+
+`POLYVOICE_SESSION_POOL_SIZE` overrides. Embedder pool already used the same knob.
+
 ## Interpretation
 
 1. **Accuracy:** with rewrite + FP32 ResNet, tract matches ort within ~0.3 pp on

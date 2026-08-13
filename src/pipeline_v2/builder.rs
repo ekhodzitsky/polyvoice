@@ -226,8 +226,8 @@ impl PipelineBuilder {
                 // have been observed to trip "dynamically resizing for sequence
                 // length" failures on long corpora (embedder), especially with
                 // powerset micro-batching.
-                // Tract: powerset rewrite binds concrete [1,1,T]; PowersetSegmenter
-                // also clamps pool/batch to 1 when POLYVOICE_INFERENCE_BACKEND=tract.
+                // Tract: powerset micro-batch N=1 (LSTM Scan); session pool stays
+                // the configured size so windows run in parallel.
                 // INT8 ResNet34 is not numerically safe under tract (ort↔tract
                 // cosine ~0 on real segments; pairwise speakers collapse) — use
                 // FP32 wespeaker_resnet34 when the pure-Rust backend is active.

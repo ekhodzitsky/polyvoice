@@ -489,6 +489,31 @@ fn powerset_fp32_tract_10s_real_audio_report() {
     );
 }
 
+/// Product micro-batch N=8 is **not** runnable on tract: LSTM `Scan` fails
+/// at eval even when a symbolic-N or concrete-N8 plan loads. Parallelism is
+/// session-pool (N=1 per run), not ONNX batch.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn powerset_fp32_tract_batch8_lstm_scan_documented() {
+    let Some(path) = model_path("powerset_fp32_tract.onnx") else {
+        eprintln!("skip batch8: missing rewrite");
+        return;
+    };
+    let t = 160_000usize;
+    let n = 8usize;
+    let input = InferenceTensor::f32(vec![n, 1, t], vec![0.01f32; n * t]);
+    let mut tract = try_open(&path, InferenceBackend::Tract).expect("tract load");
+    let err = tract
+        .run_ordered(&[&input])
+        .expect_err("N=8 must fail on tract LSTM Scan");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Scan") || msg.contains("LSTM") || msg.contains("shape"),
+        "expected Scan/LSTM failure, got: {msg}"
+    );
+    eprintln!("tract batch8: documented fail: {msg}");
+}
+
 /// ResNet34 FP32 embedding cosine: ort vs tract on identical fbank-like input.
 #[test]
 #[cfg_attr(miri, ignore)]

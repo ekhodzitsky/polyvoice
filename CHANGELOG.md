@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   AMI-test full 16 (M1 Pro): tract DER₀ **23.42%** vs ort **24.63%**
   (Δ −1.2 pp); RTFx ~**19×** vs ~**154×**. Notes:
   `benchmarks/results/tract-der-ami-2026-08-13/`.
+- Tract powerset **session pool>1** (micro-batch stays N=1: LSTM Scan cannot
+  eval N>1). Same DER; Vox-3 M1 Pro RTFx **19.3** (pool=4) vs **8.1** (pool=1).
 
 ### Fixed
 
