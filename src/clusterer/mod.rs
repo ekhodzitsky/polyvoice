@@ -39,7 +39,6 @@ const AHC_FALLBACK_N: usize = 8;
 /// Python, and MCP all go through it. The free functions in `ahc`, `kmeans`,
 /// and `spectral` are the math layer underneath — used directly by the
 /// BYO/legacy `LegacyPipeline` and wrapped here by the `Clusterer` adapters.
-#[cfg_attr(test, mockall::automock)]
 pub trait Clusterer: Send + Sync {
     /// Cluster `embeddings`. Each inner vector must have the same length and
     /// be approximately L2-normalized.

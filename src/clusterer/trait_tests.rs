@@ -81,15 +81,3 @@ fn wants_raw_embeddings_defaults_to_false() {
     let c = ConstantClusterer { labels: vec![0] };
     assert!(!c.wants_raw_embeddings());
 }
-
-#[test]
-fn mock_clusterer_satisfies_trait() {
-    let mut mock = MockClusterer::new();
-    mock.expect_cluster()
-        .returning(|embs| Ok(vec![0; embs.len()]));
-    mock.expect_max_clusters().returning(|| 4);
-    let c: Box<dyn Clusterer> = Box::new(mock);
-    let labels = c.cluster(&[vec![1.0, 0.0], vec![0.0, 1.0]]).unwrap();
-    assert_eq!(labels, vec![0, 0]);
-    assert_eq!(c.max_clusters(), 4);
-}

@@ -44,7 +44,6 @@ pub struct RawSegment {
 
 /// A speaker segmentation engine — turns raw audio into spans of speech attributed
 /// to local speaker indices, with overlap detection.
-#[cfg_attr(test, mockall::automock)]
 pub trait Segmenter: Send + Sync {
     /// Segment `audio`. Audio must be 16 kHz mono `f32` PCM.
     ///
