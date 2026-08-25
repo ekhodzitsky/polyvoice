@@ -201,10 +201,12 @@ jobs:
       # x86_64 lane, so its lines would sink the 90% floor. Its numerical gates
       # are the DER/RTF scoreboard lanes (linux-cpu-der, native scoreboard).
       # The native pipeline (embedder/native, segmentation/native) only runs
-      # when onnx is off, so accumulate a cli-native pass first; llvm-cov merges
-      # consecutive runs in the same target dir into the final report.
-      - run: cargo llvm-cov nextest --profile ci --no-default-features --features cli-native --ignore-filename-regex 'polyvoice-kernels/'
-      - run: cargo llvm-cov nextest --profile ci --all-features --cobertura --output-path cobertura.xml --fail-under-lines 90 --ignore-filename-regex 'polyvoice-kernels/'
+      # when onnx is off, so accumulate a cli-native pass first and merge via
+      # --no-report + a final report (llvm-cov's multi-run pattern).
+      - run: cargo llvm-cov clean --workspace
+      - run: cargo llvm-cov nextest --profile ci --no-default-features --features cli-native --no-report
+      - run: cargo llvm-cov nextest --profile ci --all-features --no-report
+      - run: cargo llvm-cov report --cobertura --output-path cobertura.xml --fail-under-lines 90 --ignore-filename-regex 'polyvoice-kernels/'
       - if: always()
         uses: actions/upload-artifact@v4
         with:
