@@ -308,6 +308,9 @@ fn e2e_v2_vbx_rttm_on_real_speech() {
         .stdout(predicate::str::contains("SPEAKER fuzfh 1"));
 }
 
+// --legacy runs the Silero-based legacy pipeline, which native/tract builds
+// reject by design (see legacy_is_rejected in cli_native_smoke.rs).
+#[cfg(feature = "onnx")]
 #[test]
 fn e2e_legacy_writes_output_file_and_keeps_stdout_clean() {
     let Some(cache) = seeded_models_cache() else {
