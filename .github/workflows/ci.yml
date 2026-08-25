@@ -174,7 +174,9 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Two instrumented nextest passes (cli-native + all-features) exceed 30 min
+    # on a cold cache.
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
