@@ -689,10 +689,25 @@ fn build_manifest_without_profile_reports_registry_error() {
         .build()
         .err()
         .expect("build must fail");
+    // ONNX/tract path resolves the profile before consulting any model file.
+    #[cfg(any(feature = "onnx", feature = "backend-tract"))]
     assert!(matches!(
         err,
         ConfigError::Registry(RegistryError::ProfileNotFound { .. })
     ));
+    // Kernel-only builds never resolve profiles (the INT8 pair is
+    // profile-independent), so the missing `powerset_int8` entry is the error —
+    // wrapped as a stage-load failure by the native stage builder.
+    #[cfg(not(any(feature = "onnx", feature = "backend-tract")))]
+    {
+        let ConfigError::Load { source, .. } = &err else {
+            panic!("expected stage-load failure, got {err:?}");
+        };
+        assert!(matches!(
+            source.downcast_ref::<RegistryError>(),
+            Some(RegistryError::ModelNotFound { .. })
+        ));
+    }
 }
 
 #[cfg(feature = "vbx")]
