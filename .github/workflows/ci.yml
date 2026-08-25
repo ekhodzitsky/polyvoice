@@ -197,7 +197,10 @@ jobs:
           path: models
           key: coverage-models-${{ hashFiles('scripts/download-models.sh') }}
       - run: bash scripts/download-models.sh
-      - run: cargo llvm-cov nextest --profile ci --all-features --cobertura --output-path cobertura.xml --fail-under-lines 90
+      # polyvoice-kernels is mostly aarch64-gated code: it cannot execute in this
+      # x86_64 lane, so its lines would sink the 90% floor. Its numerical gates
+      # are the DER/RTF scoreboard lanes (linux-cpu-der, native scoreboard).
+      - run: cargo llvm-cov nextest --profile ci --all-features --cobertura --output-path cobertura.xml --fail-under-lines 90 --ignore-filename-regex 'polyvoice-kernels/'
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -302,7 +305,10 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-hack
-      - run: cargo hack check --feature-powerset --depth 2 --lib --bins
+      # cli-bin / infer are helper flags with deliberate compile_error backstops
+      # when enabled standalone — exclude them from the powerset (they are still
+      # exercised transitively via cli / onnx / pipeline-* combos).
+      - run: cargo hack check --feature-powerset --depth 2 --lib --bins --exclude-features cli-bin,infer
 
   msrv:
     runs-on: ubuntu-latest
