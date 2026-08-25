@@ -206,7 +206,15 @@ jobs:
       - run: cargo llvm-cov clean --workspace
       - run: cargo llvm-cov nextest --profile ci --no-default-features --features cli-native --no-report
       - run: cargo llvm-cov nextest --profile ci --all-features --no-report
-      - run: cargo llvm-cov report --cobertura --output-path cobertura.xml --fail-under-lines 90 --ignore-filename-regex 'polyvoice-kernels/'
+      # llvm-cov 0.9's --fail-under-lines ignores --ignore-filename-regex (it
+      # checks the unfiltered total, which includes kernels' never-executed
+      # aarch64 lines). Gate on the filtered number we actually publish.
+      - run: cargo llvm-cov report --cobertura --output-path cobertura.xml --ignore-filename-regex 'polyvoice-kernels/'
+      - name: Enforce the 90% line floor
+        run: |
+          rate=$(grep -o 'line-rate="[0-9.]*"' cobertura.xml | head -1 | cut -d'"' -f2)
+          echo "filtered line-rate: $rate"
+          awk -v r="$rate" 'BEGIN { if (r+0 < 0.90) { print "line coverage below 90%"; exit 1 } }'
       - if: always()
         uses: actions/upload-artifact@v4
         with:
