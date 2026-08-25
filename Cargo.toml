@@ -78,8 +78,9 @@ infer = []
 onnx = ["infer", "dep:ort"]
 # Full ONNX diarization stack (runtime, model downloads, segmentation,
 # embeddings, clustering, resegmentation). Exports crate-root `Pipeline`
-# (pipeline_v2). Use for library ONNX consumers; front doors (cli/ffi/mcp)
-# are `pipeline-full` + `vbx`. Half-wired combos exclude pipeline_v2 (with a
+# (pipeline_v2). Opt-in ONNX path for library consumers and the Python
+# bindings; the cli/ffi/mcp front doors are `pipeline-native` (no ort).
+# Half-wired combos exclude pipeline_v2 (with a
 # compile_error! backstop if the module is forced).
 pipeline-full = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"]
 # Same v2 stack as pipeline-full, but **no ort**: tract-only inference.

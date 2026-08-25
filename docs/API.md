@@ -5,13 +5,14 @@
 `polyvoice` is a speaker diarization library for Rust. It answers the question
 **"who spoke when?"** given a stream or file of audio samples.
 
-The crate exposes two intentional pipeline layers (see
+The crate exposes three intentional pipeline layers (see
 [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md)):
 
 | Layer | Entry point | Status | Best for |
 |-------|-------------|--------|----------|
 | **BYO / ort-free** (`polyvoice::pipeline::LegacyPipeline`) | `LegacyPipeline::new(DiarizationConfig, VadConfig)` + inject `Embedder` | Stable library surface; CLI `--legacy` | No ONNX; custom embedders; streaming sibling |
-| **ONNX production** (`polyvoice::Pipeline`, re-exported from `polyvoice::pipeline_v2`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/Python/MCP default since 0.11** (v2 + VBx) | Shipped accuracy path |
+| **Native kernels** (`polyvoice::Pipeline` via `pipeline-native`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/MCP default since 0.18** (v2 + VBx, hand-written INT8 kernels, no libonnxruntime) | CPU deployment with no native dylibs |
+| **ONNX production** (`polyvoice::Pipeline` via `pipeline-full`) | `Pipeline::builder()` + `ModelRegistry` | Opt-in since 0.18 (`cli-ort`); the Python bindings still ship this stack | Shipped accuracy path |
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -115,7 +116,8 @@ Shared encoders behind `Arc` are fine as long as `Embedder` is `Send + Sync`
 (the trait requires it).
 
 ### `LegacyPipeline::new(config, vad_config)`
-Stable offline entry point. CLI/Python ONNX paths use `pipeline_v2` by default;
+Stable offline entry point. The CLI/FFI/MCP front doors default to the
+native-kernels `pipeline_v2` since 0.18 (ONNX remains opt-in via `cli-ort`);
 library consumers keep this generic surface for BYO embedders.
 
 ```rust
