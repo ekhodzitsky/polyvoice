@@ -116,16 +116,22 @@ pub(crate) fn read_npy_flat(path: &Path) -> Result<(Vec<f64>, Vec<usize>), NpyEr
     }
     let values: Vec<f64> = match descr.as_str() {
         "<f8" => data
-            .chunks_exact(8)
-            .map(|c| f64::from_le_bytes(c.try_into().unwrap_or([0; 8])))
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|c| f64::from_le_bytes(*c))
             .collect(),
         "<f4" => data
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes(c.try_into().unwrap_or([0; 4])) as f64)
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c) as f64)
             .collect(),
         "<i8" => data
-            .chunks_exact(8)
-            .map(|c| i64::from_le_bytes(c.try_into().unwrap_or([0; 8])) as f64)
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|c| i64::from_le_bytes(*c) as f64)
             .collect(),
         _ => unreachable!("elem_size match above rejects other dtypes"),
     };

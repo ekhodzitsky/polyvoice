@@ -227,8 +227,7 @@ pub fn vbx(
 
         // Responsibility + prior update: temporal HMM forward-backward when
         // loop_prob > 0, else the GMM-style independent-frame update (parity path).
-        let log_px_sum: f64;
-        if config.loop_prob > 0.0 {
+        let log_px_sum: f64 = if config.loop_prob > 0.0 {
             let (g, tll, log_a, log_b) = forward_backward(&log_p, &pi, config.loop_prob);
             gamma = g;
             // Prior / speaker-count update (24): empty speakers shrink toward zero.
@@ -245,7 +244,7 @@ pub fn vbx(
             }
             let pi_sum = pi.sum();
             pi /= pi_sum;
-            log_px_sum = tll;
+            tll
         } else {
             let lpi: Array1<f64> = pi.mapv(|p| (p + 1e-8).ln());
             let mut log_p_x = Array1::<f64>::zeros(n_samples);
@@ -265,8 +264,8 @@ pub fn vbx(
             pi = gamma.sum_axis(Axis(0));
             let pi_sum = pi.sum();
             pi /= pi_sum;
-            log_px_sum = log_p_x.sum();
-        }
+            log_p_x.sum()
+        };
 
         // ELBO = log_pX + Fb*0.5*sum(ln(invL) - invL - alpha^2 + 1).
         let reg: f64 = inv_l

@@ -277,15 +277,12 @@ mod tests {
     use std::path::Path;
 
     fn model_path() -> Option<&'static Path> {
-        for p in [
+        [
             Path::new("models/int8/powerset_int8.onnx"),
             Path::new("models/powerset_int8.onnx"),
-        ] {
-            if p.is_file() {
-                return Some(p);
-            }
-        }
-        None
+        ]
+        .into_iter()
+        .find(|p| p.is_file())
     }
 
     fn cosine(a: &[f32], b: &[f32]) -> f64 {

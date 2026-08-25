@@ -110,7 +110,7 @@ impl VoiceActivityDetector for EarshotVad {
             });
         }
         let mut probs = Vec::with_capacity(samples.len() / FRAME_SIZE);
-        for frame in samples.chunks_exact(FRAME_SIZE) {
+        for frame in samples.as_chunks::<FRAME_SIZE>().0 {
             probs.push(self.score_frame(frame)?);
         }
         Ok(probs)
