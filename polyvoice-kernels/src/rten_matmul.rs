@@ -256,10 +256,10 @@ pub fn gemm_i8_static(
     {
         return false;
     }
-    if let Some(bias) = bias {
-        if bias.len() != n {
-            return false;
-        }
+    if let Some(bias) = bias
+        && bias.len() != n
+    {
+        return false;
     }
     I8_EXEC.with(|exec| {
         I8_SCRATCH.with(|cell| {

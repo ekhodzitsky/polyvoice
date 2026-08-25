@@ -66,6 +66,7 @@ pub fn gemm_bias_row(
 }
 
 /// FLOPs below this stay on the in-crate kernel (cblas launch cost).
+#[cfg(any(target_vendor = "apple", linux_cblas))]
 const ACCEL_MIN_FLOPS: usize = 32 * 64 * 32;
 
 /// rten-gemm wins on fat N×K even when M is the LSTM batch (8).
