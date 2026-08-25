@@ -5,3 +5,6 @@ results_full/
 results/*__latest.json
 __pycache__/
 *.pyc
+
+# Local smoke-corpus audio copies (regenerable from the corpus, not committed)
+results/*/smoke-vox*/

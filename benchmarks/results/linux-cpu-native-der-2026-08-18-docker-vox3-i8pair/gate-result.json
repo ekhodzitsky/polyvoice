@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "split": "voxconverse-test",
+      "ok": true,
+      "msg": "EP resolved='Cpu' want Cpu"
+    },
+    {
+      "split": "voxconverse-test",
+      "ok": true,
+      "msg": "files_processed=3 want 3"
+    },
+    {
+      "split": "ami-test",
+      "ok": true,
+      "msg": "EP resolved='Cpu' want Cpu"
+    },
+    {
+      "split": "ami-test",
+      "ok": true,
+      "msg": "files_processed=1 want 1"
+    }
+  ]
+}

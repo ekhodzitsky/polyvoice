@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "split": "voxconverse-test",
+      "ok": true,
+      "msg": "EP resolved='Cpu' want Cpu"
+    },
+    {
+      "split": "voxconverse-test",
+      "ok": true,
+      "msg": "files_processed=232 want 232"
+    },
+    {
+      "split": "voxconverse-test",
+      "ok": true,
+      "msg": "DER0 micro=15.4717 <= baseline 14.9400 + tol 1.00 (= 15.9400)"
+    },
+    {
+      "split": "ami-test",
+      "ok": true,
+      "msg": "EP resolved='Cpu' want Cpu"
+    },
+    {
+      "split": "ami-test",
+      "ok": true,
+      "msg": "files_processed=1 want 1"
+    },
+    {
+      "split": "ami-test",
+      "ok": true,
+      "msg": "smoke: files=1 (baseline full=16); DER assert skipped"
+    }
+  ]
+}

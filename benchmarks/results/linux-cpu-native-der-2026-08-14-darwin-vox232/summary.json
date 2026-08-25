@@ -1,0 +1,132 @@
+{
+  "schema": "polyvoice-linux-cpu-der-gate-v1",
+  "protocol": {
+    "profile": "balanced",
+    "pipeline": "v2+vbx",
+    "execution_provider": "cpu",
+    "powerset_batch": 8,
+    "collar_request": 0.25,
+    "note": "collar 0.25 JSON also carries no-collar micro/macro; miss/FA/conf are for the requested collar"
+  },
+  "host": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "platform": "Darwin-25.1.0-arm64-arm-64bit-Mach-O"
+  },
+  "assert_baseline": true,
+  "runs": {
+    "voxconverse-test": {
+      "files_processed": 232,
+      "resolved_execution_provider": "Cpu",
+      "der_no_collar_micro": 15.471713512575558,
+      "der_no_collar_macro": 15.456451267572263,
+      "der_collar_micro": 10.81425023856733,
+      "der_collar_macro": 10.998671972981434,
+      "miss": 2.1403050707948865,
+      "false_alarm": 1.7396491852462552,
+      "confusion": 7.118717716940287,
+      "miss_fa_conf_collar_secs": 0.25,
+      "rt_factor_avg": 130.28895974773664,
+      "speaker_count": {
+        "exact": 86,
+        "plus_minus_1": 67,
+        "off_by_2_or_more": 79
+      },
+      "crate_version": "0.17.0",
+      "git_sha": "e35db215d4972d19d8ec08afa71b6e21c82df317",
+      "model_hashes": [
+        {
+          "model_id": "powerset_int8",
+          "sha256": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+        },
+        {
+          "model_id": "resnet34_int8",
+          "sha256": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+        }
+      ],
+      "stage_totals": {
+        "segmentation_secs": 559.8081254570002,
+        "embedding_secs": 642.3986810410001,
+        "clustering_secs": 0.6200003719999999,
+        "resegmentation_secs": 0.06041574799999999
+      },
+      "baseline_key": "voxconverse_test_linux_cpu_native",
+      "max_files": null,
+      "powerset_batch": 8
+    },
+    "ami-test": {
+      "files_processed": 1,
+      "resolved_execution_provider": "Cpu",
+      "der_no_collar_micro": 32.946716389608746,
+      "der_no_collar_macro": 32.946716389608746,
+      "der_collar_micro": 24.140540602993593,
+      "der_collar_macro": 24.140540602993593,
+      "miss": 11.958198298123083,
+      "false_alarm": 1.2587881203676423,
+      "confusion": 10.923554184502867,
+      "miss_fa_conf_collar_secs": 0.25,
+      "rt_factor_avg": 116.98083886439544,
+      "speaker_count": {
+        "exact": 0,
+        "plus_minus_1": 0,
+        "off_by_2_or_more": 1
+      },
+      "crate_version": "0.17.0",
+      "git_sha": "e35db215d4972d19d8ec08afa71b6e21c82df317",
+      "model_hashes": [
+        {
+          "model_id": "powerset_int8",
+          "sha256": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+        },
+        {
+          "model_id": "resnet34_int8",
+          "sha256": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+        }
+      ],
+      "stage_totals": {
+        "segmentation_secs": 12.359062291,
+        "embedding_secs": 5.931275583,
+        "clustering_secs": 0.025428208,
+        "resegmentation_secs": 1.85e-05
+      },
+      "baseline_key": "ami_test_linux_cpu_native",
+      "max_files": 1,
+      "powerset_batch": 8
+    }
+  },
+  "gate": {
+    "ok": true,
+    "checks": [
+      {
+        "split": "voxconverse-test",
+        "ok": true,
+        "msg": "EP resolved='Cpu' want Cpu"
+      },
+      {
+        "split": "voxconverse-test",
+        "ok": true,
+        "msg": "files_processed=232 want 232"
+      },
+      {
+        "split": "voxconverse-test",
+        "ok": true,
+        "msg": "DER0 micro=15.4717 <= baseline 14.9400 + tol 1.00 (= 15.9400)"
+      },
+      {
+        "split": "ami-test",
+        "ok": true,
+        "msg": "EP resolved='Cpu' want Cpu"
+      },
+      {
+        "split": "ami-test",
+        "ok": true,
+        "msg": "files_processed=1 want 1"
+      },
+      {
+        "split": "ami-test",
+        "ok": true,
+        "msg": "smoke: files=1 (baseline full=16); DER assert skipped"
+      }
+    ]
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "schema": "polyvoice-bench-v0.10",
+  "crate_version": "0.17.0",
+  "git_sha": "e35db215d4972d19d8ec08afa71b6e21c82df317",
+  "host_arch": "aarch64",
+  "host_os": "linux",
+  "command_line": "/target/release/polyvoice-bench data/ami-test --profile balanced --pipeline v2 --clusterer vbx --collar 0.25 --execution-provider cpu --output /work/benchmarks/results/linux-cpu-native-der-2026-08-18-goal-static-lstm/ami-test.json --max-files 1",
+  "dataset_name": "ami-test",
+  "profile": "balanced",
+  "files_processed": 1,
+  "files_skipped": 0,
+  "der_collar_macro": 35.42572919013535,
+  "der_no_collar_macro": 41.37617723279186,
+  "der_collar_micro": 35.42572919013535,
+  "der_no_collar_micro": 41.37617723279186,
+  "collar_secs": 0.25,
+  "skip_overlap": false,
+  "averaging_policy": "macro = mean of per-file DER; micro = frame-weighted (sum error frames / sum ref frames)",
+  "resolved_execution_provider": "Cpu",
+  "host_cpus": 10,
+  "stage_totals": {
+    "segmentation_secs": 32.999438015,
+    "embedding_secs": 72.325117534,
+    "clustering_secs": 0.105174208,
+    "resegmentation_secs": 0.000057792
+  },
+  "miss": 13.040790743083598,
+  "false_alarm": 1.0733493931358786,
+  "confusion": 21.311589053915878,
+  "rt_factor_avg": 20.321396055982287,
+  "speaker_count": {
+    "exact": 0,
+    "plus_minus_1": 0,
+    "off_by_2_or_more": 1
+  },
+  "model_hashes": [
+    {
+      "model_id": "powerset_int8",
+      "sha256": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+    },
+    {
+      "model_id": "resnet34_int8",
+      "sha256": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+    }
+  ],
+  "per_file": [
+    {
+      "filename": "EN2002a.Mix-Headset",
+      "der_collar": 35.42572919013535,
+      "der_no_collar": 41.37617723279186,
+      "miss_rate": 13.040790743083598,
+      "false_alarm_rate": 1.0733493931358786,
+      "confusion_rate": 21.311589053915878,
+      "der_single_speaker": 25.478192964661744,
+      "der_overlap": 53.27584530100172,
+      "per_speaker_recall": [
+        {
+          "speaker": 0,
+          "recall": 0.7861094977531868
+        },
+        {
+          "speaker": 1,
+          "recall": 0.7098145859085291
+        },
+        {
+          "speaker": 2,
+          "recall": 0.9066196595073526
+        },
+        {
+          "speaker": 3,
+          "recall": 0.01638832969463268
+        }
+      ],
+      "rt_factor": 20.321396055982287,
+      "ref_speakers": 4,
+      "hyp_speakers": 9,
+      "num_turns": 822,
+      "audio_duration_secs": 2142.709375,
+      "runtime_secs": 105.44105184,
+      "stage_timings": {
+        "segmentation_secs": 32.999438015,
+        "embedding_secs": 72.325117534,
+        "clustering_secs": 0.105174208,
+        "resegmentation_secs": 0.000057792
+      }
+    }
+  ]
+}
