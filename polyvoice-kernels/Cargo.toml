@@ -1,0 +1,24 @@
+[package]
+name = "polyvoice-kernels"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94.0"
+description = "Hand-written WeSpeaker ResNet34 kernels for polyvoice — not a general ONNX runtime."
+license = "MIT"
+repository = "https://github.com/ekhodzitsky/polyvoice"
+publish = false
+
+[dependencies]
+# Pure-Rust GEMM (INT8 + FP32, NEON/dotprod/AVX). Justified: Linux has no
+# BNNS/AMX; OpenBLAS in the Desktop VM is ~10 GFLOP/s. Not a second ONNX
+# runtime — only matmul. Apple still uses BNNS/Accelerate at runtime.
+rten-gemm = "0.25"
+rten-tensor = "0.25"
+thiserror = "2"
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"
+
+[lints.clippy]
+unwrap_used = "deny"

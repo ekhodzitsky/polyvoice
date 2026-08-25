@@ -12,16 +12,13 @@
 //! to `process()` and reset via `reset()`. Inference goes through
 //! [`crate::onnx::InferenceRuntime`]; this module does not import `ort::`.
 
-#[cfg(feature = "onnx")]
 use crate::onnx::{InferenceRuntime, InferenceTensor, NamedTensor, RuntimeSession};
-#[cfg(feature = "onnx")]
 use crate::vad::{VadError, VoiceActivityDetector};
 
 /// Errors from [`SileroVad`] construction.
 ///
 /// Load-time failures are kept separate from the runtime [`VadError`] surface:
 /// a model that never loads is a deployment problem, not a per-frame one.
-#[cfg(feature = "onnx")]
 #[derive(thiserror::Error, Debug)]
 pub enum SileroVadError {
     /// `chunk_size` was 0 — the model scores fixed-size frames.
@@ -34,7 +31,6 @@ pub enum SileroVadError {
     Session(#[from] crate::onnx::OnnxError),
 }
 
-#[cfg(feature = "onnx")]
 pub struct SileroVad {
     session: RuntimeSession,
     state: Vec<f32>,
@@ -43,7 +39,6 @@ pub struct SileroVad {
     context_size: usize,
 }
 
-#[cfg(feature = "onnx")]
 impl SileroVad {
     const STATE_SIZE: usize = 2 * 128;
     /// Silero VAD weights are trained for 16 kHz mono audio only.
@@ -131,7 +126,6 @@ impl SileroVad {
     }
 }
 
-#[cfg(feature = "onnx")]
 impl VoiceActivityDetector for SileroVad {
     fn reset(&mut self) {
         self.state = vec![0.0f32; Self::STATE_SIZE];
@@ -163,11 +157,16 @@ impl VoiceActivityDetector for SileroVad {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "onnx")]
     use crate::onnx::{ExecutionProvider, InferenceBackend};
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
+    #[cfg(feature = "onnx")]
+    use std::path::PathBuf;
 
+    #[cfg(feature = "onnx")]
     const SILERO: &str = "models/silero_vad.onnx";
 
+    #[cfg(feature = "onnx")]
     fn silero_path() -> Option<PathBuf> {
         let p = Path::new(SILERO);
         if p.is_file() {
@@ -178,6 +177,7 @@ mod tests {
     }
 
     /// `n` samples of a 300 Hz sine at 16 kHz, amplitude 0.3.
+    #[cfg(feature = "onnx")]
     fn sine_samples(n: usize) -> Vec<f32> {
         (0..n)
             .map(|i| 0.3 * (2.0 * std::f32::consts::PI * 300.0 * i as f32 / 16_000.0).sin())
@@ -214,6 +214,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "onnx")]
     #[cfg_attr(miri, ignore)]
     fn with_ep_sets_context_size_from_chunk() {
         let Some(path) = silero_path() else {
@@ -234,6 +235,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "onnx")]
     #[cfg_attr(miri, ignore)]
     fn with_ep_accepts_unwired_providers() {
         let Some(path) = silero_path() else {
@@ -248,6 +250,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "onnx")]
     #[cfg_attr(miri, ignore)]
     fn process_rejects_partial_chunk() {
         let Some(path) = silero_path() else {
@@ -276,6 +279,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "onnx")]
     #[cfg_attr(miri, ignore)]
     fn process_returns_probs_in_unit_range() {
         let Some(path) = silero_path() else {
@@ -300,6 +304,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "onnx")]
     #[cfg_attr(miri, ignore)]
     fn silence_scores_low() {
         let Some(path) = silero_path() else {
@@ -318,6 +323,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "onnx")]
     #[cfg_attr(miri, ignore)]
     fn reset_restores_fresh_state() {
         let Some(path) = silero_path() else {

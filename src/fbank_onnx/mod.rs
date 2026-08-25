@@ -24,7 +24,6 @@ use std::path::Path;
 ///
 /// First-class [`Embedder`] implementation. Prefer architecture-specific
 /// adapters in [`crate::embedder`] when targeting a known model family.
-#[cfg(feature = "onnx")]
 pub struct FbankOnnxExtractor {
     pool: crate::utils::ObjectPool<RuntimeSession>,
     embedding_dim: usize,
@@ -36,7 +35,6 @@ pub struct FbankOnnxExtractor {
 /// Distinguishes a caller configuration error (`pool_size == 0`) from a
 /// backend session-build failure so adapters can map each cause onto their
 /// own error surface instead of flattening everything into one message.
-#[cfg(feature = "onnx")]
 #[derive(Clone, thiserror::Error, Debug)]
 pub enum FbankExtractorError {
     /// `pool_size` was 0 — the session pool must hold at least one session.
@@ -53,7 +51,6 @@ pub enum FbankExtractorError {
     },
 }
 
-#[cfg(feature = "onnx")]
 impl FbankOnnxExtractor {
     /// { pool_size > 0 }
     /// `fn new(model_path: &Path, embedding_dim: usize, pool_size: usize, ep: ExecutionProvider) -> Result<Self, FbankExtractorError>`
@@ -102,7 +99,6 @@ impl FbankOnnxExtractor {
     }
 }
 
-#[cfg(feature = "onnx")]
 impl Embedder for FbankOnnxExtractor {
     fn dim(&self) -> usize {
         self.embedding_dim
@@ -257,7 +253,7 @@ mod tests {
             eprintln!("skip: {RESNET34} missing");
             return;
         };
-        // Pin ort: the checked-in fp32 models are validated against ort.
+        #[cfg(feature = "onnx")]
         InferenceBackend::force(Some(InferenceBackend::Ort));
         let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 2, ExecutionProvider::Cpu).unwrap();
         assert_eq!(ext.pool_size(), 2);
@@ -272,6 +268,7 @@ mod tests {
             eprintln!("skip: {RESNET34} missing");
             return;
         };
+        #[cfg(feature = "onnx")]
         InferenceBackend::force(Some(InferenceBackend::Ort));
         let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 1, ExecutionProvider::Cpu).unwrap();
         let pcm = sine_pcm(1.0, 16_000);
@@ -293,6 +290,7 @@ mod tests {
             eprintln!("skip: {RESNET34} missing");
             return;
         };
+        #[cfg(feature = "onnx")]
         InferenceBackend::force(Some(InferenceBackend::Ort));
         let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 1, ExecutionProvider::Cpu).unwrap();
         // Shorter than one fbank window (400 samples) → zero-padded internally.
@@ -311,6 +309,7 @@ mod tests {
             eprintln!("skip: {RESNET34} missing");
             return;
         };
+        #[cfg(feature = "onnx")]
         InferenceBackend::force(Some(InferenceBackend::Ort));
         // Declare the wrong dim: the model emits 256 values per utterance.
         let ext = FbankOnnxExtractor::new(&path, 192, 1, ExecutionProvider::Cpu).unwrap();
@@ -325,7 +324,7 @@ mod tests {
         InferenceBackend::force(None);
     }
 
-    #[cfg(feature = "backend-tract")]
+    #[cfg(all(feature = "backend-tract", feature = "onnx"))]
     fn cosine(a: &[f32], b: &[f32]) -> f64 {
         let mut dot = 0.0f64;
         let mut na = 0.0f64;
@@ -339,7 +338,7 @@ mod tests {
     }
 
     /// Ort vs tract embeddings on real segment-length audio (variable fbank T).
-    #[cfg(feature = "backend-tract")]
+    #[cfg(all(feature = "backend-tract", feature = "onnx"))]
     #[test]
     #[cfg_attr(miri, ignore)]
     fn embed_ort_vs_tract_real_segments() {

@@ -170,7 +170,7 @@ pub fn load_model_config(
     let mut used_manifest = false;
     let mut used_defaults = false;
 
-    // 1. ONNX metadata_props (feature-gated; no-op without onnx / missing file).
+    // 1. ONNX metadata_props (feature-gated; no-op without infer / missing file).
     if let Some(path) = onnx_path {
         match read_onnx_metadata_props(path) {
             Ok(props) if !props.is_empty() => {
@@ -236,10 +236,11 @@ pub fn load_model_config(
 
 /// Read custom metadata key/value pairs from an ONNX file.
 ///
-/// Opens a short-lived ort session and queries `ModelMetadata`. The typed
-/// [`crate::onnx::OnnxError`] lets callers distinguish an unloadable model
-/// from a metadata read failure.
-#[cfg(feature = "onnx")]
+/// With `onnx` this queries the model via a short-lived session. Tract-only
+/// builds validate the header and return empty (manifest/defaults fill in).
+/// The typed [`crate::onnx::OnnxError`] lets callers distinguish an
+/// unloadable model from a metadata read failure.
+#[cfg(feature = "infer")]
 pub fn read_onnx_metadata_props(
     path: &Path,
 ) -> Result<HashMap<String, String>, crate::onnx::OnnxError> {
@@ -248,10 +249,10 @@ pub fn read_onnx_metadata_props(
 
 /// Read custom metadata key/value pairs from an ONNX file.
 ///
-/// Without the `onnx` feature there is no runtime to query, so this is
+/// Without an inference backend there is no runtime to query, so this is
 /// infallible and always returns an empty map — callers fall through to the
 /// manifest/defaults path.
-#[cfg(not(feature = "onnx"))]
+#[cfg(not(feature = "infer"))]
 pub fn read_onnx_metadata_props(
     path: &Path,
 ) -> Result<HashMap<String, String>, std::convert::Infallible> {
@@ -547,7 +548,7 @@ mod tests {
         assert_eq!(meta.source, Some(MetaSource::Manifest));
     }
 
-    #[cfg(feature = "onnx")]
+    #[cfg(feature = "infer")]
     #[test]
     fn load_with_unreadable_onnx_falls_back_to_manifest() {
         let m = Manifest::from_toml_str(ENTRY_TOML).unwrap();

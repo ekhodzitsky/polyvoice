@@ -5,7 +5,7 @@
 //! [`crate::pipeline::LegacyPipeline`] and online
 //! [`crate::streaming::StreamingPipeline`]. The pure-Rust trait and overlap
 //! mask are always available (no `onnx` required). ONNX-backed adapters still
-//! need `features = ["onnx", "embedder"]`. The generic `EmbedderPool` is a
+//! need `features = ["infer", "embedder"]`. The generic `EmbedderPool` is a
 //! test-only helper, not public API.
 //!
 //! Shared fbank+ONNX engine: `crate::fbank_onnx::FbankOnnxExtractor` (feature
@@ -87,7 +87,7 @@ pub enum EmbedderError {
     /// An ONNX-backed extractor failed to construct: invalid pool size, an
     /// unloadable model file, or a backend session-build failure. The typed
     /// cause is preserved as the [`std::error::Error::source`].
-    #[cfg(feature = "onnx")]
+    #[cfg(feature = "infer")]
     #[error("failed to build embedder for {path}: {source}")]
     SessionBuild {
         path: std::path::PathBuf,
@@ -305,7 +305,7 @@ impl<E: Embedder> EmbedderPool<E> {
 ///
 /// Only referenced by the shared ONNX adapter backing the per-model wrappers
 /// (`ResNet34`, CAM++, ERes2NetV2).
-#[cfg(all(feature = "onnx", feature = "embedder"))]
+#[cfg(all(feature = "infer", feature = "embedder"))]
 fn parallel_embed_batch<E: Embedder>(
     embedder: &E,
     audios: &[&[f32]],
@@ -348,7 +348,7 @@ fn parallel_embed_batch<E: Embedder>(
     })
 }
 
-#[cfg(all(feature = "onnx", feature = "embedder"))]
+#[cfg(all(feature = "infer", feature = "embedder"))]
 mod onnx_adapters {
     use super::*;
     use crate::fbank_onnx::FbankOnnxExtractor;
@@ -504,8 +504,13 @@ mod onnx_adapters {
     }
 }
 
-#[cfg(all(feature = "onnx", feature = "embedder"))]
+#[cfg(all(feature = "infer", feature = "embedder"))]
 pub use onnx_adapters::{CamPlusPlusExtractor, ERes2NetV2Extractor, ResNet34Adapter};
+
+#[cfg(feature = "embedder-native")]
+mod native;
+#[cfg(feature = "embedder-native")]
+pub use native::ResNet34Native;
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 #[path = "overlap_mask_tests.rs"]
@@ -532,6 +537,6 @@ mod error_display_tests;
 mod dummy_extractor_tests;
 
 #[allow(clippy::unwrap_used)]
-#[cfg(all(test, feature = "onnx", feature = "embedder"))]
+#[cfg(all(test, feature = "infer", feature = "embedder"))]
 #[path = "onnx_adapter_tests.rs"]
 mod onnx_adapter_tests;

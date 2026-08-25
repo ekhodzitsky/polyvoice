@@ -1,7 +1,10 @@
 //! `polyvoice::pipeline_v2` — trait-wired production ONNX diarization pipeline.
 
 #[cfg(not(all(
-    feature = "onnx",
+    any(
+        feature = "infer",
+        all(feature = "segmenter-native", feature = "embedder-native")
+    ),
     feature = "download",
     feature = "segmentation",
     feature = "embedder",
@@ -9,7 +12,8 @@
     feature = "resegmentation",
 )))]
 compile_error!(
-    "pipeline_v2 requires onnx + download + segmentation + embedder + clusterer + resegmentation features"
+    "pipeline_v2 requires download + segmentation + embedder + clusterer + resegmentation \
+     and an engine (`onnx`, `backend-tract`, or `pipeline-native`)"
 );
 
 pub mod builder;

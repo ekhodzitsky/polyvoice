@@ -21,6 +21,7 @@
 #   OUT=benchmarks/results/linux-cpu-der-manual bash scripts/linux-cpu-der-gate.sh
 #   MAX_VOX=10 MAX_AMI=16 bash scripts/linux-cpu-der-gate.sh   # smoke (AMI still gated)
 #   DOCKER=1 bash scripts/linux-cpu-der-gate.sh
+#   FEATURES=cli-native DOCKER=1 bash scripts/linux-cpu-der-gate.sh
 #   ASSERT_BASELINE=0 bash scripts/linux-cpu-der-gate.sh       # measure only
 #
 # Writes under OUT/:
@@ -33,7 +34,21 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 DATE="${DATE:-$(date +%Y-%m-%d)}"
-OUT="${OUT:-benchmarks/results/linux-cpu-der-${DATE}}"
+FEATURES="${FEATURES:-cli-ort}"
+# Cargo feature set that produces the bench/CLI. `cli` / `cli-native` =
+# kernels (no libonnxruntime). `cli-ort` = ONNX Runtime INT8.
+if [[ "$FEATURES" == *native* ]]; then
+  DEFAULT_OUT="benchmarks/results/linux-cpu-native-der-${DATE}"
+  DEFAULT_VOX_KEY="voxconverse_test_linux_cpu_native"
+  DEFAULT_AMI_KEY="ami_test_linux_cpu_native"
+else
+  DEFAULT_OUT="benchmarks/results/linux-cpu-der-${DATE}"
+  DEFAULT_VOX_KEY="voxconverse_test_linux_cpu"
+  DEFAULT_AMI_KEY="ami_test_linux_cpu"
+fi
+OUT="${OUT:-$DEFAULT_OUT}"
+BASELINE_VOX="${BASELINE_VOX:-$DEFAULT_VOX_KEY}"
+BASELINE_AMI="${BASELINE_AMI:-$DEFAULT_AMI_KEY}"
 EP="${EP:-cpu}"
 PROFILE="${PROFILE:-balanced}"
 PIPELINE="${PIPELINE:-v2}"
@@ -82,9 +97,13 @@ if [[ "${DOCKER:-0}" == "1" ]]; then
     -e ASSERT_BASELINE \
     -e BASELINE_JSON=/work/tests/der_baseline.json \
     -e POLYVOICE_POWERSET_BATCH_SIZE \
+    -e FEATURES \
+    -e BASELINE_VOX \
+    -e BASELINE_AMI \
     -e POLYVOICE_VBX_PLDA_DIR=/work/fixtures/vbx-plda \
     -e XDG_CACHE_HOME=/cache \
     -e CARGO_HOME=/cargo \
+    -e RUSTUP_HOME=/cargo/rustup \
     -e CARGO_TARGET_DIR=/target \
     -e PATH="/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     -e DOCKER=0 \
@@ -98,13 +117,19 @@ if [[ "${DOCKER:-0}" == "1" ]]; then
     bash -c 'set -euo pipefail
              apt-get update -qq
              apt-get install -y -qq curl ca-certificates build-essential \
-               pkg-config libssl-dev git python3 >/dev/null
-             if ! command -v cargo >/dev/null 2>&1; then
-               curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.88.0
-             fi
+               pkg-config libssl-dev git python3 libopenblas-dev gfortran >/dev/null
+             export PATH="/cargo/bin:$PATH"
              # shellcheck disable=SC1091
              source /cargo/env 2>/dev/null || true
-             export PATH="/cargo/bin:$PATH"
+             # A leftover rustup proxy on the cargo volume is not enough —
+             # the default toolchain may be missing. Probe rustc, not cargo.
+             if ! rustc --version >/dev/null 2>&1; then
+               curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
+                 | sh -s -- -y --default-toolchain 1.94.0
+               # shellcheck disable=SC1091
+               source /cargo/env
+             fi
+             rustup default 1.94.0 >/dev/null
              bash scripts/linux-cpu-der-gate.sh'
 fi
 
@@ -129,6 +154,7 @@ GATE_FAIL=0
   fi
   echo "ep: $EP"
   echo "profile: $PROFILE"
+  echo "features: $FEATURES"
   echo "pipeline: $PIPELINE + $CLUSTERER"
   echo "powerset_batch: $POLYVOICE_POWERSET_BATCH_SIZE"
   echo "assert_baseline: $ASSERT_BASELINE"
@@ -138,22 +164,23 @@ GATE_FAIL=0
 } | tee "$OUT/host.txt"
 
 # --- build ------------------------------------------------------------------
-need_build=0
-if [[ ! -x "$BENCH" ]]; then
-  need_build=1
-elif ! "$BENCH" --help >/dev/null 2>&1; then
-  echo "note: $BENCH not runnable on this host — rebuilding"
-  need_build=1
+# Always invoke cargo. A leftover binary in a shared CARGO_TARGET_DIR (the
+# Docker named volume) from another feature set is runnable and would
+# otherwise skip the requested FEATURES — measuring ort when we asked
+# for cli-native, or the reverse.
+echo "=== build release polyvoice-bench (features=$FEATURES) ==="
+cargo build --release --features "$FEATURES" --bin polyvoice-bench --bin polyvoice
+if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
+  BENCH="$CARGO_TARGET_DIR/release/polyvoice-bench"
+  CLI="$CARGO_TARGET_DIR/release/polyvoice"
+else
+  BENCH="target/release/polyvoice-bench"
+  CLI="target/release/polyvoice"
 fi
-if [[ "$need_build" == "1" ]]; then
-  echo "=== build release polyvoice-bench (features=cli) ==="
-  cargo build --release --features cli --bin polyvoice-bench --bin polyvoice
-  if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
-    BENCH="$CARGO_TARGET_DIR/release/polyvoice-bench"
-    CLI="$CARGO_TARGET_DIR/release/polyvoice"
-  else
-    BENCH="target/release/polyvoice-bench"
-    CLI="target/release/polyvoice"
+if [[ "$FEATURES" == *native* ]] && command -v strings >/dev/null 2>&1; then
+  if strings "$BENCH" | grep -F -q 'ort-artifacts/onnxruntime'; then
+    echo "FATAL: $BENCH still contains bundled onnxruntime after features=$FEATURES" >&2
+    exit 1
   fi
 fi
 
@@ -262,8 +289,8 @@ PY
   echo "${label}|${json}|${baseline_key}|${expected}|${maxf}" >>"$OUT/_runs.list"
 }
 
-run_split "voxconverse-test" "data/voxconverse-test" "$MAX_VOX" "voxconverse_test_linux_cpu" || true
-run_split "ami-test" "data/ami-test" "$MAX_AMI" "ami_test_linux_cpu" || true
+run_split "voxconverse-test" "data/voxconverse-test" "$MAX_VOX" "$BASELINE_VOX" || true
+run_split "ami-test" "data/ami-test" "$MAX_AMI" "$BASELINE_AMI" || true
 
 if [[ ! -s "$OUT/_runs.list" ]]; then
   echo "FATAL: no successful split runs" >&2

@@ -72,7 +72,11 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 |-------------------|--------|
 | `download` / `ModelRegistry` | HTTP registry + SHA-256 / minisign; **no ort by itself** |
 | `pipeline-full` | `onnx` + `download` + stage markers — ONNX library bundle |
-| `cli`, `ffi`, `mcp` | `pipeline-full` + `vbx` (+ extras). Front doors **set** VBx; library `PipelineConfig::default()` is still AHC |
+| `pipeline-tract` | same v2 stack, tract only — **no ort** |
+| `cli`, `ffi`, `mcp` | `pipeline-native` + `vbx` (+ extras). Front doors **set** VBx; library `PipelineConfig::default()` is still AHC |
+| `cli-ort` | previous product: `pipeline-full` + `vbx` (ONNX Runtime INT8) |
+| `cli-tract` | same CLI bins as `cli`, tract engine, no `ort`; `--legacy` rejected |
+| `pipeline-native` / `cli-native` | same v2 stack on hand-written kernels; **no ort, no tract**; `--legacy` rejected |
 
 ## Reference consumer pattern
 

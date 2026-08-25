@@ -123,20 +123,6 @@ fn pre_emphasis(samples: &[f32], coeff: f32) -> Vec<f32> {
     out
 }
 
-fn frame(samples: &[f32], win_length: usize, hop_length: usize) -> Vec<Vec<f32>> {
-    let num_frames = if samples.len() >= win_length {
-        1 + (samples.len() - win_length) / hop_length
-    } else {
-        0
-    };
-    let mut frames = Vec::with_capacity(num_frames);
-    for i in 0..num_frames {
-        let start = i * hop_length;
-        frames.push(samples[start..start + win_length].to_vec());
-    }
-    frames
-}
-
 fn hamming_window(n: usize) -> Vec<f32> {
     (0..n)
         .map(|i| 0.54 - 0.46 * (2.0 * std::f32::consts::PI * i as f32 / (n as f32 - 1.0)).cos())
@@ -151,7 +137,8 @@ pub struct FbankExtractor {
     pub config: FbankConfig,
     r2c: std::sync::Arc<dyn realfft::RealToComplex<f32>>,
     window: Vec<f32>,
-    mel_filters: Vec<Vec<f32>>,
+    /// Sparse triangular bands: `(fft_bin_start, weights)`.
+    mel_bands: Vec<(usize, Vec<f32>)>,
 }
 
 impl FbankExtractor {
@@ -191,7 +178,7 @@ impl FbankExtractor {
         let mut planner = RealFftPlanner::<f32>::new();
         let r2c = planner.plan_fft_forward(config.n_fft);
         let window = hamming_window(config.win_length);
-        let mel_filters = mel_filterbank(
+        let mel_bands = sparse_mel_bands(
             config.n_fft,
             config.n_mels,
             config.sample_rate,
@@ -202,7 +189,7 @@ impl FbankExtractor {
             config,
             r2c,
             window,
-            mel_filters,
+            mel_bands,
         })
     }
 
@@ -227,56 +214,41 @@ impl FbankExtractor {
             return Ok(Vec::new());
         }
 
+        let win = self.config.win_length;
+        let hop = self.config.hop_length;
+        let n_fft = self.config.n_fft;
+        let n_frames = 1 + (samples.len() - win) / hop;
         let pre = pre_emphasis(samples, self.config.pre_emphasis);
-        let frames = frame(&pre, self.config.win_length, self.config.hop_length);
+        let mut buf = vec![0.0f32; n_fft];
         let mut spectrum = self.r2c.make_output_vec();
-        let mut melspec = Vec::with_capacity(frames.len());
-        let spectrum_len = spectrum.len();
+        let mut power = vec![0.0f32; spectrum.len()];
+        let mut melspec = vec![vec![0.0f32; self.config.n_mels]; n_frames];
 
-        for fr in frames {
-            let mut buf = vec![0.0f32; self.config.n_fft];
-            for (i, &v) in fr.iter().enumerate() {
-                buf[i] = v * self.window[i];
+        for (fi, mel) in melspec.iter_mut().enumerate() {
+            let start = fi * hop;
+            buf[win..].fill(0.0);
+            for i in 0..win {
+                buf[i] = pre[start + i] * self.window[i];
             }
-
-            if buf.len() != self.config.n_fft {
-                return Err(FbankError::Shape(format!(
-                    "buffer len {} != n_fft {}",
-                    buf.len(),
-                    self.config.n_fft
-                )));
-            }
-            if spectrum.len() != spectrum_len {
-                return Err(FbankError::Shape(
-                    "spectrum buffer resized unexpectedly".to_string(),
-                ));
-            }
-
             self.r2c
                 .process(&mut buf, &mut spectrum)
                 .map_err(|e| FbankError::Fft(e.to_string()))?;
-
-            let power: Vec<f32> = spectrum.iter().map(|c| c.norm_sqr()).collect();
-
-            let mut mel = vec![0.0f32; self.config.n_mels];
-            for (i, filter) in self.mel_filters.iter().enumerate() {
-                let sum = filter
-                    .iter()
-                    .zip(power.iter())
-                    .map(|(a, b)| a * b)
-                    .sum::<f32>();
-                mel[i] = sum.max(1e-10).ln();
+            for (p, c) in power.iter_mut().zip(spectrum.iter()) {
+                *p = c.norm_sqr();
             }
-            melspec.push(mel);
+            for (slot, (off, weights)) in mel.iter_mut().zip(self.mel_bands.iter()) {
+                let mut sum = 0.0f32;
+                for (j, &wt) in weights.iter().enumerate() {
+                    sum += wt * power[off + j];
+                }
+                *slot = sum.max(1e-10).ln();
+            }
         }
 
         Ok(melspec)
     }
 }
 
-/// { true }
-/// `pub fn apply_cmvn(frames: &[Vec<f32>]) -> Vec<Vec<f32>>`
-/// { ret.len() == frames.len() }
 /// Apply cepstral mean normalization (CMN) to fbank features.
 ///
 /// Subtracts the per-bin mean across all frames. Required by WeSpeaker
@@ -306,6 +278,50 @@ pub fn apply_cmvn(frames: &[Vec<f32>]) -> Vec<Vec<f32>> {
                 .zip(means.iter())
                 .map(|(&v, &m)| v - m)
                 .collect()
+        })
+        .collect()
+}
+
+/// Subtract per-bin mean in place (same as [`apply_cmvn`]).
+pub fn apply_cmvn_inplace(frames: &mut [Vec<f32>]) {
+    if frames.is_empty() {
+        return;
+    }
+    let n_bins = frames[0].len();
+    let n_frames = frames.len() as f32;
+    let mut means = vec![0.0f32; n_bins];
+    for frame in frames.iter() {
+        for (i, &v) in frame.iter().enumerate() {
+            means[i] += v;
+        }
+    }
+    for m in &mut means {
+        *m /= n_frames;
+    }
+    for frame in frames.iter_mut() {
+        for (v, &m) in frame.iter_mut().zip(means.iter()) {
+            *v -= m;
+        }
+    }
+}
+
+fn sparse_mel_bands(
+    n_fft: usize,
+    n_mels: usize,
+    sample_rate: u32,
+    f_min: f32,
+    f_max: f32,
+) -> Vec<(usize, Vec<f32>)> {
+    mel_filterbank(n_fft, n_mels, sample_rate, f_min, f_max)
+        .into_iter()
+        .map(|filter| {
+            let start = filter.iter().position(|&w| w != 0.0).unwrap_or(0);
+            let end = filter
+                .iter()
+                .rposition(|&w| w != 0.0)
+                .map(|i| i + 1)
+                .unwrap_or(start);
+            (start, filter[start..end].to_vec())
         })
         .collect()
 }
@@ -416,6 +432,19 @@ mod tests {
         let frames: Vec<Vec<f32>> = vec![];
         let normalized = apply_cmvn(&frames);
         assert!(normalized.is_empty());
+    }
+
+    #[test]
+    fn apply_cmvn_inplace_matches_allocating() {
+        let frames = vec![vec![1.0, 2.0], vec![3.0, 4.0], vec![5.0, 6.0]];
+        let want = apply_cmvn(&frames);
+        let mut got = frames;
+        apply_cmvn_inplace(&mut got);
+        for (a, b) in got.iter().zip(want.iter()) {
+            for (x, y) in a.iter().zip(b.iter()) {
+                assert!((x - y).abs() < 1e-6);
+            }
+        }
     }
 
     #[test]
@@ -544,14 +573,15 @@ mod tests {
     }
 
     #[test]
-    fn frame_exact_window_multiple() {
-        let samples = vec![1.0f32; 800];
-        let frames = frame(&samples, 400, 160);
-        assert_eq!(frames.len(), 1 + (800 - 400) / 160);
-        assert!(frames.iter().all(|f| f.len() == 400));
-        // Exactly one window's worth of samples yields exactly one frame.
-        let frames = frame(&samples[..400], 400, 160);
-        assert_eq!(frames.len(), 1);
+    fn extract_frame_count_matches_hop() {
+        let config = FbankConfig::default();
+        let extractor = FbankExtractor::new(config);
+        let samples = vec![0.01f32; 800];
+        let frames = extractor.extract(&samples).unwrap();
+        assert_eq!(frames.len(), 1 + (800 - config.win_length) / config.hop_length);
+        assert!(frames.iter().all(|f| f.len() == config.n_mels));
+        let one = extractor.extract(&samples[..config.win_length]).unwrap();
+        assert_eq!(one.len(), 1);
     }
 
     #[test]

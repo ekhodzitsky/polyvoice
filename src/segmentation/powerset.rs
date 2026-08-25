@@ -706,6 +706,7 @@ mod tests {
         assert!(
             seg.model_path().ends_with("powerset_int8.onnx")
                 || seg.model_path().ends_with("powerset_fp32.onnx")
+                || seg.model_path().ends_with("powerset_fp32_tract.onnx")
         );
         let cfg = seg.config();
         assert!((cfg.window_secs - 10.0).abs() < 1e-6);
@@ -832,7 +833,7 @@ mod tests {
 
     /// Ort vs tract: segment counts / local speakers on a real short file.
     /// Explains whether the DER collapse is in segmentation vs later stages.
-    #[cfg(feature = "backend-tract")]
+    #[cfg(all(feature = "backend-tract", feature = "onnx"))]
     #[test]
     #[cfg_attr(miri, ignore)]
     fn tract_vs_ort_segment_real_short_file() {
@@ -978,6 +979,7 @@ mod tests {
     /// `benchmarks/results/int8-batch8-default-2026-08-10/`). This unit test
     /// only guards wiring: same frame counts, same logit length, no NaN/Inf.
     #[test]
+    #[cfg(feature = "onnx")]
     fn infer_batch_same_shape_as_sequential_on_cpu() {
         let path = local_model_path();
         if !path.exists() {

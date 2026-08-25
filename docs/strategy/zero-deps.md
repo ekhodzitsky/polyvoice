@@ -1,7 +1,7 @@
 # Zero-dependency aspiration (pure Rust / no native dylib)
 
 **Status:** active engineering constraint (Claude.md / AGENTS.md).  
-**Updated:** 2026-08-12  
+**Updated:** 2026-08-13  
 
 ## Goal
 
@@ -9,18 +9,41 @@ Ship speaker diarization without a C/C++ toolchain or prebuilt native
 runtimes (`libonnxruntime`, CoreML bindings, etc.) for the **core library
 path**, and progressively shrink the production path toward the same.
 
+**How:** only the ops polyvoice actually runs, in small workspace crates.
+Do **not** clone ONNX Runtime, tract, or a general ONNX executor.
+
+## Incremental path (narrow crates, not clones)
+
+| Step | What | Not |
+|------|------|-----|
+| **0** | Honest feature graph: `infer` / `onnx` / `backend-tract`. `pipeline-tract` has **no** `ort`. Product default stays `cli`+ort until a pure-Rust path is product-grade. | Switching product default |
+| **1** | Optional `cli-tract` (same CLI bins, tract engine, no dylib). `--legacy` rejected. | Rewriting the CLI |
+| **2** | `polyvoice-kernels`: **WeSpeaker ResNet34 only** (fused-BN Conv2d, ReLU, residual, stats-pool, GEMM). Initializers from shipping ONNX. Feature `embedder-native`. | Candle/Burn/tract clone |
+| **3** | Same crate: **powerset LSTM** (SincNet + 4× biLSTM). Feature `segmenter-native`. N>1 works. | Generic Scan / all ONNX ops |
+| **4 (now)** | `cli` / `ffi` / `mcp` = `pipeline-native` (no ort, no tract). Darwin Vox-3 holds the scoreboard floors. Linux DER holds the AMI ceiling; RTF is still below the old ort band. `cli-ort` keeps ONNX Runtime opt-in. | Pulling `ort` back into `cli` |
+| **skip** | Silero (v2 powerset already does VAD). Full protobuf ONNX parser. Sortformer stays opt-in/`onnx` until someone needs it. | — |
+
+Cross-platform is the default of this path: no `libonnxruntime`, no glibc pin, no CoreML/XNNPACK. Linux / macOS / Windows; clustering is already wasm32-clean.
+
+Keep `ort` as an optional `onnx` feature until step 4 so INT8 + EP + Sortformer keep working. Do not add another general ML framework.
+
 ## Current matrix
 
 | Surface | Pure Rust? | Quality / notes |
 |---------|------------|-----------------|
 | `default = []` + BYO `Embedder` + `EnergyVad` + AHC/VBx | **Yes** | Library mode; no models bundled |
 | `vad-earshot` (`EarshotVad`) | **Yes** (weights in crate) | Legacy VAD only; **+2.65 pp DER** vs Silero on measured subset — **opt-in only** |
+| `backend-tract` / `pipeline-tract` (no `onnx`) | **Yes** (tract-onnx; **no ort**) | Feature graph no longer pulls `libonnxruntime` |
 | `backend-tract` embedders (ResNet34 FP32/INT8, CAM++) | **Yes** (tract is pure Rust) | Numerical parity with ort within tol |
 | `backend-tract` + Silero ONNX | **No (load fail)** | Nested `If` / analyse |
 | `backend-tract` + powerset **shipping** ONNX | **No (load fail)** | nested `If` + `InstanceNormalization` |
 | `backend-tract` + rewrite + **FP32** ResNet | **Yes (smoke DER)** | remaps powerset; builder forces `wespeaker_resnet34` (INT8 ResNet unsafe under tract); ~9× slower RTFx; 3-file Vox DER ≈ ort |
 | `backend-tract` + INT8 ResNet | **No (accuracy)** | ort↔tract cosine ~0; speakers collapse — **not used** when tract is selected |
-| Production CLI / pipeline v2 default | **No** (ort + INT8) | Opt-in: `POLYVOICE_INFERENCE_BACKEND=tract` + `backend-tract` + rewrite ONNX |
+| `cli-tract` | **Yes** (tract-onnx; **no ort**) | Same `polyvoice` / `polyvoice-bench` / `polyvoice-measure` bins; `--legacy` rejected |
+| `embedder-native` (`ResNet34Native`) | **Yes** | Hand-written ResNet34; ort cosine 1.0 on 1 s fixture; no dylib |
+| `segmenter-native` (`PowersetNative`) | **Yes** | SincNet + 4× biLSTM; N>1; 1 s vs ort cosine 1.0 |
+| `pipeline-native` / `cli` / `ffi` | **Yes** (Apple Accelerate; Linux `rten-gemm`) | **Product default.** Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux AMI DER within ort ceiling; RTF ~28× (Vox-3) |
+| `cli-ort` / `pipeline-full` | **No** (ort + INT8) | Opt-in previous product |
 
 CI freezes the pure-Rust **invariants** via:
 
@@ -93,10 +116,18 @@ python3 scripts/export-powerset-tract.py --verify
 cargo test --lib --features "onnx,segmentation,backend-tract" powerset_fp32_tract_friendly -- --nocapture
 cargo test --lib --features "onnx,segmentation,backend-tract" tract_backend_segments -- --nocapture
 
-# Optional pure-Rust pipeline (not product default):
+# Optional pure-Rust CLI (not product default):
 # bash scripts/install-tract-models.sh
-# POLYVOICE_INFERENCE_BACKEND=tract cargo run --release --features "cli,backend-tract" -- …
+# cargo run --release --features cli-tract -- …
 
+
+# Native ResNet34 + powerset (no ONNX runtime)
+cargo test -p polyvoice-kernels
+cargo test --lib --features "onnx,embedder,embedder-native" native_matches_onnx_resnet34
+cargo test --lib --features "onnx,segmentation,segmenter-native" native_matches_ort_one_second
+# Full v2, no ort/tract:
+cargo test --lib --features "pipeline-native,vbx" native_pipeline_runs_short_sine
+cargo run --release --features cli-native -- meeting.wav
 
 # Earshot unit tests
 cargo test --lib --features vad-earshot earshot_vad
@@ -116,4 +147,5 @@ cargo run --release --features "cli,vad-earshot" --bin polyvoice-measure -- vad-
 
 - [`benchmarks/results/tract-backend-verdict.md`](../../benchmarks/results/tract-backend-verdict.md)
 - [`benchmarks/results/earshot-vad-notes.md`](../../benchmarks/results/earshot-vad-notes.md)
+- [`benchmarks/results/native-kernels-rtf-der-2026-08-13/NOTES.md`](../../benchmarks/results/native-kernels-rtf-der-2026-08-13/NOTES.md)
 - [`docs/library-mode.md`](../library-mode.md)

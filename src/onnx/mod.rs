@@ -7,21 +7,26 @@
 //! Neural stages outside this module must depend only on [`InferenceRuntime`] /
 //! [`RuntimeSession`] and must **not** import `ort::` or `tract_onnx` directly.
 //!
-//! Default backend is always ort. Select tract with env
-//! `POLYVOICE_INFERENCE_BACKEND=tract` (requires `backend-tract`) or
-//! [`InferenceBackend::force`].
+//! Default backend is ort when the `onnx` feature is on. Tract-only builds
+//! (`backend-tract` without `onnx`) always use tract. Select tract with env
+//! `POLYVOICE_INFERENCE_BACKEND=tract` or [`InferenceBackend::force`].
 
 use std::path::Path;
 
+#[cfg(not(any(feature = "onnx", feature = "backend-tract")))]
+compile_error!("feature `infer` requires `onnx` (ort) and/or `backend-tract`");
+
 mod factory;
+#[cfg(feature = "onnx")]
 mod ort_session;
-#[cfg(all(test, feature = "backend-tract"))]
+#[cfg(all(test, feature = "backend-tract", feature = "onnx"))]
 mod parity;
 mod runtime;
 #[cfg(feature = "backend-tract")]
 mod tract_session;
 
 pub use factory::{InferenceBackend, RuntimeSession};
+#[cfg(feature = "onnx")]
 pub use ort_session::OrtSession;
 pub use runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
 #[cfg(feature = "backend-tract")]
@@ -155,16 +160,26 @@ pub fn resolve_intra_threads(pool_size: usize) -> usize {
 
 /// Read ONNX `metadata_props` (custom metadata key/value pairs) from `path`.
 ///
-/// Opens a short-lived CPU session solely to query model metadata, then drops
-/// it. Used by `models::metadata::load_model_config` so stage adapters can take
-/// geometry / license / adapter_type from the model itself (sherpa-onnx pattern).
+/// With the `onnx` feature this opens a short-lived CPU session solely to
+/// query model metadata, then drops it. Tract-only builds validate the
+/// header and return an empty map — adapters then take geometry from the
+/// manifest / defaults (`models::metadata::load_model_config`). A protobuf
+/// walk just to read props is not worth a second ONNX parser.
 ///
 /// Returns an empty map when the model has no custom props (not an error).
 pub fn read_model_metadata_props(
     path: &Path,
 ) -> Result<std::collections::HashMap<String, String>, OnnxError> {
-    let session = OrtSession::from_path(path, ExecutionProvider::Cpu, Some(1))?;
-    session.custom_metadata_props()
+    validate_onnx_header(path)?;
+    #[cfg(feature = "onnx")]
+    {
+        let session = OrtSession::from_path(path, ExecutionProvider::Cpu, Some(1))?;
+        session.custom_metadata_props()
+    }
+    #[cfg(not(feature = "onnx"))]
+    {
+        Ok(std::collections::HashMap::new())
+    }
 }
 
 /// Errors from ONNX session construction and model metadata reads.
@@ -345,6 +360,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "onnx")]
     #[cfg_attr(miri, ignore)]
     fn build_session_with_ep_cpu_and_unwired_ep_build_ok() {
         let path = std::path::Path::new("models/silero_vad.onnx");
@@ -370,6 +386,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "onnx")]
     #[cfg_attr(miri, ignore)]
     fn build_session_with_ep_optional_providers_build_ok() {
         let path = std::path::Path::new("models/silero_vad.onnx");

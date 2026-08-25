@@ -7,7 +7,7 @@ polyvoice exposes a small C API for embedding the **production pipeline v2**
 |----------|------|
 | Header | [`include/polyvoice.h`](../include/polyvoice.h) |
 | Example | [`examples/ffi_usage.c`](../examples/ffi_usage.c) |
-| Cargo feature | `ffi` (= `pipeline-full` + `vbx`) |
+| Cargo feature | `ffi` (= `pipeline-native` + `vbx`; no `ort`) |
 
 ## Build
 

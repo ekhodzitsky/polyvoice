@@ -2,7 +2,7 @@
 name = "polyvoice-asr"
 version = "0.10.0"
 edition = "2024"
-rust-version = "1.88.0"
+rust-version = "1.94.0"
 description = "Opt-in ASR companion for polyvoice: Parakeet TDT word-level transcription via parakeet-rs, sharing the core ONNX runtime."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"

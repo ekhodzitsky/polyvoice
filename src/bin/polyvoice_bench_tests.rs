@@ -178,6 +178,7 @@ fn check_model_sha256_missing_file_errors() {
     assert!(format!("{e:#}").contains("read model"));
 }
 
+#[cfg(feature = "onnx")]
 #[test]
 fn verify_model_integrity_accepts_shipped_pair() {
     // Balanced profile embedder is resnet34_int8 (0.17+); VAD is still silero.
@@ -194,6 +195,7 @@ fn verify_model_integrity_accepts_shipped_pair() {
     .unwrap();
 }
 
+#[cfg(feature = "onnx")]
 #[test]
 fn verify_model_integrity_rejects_swapped_vad() {
     if !has_model("int8/resnet34_int8.onnx") {
@@ -265,7 +267,7 @@ fn build_report_assembles_serializable_report() {
         &registry,
         Profile::Balanced,
         "powerset_fp32",
-        polyvoice::onnx::ExecutionProvider::Cpu,
+        polyvoice::pipeline_v2::ExecutionProvider::Cpu,
         "dataset".to_owned(),
         acc,
     );
@@ -309,7 +311,7 @@ fn build_report_empty_accumulator_does_not_panic() {
         &registry,
         Profile::Balanced,
         "powerset_fp32",
-        polyvoice::onnx::ExecutionProvider::Cpu,
+        polyvoice::pipeline_v2::ExecutionProvider::Cpu,
         "empty".to_owned(),
         Accum::default(),
     );

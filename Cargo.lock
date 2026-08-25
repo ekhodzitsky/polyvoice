@@ -2292,7 +2292,7 @@ dependencies = [
 
 [[package]]
 name = "polyvoice"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2309,6 +2309,7 @@ dependencies = [
  "mockall",
  "ndarray",
  "ort",
+ "polyvoice-kernels",
  "predicates",
  "proptest",
  "realfft",
@@ -2339,6 +2340,17 @@ dependencies = [
  "polyvoice",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "polyvoice-kernels"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "rten-gemm",
+ "rten-tensor",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2828,6 +2840,54 @@ dependencies = [
  "quote",
  "serde_json",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "rten-base"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ce2e99d0a7cdd93ba73668dfa87d682ee3250c297afb8da83304678109e14f7"
+
+[[package]]
+name = "rten-gemm"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e0156f319d872aaa72c86bae71201f4050b2c2f26bb10c5f5231699a30d93ae"
+dependencies = [
+ "rayon",
+ "rten-base",
+ "rten-parallel",
+ "rten-simd",
+ "rten-tensor",
+]
+
+[[package]]
+name = "rten-parallel"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1269349c08f33c9f897009dd79be1f3582f17e5127544484c913286a4e4ed97"
+dependencies = [
+ "rayon",
+ "rten-base",
+]
+
+[[package]]
+name = "rten-simd"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5b7fa7c387ec732563348c923e5a0442e3a2a0977b380b90173e5cf2b50aae1"
+
+[[package]]
+name = "rten-tensor"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fabd83fb0fefd42763ceb5fd9635b7ce94aac10c577274a24ae94ff8e9f4565b"
+dependencies = [
+ "rayon",
+ "rten-base",
+ "rten-parallel",
+ "smallvec",
+ "typeid",
 ]
 
 [[package]]

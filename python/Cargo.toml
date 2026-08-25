@@ -1,10 +1,10 @@
 [package]
 name = "polyvoice-python"
-version = "0.17.0"
+version = "0.18.0"
 edition = "2024"
-# Tracks the core crate's MSRV (the path dependency on polyvoice requires 1.88);
+# Tracks the core crate's MSRV (the path dependency on polyvoice requires 1.94);
 # pyo3 itself is fine with older toolchains.
-rust-version = "1.88.0"
+rust-version = "1.94.0"
 publish = false
 
 [lib]

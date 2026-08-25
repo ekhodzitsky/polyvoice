@@ -123,6 +123,52 @@
     "_status": "operational — Linux aarch64 CPU product gate 2026-08-11; v2+VBx INT8; powerset N=8. micro no-collar 24.19% / collar 16.60% / RTFx ~94.9×. miss/FA/conf are @ collar 0.25. Primary non-Apple deploy truth; Mac CoreML remains ami_test. Asserted by scripts/linux-cpu-der-gate.sh when files=16 (CI smoke + full).",
     "_filled_by": "benchmarks/results/linux-cpu-der-2026-08-11/ami-test.json via scripts/linux-cpu-der-gate.sh"
   },
+  "voxconverse_test_linux_cpu_native": {
+    "files": 232,
+    "profile": "balanced",
+    "pipeline": "v2",
+    "clusterer": "vbx",
+    "execution_provider": "cpu",
+    "engine": "cli-native",
+    "powerset_batch": 8,
+    "der_collar_0_25": 10.27,
+    "der_no_collar": 14.94,
+    "der_collar_macro": 10.75,
+    "der_collar_micro": 10.27,
+    "der_no_collar_macro": 15.2,
+    "der_no_collar_micro": 14.94,
+    "tolerance": 1.0,
+    "model_versions": {
+      "segmenter": "powerset_int8",
+      "embedder": "resnet34_int8",
+      "clusterer": "vbx_plda"
+    },
+    "_status": "pending first Linux native full split — DER ceiling copied from voxconverse_test_linux_cpu (must not be worse than ort INT8). RTFx filled after scripts/linux-cpu-native-der-gate.sh.",
+    "_filled_by": null
+  },
+  "ami_test_linux_cpu_native": {
+    "files": 16,
+    "profile": "balanced",
+    "pipeline": "v2",
+    "clusterer": "vbx",
+    "execution_provider": "cpu",
+    "engine": "cli-native",
+    "powerset_batch": 8,
+    "der_collar_0_25": 16.6,
+    "der_no_collar": 24.19,
+    "der_collar_macro": 15.97,
+    "der_collar_micro": 16.6,
+    "der_no_collar_macro": 23.22,
+    "der_no_collar_micro": 24.19,
+    "tolerance": 1.5,
+    "model_versions": {
+      "segmenter": "powerset_int8",
+      "embedder": "resnet34_int8",
+      "clusterer": "vbx_plda"
+    },
+    "_status": "pending first Linux native AMI-16 — DER ceiling copied from ami_test_linux_cpu. RTFx filled after the native Linux gate.",
+    "_filled_by": null
+  },
   "voxconverse_dev": {
     "files": null,
     "profile": "balanced",

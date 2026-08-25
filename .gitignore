@@ -91,3 +91,8 @@ cobertura.xml
 
 # local quant experiment outputs (not release artifacts)
 models/int8/candidates/
+
+# Compiled BNNSGraph cache (regenerate via scripts/export-resnet-bnns-graph.py)
+*.mlmodelc/
+*.mlpackage/
+*.bnnsgraph

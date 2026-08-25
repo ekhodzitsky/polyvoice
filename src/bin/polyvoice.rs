@@ -21,10 +21,12 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use polyvoice::cli_common;
 use polyvoice::format::{write_srt, write_txt, write_vtt};
 use polyvoice::models::ModelRegistry;
+#[cfg(feature = "onnx")]
 use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::pipeline_v2::PipelineConfig;
 use polyvoice::rttm::write_rttm;
 use polyvoice::types::{DiarizationResult, Profile, SampleRate};
+#[cfg(feature = "onnx")]
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::load_audio;
 use std::io::Write;
@@ -218,6 +220,9 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     // v2 is the default; --legacy opts into the pre-0.11 Silero+AHC path.
     // `--v2` remains accepted (hidden) for script compatibility.
     let use_legacy = legacy;
+    if use_legacy {
+        cli_common::require_onnx("--legacy")?;
+    }
 
     let wav = wav.ok_or_else(|| {
         anyhow::anyhow!(
@@ -269,15 +274,22 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
                 "--as-norm/--cohort/--domain-profile apply to the default v2 pipeline only"
             );
         }
-        run_legacy_pipeline(
-            &wav,
-            profile,
-            &registry,
-            threshold,
-            max_clusters,
-            latency,
-            quiet,
-        )?
+        #[cfg(feature = "onnx")]
+        {
+            run_legacy_pipeline(
+                &wav,
+                profile,
+                &registry,
+                threshold,
+                max_clusters,
+                latency,
+                quiet,
+            )?
+        }
+        #[cfg(not(feature = "onnx"))]
+        {
+            unreachable!("require_onnx rejected --legacy");
+        }
     } else {
         run_v2_pipeline(
             &wav,
@@ -357,6 +369,23 @@ fn write_output(
     Ok(())
 }
 
+fn inference_backend_label() -> &'static str {
+    #[cfg(feature = "infer")]
+    {
+        match polyvoice::onnx::InferenceBackend::resolve() {
+            #[cfg(feature = "onnx")]
+            polyvoice::onnx::InferenceBackend::Ort => "ort",
+            #[cfg(feature = "backend-tract")]
+            polyvoice::onnx::InferenceBackend::Tract => "tract",
+        }
+    }
+    #[cfg(not(feature = "infer"))]
+    {
+        "native"
+    }
+}
+
+#[cfg(feature = "onnx")]
 fn run_legacy_pipeline(
     wav: &Path,
     profile: Profile,
@@ -472,9 +501,10 @@ fn run_v2_pipeline(
 
     if !quiet {
         eprintln!(
-            "Running diarization on {} samples ({} Hz)...",
+            "Running diarization on {} samples ({} Hz, backend {})...",
             samples.len(),
-            sr_hz
+            sr_hz,
+            inference_backend_label(),
         );
     }
     let result = pipeline

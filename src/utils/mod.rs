@@ -283,9 +283,9 @@ fn mean_confidence(sum: f32, count: u32) -> Option<f32> {
 /// checkout is not a contention-hot path in this crate, so a small mutex pool
 /// is preferred over a dedicated lock-free queue crate.
 ///
-/// Compiled for the `onnx` session pool (`fbank_onnx::FbankOnnxExtractor`) and for
-/// unit tests; unused in the default ort-free build.
-#[cfg(any(test, feature = "onnx"))]
+/// Compiled for the inference session pool (`fbank_onnx::FbankOnnxExtractor`) and for
+/// unit tests; unused in the default infer-free build.
+#[cfg(any(test, feature = "infer"))]
 pub(crate) struct ObjectPool<T> {
     items: std::sync::Mutex<Vec<T>>,
     /// Fixed construction size; not affected by checkouts.
@@ -296,13 +296,13 @@ pub(crate) struct ObjectPool<T> {
 }
 
 /// RAII guard: the pooled item is returned on drop.
-#[cfg(any(test, feature = "onnx"))]
+#[cfg(any(test, feature = "infer"))]
 pub(crate) struct PooledGuard<'a, T> {
     item: Option<T>,
     pool: &'a ObjectPool<T>,
 }
 
-#[cfg(any(test, feature = "onnx"))]
+#[cfg(any(test, feature = "infer"))]
 impl<T> ObjectPool<T> {
     pub(crate) fn new(items: Vec<T>) -> Self {
         let capacity = items.len();
@@ -338,7 +338,7 @@ impl<T> ObjectPool<T> {
     }
 }
 
-#[cfg(any(test, feature = "onnx"))]
+#[cfg(any(test, feature = "infer"))]
 impl<T> std::ops::Deref for PooledGuard<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
@@ -350,7 +350,7 @@ impl<T> std::ops::Deref for PooledGuard<'_, T> {
     }
 }
 
-#[cfg(any(test, feature = "onnx"))]
+#[cfg(any(test, feature = "infer"))]
 impl<T> std::ops::DerefMut for PooledGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         match self.item.as_mut() {
@@ -360,7 +360,7 @@ impl<T> std::ops::DerefMut for PooledGuard<'_, T> {
     }
 }
 
-#[cfg(any(test, feature = "onnx"))]
+#[cfg(any(test, feature = "infer"))]
 impl<T> Drop for PooledGuard<'_, T> {
     fn drop(&mut self) {
         if let Some(item) = self.item.take() {

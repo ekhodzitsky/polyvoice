@@ -9,7 +9,7 @@
 //! - silero / powerset may fail to load on tract — that is recorded as a
 //!   documented incompatibility (test still passes; see the verdict report).
 
-#![cfg(all(test, feature = "backend-tract"))]
+#![cfg(all(test, feature = "backend-tract", feature = "onnx"))]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use super::ExecutionProvider;

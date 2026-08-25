@@ -77,10 +77,11 @@ jobs:
       - name: Models (hard fail)
         run: cargo run --release --features cli --bin polyvoice -- download-models --profile balanced
 
-      - name: Linux CPU DER gate
+      - name: Linux CPU DER gate (ort)
         env:
           OUT: benchmarks/results/linux-cpu-der-ci
           EP: cpu
+          FEATURES: cli-ort
           POLYVOICE_POWERSET_BATCH_SIZE: "8"
           POLYVOICE_VBX_PLDA_DIR: ${{ github.workspace }}/fixtures/vbx-plda
           ASSERT_BASELINE: "1"
@@ -95,6 +96,26 @@ jobs:
           fi
           bash scripts/linux-cpu-der-gate.sh
 
+      - name: Linux CPU DER gate (native, no ort)
+        env:
+          OUT: benchmarks/results/linux-cpu-native-der-ci
+          EP: cpu
+          FEATURES: cli
+          POLYVOICE_POWERSET_BATCH_SIZE: "8"
+          POLYVOICE_VBX_PLDA_DIR: ${{ github.workspace }}/fixtures/vbx-plda
+          ASSERT_BASELINE: "1"
+          BASELINE_JSON: ${{ github.workspace }}/tests/der_baseline.json
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libopenblas-dev pkg-config
+          if [ "$MODE" = "full" ]; then
+            export MAX_VOX=0 MAX_AMI=0
+          else
+            export MAX_VOX=10 MAX_AMI=0
+          fi
+          bash scripts/linux-cpu-native-der-gate.sh
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -102,4 +123,5 @@ jobs:
           name: linux-cpu-der-reports-${{ env.MODE }}
           path: |
             benchmarks/results/linux-cpu-der-ci/
+            benchmarks/results/linux-cpu-native-der-ci/
           if-no-files-found: warn

@@ -98,10 +98,31 @@ pub enum ClustererKind {
     Vbx,
 }
 
-// Canonical home moved to `crate::onnx` (the module that owns session
-// creation) so low-level constructors can name the EP without a cyclic dep on
-// pipeline_v2; re-exported here so existing imports keep compiling.
+// Ort owns the live EP type (session construction). Kernel-only builds
+// (`pipeline-native`) have no `onnx` module — same variants, ignored at run.
+#[cfg(feature = "infer")]
 pub use crate::onnx::ExecutionProvider;
+
+#[cfg(not(feature = "infer"))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ExecutionProvider {
+    Cpu,
+    CoreMl,
+    Nnapi,
+    Cuda,
+    XnnPack,
+}
+
+#[cfg(not(feature = "infer"))]
+impl ExecutionProvider {
+    pub fn auto() -> Self {
+        Self::Cpu
+    }
+
+    pub fn is_available(self) -> bool {
+        matches!(self, Self::Cpu)
+    }
+}
 
 fn default_pool_size() -> usize {
     std::thread::available_parallelism()

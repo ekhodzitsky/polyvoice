@@ -7,8 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-25
+
+### Changed
+
+- **Product default is kernels, not ONNX Runtime.** `cli`, `ffi`, and
+  `mcp` now enable `pipeline-native` (hand-written INT8 powerset + ResNet,
+  no `libonnxruntime`). The previous ort INT8 stack is `--features cli-ort`
+  / `pipeline-full`. `cli-native` remains an alias of `cli`. Darwin
+  scoreboard floors are unchanged. Linux CPU RTF is still below the old
+  ort band; DER on AMI-16 stays within the ort ceiling. Linux large FP32
+  GEMMs can use `rten-gemm` (pure Rust NEON). **MSRV is 1.94**
+  (`rten-simd`).
+- **Linux INT8 conv is a 4×16 indexed-SDOT kernel.** Output lanes sit in
+  NEON registers (not a K-reduction plus horizontal sum). 3×3 stride-1
+  and stride-2 tiles gather KN then GEMM. Virtual rten im2col stays
+  opt-in (`POLYVOICE_RTEN_CONV=1`). ResNet T=400 embed **~147 ms**
+  (was ~450 ms). Vox-3 pipeline **~28×** RTFx (was ~6×): 3×3 s1 keeps
+  three padded input rows packed so 8 embed workers stop thrashing.
+  LSTM recurrent GEMM prepacks `R` once; SincNet InstanceNorm / leaky
+  ReLU use NEON. A full-width KN GEMM and a 4-thread powerset cap both
+  lost to cache thrash and were dropped.
+- **Linux NEON for QDQ / residual, rten for LSTM GEMM.** Quantize uses
+  `v / scale` (not `v * (1/scale)`) so rounding matches scalar.
+  Recurrent LSTM steps (`M=batch`) now hit rten-gemm; powerset N=8
+  10 s is ~2.3 s. Pipeline segmentation on Vox-3 dropped ~12.5 s →
+  ~10 s. Ort on the same host remains ~82×. LSTM gate sigmoid/tanh/exp
+  are NEON-vectorized as well (Cephes-minimax exp, rational tanh,
+  ≤ 4 ulp vs scalar): powerset 10 s at pack N=4 ~0.75 s → ~0.54 s,
+  DER₀ unchanged on the Linux gate subset.
+- **Embed workers adapt to batch shape.** When a batch is mostly
+  unique-length clips (cannot share a packed forward), `embed_batch`
+  defaults to 4 serial ResNet workers instead of 3;
+  `POLYVOICE_EMBED_THREADS` still overrides. AMI-1 RTFx ~+4 % on the
+  10-vCPU ARM bench box; DER₀ bit-identical.
+
 ### Added
 
+- **Linux native DER gate** (`scripts/linux-cpu-native-der-gate.sh`,
+  `FEATURES=cli-native` on the shared `linux-cpu-der-gate.sh` harness,
+  CI job in `linux-cpu-der.yml`). Same v2+VBx / INT8 / CPU protocol as
+  the ort product gate. Linux GEMM uses system OpenBLAS when present.
+  First full-split numbers are **Darwin** (Docker engine was down):
+  Vox-232 DER₀ **15.47 %** (≤ 14.94+1.0), AMI-16 **25.19 %**
+  (≤ 24.19+1.5), RTFx **130× / 109×** on M1 Pro. Product default is
+  now kernels; Linux RTF is the remaining gap vs ort (~13× vs ~82×).
+- **Native ResNet BNNSGraph** (Apple, `cli-native`): optional compiled
+  Core ML graph (`resnet34_bnns.mlmodelc` next to the INT8 ONNX, or
+  `POLYVOICE_RESNET_MLMODELC`) runs the whole conv stack in one
+  BNNSGraph execute with dynamic T. One shared context so peak RSS stays
+  under the 556 MiB floor. Vox-3 vs live ort INT8 CPU: embed **0.33 s vs
+  0.33–0.35 s**, RTFx **~131 vs ~131**, DER₀ **7.11 / 7.39**, RSS
+  **~524–535 MiB vs ~585–600 MiB**. Generate with
+  `scripts/export-resnet-bnns-graph.py` + `xcrun coremlcompiler`. Disable
+  with `POLYVOICE_NO_BNNS_GRAPH`. Product default remains `cli` (ort+INT8).
 - **Linux / CPU full-split DER gate** (`scripts/linux-cpu-der-gate.sh`,
   optional `DOCKER=1`, CI workflow `linux-cpu-der.yml`). Official non-Apple
   product numbers (INT8, v2+VBx, EP=cpu, powerset N=8): VoxConverse-test 232
@@ -56,8 +108,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Default 1 preserves historical RTFx. `--jobs` cuts **corpus wall** (Vox-3
   tract: 5.5 s @ jobs=3/pool=1 vs 6.9 s @ jobs=1/pool=4; same DER 7.22%).
 
+### Changed
+
+- **`backend-tract` no longer pulls `ort`.** Shared session types live behind
+  a new empty `infer` feature; `onnx` is now `infer` + `dep:ort`,
+  `backend-tract` is `infer` + `dep:tract-onnx`. `pipeline-tract` is the v2
+  stack without `libonnxruntime`. Product default remains `cli` (ort+INT8).
+  Zero-deps gates now fail if `ort` leaks into `backend-tract` /
+  `pipeline-tract`.
+- **`cli-tract`** — same `polyvoice` / `polyvoice-bench` / `polyvoice-measure`
+  binaries on tract only (no `ort`). `--legacy` and Silero-backed measure
+  commands fail fast. Shared clap surface is the `cli-bin` feature
+  (`required-features` on those bins). `cargo install polyvoice --features
+  cli` is unchanged.
+- **`polyvoice-kernels`** + feature `embedder-native`: hand-written WeSpeaker
+  ResNet34 (Conv2d / ReLU / residual / stats-pool / GEMM). Reads shipping
+  ONNX initializers only — not a graph runtime. `ResNet34Native` matches
+  ort cosine **1.0** on a 1 s fixture. Not product default.
+- **`segmenter-native`** / `PowersetNative`: hand-written powerset-3.0
+  (SincNet + 4× bidirectional LSTM-128). Batch N>1 is first-class (tract
+  cannot eval LSTM Scan at N>1). 1 s window vs ort: cosine **1.0**, argmax
+  56/56. Not product default.
+- **`pipeline-native` / `cli-native`**: v2 + VBx on hand-written kernels
+  only (no `ort`, no `tract`). Profile builds load the product INT8 pair
+  `powerset_int8` + `resnet34_int8` (~8.1 MB). ResNet uses QDQ + static
+  fake-quant; the powerset head is ONNX `DynamicQuantizeLinear` (UINT8) +
+  `MatMulInteger` (matches ort). Product default remains `cli` (ort+INT8).
+- **Native scoreboard** (`tests/native_scoreboard.rs`): Vox-3 floors for
+  DER₀ micro/macro **7.11 / 7.39**, RTFx **≥ 117**, INT8 pair **≤ 8.41 MB**,
+  peak RSS **≤ 556 MiB** (below live ort INT8 CPU on the same protocol).
+  RTF/RSS apply only against a release `polyvoice-bench`.
+- **Native kernel speedup** (LSTM `X@W` precompute + saxpy GEMM, SincNet
+  im2col+GEMM, ResNet BNNS/im2col+GEMM, window-parallel powerset). On
+  Apple, Conv2d uses Accelerate BNNS (fallback im2col + `cblas_sgemm`).
+  Vox-3 same-host: native **~113×** RTFx / DER₀ **7.22%** vs live ort
+  INT8 **~108×** / **7.41%**. Product default remains `cli` (ort+INT8).
+- **Native embed batching**: `ResNet34Native::embed_batch` fans segments
+  across cores (same pattern as the ort/tract session pool). 3×3 im2col
+  is a row-copy; residual add is in-place. e2e-smoke **5.84×** RTFx
+  (emb 6.80 s → 3.91 s); Vox-3 **6.98×** (emb 22.6 s → 12.1 s). DER
+  unchanged.
+- **Native conv GEMM**: 4×8 NEON FMA microkernel on `gemm_bias_row`
+  (~28 GFLOP/s vs ~4.4 saxpy).
+- **Apple Accelerate AMX** (`cblas_sgemm`) for fat GEMMs + SincNet
+  conv1d via im2col. Layer-1 GEMM **~318 GFLOP/s**. Vox-3 **61–65×**
+  RTFx (DER₀ **7.22%**, same as tract FP32) vs live ort INT8 **80×**
+  / **7.41%** and tract **~12×** on the same files. Powerset seg
+  **0.46 s** beats live ort **0.73 s**; embed still trails (1.26 s vs
+  0.58 s). Linux/other targets keep the in-crate kernel. Notes:
+  `benchmarks/results/native-kernels-rtf-der-2026-08-13/`. Still not
+  product default.
+
 ### Fixed
 
+- `polyvoice-kernels` compiles cleanly under `-D warnings` on Apple targets
+  again: the INT8-LSTM helpers (wired only on non-Apple) no longer trip
+  dead-code lints there, so `--features cli` / `cli-native` build on macOS.
 - Linux CPU gate is a real gate: hard-fail on missing datasets / wrong file
   counts / non-Cpu EP; asserts DER₀ micro against `*_linux_cpu` baselines when
   the run is full-split; model download no longer soft-fails; CI smoke asserts

@@ -1,20 +1,19 @@
 [workspace]
-# The core crate is the workspace root package; the opt-in ASR companion is the
-# only added member so they share one ONNX runtime (ort) and one lockfile.
+# The core crate is the workspace root package; added members share one lockfile.
+# python/ (maturin), fuzz/, and polyvoice-asr-sherpa/ stay standalone.
 # python/ (maturin), fuzz/, and polyvoice-asr-sherpa/ stay standalone — excluded
 # or self-isolated via their own [workspace], so their builds and lockfiles are
 # unaffected and sherpa-onnx's second C++ runtime never enters the core graph.
-members = ["polyvoice-asr"]
+members = ["polyvoice-asr", "polyvoice-kernels"]
 exclude = ["python", "fuzz"]
 resolver = "2"
 
 [package]
 name = "polyvoice"
-version = "0.17.0"
+version = "0.18.0"
 edition = "2024"
-# MSRV tracks ort-enabled (real) builds: ort 2.0.0-rc.11+ needs Rust 1.88.
-# Pure non-ort library features may compile on older toolchains, but CI pins 1.88.
-rust-version = "1.88.0"
+# MSRV: rten-gemm / rten-simd (Linux INT8 GEMM) need 1.94.
+rust-version = "1.94.0"
 description = "Speaker diarization for Rust — who spoke when. ONNX path optional: default features are empty (ort-free BYO-embedder core); enable onnx for Silero VAD, WeSpeaker embeddings, and Pyannote segmentation."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
@@ -71,26 +70,59 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-# ONNX-based embedding extractors (pulls ort).
-onnx = ["dep:ort"]
+# InferenceRuntime surface (tensors, factory, session trait). No native dylib.
+# Enabled by `onnx` (ort) and/or `backend-tract`. Stages depend on this, not on
+# a concrete engine.
+infer = []
+# ONNX Runtime backend (pulls ort + native libonnxruntime).
+onnx = ["infer", "dep:ort"]
 # Full ONNX diarization stack (runtime, model downloads, segmentation,
 # embeddings, clustering, resegmentation). Exports crate-root `Pipeline`
 # (pipeline_v2). Use for library ONNX consumers; front doors (cli/ffi/mcp)
 # are `pipeline-full` + `vbx`. Half-wired combos exclude pipeline_v2 (with a
 # compile_error! backstop if the module is forced).
 pipeline-full = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"]
-# C FFI bindings (ABI v3). Requires the full pipeline stack. Includes VBx so the
-# C ABI ships the same production default (pipeline v2 + VBx) as the CLI/MCP.
-ffi = ["pipeline-full", "vbx"]
+# Same v2 stack as pipeline-full, but **no ort**: tract-only inference.
+pipeline-tract = [
+    "backend-tract",
+    "download",
+    "segmentation",
+    "embedder",
+    "clusterer",
+    "resegmentation",
+]
+# v2 stack with hand-written kernels only (no ort, no tract).
+pipeline-native = [
+    "download",
+    "segmentation",
+    "embedder",
+    "clusterer",
+    "resegmentation",
+    "embedder-native",
+    "segmenter-native",
+]
+# C FFI bindings (ABI v3). Same production stack as `cli` (kernels, no ort).
+ffi = ["pipeline-native", "vbx"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
 download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
-# CLI binary (polyvoice command). Includes VBx so the post-gate default path
-# (pipeline v2 + VBx) is available without an extra feature flag.
-cli = ["pipeline-full", "vbx", "dep:clap", "dep:clap_complete"]
+# Shared clap surface for the CLI binaries. Engine comes from `cli` or
+# `cli-tract` — do not enable this flag alone.
+cli-bin = ["dep:clap", "dep:clap_complete"]
+# Product CLI: hand-written kernels, no libonnxruntime. Includes VBx so the
+# v2 + VBx default is available without an extra flag.
+cli = ["cli-bin", "pipeline-native", "vbx"]
+# Same CLI binaries on ONNX Runtime INT8 (previous product). Opt-in.
+cli-ort = ["cli-bin", "pipeline-full", "vbx"]
+# Same CLI binaries, tract-only inference — no `ort` / libonnxruntime.
+# `--legacy` is rejected (Silero does not load on tract).
+cli-tract = ["cli-bin", "pipeline-tract", "vbx"]
+# Alias of `cli` (kept so existing `--features cli-native` commands work).
+cli-native = ["cli"]
 
 # Multi-format audio decode (symphonia) + resampling to 16 kHz (rubato) for the
 # CLI / loading layer. Opt-in only — keeps the default library surface free of
-# media-codec deps. Rebuild the CLI with `--features "cli,audio-io"`.
+# media-codec deps. Rebuild the CLI with `--features "cli,audio-io"` or
+# `"cli-ort,audio-io"` / `"cli-tract,audio-io"`.
 audio-io = ["dep:rubato", "dep:symphonia"]
 
 # Execution providers (forward `ort` features). Used by the Pipeline implementations.
@@ -98,26 +130,23 @@ coreml = ["onnx", "ort/coreml"]
 nnapi = ["onnx", "ort/nnapi"]
 xnnpack = ["onnx", "ort/xnnpack"]
 
-# Pure-Rust ONNX inference via tract (Sonos). Opt-in alternative to ort behind
-# InferenceRuntime. Default builds must not pull tract (verify with cargo tree).
-# Requires the `onnx` feature so the shared runtime surface is available; ort
-# remains the default backend even when this feature is enabled.
+# Pure-Rust ONNX inference via tract. Does **not** pull ort.
 # Note: tract-onnx declares MSRV 1.91 — higher than this crate's rust-version
-# (1.88). Enabling this feature needs a newer toolchain; we do not bump MSRV.
-backend-tract = ["onnx", "dep:tract-onnx"]
+# (1.94). Enabling this feature needs a toolchain that also covers tract.
+backend-tract = ["infer", "dep:tract-onnx"]
 
 # Spectral clustering backend (pulls faer for SVD/eigendecomp).
 spectral = ["dep:faer"]
 
 # Powerset speaker segmentation (sherpa-onnx-pyannote-segmentation-3-0).
 # The pure-Rust algorithmic core (decoder, aggregator, hungarian) compiles to
-# wasm32-clean. The ONNX-backed `PowersetSegmenter` additionally requires `onnx`.
+# wasm32-clean. The ONNX-backed `PowersetSegmenter` additionally requires `infer`.
 segmentation = []
 
 # ONNX-backed Embedder adapters (CAM++/ResNet34/ERes2NetV2) + docs.rs grouping.
 # The pure-Rust Embedder trait and overlap mask are always compiled
 # (feature-free library BYO path). Enabling this feature alone adds
-# nothing without `onnx`; with `onnx` it exports CamPlusPlusExtractor etc.
+# nothing without `infer`; with `onnx` or `backend-tract` it exports CamPlusPlusExtractor etc.
 embedder = []
 
 # v1.0 Clusterer trait + NME-SC + AHC adapters.
@@ -141,6 +170,11 @@ resegmentation = []
 # weights are optional download via the model registry (never bundled).
 sortformer = ["onnx"]
 
+# Hand-written WeSpeaker ResNet34 (no ONNX runtime). Opt-in only.
+embedder-native = ["dep:polyvoice-kernels"]
+# Hand-written powerset-3.0 (SincNet + 4× biLSTM). Opt-in only.
+segmenter-native = ["dep:polyvoice-kernels", "segmentation"]
+
 # Optional pure-Rust earshot VAD (pykeio). Opt-in only — never default.
 # Silero remains the production default and the DER-parity reference.
 # Weights are compiled into the earshot crate (no ONNX, no download).
@@ -156,9 +190,9 @@ attribution = []
 # tool can run. `ort` is the SAME crate dependency as the core (polyvoice-mcp is a
 # bin in this crate, not a separate crate), so the ONNX Runtime version matches
 # automatically — no dual-runtime risk.
-# Agent MCP server: same production stack as `cli` (pipeline v2 + VBx default).
+# Agent MCP server: same production stack as `cli` (kernels, v2 + VBx).
 mcp = [
-    "pipeline-full",
+    "pipeline-native",
     "vbx",
     "dep:rmcp",
     "dep:schemars",
@@ -171,6 +205,8 @@ ort = { version = "2.0.0-rc.12", optional = true, default-features = false, feat
 # Pure-Rust ONNX loader/runtime (opt-in via `backend-tract`). Use tract-onnx
 # directly rather than the heavier facade crate (which pulls CUDA by default).
 tract-onnx = { version = "0.23.4", optional = true, default-features = false }
+# Hand-written ResNet34 kernels (opt-in via `embedder-native`).
+polyvoice-kernels = { path = "polyvoice-kernels", version = "0.1.0", optional = true }
 
 # Pure-Rust VAD (opt-in via `vad-earshot`). Weights compiled into the crate;
 # no ONNX Runtime session. Default builds must not pull this dependency.
@@ -237,17 +273,17 @@ harness = false
 [[bin]]
 name = "polyvoice"
 path = "src/bin/polyvoice.rs"
-required-features = ["cli"]
+required-features = ["cli-bin"]
 
 [[bin]]
 name = "polyvoice-bench"
 path = "src/bin/polyvoice-bench.rs"
-required-features = ["cli"]
+required-features = ["cli-bin"]
 
 [[bin]]
 name = "polyvoice-measure"
 path = "src/bin/polyvoice-measure.rs"
-required-features = ["cli"]
+required-features = ["cli-bin"]
 
 [[bin]]
 name = "polyvoice-mcp"
@@ -258,7 +294,7 @@ required-features = ["mcp"]
 # stack, so it is skipped in feature-free builds (CI clippy --all-targets).
 [[example]]
 name = "build_asnorm_cohort"
-required-features = ["cli"]
+required-features = ["cli-ort"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(kani)'] }

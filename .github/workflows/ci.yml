@@ -28,9 +28,9 @@ jobs:
           - os: ubuntu-latest
             flags: --all-targets --all-features
           - os: macos-latest
-            flags: --all-targets --features onnx,ffi,cli
+            flags: --all-targets --features cli
           - os: windows-latest
-            flags: --all-targets --features onnx,ffi,cli
+            flags: --all-targets --features cli
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -82,9 +82,9 @@ jobs:
           - os: ubuntu-latest
             flags: --all-targets --all-features
           - os: macos-latest
-            flags: --all-targets --features onnx,ffi,cli
+            flags: --all-targets --features cli
           - os: windows-latest
-            flags: --all-targets --features onnx,ffi,cli
+            flags: --all-targets --features cli
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -120,9 +120,9 @@ jobs:
           - os: ubuntu-latest
             flags: --all-features
           - os: macos-latest
-            flags: --features onnx,ffi,cli
+            flags: --features cli
           - os: windows-latest
-            flags: --features onnx,ffi,cli
+            flags: --features cli
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -402,6 +402,11 @@ jobs:
       - run: cargo test --no-default-features --features clusterer,vbx --lib --locked
       - run: cargo test --no-default-features --features clusterer,vbx --test library_vbx_from_dir --locked
       - run: cargo clippy --no-default-features --features clusterer,vbx --all-targets --locked -- -D warnings
+      # Hand-written kernels + kernel-only CLI (no ort, no tract).
+      - run: cargo test -p polyvoice-kernels --locked
+      - run: cargo clippy -p polyvoice-kernels --all-targets --locked -- -D warnings
+      - run: cargo test --no-default-features --features cli-native --test cli_native_smoke --locked
+      - run: cargo clippy --no-default-features --features cli-native --all-targets --locked -- -D warnings
 
   wasm32-smoke:
     runs-on: ubuntu-latest

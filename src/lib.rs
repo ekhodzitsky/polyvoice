@@ -17,11 +17,14 @@
 //! ## Quick start
 //!
 //! **ONNX production path:** the crate-root `Pipeline` (re-exported from
-//! `pipeline_v2`) + `ModelRegistry`, gated on features `onnx`, `download`,
+//! `pipeline_v2`) + `ModelRegistry`, gated on features `infer`, `download`,
 //! `segmentation`, `embedder`, `clusterer`, `resegmentation` (CLI also
-//! enables `vbx`). This is what CLI / FFI / Python / MCP run by default
-//! since **0.11** (v2 + VBx). With the gate off there is deliberately no
-//! crate-root `Pipeline` — ort-free builds use [`pipeline::LegacyPipeline`].
+//! enables `vbx`). `infer` comes from `onnx` (ort) and/or `backend-tract`.
+//! CLI / FFI / MCP default to **kernels** via `cli` / `pipeline-native`
+//! (no `ort`). ONNX Runtime is `--features cli-ort` / `onnx` /
+//! `pipeline-full`. `cli-tract` is the same v2 stack on tract. With the
+//! gate off there is deliberately no crate-root `Pipeline` — inference-free
+//! builds use [`pipeline::LegacyPipeline`].
 //!
 //! **Library mode (no ONNX):** `default-features = false`, implement
 //! [`Embedder`], pair with [`EnergyVad`] and [`pipeline::LegacyPipeline`] /
@@ -32,9 +35,9 @@
 //!
 //! Two intentional pipeline families share math and types:
 //!
-//! - **ONNX production (`pipeline_v2`, crate-root `Pipeline`):** trait-wired
-//!   Segmenter → Embedder → Clusterer → Resegmenter. CLI/FFI/Python/MCP
-//!   default since 0.11 (VBx when PLDA is available). See
+//! - **Production (`pipeline_v2`, crate-root `Pipeline`):** trait-wired
+//!   Segmenter → Embedder → Clusterer → Resegmenter. CLI/FFI/MCP default
+//!   to hand-written kernels (`cli`). ONNX Runtime is `cli-ort`. See
 //!   `docs/PIPELINE-ARCHITECTURE.md`.
 //! - **BYO / ort-free ([`pipeline::LegacyPipeline`] + `StreamingPipeline`):**
 //!   inject [`Embedder`] + [`VoiceActivityDetector`]. CLI `--legacy` uses
@@ -81,8 +84,11 @@ pub use segmentation::{
     RawSegment, SegmentationError, Segmenter, WindowOutput,
 };
 
-#[cfg(all(feature = "onnx", feature = "segmentation"))]
+#[cfg(all(feature = "infer", feature = "segmentation"))]
 pub use segmentation::{PowersetConfig, PowersetSegmenter};
+
+#[cfg(all(feature = "segmenter-native", feature = "segmentation"))]
+pub use segmentation::PowersetNative;
 
 /// Bring-your-own speaker embedder trait (always available; pure Rust core).
 /// ONNX-backed adapters still require `features = ["onnx", "embedder"]`.
@@ -90,8 +96,11 @@ pub mod embedder;
 
 pub use embedder::{DummyExtractor, Embedder, EmbedderError, apply_overlap_mask};
 
-#[cfg(all(feature = "onnx", feature = "embedder"))]
+#[cfg(all(feature = "infer", feature = "embedder"))]
 pub use embedder::{CamPlusPlusExtractor, ERes2NetV2Extractor, ResNet34Adapter};
+
+#[cfg(feature = "embedder-native")]
+pub use embedder::ResNet34Native;
 
 #[cfg(feature = "clusterer")]
 pub mod clusterer;
@@ -142,7 +151,10 @@ pub use attribution::{
 pub mod pipeline;
 
 #[cfg(all(
-    feature = "onnx",
+    any(
+        feature = "infer",
+        all(feature = "segmenter-native", feature = "embedder-native")
+    ),
     feature = "download",
     feature = "segmentation",
     feature = "embedder",
@@ -151,11 +163,14 @@ pub mod pipeline;
 ))]
 pub mod pipeline_v2;
 
-/// Production ONNX pipeline, re-exported at the crate root under the same
+/// Production pipeline, re-exported at the crate root under the same
 /// feature gate as [`pipeline_v2`]. Deliberately absent when the gate is off:
-/// ort-free consumers use [`pipeline::LegacyPipeline`].
+/// backend-free consumers use [`pipeline::LegacyPipeline`].
 #[cfg(all(
-    feature = "onnx",
+    any(
+        feature = "infer",
+        all(feature = "segmenter-native", feature = "embedder-native")
+    ),
     feature = "download",
     feature = "segmentation",
     feature = "embedder",
@@ -167,22 +182,23 @@ pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
 /// Shared wiring helpers for the CLI-family binaries (`polyvoice`,
 /// `polyvoice-bench`, `polyvoice-measure`, `polyvoice-mcp`): flag-to-config
 /// translation, pipeline construction, and bench-dataset walking, so each
-/// binary stays a thin wrapper. Compiled with `cli` or `mcp` — both imply the
-/// full ONNX pipeline stack this module builds on.
+/// binary stays a thin wrapper. Compiled with `cli` / `cli-tract` (`cli-bin`)
+/// or `mcp`. `cli` is the ort product front door; `cli-tract` is the same
+/// binaries without `ort`.
 ///
 /// Hidden from docs: not a supported library API (bin wiring only). Kept
 /// `pub` (not `pub(crate)`) so field uses from bin targets do not trip
 /// `dead_code` when building the lib alone.
 #[doc(hidden)]
-#[cfg(any(feature = "cli", feature = "mcp"))]
+#[cfg(any(feature = "cli-bin", feature = "mcp"))]
 pub mod cli_common;
 
 pub mod vad;
 pub use vad::{EnergyVad, VadConfig, VadError, VoiceActivityDetector, segment_speech};
 
-#[cfg(feature = "onnx")]
+#[cfg(feature = "infer")]
 pub mod silero_vad;
-#[cfg(feature = "onnx")]
+#[cfg(feature = "infer")]
 pub use silero_vad::SileroVad;
 
 /// Optional pure-Rust earshot VAD. Opt-in via `--features vad-earshot`.
@@ -194,10 +210,10 @@ pub use earshot_vad::{
     ADAPTER_TYPE as EARSHOT_ADAPTER_TYPE, EarshotVad, FRAME_SIZE as EARSHOT_FRAME_SIZE,
 };
 
-#[cfg(feature = "onnx")]
+#[cfg(feature = "infer")]
 pub mod onnx;
 
-#[cfg(feature = "onnx")]
+#[cfg(feature = "infer")]
 pub mod fbank_onnx;
 
 /// Optional NVIDIA Streaming Sortformer v2 E2E diarizer (≤4 speakers).
@@ -220,5 +236,5 @@ pub use types::{
 };
 pub use window::{WindowBuffer, WindowIter};
 
-#[cfg(feature = "onnx")]
+#[cfg(feature = "infer")]
 pub use fbank_onnx::FbankOnnxExtractor;

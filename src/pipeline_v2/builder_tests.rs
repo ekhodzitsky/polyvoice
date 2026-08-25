@@ -13,6 +13,29 @@ fn repo_file(rel: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel)
 }
 
+/// Product-profile builds assume the ort default (shipping ONNX). Tract-only
+/// graphs remap to `powerset_fp32_tract`, which these fixtures do not ship.
+fn pin_ort_or_skip() -> Option<OrtPin> {
+    #[cfg(feature = "onnx")]
+    {
+        crate::onnx::InferenceBackend::force(Some(crate::onnx::InferenceBackend::Ort));
+        Some(OrtPin)
+    }
+    #[cfg(not(feature = "onnx"))]
+    {
+        None
+    }
+}
+
+struct OrtPin;
+
+#[cfg(feature = "onnx")]
+impl Drop for OrtPin {
+    fn drop(&mut self) {
+        crate::onnx::InferenceBackend::force(None);
+    }
+}
+
 /// Every shipping profile resolves to the local FP32 model pair checked
 /// into `models/`, so profile builds serve registry cache hits and never
 /// touch the network.
@@ -148,10 +171,10 @@ fn registry_with_local_models() -> Option<(tempfile::TempDir, ModelRegistry)> {
 
 #[test]
 fn execution_provider_setter_overrides_config() {
-    let b = fresh().execution_provider(crate::onnx::ExecutionProvider::Cpu);
+    let b = fresh().execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu);
     assert_eq!(
         b.config.execution_provider,
-        crate::onnx::ExecutionProvider::Cpu
+        crate::pipeline_v2::ExecutionProvider::Cpu
     );
 }
 
@@ -417,27 +440,99 @@ fn build_balanced_without_registry_errors() {
 
 #[test]
 fn build_balanced_with_local_models_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
     let p = fresh()
         .profile(Profile::Balanced)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("balanced profile builds from cached local models");
     assert_eq!(p.config().profile, Profile::Balanced);
 }
 
+#[cfg(all(
+    feature = "segmenter-native",
+    feature = "embedder-native",
+    not(feature = "onnx"),
+    not(feature = "backend-tract")
+))]
+#[test]
+fn build_native_with_local_models_succeeds() {
+    let models = repo_file("models");
+    let cache = if models.join("int8/powerset_int8.onnx").is_file() {
+        models.join("int8")
+    } else {
+        models.clone()
+    };
+    if !cache.join("powerset_int8.onnx").is_file() || !cache.join("resnet34_int8.onnx").is_file() {
+        eprintln!("skip: INT8 powerset/resnet missing under models/int8");
+        return;
+    }
+    let registry = ModelRegistry::with_cache_dir(&cache).expect("registry");
+    let p = fresh()
+        .profile(Profile::Balanced)
+        .with_models_from(registry)
+        .build()
+        .expect("native kernels build from local INT8 models");
+    assert_eq!(p.config().profile, Profile::Balanced);
+}
+
+#[cfg(all(
+    feature = "segmenter-native",
+    feature = "embedder-native",
+    not(feature = "onnx"),
+    not(feature = "backend-tract")
+))]
+#[test]
+fn native_pipeline_runs_short_sine() {
+    let models = repo_file("models");
+    let cache = if models.join("int8/powerset_int8.onnx").is_file() {
+        models.join("int8")
+    } else {
+        models.clone()
+    };
+    if !cache.join("powerset_int8.onnx").is_file() || !cache.join("resnet34_int8.onnx").is_file() {
+        eprintln!("skip: INT8 models missing");
+        return;
+    }
+    let registry = ModelRegistry::with_cache_dir(&cache).expect("registry");
+    let p = fresh()
+        .profile(Profile::Balanced)
+        .with_models_from(registry)
+        .build()
+        .expect("build");
+    let n = 32_000usize;
+    let pcm: Vec<f32> = (0..n)
+        .map(|i| 0.2 * (2.0 * std::f32::consts::PI * 220.0 * i as f32 / 16_000.0).sin())
+        .collect();
+    let sr = crate::types::SampleRate::new(16_000).expect("sr");
+    let result = p.run(&pcm, sr).expect("native pipeline run");
+    eprintln!(
+        "native run: turns={} speakers={}",
+        result.turns.len(),
+        result.num_speakers
+    );
+}
+
 #[test]
 fn build_mobile_with_local_models_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
     let p = fresh()
         .profile(Profile::Mobile)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("mobile profile builds from cached local models");
     assert_eq!(p.config().profile, Profile::Mobile);
@@ -445,13 +540,17 @@ fn build_mobile_with_local_models_succeeds() {
 
 #[test]
 fn build_fast_with_local_models_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
     let p = fresh()
         .profile(Profile::Fast)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("fast profile resolves through the same local pair");
     assert_eq!(p.config().profile, Profile::Fast);
@@ -459,6 +558,10 @@ fn build_fast_with_local_models_succeeds() {
 
 #[test]
 fn build_with_nme_sc_clusterer_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
@@ -469,7 +572,7 @@ fn build_with_nme_sc_clusterer_succeeds() {
     let p = fresh()
         .config(cfg)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("NME-SC clusterer selection builds");
     assert!(matches!(p.config().clusterer, ClustererKind::NmeSc));
@@ -477,6 +580,10 @@ fn build_with_nme_sc_clusterer_succeeds() {
 
 #[test]
 fn build_with_min_cluster_size_pruning_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
@@ -487,7 +594,7 @@ fn build_with_min_cluster_size_pruning_succeeds() {
     let p = fresh()
         .config(cfg)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("min-cluster-size pruning wraps the AHC clusterer");
     assert_eq!(p.config().min_cluster_size, 4);
@@ -495,6 +602,10 @@ fn build_with_min_cluster_size_pruning_succeeds() {
 
 #[test]
 fn build_garbage_segmenter_reports_load_error() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let embedder_src = repo_file("models/wespeaker_resnet34.onnx");
     if !embedder_src.exists() {
         eprintln!("skip: models/wespeaker_resnet34.onnx missing");
@@ -509,7 +620,7 @@ fn build_garbage_segmenter_reports_load_error() {
     let err = fresh()
         .profile(Profile::Balanced)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .err()
         .expect("build must fail");
@@ -524,6 +635,10 @@ fn build_garbage_segmenter_reports_load_error() {
 
 #[test]
 fn build_garbage_embedder_reports_load_error() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let segmenter_src = repo_file("models/powerset_fp32.onnx");
     if !segmenter_src.exists() {
         eprintln!("skip: models/powerset_fp32.onnx missing");
@@ -538,7 +653,7 @@ fn build_garbage_embedder_reports_load_error() {
     let err = fresh()
         .profile(Profile::Balanced)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .err()
         .expect("build must fail");
@@ -583,6 +698,10 @@ fn build_manifest_without_profile_reports_registry_error() {
 #[cfg(feature = "vbx")]
 #[test]
 fn build_vbx_from_explicit_plda_dir_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
@@ -598,7 +717,7 @@ fn build_vbx_from_explicit_plda_dir_succeeds() {
     let p = fresh()
         .config(cfg)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("VBx builds from an explicit PLDA dir");
     assert!(matches!(p.config().clusterer, ClustererKind::Vbx));
@@ -607,6 +726,10 @@ fn build_vbx_from_explicit_plda_dir_succeeds() {
 #[cfg(feature = "vbx")]
 #[test]
 fn build_vbx_from_env_plda_dir_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
@@ -623,7 +746,7 @@ fn build_vbx_from_env_plda_dir_succeeds() {
     let built = fresh()
         .config(cfg)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build();
     unsafe {
         std::env::remove_var("POLYVOICE_VBX_PLDA_DIR");
@@ -634,6 +757,10 @@ fn build_vbx_from_env_plda_dir_succeeds() {
 #[cfg(feature = "vbx")]
 #[test]
 fn build_vbx_from_registry_cache_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let tmp = tempfile::TempDir::new().expect("temp dir");
     for f in ["powerset_fp32.onnx", "wespeaker_resnet34.onnx"] {
         let src = repo_file(&format!("models/{f}"));
@@ -659,7 +786,7 @@ fn build_vbx_from_registry_cache_succeeds() {
     let p = fresh()
         .config(cfg)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("VBx falls back to the registry PLDA artifacts");
     assert!(matches!(p.config().clusterer, ClustererKind::Vbx));
@@ -668,6 +795,10 @@ fn build_vbx_from_registry_cache_succeeds() {
 #[cfg(feature = "vbx")]
 #[test]
 fn build_vbx_missing_plda_dir_reports_load_error() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
@@ -679,7 +810,7 @@ fn build_vbx_missing_plda_dir_reports_load_error() {
     let err = fresh()
         .config(cfg)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .err()
         .expect("build must fail");
@@ -953,6 +1084,10 @@ fn load_as_norm_cohort_bad_file_reports_load_error() {
 
 #[test]
 fn build_ahc_with_as_norm_cohort_path_succeeds() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
@@ -971,7 +1106,7 @@ fn build_ahc_with_as_norm_cohort_path_succeeds() {
     let p = fresh()
         .config(cfg)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("AHC + AS-norm + domain profile builds");
     // config() reports the EFFECTIVE threshold: the AMI profile's
@@ -988,6 +1123,10 @@ fn build_ahc_with_as_norm_cohort_path_succeeds() {
 #[cfg(feature = "vbx")]
 #[test]
 fn build_vbx_never_touches_as_norm_config() {
+    let Some(_ort) = pin_ort_or_skip() else {
+        eprintln!("skip: product builder tests require feature onnx");
+        return;
+    };
     let Some((_tmp, registry)) = registry_with_local_models() else {
         return;
     };
@@ -1006,7 +1145,7 @@ fn build_vbx_never_touches_as_norm_config() {
     let p = fresh()
         .config(cfg)
         .with_models_from(registry)
-        .execution_provider(crate::onnx::ExecutionProvider::Cpu)
+        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
         .build()
         .expect("VBx path ignores AS-norm and domain config");
     assert!(matches!(p.config().clusterer, ClustererKind::Vbx));

@@ -6,15 +6,20 @@ mod aggregator;
 mod binarize;
 mod decoder;
 
-#[cfg(all(feature = "onnx", feature = "segmentation"))]
+#[cfg(all(feature = "infer", feature = "segmentation"))]
 mod powerset;
 
 pub use aggregator::{AggregationConfig, Aggregator, WindowOutput};
 pub use binarize::{BinarizationConfig, binarize_frames};
 pub use decoder::{FrameLabel, PowersetClass, PowersetDecoder};
 
-#[cfg(all(feature = "onnx", feature = "segmentation"))]
+#[cfg(all(feature = "infer", feature = "segmentation"))]
 pub use powerset::{PowersetConfig, PowersetSegmenter};
+
+#[cfg(all(feature = "segmenter-native", feature = "segmentation"))]
+mod native;
+#[cfg(all(feature = "segmenter-native", feature = "segmentation"))]
+pub use native::PowersetNative;
 
 use crate::types::{Confidence, TimeRange};
 

@@ -1,0 +1,9 @@
+{
+  "protocol": "Vox-3 smoke (euqef, fuzfh, msbyq), collar 0, v2+VBx, balanced, cli-native, powerset_int8+resnet34_int8. Apple Silicon host.",
+  "der_no_collar_micro_max": 7.11,
+  "der_no_collar_macro_max": 7.39,
+  "rt_factor_min": 117.0,
+  "model_bytes_max": 8414314,
+  "rss_mib_max": 556.0,
+  "notes": "Floors are the best locked native numbers as of 2026-08-14. DER and model size must never get worse. RTF must stay at least 117. Peak RSS must stay at or below 556 MiB, which is below live ort INT8 CPU on the same Vox-3 protocol (~580-585 MiB)."
+}

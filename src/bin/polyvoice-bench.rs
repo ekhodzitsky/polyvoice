@@ -12,9 +12,11 @@ use polyvoice::der::{
     compute_der_with_uem, parse_uem,
 };
 use polyvoice::models::ModelRegistry;
+#[cfg(feature = "onnx")]
 use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::pipeline_v2::{Pipeline as V2Pipeline, PipelineConfig, StageTimings};
 use polyvoice::types::{DiarizationResult, Profile, SampleRate, TimeRange};
+#[cfg(feature = "onnx")]
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use serde::Serialize;
@@ -245,6 +247,7 @@ fn model_hashes(registry: &ModelRegistry, profile: Profile, segmenter_id: &str) 
 
 /// Hard-fail unless the on-disk embedder + VAD match the manifest sha256, so a DER
 /// number can never be silently attributed to a swapped/corrupted/non-FP32 model.
+#[cfg(feature = "onnx")]
 fn verify_model_integrity(
     registry: &ModelRegistry,
     profile: Profile,
@@ -286,6 +289,7 @@ fn hex_lower(bytes: &[u8]) -> String {
 }
 
 /// Legacy pipeline + its ONNX sessions (Silero VAD + sliding-window embedder).
+#[cfg(feature = "onnx")]
 struct LegacyRunner {
     pipeline: LegacyPipeline,
     stack: cli_common::LegacyStack,
@@ -295,6 +299,7 @@ struct LegacyRunner {
 /// downstream DER / speaker-count reporting is shared. Both payloads are boxed
 /// so the variants are the same (pointer) size.
 enum Runner {
+    #[cfg(feature = "onnx")]
     Legacy(Box<LegacyRunner>),
     V2(Box<V2Pipeline>),
 }
@@ -306,6 +311,7 @@ impl Runner {
         sr: SampleRate,
     ) -> Result<(DiarizationResult, Option<StageTimings>)> {
         match self {
+            #[cfg(feature = "onnx")]
             Runner::Legacy(l) => Ok((
                 l.pipeline
                     .run(samples, &l.stack.extractor, &mut l.stack.vad)?,
@@ -323,7 +329,7 @@ impl Runner {
 struct BenchRunner {
     runner: Runner,
     segmenter_id: String,
-    resolved_ep: polyvoice::onnx::ExecutionProvider,
+    resolved_ep: polyvoice::pipeline_v2::ExecutionProvider,
     profile: Profile,
     registry: ModelRegistry,
 }
@@ -331,6 +337,9 @@ struct BenchRunner {
 /// Build the requested pipeline. Each arm verifies the integrity of exactly
 /// the models it loads and yields the segmenter id for the report.
 fn build_runner(args: &Args) -> Result<BenchRunner> {
+    if args.pipeline == "legacy" {
+        cli_common::require_onnx("--pipeline legacy")?;
+    }
     let profile: Profile = args.profile.parse()?;
     let registry = ModelRegistry::default().context("registry")?;
     let models = registry
@@ -346,8 +355,8 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
         .map(cli_common::parse_execution_provider)
         .transpose()?;
     let resolved_ep = match args.pipeline.as_str() {
-        "v2" => explicit_ep.unwrap_or_else(polyvoice::onnx::ExecutionProvider::auto),
-        _ => explicit_ep.unwrap_or(polyvoice::onnx::ExecutionProvider::Cpu),
+        "v2" => explicit_ep.unwrap_or_else(polyvoice::pipeline_v2::ExecutionProvider::auto),
+        _ => explicit_ep.unwrap_or(polyvoice::pipeline_v2::ExecutionProvider::Cpu),
     };
 
     let (runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
@@ -410,30 +419,33 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
             if args.as_norm || args.cohort.is_some() || args.domain_profile.is_some() {
                 anyhow::bail!("--as-norm/--cohort/--domain-profile apply to --pipeline v2 only");
             }
-            let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
-            let stack = cli_common::load_legacy_stack(
-                &models.embedder_path,
-                profile.embedding_dim(),
-                resolved_ep,
-                &vad_path,
-                512,
-            )?;
-
-            // Integrity gate: a DER number is only trustworthy if produced by
-            // the EXACT shipped artifact — hard-fail if the on-disk embedder/VAD
-            // sha256 disagrees with the manifest (swapped/corrupted/non-FP32).
-            verify_model_integrity(&registry, profile, &models.embedder_path, &vad_path)?;
-
-            let mut config = cli_common::legacy_diarization_config(
-                args.threshold.unwrap_or(polyvoice::DEFAULT_AHC_THRESHOLD),
-            );
-            config.cluster.min_cluster_size = args.min_cluster_size.unwrap_or(1);
-            config.cluster.min_cluster_secs = args.min_cluster_secs.unwrap_or(0.0);
-            let pipeline = LegacyPipeline::new(config, VadConfig::default());
-            (
-                Runner::Legacy(Box::new(LegacyRunner { pipeline, stack })),
-                "silero_vad".to_owned(),
-            )
+            #[cfg(not(feature = "onnx"))]
+            {
+                let _ = (models, resolved_ep, registry, profile);
+                unreachable!("require_onnx rejected --pipeline legacy");
+            }
+            #[cfg(feature = "onnx")]
+            {
+                let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
+                let stack = cli_common::load_legacy_stack(
+                    &models.embedder_path,
+                    profile.embedding_dim(),
+                    resolved_ep,
+                    &vad_path,
+                    512,
+                )?;
+                verify_model_integrity(&registry, profile, &models.embedder_path, &vad_path)?;
+                let mut config = cli_common::legacy_diarization_config(
+                    args.threshold.unwrap_or(polyvoice::DEFAULT_AHC_THRESHOLD),
+                );
+                config.cluster.min_cluster_size = args.min_cluster_size.unwrap_or(1);
+                config.cluster.min_cluster_secs = args.min_cluster_secs.unwrap_or(0.0);
+                let pipeline = LegacyPipeline::new(config, VadConfig::default());
+                (
+                    Runner::Legacy(Box::new(LegacyRunner { pipeline, stack })),
+                    "silero_vad".to_owned(),
+                )
+            }
         }
     };
     Ok(BenchRunner {
@@ -719,7 +731,7 @@ fn build_report(
     registry: &ModelRegistry,
     profile: Profile,
     segmenter_id: &str,
-    resolved_ep: polyvoice::onnx::ExecutionProvider,
+    resolved_ep: polyvoice::pipeline_v2::ExecutionProvider,
     dataset_name: String,
     acc: Accum,
 ) -> BenchReport {

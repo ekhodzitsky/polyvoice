@@ -46,4 +46,32 @@ fail_if_ort "--no-default-features --features clusterer,vbx" \
 fail_if_ort "--no-default-features --features clusterer,vbx,spectral,segmentation,embedder,resegmentation,attribution" \
   --no-default-features --features clusterer,vbx,spectral,segmentation,embedder,resegmentation,attribution
 
+# Pure-Rust inference: tract must not pull the native ONNX Runtime dylib.
+fail_if_ort "--no-default-features --features backend-tract" \
+  --no-default-features --features backend-tract
+
+fail_if_ort "--no-default-features --features pipeline-tract,vbx" \
+  --no-default-features --features pipeline-tract,vbx
+
+fail_if_ort "--no-default-features --features cli-tract" \
+  --no-default-features --features cli-tract
+
+fail_if_ort "--no-default-features --features embedder-native" \
+  --no-default-features --features embedder-native
+
+fail_if_ort "--no-default-features --features segmenter-native" \
+  --no-default-features --features segmenter-native
+
+fail_if_ort "--no-default-features --features pipeline-native,vbx" \
+  --no-default-features --features pipeline-native,vbx
+
+fail_if_ort "--no-default-features --features cli-native" \
+  --no-default-features --features cli-native
+
+fail_if_ort "--no-default-features --features cli" \
+  --no-default-features --features cli
+
+fail_if_ort "--no-default-features --features ffi" \
+  --no-default-features --features ffi
+
 echo "OK: ort-free library graphs stay free of ort."

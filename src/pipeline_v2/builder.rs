@@ -114,7 +114,7 @@ impl PipelineBuilder {
 
     /// Override the execution provider (defaults to
     /// `ExecutionProvider::auto()` via `PipelineConfig::default`).
-    pub fn execution_provider(mut self, ep: crate::onnx::ExecutionProvider) -> Self {
+    pub fn execution_provider(mut self, ep: crate::pipeline_v2::ExecutionProvider) -> Self {
         self.config.execution_provider = ep;
         self
     }
@@ -219,96 +219,10 @@ impl PipelineBuilder {
                 let registry = self.registry.ok_or(ConfigError::MissingRegistry {
                     profile: self.config.profile,
                 })?;
-                let profile_models = registry.ensure_for_profile(self.config.profile)?;
                 let ep = self.config.execution_provider;
                 tracing::info!("pipeline v2 execution provider: {ep:?}");
-                // CoreML: single session per stage. Multi-session CoreML pools
-                // have been observed to trip "dynamically resizing for sequence
-                // length" failures on long corpora (embedder), especially with
-                // powerset micro-batching.
-                // Tract: powerset micro-batch N=1 (LSTM Scan); session pool stays
-                // the configured size so windows run in parallel.
-                // INT8 ResNet34 is not numerically safe under tract (ort↔tract
-                // cosine ~0 on real segments; pairwise speakers collapse) — use
-                // FP32 wespeaker_resnet34 when the pure-Rust backend is active.
-                let use_tract = {
-                    #[cfg(feature = "backend-tract")]
-                    {
-                        matches!(
-                            crate::onnx::InferenceBackend::resolve(),
-                            crate::onnx::InferenceBackend::Tract
-                        )
-                    }
-                    #[cfg(not(feature = "backend-tract"))]
-                    {
-                        false
-                    }
-                };
-                let pool = if matches!(ep, crate::onnx::ExecutionProvider::CoreMl) {
-                    1
-                } else {
-                    self.config.embedder_pool_size
-                };
-                let mut seg_cfg = crate::segmentation::PowersetConfig::default();
-                seg_cfg.aggregation.binarization = self.config.binarization;
-                // Same session-pool budget as the embedder so one config knob
-                // (and POLYVOICE_SESSION_POOL_SIZE) controls both hot stages.
-                seg_cfg.pool_size = pool;
-                // Tract: registry-signed rewrite (shipping powerset fails load).
-                // Sibling remap in PowersetSegmenter remains a local fallback.
-                let segmenter_path = if use_tract {
-                    tracing::info!(
-                        "tract backend: loading powerset_fp32_tract (shipping powerset unsupported)"
-                    );
-                    registry
-                        .ensure("powerset_fp32_tract")
-                        .map_err(|e| ConfigError::Load {
-                            model_id: "powerset_fp32_tract",
-                            source: Box::new(e),
-                        })?
-                } else {
-                    profile_models.segmenter_path
-                };
-                let segmenter: Box<dyn Segmenter> = Box::new(
-                    crate::segmentation::PowersetSegmenter::with_config(
-                        &segmenter_path,
-                        seg_cfg,
-                        ep,
-                    )
-                    .map_err(|e| ConfigError::Load {
-                        model_id: if use_tract {
-                            "powerset_fp32_tract"
-                        } else {
-                            "powerset"
-                        },
-                        source: Box::new(e),
-                    })?,
-                );
-                let embedder_path = if use_tract {
-                    tracing::info!(
-                        "tract backend: loading FP32 wespeaker_resnet34 (INT8 unsafe under tract)"
-                    );
-                    registry
-                        .ensure("wespeaker_resnet34")
-                        .map_err(|e| ConfigError::Load {
-                            model_id: "wespeaker_resnet34",
-                            source: Box::new(e),
-                        })?
-                } else {
-                    profile_models.embedder_path
-                };
-                let embedder: Box<dyn Embedder> = Box::new(
-                    crate::embedder::ResNet34Adapter::new(&embedder_path, pool, ep).map_err(
-                        |e| ConfigError::Load {
-                            model_id: if use_tract {
-                                "wespeaker_resnet34"
-                            } else {
-                                "resnet34"
-                            },
-                            source: Box::new(e),
-                        },
-                    )?,
-                );
+                let (segmenter, embedder): (Box<dyn Segmenter>, Box<dyn Embedder>) =
+                    load_profile_stages(&registry, &self.config)?;
                 let clusterer: Box<dyn Clusterer> =
                     build_profile_clusterer(&self.config, &registry)?;
                 // Activate min_cluster_size pruning (this config field was
@@ -344,6 +258,153 @@ impl PipelineBuilder {
             }
         }
     }
+}
+
+type StagePair = (Box<dyn Segmenter>, Box<dyn Embedder>);
+
+/// True when this build is kernel-only (no ort, no tract).
+fn use_native_kernels() -> bool {
+    cfg!(all(
+        feature = "segmenter-native",
+        feature = "embedder-native"
+    )) && !cfg!(feature = "onnx")
+        && !cfg!(feature = "backend-tract")
+}
+
+fn load_profile_stages(
+    registry: &ModelRegistry,
+    #[cfg_attr(not(feature = "infer"), allow(unused_variables))] config: &PipelineConfig,
+) -> Result<StagePair, ConfigError> {
+    if use_native_kernels() {
+        build_native_stages(registry)
+    } else {
+        #[cfg(feature = "infer")]
+        {
+            build_onnx_stages(registry, config)
+        }
+        #[cfg(not(feature = "infer"))]
+        {
+            unreachable!("pipeline_v2 without infer always uses native kernels")
+        }
+    }
+}
+
+#[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
+fn build_native_stages(registry: &ModelRegistry) -> Result<StagePair, ConfigError> {
+    tracing::info!("native kernels: powerset_int8 + resnet34_int8");
+    let seg_path = registry
+        .ensure("powerset_int8")
+        .map_err(|e| ConfigError::Load {
+            model_id: "powerset_int8",
+            source: Box::new(e),
+        })?;
+    let emb_path = registry
+        .ensure("resnet34_int8")
+        .map_err(|e| ConfigError::Load {
+            model_id: "resnet34_int8",
+            source: Box::new(e),
+        })?;
+    let segmenter: Box<dyn Segmenter> = Box::new(
+        crate::segmentation::PowersetNative::from_onnx_path(&seg_path).map_err(|e| {
+            ConfigError::Load {
+                model_id: "powerset_int8",
+                source: Box::new(e),
+            }
+        })?,
+    );
+    let embedder: Box<dyn Embedder> = Box::new(
+        crate::embedder::ResNet34Native::from_onnx_path(&emb_path).map_err(|e| {
+            ConfigError::Load {
+                model_id: "resnet34_int8",
+                source: Box::new(e),
+            }
+        })?,
+    );
+    Ok((segmenter, embedder))
+}
+
+#[cfg(not(all(feature = "segmenter-native", feature = "embedder-native")))]
+fn build_native_stages(_registry: &ModelRegistry) -> Result<StagePair, ConfigError> {
+    unreachable!("native stage loader compiled out")
+}
+
+#[cfg(feature = "infer")]
+fn build_onnx_stages(
+    registry: &ModelRegistry,
+    config: &PipelineConfig,
+) -> Result<StagePair, ConfigError> {
+    let profile_models = registry.ensure_for_profile(config.profile)?;
+    let ep = config.execution_provider;
+    let use_tract = {
+        #[cfg(feature = "backend-tract")]
+        {
+            matches!(
+                crate::onnx::InferenceBackend::resolve(),
+                crate::onnx::InferenceBackend::Tract
+            )
+        }
+        #[cfg(not(feature = "backend-tract"))]
+        {
+            false
+        }
+    };
+    let pool = if matches!(ep, crate::pipeline_v2::ExecutionProvider::CoreMl) {
+        1
+    } else {
+        config.embedder_pool_size
+    };
+    let mut seg_cfg = crate::segmentation::PowersetConfig::default();
+    seg_cfg.aggregation.binarization = config.binarization;
+    seg_cfg.pool_size = pool;
+    let segmenter_path = if use_tract {
+        tracing::info!(
+            "tract backend: loading powerset_fp32_tract (shipping powerset unsupported)"
+        );
+        registry
+            .ensure("powerset_fp32_tract")
+            .map_err(|e| ConfigError::Load {
+                model_id: "powerset_fp32_tract",
+                source: Box::new(e),
+            })?
+    } else {
+        profile_models.segmenter_path
+    };
+    let segmenter: Box<dyn Segmenter> = Box::new(
+        crate::segmentation::PowersetSegmenter::with_config(&segmenter_path, seg_cfg, ep).map_err(
+            |e| ConfigError::Load {
+                model_id: if use_tract {
+                    "powerset_fp32_tract"
+                } else {
+                    "powerset"
+                },
+                source: Box::new(e),
+            },
+        )?,
+    );
+    let embedder_path = if use_tract {
+        tracing::info!("tract backend: loading FP32 wespeaker_resnet34 (INT8 unsafe under tract)");
+        registry
+            .ensure("wespeaker_resnet34")
+            .map_err(|e| ConfigError::Load {
+                model_id: "wespeaker_resnet34",
+                source: Box::new(e),
+            })?
+    } else {
+        profile_models.embedder_path
+    };
+    let embedder: Box<dyn Embedder> = Box::new(
+        crate::embedder::ResNet34Adapter::new(&embedder_path, pool, ep).map_err(|e| {
+            ConfigError::Load {
+                model_id: if use_tract {
+                    "wespeaker_resnet34"
+                } else {
+                    "resnet34"
+                },
+                source: Box::new(e),
+            }
+        })?,
+    );
+    Ok((segmenter, embedder))
 }
 
 #[allow(clippy::unwrap_used)]

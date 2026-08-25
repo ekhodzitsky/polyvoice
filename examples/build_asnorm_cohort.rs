@@ -1,7 +1,7 @@
 //! Build the AS-norm imposter cohort from VoxConverse-dev speaker embeddings.
 //!
 //! ```bash
-//! cargo run --release --features cli --example build_asnorm_cohort -- \
+//! cargo run --release --features cli-ort --example build_asnorm_cohort -- \
 //!     [--data-dir data/voxconverse-dev] [--max-speakers 96] [--out fixtures/asnorm/cohort_voxdev.npy]
 //! ```
 //!

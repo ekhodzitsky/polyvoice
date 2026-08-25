@@ -28,9 +28,14 @@ cargo run --features cli --bin polyvoice -- download-models --profile balanced
 | Goal | Features |
 |------|----------|
 | BYO embedder / library mode | `--no-default-features` (+ optional `clusterer`, `vbx`) — see [docs/library-mode.md](docs/library-mode.md) |
-| Production ONNX library | `pipeline-full` (+ `vbx` for the CLI-parity default) |
-| CLI / FFI / MCP | `cli` / `ffi` / `mcp` (each is `pipeline-full` + `vbx` + extras) |
-| Multi-format audio decode | `audio-io` (with `cli` for the binary) |
+| Production library (kernels) | `pipeline-native` + `vbx` (same as `cli`) |
+| ONNX Runtime library | `pipeline-full` + `vbx` |
+| CLI / FFI / MCP | `cli` / `ffi` / `mcp` (kernels, no ort) |
+| CLI with ONNX Runtime | `cli-ort` |
+| CLI with tract | `cli-tract` |
+| Native ResNet34 embedder | `embedder-native` (`ResNet34Native`, no ONNX runtime) |
+| Native powerset segmenter | `segmenter-native` (`PowersetNative`, N>1 LSTM) |
+| Multi-format audio decode | `audio-io` (with `cli`, `cli-tract`, or `cli-native` for the binary) |
 
 Architecture map: [docs/PIPELINE-ARCHITECTURE.md](docs/PIPELINE-ARCHITECTURE.md).
 Full doc index: [docs/README.md](docs/README.md). C FFI: [docs/FFI.md](docs/FFI.md).
@@ -67,6 +72,8 @@ pytest tests/ -v
 | Command | What it tests |
 |---------|---------------|
 | `cargo test` | Ort-free unit + integration |
+| `cargo test -p polyvoice-kernels` | Hand-written ResNet / powerset kernels |
+| `cargo test --no-default-features --features cli-native --test cli_native_smoke` | Kernel-only CLI (no ort/tract) |
 | `cargo test --features "pipeline-full,vbx"` | Production stack lib tests |
 | `cargo test --features cli --bin polyvoice` | CLI-related (when applicable) |
 | `cargo test --features ffi` | C FFI bindings |

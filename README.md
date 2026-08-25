@@ -17,16 +17,15 @@ C FFI, and a CLI. MIT, ungated **INT8** models (~8.4 MB production pair).
 
 ## Numbers
 
-**Default stack is INT8** (`powerset_int8` + `resnet34_int8`) for every
-profile (`balanced` / `mobile` / `fast`). Full-split numbers below are the
-INT8 shipping path (pipeline v2 + VBx, crate 0.17+). Protocol:
-[Benchmarks](docs/BENCHMARKS.md). **Linux/CPU** is the product path for
-servers (powerset micro-batch N=8); Mac CoreML is a separate headline.
+**Default stack is INT8 kernels** (`powerset_int8` + `resnet34_int8`, no
+`libonnxruntime`) for every profile. Protocol: [Benchmarks](docs/BENCHMARKS.md).
+Darwin uses Accelerate/BNNS. Linux uses pure-Rust `rten-gemm` (OpenBLAS
+optional). ONNX Runtime remains `--features cli-ort`.
 
-| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed (INT8) |
+| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed |
 |---|---:|---:|---:|
-| VoxConverse-test (232 files) | **10.3 %** | **14.9 % Linux / 15.0 % CoreML** | **~82× Linux CPU / ~111× CoreML** |
-| AMI-test (16 meetings) | **16.6 % Linux / 16.8 % CoreML** | **24.2 % Linux / 24.5 % CoreML** | **~95× Linux CPU / ~110–130× CoreML** |
+| VoxConverse-test (232) | **10.3 %** (ort) / **~15.5 %** Darwin native | **14.9 %** Linux ort / **15.5 %** Darwin native | **~117–130×** Darwin native / **~82×** Linux ort / **~28×** Linux native (Vox-3) |
+| AMI-test (16) | **16.6 %** Linux ort / **~16.9 %** Darwin native | **24.2 %** Linux ort / **25.2 %** native | **~110×** Darwin native / **~95×** Linux ort / **~21×** Linux native (AMI-1) |
 
 Like-for-like (strict collar 0) VoxConverse-test **15.0 %** vs pyannote 3.1
 **11.3 %** — accuracy traded for a CPU-only, MIT, **ungated** INT8 deploy.
@@ -61,10 +60,11 @@ A 1-hour meeting diarizes in about a minute on a laptop.
 | Platform | Get it |
 |---|---|
 | Linux x86_64 / ARM64, macOS, Windows | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) — put them on your `PATH` |
-| Rust library (ONNX production) | `cargo add polyvoice --features "pipeline-full,vbx"` — crate-root `Pipeline` (v2); set `clusterer: Vbx` for CLI parity |
-| Rust, no ONNX (BYO embedder) | `cargo add polyvoice --no-default-features` (extras: `clusterer,vbx`) — [library mode](docs/library-mode.md) |
+| Rust library (kernels, no ort) | `cargo add polyvoice --features "pipeline-native,vbx"` — crate-root `Pipeline` (v2); set `clusterer: Vbx` for CLI parity |
+| Rust library (ONNX Runtime) | `cargo add polyvoice --features "pipeline-full,vbx"` |
+| Rust, no models (BYO embedder) | `cargo add polyvoice --no-default-features` (extras: `clusterer,vbx`) — [library mode](docs/library-mode.md) |
 | Python | `pip install polyvoice` — [python/README.md](python/README.md) |
-| From source | `cargo install polyvoice --features cli` · `"cli,audio-io"` (mp3/flac/ogg, any sample rate) · `ffi` (C ABI v3) |
+| From source | `cargo install polyvoice --features cli` · `"cli,audio-io"` · `cli-ort` (ONNX Runtime) · `cli-tract` · `ffi` |
 
 ## Library usage
 

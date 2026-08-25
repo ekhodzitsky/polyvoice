@@ -74,7 +74,9 @@ use **INT8** models only. Canonical accuracy protocol:
 |------|----------|
 | Ort-free BYO | `--no-default-features` (+ `clusterer`, `vbx` optional) |
 | ONNX library | `pipeline-full` (+ set `ClustererKind::Vbx`) |
-| CLI / FFI / MCP | `cli` / `ffi` / `mcp` (= `pipeline-full` + `vbx` + extras) |
-| Multi-format audio | `audio-io` (often with `cli`) |
+| CLI / FFI / MCP | `cli` / `ffi` / `mcp` (= `pipeline-native` + `vbx`; no `ort`) |
+| CLI with ONNX Runtime | `cli-ort` |
+| CLI with tract | `cli-tract` |
+| Multi-format audio | `audio-io` (often with `cli` or `cli-tract`) |
 
 Full table: [library-mode.md](library-mode.md) and [CONTRIBUTING.md](../CONTRIBUTING.md).
