@@ -196,12 +196,17 @@ pub fn gemm_add(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usiz
         PACKED_F32_B.with(|cell| {
             let mut cache = cell.borrow_mut();
             let key = b.as_ptr() as usize;
-            let hit = cache.iter().position(|(p, nn, kk, _)| *p == key && *nn == n && *kk == k);
+            let hit = cache
+                .iter()
+                .position(|(p, nn, kk, _)| *p == key && *nn == n && *kk == k);
             if hit.is_none() && cache.len() < PACK_CAP {
                 let b_m = NdTensorView::from_data([k, n], b);
                 cache.push((key, n, k, exec.prepack_b(b_m)));
             }
-            let b_in = match cache.iter().find(|(p, nn, kk, _)| *p == key && *nn == n && *kk == k) {
+            let b_in = match cache
+                .iter()
+                .find(|(p, nn, kk, _)| *p == key && *nn == n && *kk == k)
+            {
                 Some((_, _, _, packed)) => GemmInputB::Packed(packed),
                 None => GemmInputB::Unpacked(NdTensorView::from_data([k, n], b)),
             };
@@ -331,7 +336,6 @@ pub fn gemm_i8_static(
     })
 }
 
-
 /// `C = ((A_u8 - a_zp) @ (B_[n,k]^T - b_zp)) * a_scale * b_scale + bias`.
 ///
 /// `B` is qlinear `[n, k]`. Transposed to `[k, n]` and run Unpacked: rten's
@@ -442,11 +446,7 @@ fn dequant_acc(
     for mi in 0..m {
         let row = mi * n;
         for ni in 0..n {
-            let sw = if b_scale.len() == n {
-                b_scale[ni]
-            } else {
-                s0
-            };
+            let sw = if b_scale.len() == n { b_scale[ni] } else { s0 };
             let v = acc[row + ni] as f32 * a_scale * sw;
             if accumulate {
                 c[row + ni] += v;
@@ -482,10 +482,7 @@ fn dequant_acc_neon(
         let mut ni = 0usize;
         while ni < n {
             unsafe {
-                let mut v = vmulq_f32(
-                    vcvtq_f32_s32(vld1q_s32(acc.as_ptr().add(row + ni))),
-                    sa,
-                );
+                let mut v = vmulq_f32(vcvtq_f32_s32(vld1q_s32(acc.as_ptr().add(row + ni))), sa);
                 let sw = if per_col {
                     vld1q_f32(b_scale.as_ptr().add(ni))
                 } else {
@@ -525,7 +522,7 @@ fn quant_u8_static(src: &[f32], scale: f32, zp: u8, dst: &mut [u8]) {
 #[cfg(all(not(target_vendor = "apple"), target_arch = "aarch64"))]
 fn quant_u8_neon(src: &[f32], s: f32, z: f32, dst: &mut [u8], n: usize) {
     use std::arch::aarch64::{
-        vaddq_f32, vcombine_u16, vcombine_u8, vcvtq_u32_f32, vdivq_f32, vld1q_f32, vmaxq_f32,
+        vaddq_f32, vcombine_u8, vcombine_u16, vcvtq_u32_f32, vdivq_f32, vld1q_f32, vmaxq_f32,
         vminq_f32, vmovq_n_f32, vqmovn_u16, vqmovn_u32, vrndaq_f32, vst1q_u8,
     };
     let vs = unsafe { vmovq_n_f32(s) };

@@ -128,7 +128,9 @@ mod tests {
         let n = 8;
         let k = 12;
         let x: Vec<f32> = (0..m * k).map(|i| (i as f32) * 0.07 - 1.3).collect();
-        let w: Vec<i8> = (0..n * k).map(|i| (i as i8).wrapping_mul(3).wrapping_sub(17)).collect();
+        let w: Vec<i8> = (0..n * k)
+            .map(|i| (i as i8).wrapping_mul(3).wrapping_sub(17))
+            .collect();
         let w_scale: Vec<f32> = (0..n).map(|i| 0.01 + i as f32 * 0.001).collect();
         let w_zp: Vec<i8> = (0..n).map(|i| (i as i8) - 2).collect();
         let bias: Vec<f32> = (0..n).map(|i| i as f32 * 0.05 - 0.2).collect();

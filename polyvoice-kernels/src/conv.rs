@@ -31,6 +31,8 @@ pub struct Conv2d {
     pub act_zp: i8,
     pub(crate) q_w_pad: Vec<i8>,
     /// `q_w_pad` retiled as `[oc/4][k_pad/4][4×4]` for the 4×16 SDOT kernel.
+    /// Read only by the aarch64 zip kernels.
+    #[cfg_attr(not(target_arch = "aarch64"), allow(dead_code))]
     pub(crate) q_w_4x4: Vec<i8>,
     pub(crate) w_sum: Vec<i32>,
     pub(crate) k_pad: usize,
@@ -692,7 +694,10 @@ mod tests {
                 arg = i;
             }
         }
-        assert!(max < 0.05, "wide-row i8 vs fakequant-float maxabs={max} at {arg}");
+        assert!(
+            max < 0.05,
+            "wide-row i8 vs fakequant-float maxabs={max} at {arg}"
+        );
         crate::conv_i8::force_i8(false);
     }
 
@@ -730,9 +735,18 @@ mod tests {
         let mut serial = vec![0i8; need];
         let mut par = vec![0i8; need];
         crate::set_intra_threads(1);
-        assert!(crate::conv_i8::try_conv_to_i8(&conv, &x, &mut serial, true, 0.05, -128));
+        assert!(crate::conv_i8::try_conv_to_i8(
+            &conv,
+            &x,
+            &mut serial,
+            true,
+            0.05,
+            -128
+        ));
         crate::set_intra_threads(4);
-        assert!(crate::conv_i8::try_conv_to_i8(&conv, &x, &mut par, true, 0.05, -128));
+        assert!(crate::conv_i8::try_conv_to_i8(
+            &conv, &x, &mut par, true, 0.05, -128
+        ));
         crate::set_intra_threads(1);
         crate::conv_i8::force_i8(false);
         let mut nmis = 0usize;

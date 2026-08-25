@@ -578,7 +578,10 @@ mod tests {
         let extractor = FbankExtractor::new(config);
         let samples = vec![0.01f32; 800];
         let frames = extractor.extract(&samples).unwrap();
-        assert_eq!(frames.len(), 1 + (800 - config.win_length) / config.hop_length);
+        assert_eq!(
+            frames.len(),
+            1 + (800 - config.win_length) / config.hop_length
+        );
         assert!(frames.iter().all(|f| f.len() == config.n_mels));
         let one = extractor.extract(&samples[..config.win_length]).unwrap();
         assert_eq!(one.len(), 1);

@@ -152,19 +152,18 @@ pub(crate) fn seed_xq_add_relu(a: &mut Tensor, b: &Tensor, scale: f32, zp: i8) {
 }
 
 pub(crate) fn i8_conv_on() -> bool {
-    i8_forced()
-        || {
-            static USE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-            *USE.get_or_init(|| {
-                if std::env::var_os("POLYVOICE_NO_I8_CONV").is_some() {
-                    return false;
-                }
-                if std::env::var_os("POLYVOICE_I8_CONV").is_some() {
-                    return true;
-                }
-                cfg!(all(target_os = "linux", target_arch = "aarch64"))
-            })
-        }
+    i8_forced() || {
+        static USE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *USE.get_or_init(|| {
+            if std::env::var_os("POLYVOICE_NO_I8_CONV").is_some() {
+                return false;
+            }
+            if std::env::var_os("POLYVOICE_I8_CONV").is_some() {
+                return true;
+            }
+            cfg!(all(target_os = "linux", target_arch = "aarch64"))
+        })
+    }
 }
 
 /// True if this layer ran the integer kernel (caller must not also run BNNS).
@@ -221,7 +220,10 @@ pub fn try_conv_to_i8(
         return false;
     }
     let (oh, ow) = conv.out_hw_dims(x.h, x.w);
-    let need = x.n.saturating_mul(conv.oc).saturating_mul(oh).saturating_mul(ow);
+    let need =
+        x.n.saturating_mul(conv.oc)
+            .saturating_mul(oh)
+            .saturating_mul(ow);
     if yq.len() < need {
         return false;
     }
@@ -278,7 +280,11 @@ pub fn try_from_i8(
     if !i8_conv_on() {
         return false;
     }
-    if xq.len() != n.saturating_mul(conv.ic).saturating_mul(h).saturating_mul(w) {
+    if xq.len()
+        != n.saturating_mul(conv.ic)
+            .saturating_mul(h)
+            .saturating_mul(w)
+    {
         return false;
     }
     run_from_xq(conv, n, h, w, xq, y, relu, None)
@@ -412,9 +418,7 @@ unsafe fn store16_i8(
     q2: std::arch::aarch64::int32x4_t,
     q3: std::arch::aarch64::int32x4_t,
 ) {
-    use std::arch::aarch64::{
-        vcombine_s16, vcombine_s8, vqmovn_s16, vqmovn_s32, vst1q_s8,
-    };
+    use std::arch::aarch64::{vcombine_s8, vcombine_s16, vqmovn_s16, vqmovn_s32, vst1q_s8};
     unsafe {
         let a = vcombine_s16(vqmovn_s32(q0), vqmovn_s32(q1));
         let b = vcombine_s16(vqmovn_s32(q2), vqmovn_s32(q3));
@@ -486,8 +490,24 @@ fn conv3x3_s1_rows(
                             let ybase = ni * oc * oh * ow;
                             let ximg = &xq[xbase..xbase + ic * h * w];
                             s1_scan(
-                                conv, ximg, h, w, &mut y.data, ybase, oh, ow, &mut rows,
-                                &mut kn, &mut nk, relu, i8d, 0, oc, 0, oh, tcount,
+                                conv,
+                                ximg,
+                                h,
+                                w,
+                                &mut y.data,
+                                ybase,
+                                oh,
+                                ow,
+                                &mut rows,
+                                &mut kn,
+                                &mut nk,
+                                relu,
+                                i8d,
+                                0,
+                                oc,
+                                0,
+                                oh,
+                                tcount,
                             );
                         }
                     });
@@ -557,15 +577,30 @@ fn conv3x3_s1_rows(
                     let ybase = ni * oc * oh * ow;
                     let ximg = &xq[xbase..xbase + ic * h * w];
                     s1_scan(
-                        conv, ximg, h, w, &mut y.data, ybase, oh, ow, &mut rows, &mut kn,
-                        &mut nk, relu, i8d, 0, oc, 0, oh, 0,
+                        conv,
+                        ximg,
+                        h,
+                        w,
+                        &mut y.data,
+                        ybase,
+                        oh,
+                        ow,
+                        &mut rows,
+                        &mut kn,
+                        &mut nk,
+                        relu,
+                        i8d,
+                        0,
+                        oc,
+                        0,
+                        oh,
+                        0,
                     );
                 }
             });
         });
     });
 }
-
 
 fn oc_bounds(oc: usize, t: usize, n: usize) -> (usize, usize) {
     let groups = oc / MR;
@@ -625,8 +660,8 @@ fn s1_scan(
         #[cfg(target_arch = "aarch64")]
         {
             s1_scan_shared_oc(
-                conv, ximg, h, w, yd, ybase, oh, ow, rows, kn, nk, relu, i8d, oy0, oy1,
-                oc_par, plane, wp, zp,
+                conv, ximg, h, w, yd, ybase, oh, ow, rows, kn, nk, relu, i8d, oy0, oy1, oc_par,
+                plane, wp, zp,
             );
             return;
         }
@@ -654,15 +689,15 @@ fn s1_scan(
             let mut ox = 0usize;
             while ox + PN <= ow {
                 implicit_tile_from_rows(
-                    conv, rows, plane, wp, yd, ybase, oh, ow, oy, ox, PN, kn, nk, relu, i8d,
-                    oc0, oc1,
+                    conv, rows, plane, wp, yd, ybase, oh, ow, oy, ox, PN, kn, nk, relu, i8d, oc0,
+                    oc1,
                 );
                 ox += PN;
             }
             while ox + NR16 <= ow {
                 implicit_tile_from_rows(
-                    conv, rows, plane, wp, yd, ybase, oh, ow, oy, ox, NR16, kn, nk, relu, i8d,
-                    oc0, oc1,
+                    conv, rows, plane, wp, yd, ybase, oh, ow, oy, ox, NR16, kn, nk, relu, i8d, oc0,
+                    oc1,
                 );
                 ox += NR16;
             }
@@ -679,9 +714,6 @@ fn s1_scan(
 
 /// Gather every in-row tile, zip once, then stream OC across tiles so the
 /// 4-row weight panel stays hot. Bound is `ox+pn <= ow` (right halo fits).
-#[cfg(target_arch = "aarch64")]
-#[allow(clippy::too_many_arguments)]
-
 /// Zip every output row once, then one intra-op OC stream. Per-row pool
 /// wakeups cost more than a T=400 layer-3 row; one dispatch amortizes.
 #[cfg(target_arch = "aarch64")]
@@ -856,7 +888,18 @@ fn s1_scan_shared_oc(
                     while no + NR16 <= pn {
                         unsafe {
                             kernel_4x16_zip_store(
-                                conv, yd, ybase, oh, ow, oy, oxs[ti] + no, mo, z, pn, no, relu,
+                                conv,
+                                yd,
+                                ybase,
+                                oh,
+                                ow,
+                                oy,
+                                oxs[ti] + no,
+                                mo,
+                                z,
+                                pn,
+                                no,
+                                relu,
                                 i8d,
                             );
                         }
@@ -885,7 +928,17 @@ fn s1_scan_shared_oc(
                             accu += i32::from(wv) * i32::from(kn[kk * pn + tcol]);
                         }
                         write_out_sl(
-                            conv, yd, ybase, oh, ow, oy, ox0 + tcol, mo0 + mi, accu, relu, i8d,
+                            conv,
+                            yd,
+                            ybase,
+                            oh,
+                            ow,
+                            oy,
+                            ox0 + tcol,
+                            mo0 + mi,
+                            accu,
+                            relu,
+                            i8d,
                         );
                     }
                 }
@@ -895,6 +948,8 @@ fn s1_scan_shared_oc(
     }
 }
 
+#[cfg(target_arch = "aarch64")]
+#[allow(clippy::too_many_arguments)]
 fn s1_scan_row_zip(
     conv: &Conv2d,
     rows: &[i8],
@@ -956,7 +1011,19 @@ fn s1_scan_row_zip(
                         if mr == MR && no + NR16 <= pn {
                             unsafe {
                                 kernel_4x16_zip_store(
-                                    conv, yd, ybase, oh, ow, oy, ox0 + no, mo, z, pn, no, relu, i8d,
+                                    conv,
+                                    yd,
+                                    ybase,
+                                    oh,
+                                    ow,
+                                    oy,
+                                    ox0 + no,
+                                    mo,
+                                    z,
+                                    pn,
+                                    no,
+                                    relu,
+                                    i8d,
                                 );
                             }
                             no += NR16;
@@ -970,7 +1037,16 @@ fn s1_scan_row_zip(
                                         a += i32::from(wv) * i32::from(kn[kk * pn + ti]);
                                     }
                                     write_out_sl(
-                                        conv, yd, ybase, oh, ow, oy, ox0 + ti, mo + mi, a, relu,
+                                        conv,
+                                        yd,
+                                        ybase,
+                                        oh,
+                                        ow,
+                                        oy,
+                                        ox0 + ti,
+                                        mo + mi,
+                                        a,
+                                        relu,
                                         i8d,
                                     );
                                 }
@@ -1012,7 +1088,19 @@ fn s1_scan_row_zip(
                         if mr == MR && no + NR16 <= pn {
                             unsafe {
                                 kernel_4x16_zip_store(
-                                    conv, yd, ybase, oh, ow, oy, ox0 + no, mo, z, pn, no, relu, i8d,
+                                    conv,
+                                    yd,
+                                    ybase,
+                                    oh,
+                                    ow,
+                                    oy,
+                                    ox0 + no,
+                                    mo,
+                                    z,
+                                    pn,
+                                    no,
+                                    relu,
+                                    i8d,
                                 );
                             }
                             no += NR16;
@@ -1026,7 +1114,17 @@ fn s1_scan_row_zip(
                                         a += i32::from(wv) * i32::from(kn[kk * pn + ti]);
                                     }
                                     write_out_sl(
-                                        conv, yd, ybase, oh, ow, oy, ox0 + ti, mo + mi, a, relu, i8d,
+                                        conv,
+                                        yd,
+                                        ybase,
+                                        oh,
+                                        ow,
+                                        oy,
+                                        ox0 + ti,
+                                        mo + mi,
+                                        a,
+                                        relu,
+                                        i8d,
                                     );
                                 }
                             }
@@ -1054,7 +1152,19 @@ fn s1_scan_row_zip(
                         if mr == MR && no + NR16 <= pn {
                             unsafe {
                                 kernel_4x16_zip_store(
-                                    conv, yd, ybase, oh, ow, oy, ox0 + no, mo, z, pn, no, relu, i8d,
+                                    conv,
+                                    yd,
+                                    ybase,
+                                    oh,
+                                    ow,
+                                    oy,
+                                    ox0 + no,
+                                    mo,
+                                    z,
+                                    pn,
+                                    no,
+                                    relu,
+                                    i8d,
                                 );
                             }
                             no += NR16;
@@ -1068,7 +1178,17 @@ fn s1_scan_row_zip(
                                         a += i32::from(wv) * i32::from(kn[kk * pn + ti]);
                                     }
                                     write_out_sl(
-                                        conv, yd, ybase, oh, ow, oy, ox0 + ti, mo + mi, a, relu, i8d,
+                                        conv,
+                                        yd,
+                                        ybase,
+                                        oh,
+                                        ow,
+                                        oy,
+                                        ox0 + ti,
+                                        mo + mi,
+                                        a,
+                                        relu,
+                                        i8d,
                                     );
                                 }
                             }
@@ -1107,8 +1227,8 @@ fn pack_pad_row(
 fn row_slot(oy: usize, kh: usize) -> usize {
     // rows packed: before loop, slot 0 = iy=-1, slot 1 = iy=0;
     // each oy packs iy=oy+1 into slot (oy+2)%3.
-    // iy = oy + kh - 1 lives in slot (oy + kh) % 3? 
-    // oy=0, kh=0, iy=-1 → slot 0. (0+0)%3=0. 
+    // iy = oy + kh - 1 lives in slot (oy + kh) % 3?
+    // oy=0, kh=0, iy=-1 → slot 0. (0+0)%3=0.
     // oy=0, kh=1, iy=0 → slot 1.
     // oy=0, kh=2, iy=1 → packed this iter into slot 2.
     // oy=1, kh=0, iy=0 → slot 1. (1+0)%3=1.
@@ -1191,7 +1311,9 @@ fn implicit_tile_from_rows(
     gather_kn_from_rows(conv, rows, plane, wp, oy, ox, pn, kn);
     #[cfg(target_arch = "aarch64")]
     if has_dotprod() && pn.is_multiple_of(NR16) {
-        gemm_panel_kn16(conv, yd, ybase, oh, ow, oy, ox, pn, kn, nk, relu, i8d, oc0, oc1);
+        gemm_panel_kn16(
+            conv, yd, ybase, oh, ow, oy, ox, pn, kn, nk, relu, i8d, oc0, oc1,
+        );
         return;
     }
     let k_pad = conv.k_pad;
@@ -1285,8 +1407,21 @@ fn conv3x3_s2_rows(
                     let ybase = ni * oc * oh * ow;
                     let ximg = &xq[xbase..xbase + ic * h * w];
                     s2_scan(
-                        conv, ximg, h, w, &mut y.data, ybase, oh, ow, &mut rows, &mut kn,
-                        &mut nk, relu, i8d, 0, oc,
+                        conv,
+                        ximg,
+                        h,
+                        w,
+                        &mut y.data,
+                        ybase,
+                        oh,
+                        ow,
+                        &mut rows,
+                        &mut kn,
+                        &mut nk,
+                        relu,
+                        i8d,
+                        0,
+                        oc,
                     );
                 }
             });
@@ -1324,8 +1459,22 @@ fn s2_scan(
     let mut bot = 2usize;
     for oy in 0..oh {
         s2_scan_row_zip(
-            conv, rows, plane, wp, [top, mid, bot], yd, ybase, oh, ow, oy, kn, nk,
-            relu, i8d, oc0, oc1,
+            conv,
+            rows,
+            plane,
+            wp,
+            [top, mid, bot],
+            yd,
+            ybase,
+            oh,
+            ow,
+            oy,
+            kn,
+            nk,
+            relu,
+            i8d,
+            oc0,
+            oc1,
         );
         let next_mid = 2 * (oy + 1);
         let next_bot = next_mid + 1;
@@ -1398,7 +1547,10 @@ pub(crate) fn copy_strided2(dst: &mut [i8], src: &[i8]) {
                 let p = src.as_ptr().add(2 * i);
                 let d = dst.as_mut_ptr().add(i);
                 vst1q_s8(d, vuzp1q_s8(vld1q_s8(p), vld1q_s8(p.add(16))));
-                vst1q_s8(d.add(16), vuzp1q_s8(vld1q_s8(p.add(32)), vld1q_s8(p.add(48))));
+                vst1q_s8(
+                    d.add(16),
+                    vuzp1q_s8(vld1q_s8(p.add(32)), vld1q_s8(p.add(48))),
+                );
             }
             i += 32;
         }
@@ -1523,6 +1675,7 @@ fn s2_scan_row_zip(
             for t in 0..ntiles {
                 let pn = pns[t];
                 let ox0 = oxs[t];
+                #[cfg(target_arch = "aarch64")]
                 let z = &zip[zoff[t]..zoff[t] + k_pad * pn];
                 let mut mo = oc0;
                 while mo < oc1 {
@@ -1533,7 +1686,19 @@ fn s2_scan_row_zip(
                             #[cfg(target_arch = "aarch64")]
                             unsafe {
                                 kernel_4x16_zip_store(
-                                    conv, yd, ybase, oh, ow, oy, ox0 + no, mo, z, pn, no, relu, i8d,
+                                    conv,
+                                    yd,
+                                    ybase,
+                                    oh,
+                                    ow,
+                                    oy,
+                                    ox0 + no,
+                                    mo,
+                                    z,
+                                    pn,
+                                    no,
+                                    relu,
+                                    i8d,
                                 );
                             }
                             no += NR16;
@@ -1547,7 +1712,16 @@ fn s2_scan_row_zip(
                                         a += i32::from(wv) * i32::from(kn[kk * pn + ti]);
                                     }
                                     write_out_sl(
-                                        conv, yd, ybase, oh, ow, oy, ox0 + ti, mo + mi, a, relu,
+                                        conv,
+                                        yd,
+                                        ybase,
+                                        oh,
+                                        ow,
+                                        oy,
+                                        ox0 + ti,
+                                        mo + mi,
+                                        a,
+                                        relu,
                                         i8d,
                                     );
                                 }
@@ -1565,6 +1739,7 @@ fn s2_scan_row_zip(
                 for t in 0..ntiles {
                     let pn = pns[t];
                     let ox0 = oxs[t];
+                    #[cfg(target_arch = "aarch64")]
                     let z = &zip[zoff[t]..zoff[t] + k_pad * pn];
                     let mut no = 0usize;
                     while no < pn {
@@ -1572,7 +1747,19 @@ fn s2_scan_row_zip(
                             #[cfg(target_arch = "aarch64")]
                             unsafe {
                                 kernel_4x16_zip_store(
-                                    conv, yd, ybase, oh, ow, oy, ox0 + no, mo, z, pn, no, relu, i8d,
+                                    conv,
+                                    yd,
+                                    ybase,
+                                    oh,
+                                    ow,
+                                    oy,
+                                    ox0 + no,
+                                    mo,
+                                    z,
+                                    pn,
+                                    no,
+                                    relu,
+                                    i8d,
                                 );
                             }
                             no += NR16;
@@ -1586,7 +1773,16 @@ fn s2_scan_row_zip(
                                         a += i32::from(wv) * i32::from(kn[kk * pn + ti]);
                                     }
                                     write_out_sl(
-                                        conv, yd, ybase, oh, ow, oy, ox0 + ti, mo + mi, a, relu,
+                                        conv,
+                                        yd,
+                                        ybase,
+                                        oh,
+                                        ow,
+                                        oy,
+                                        ox0 + ti,
+                                        mo + mi,
+                                        a,
+                                        relu,
                                         i8d,
                                     );
                                 }
@@ -1626,7 +1822,21 @@ fn conv3x3(
             if interior_y {
                 while ox < 1 && ox < ow {
                     gather_one_3x3(conv, ximg, h, w, oy, ox, nk);
-                    store_col(conv, &mut y.data, ybase, oh, ow, oy, ox, nk, k_raw, relu, None, 0, conv.oc);
+                    store_col(
+                        conv,
+                        &mut y.data,
+                        ybase,
+                        oh,
+                        ow,
+                        oy,
+                        ox,
+                        nk,
+                        k_raw,
+                        relu,
+                        None,
+                        0,
+                        conv.oc,
+                    );
                     ox += 1;
                 }
                 while ox + PN <= ow && last_ix(ox, PN, sx) < w {
@@ -1634,7 +1844,9 @@ fn conv3x3(
                     ox += PN;
                 }
                 while ox + NR16 <= ow && last_ix(ox, NR16, sx) < w {
-                    implicit_tile_3x3(conv, ximg, y, ybase, h, w, oh, ow, oy, ox, NR16, kn, nk, relu);
+                    implicit_tile_3x3(
+                        conv, ximg, y, ybase, h, w, oh, ow, oy, ox, NR16, kn, nk, relu,
+                    );
                     ox += NR16;
                 }
                 while ox + NR <= ow && last_ix(ox, NR, sx) < w {
@@ -1644,7 +1856,21 @@ fn conv3x3(
             }
             while ox < ow {
                 gather_one_3x3(conv, ximg, h, w, oy, ox, nk);
-                store_col(conv, &mut y.data, ybase, oh, ow, oy, ox, nk, k_raw, relu, None, 0, conv.oc);
+                store_col(
+                    conv,
+                    &mut y.data,
+                    ybase,
+                    oh,
+                    ow,
+                    oy,
+                    ox,
+                    nk,
+                    k_raw,
+                    relu,
+                    None,
+                    0,
+                    conv.oc,
+                );
                 ox += 1;
             }
         }
@@ -1665,7 +1891,13 @@ fn gather_one_3x3(
     ox: usize,
     tile: &mut [i8],
 ) {
-    let (ic, k_pad, zp, sx, pad) = (conv.ic, conv.k_pad, conv.act_zp, conv.stride.max(1), conv.pad);
+    let (ic, k_pad, zp, sx, pad) = (
+        conv.ic,
+        conv.k_pad,
+        conv.act_zp,
+        conv.stride.max(1),
+        conv.pad,
+    );
     let k_raw = ic * 9;
     tile[..k_raw].fill(zp);
     tile[k_raw..k_pad].fill(0);
@@ -1729,11 +1961,40 @@ fn implicit_tile_3x3(
     }
     #[cfg(target_arch = "aarch64")]
     if has_dotprod() && pn.is_multiple_of(NR16) {
-        gemm_panel_kn16(conv, &mut y.data, ybase, oh, ow, oy, ox, pn, kn, nk, relu, None, 0, conv.oc);
+        gemm_panel_kn16(
+            conv,
+            &mut y.data,
+            ybase,
+            oh,
+            ow,
+            oy,
+            ox,
+            pn,
+            kn,
+            nk,
+            relu,
+            None,
+            0,
+            conv.oc,
+        );
         return;
     }
     transpose_kn_nk(&kn[..nkk], &mut nk[..nkk], k_pad, pn);
-    gemm_panel(conv, &mut y.data, ybase, oh, ow, oy, ox, pn, nk, relu, None, 0, conv.oc);
+    gemm_panel(
+        conv,
+        &mut y.data,
+        ybase,
+        oh,
+        ow,
+        oy,
+        ox,
+        pn,
+        nk,
+        relu,
+        None,
+        0,
+        conv.oc,
+    );
 }
 
 fn transpose_kn_nk(kn: &[i8], nk: &mut [i8], k: usize, n: usize) {
@@ -1771,8 +2032,22 @@ fn conv1x1(
             if row_zip {
                 #[cfg(target_arch = "aarch64")]
                 conv1x1_row_zip(
-                    conv, ximg, h, w, iy, sx, &mut y.data, ybase, oh, ow, oy, kn, nk, relu,
-                    k_pad, oc,
+                    conv,
+                    ximg,
+                    h,
+                    w,
+                    iy,
+                    sx,
+                    &mut y.data,
+                    ybase,
+                    oh,
+                    ow,
+                    oy,
+                    kn,
+                    nk,
+                    relu,
+                    k_pad,
+                    oc,
                 );
             } else {
                 let mut ox = 0usize;
@@ -1784,7 +2059,19 @@ fn conv1x1(
                     gather_1x1(conv, ximg, h, w, iy, ox, pn, sx, kn);
                     transpose_kn_nk(kn, nk, k_pad, pn);
                     gemm_panel(
-                        conv, &mut y.data, ybase, oh, ow, oy, ox, pn, nk, relu, None, 0, oc,
+                        conv,
+                        &mut y.data,
+                        ybase,
+                        oh,
+                        ow,
+                        oy,
+                        ox,
+                        pn,
+                        nk,
+                        relu,
+                        None,
+                        0,
+                        oc,
                     );
                     ox += pn;
                 }
@@ -1894,7 +2181,19 @@ fn conv1x1_row_zip(
                 while no + NR16 <= pn {
                     unsafe {
                         kernel_4x16_zip_store(
-                            conv, yd, ybase, oh, ow, oy, oxs[t] + no, mo, z, pn, no, relu, None,
+                            conv,
+                            yd,
+                            ybase,
+                            oh,
+                            ow,
+                            oy,
+                            oxs[t] + no,
+                            mo,
+                            z,
+                            pn,
+                            no,
+                            relu,
+                            None,
                         );
                     }
                     no += NR16;
@@ -1911,7 +2210,17 @@ fn conv1x1_row_zip(
                             a += i32::from(wv) * i32::from(kn[kk * pns[t] + ti]);
                         }
                         write_out_sl(
-                            conv, yd, ybase, oh, ow, oy, oxs[t] + ti, mo + mi, a, relu, None,
+                            conv,
+                            yd,
+                            ybase,
+                            oh,
+                            ow,
+                            oy,
+                            oxs[t] + ti,
+                            mo + mi,
+                            a,
+                            relu,
+                            None,
                         );
                     }
                 }
@@ -1946,7 +2255,17 @@ fn conv1x1_row_zip(
                             a += i32::from(wv) * i32::from(kn[kk * pn + ti]);
                         }
                         write_out_sl(
-                            conv, yd, ybase, oh, ow, oy, ox0 + ti, mo + mi, a, relu, None,
+                            conv,
+                            yd,
+                            ybase,
+                            oh,
+                            ow,
+                            oy,
+                            ox0 + ti,
+                            mo + mi,
+                            a,
+                            relu,
+                            None,
                         );
                     }
                 }
@@ -1967,7 +2286,6 @@ fn conv1x1_row_zip(
         ox += pn;
     }
 }
-
 
 fn conv_gather(
     conv: &Conv2d,
@@ -2006,7 +2324,19 @@ fn conv_gather(
                 }
                 debug_assert_eq!(kk, k_raw);
                 store_col(
-                    conv, &mut y.data, ybase, y.h, y.w, oy, ox, tile, k_raw, relu, None, 0, conv.oc,
+                    conv,
+                    &mut y.data,
+                    ybase,
+                    y.h,
+                    y.w,
+                    oy,
+                    ox,
+                    tile,
+                    k_raw,
+                    relu,
+                    None,
+                    0,
+                    conv.oc,
                 );
             }
         }
@@ -2041,7 +2371,17 @@ fn gemm_panel(
                 for (mi, row) in tmp.iter().enumerate() {
                     for (t, &acc) in row.iter().enumerate() {
                         write_out_sl(
-                            conv, yd, ybase, yh, yw, oy, ox + no + t, mo + mi, acc, relu, i8d,
+                            conv,
+                            yd,
+                            ybase,
+                            yh,
+                            yw,
+                            oy,
+                            ox + no + t,
+                            mo + mi,
+                            acc,
+                            relu,
+                            i8d,
                         );
                     }
                 }
@@ -2122,18 +2462,15 @@ fn write_out_sl(
     }
 }
 
+#[cfg(target_arch = "aarch64")]
 fn has_dotprod() -> bool {
     #[cfg(target_vendor = "apple")]
     {
         true
     }
-    #[cfg(all(target_arch = "aarch64", not(target_vendor = "apple")))]
+    #[cfg(not(target_vendor = "apple"))]
     {
         std::arch::is_aarch64_feature_detected!("dotprod")
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        false
     }
 }
 
@@ -2251,11 +2588,35 @@ fn gemm_panel_kn16(
                 unsafe {
                     if use_zip {
                         kernel_4x16_zip_store(
-                            conv, yd, ybase, yh, yw, oy, ox + no, mo, zip, pn, no, relu, i8d,
+                            conv,
+                            yd,
+                            ybase,
+                            yh,
+                            yw,
+                            oy,
+                            ox + no,
+                            mo,
+                            zip,
+                            pn,
+                            no,
+                            relu,
+                            i8d,
                         );
                     } else {
                         kernel_4x16_kn_store(
-                            conv, yd, ybase, yh, yw, oy, ox + no, mo, kn, pn, no, relu, i8d,
+                            conv,
+                            yd,
+                            ybase,
+                            yh,
+                            yw,
+                            oy,
+                            ox + no,
+                            mo,
+                            kn,
+                            pn,
+                            no,
+                            relu,
+                            i8d,
                         );
                     }
                 }
@@ -2268,9 +2629,7 @@ fn gemm_panel_kn16(
                         for (kk, &wv) in wr.iter().enumerate() {
                             acc += i32::from(wv) * i32::from(kn[kk * pn + t]);
                         }
-                        write_out_sl(
-                            conv, yd, ybase, yh, yw, oy, ox + t, mo + mi, acc, relu, i8d,
-                        );
+                        write_out_sl(conv, yd, ybase, yh, yw, oy, ox + t, mo + mi, acc, relu, i8d);
                     }
                 }
                 no = pn;
@@ -2303,8 +2662,8 @@ unsafe fn store4_i8(dst: *mut i8, v: std::arch::aarch64::float32x4_t, inv: f32, 
 #[cfg(target_arch = "aarch64")]
 fn pack_kn_sdot16(kn: &[i8], zip: &mut [i8], k_pad: usize, pn: usize) {
     use std::arch::aarch64::{
-        vld1q_s8, vreinterpretq_s16_s8, vreinterpretq_s8_s16, vst1q_s8, vzip1q_s16, vzip1q_s8,
-        vzip2q_s16, vzip2q_s8,
+        vld1q_s8, vreinterpretq_s8_s16, vreinterpretq_s16_s8, vst1q_s8, vzip1q_s8, vzip1q_s16,
+        vzip2q_s8, vzip2q_s16,
     };
     let mut o = 0usize;
     let mut k = 0usize;
@@ -2470,8 +2829,8 @@ unsafe fn kernel_4x16_kn_store(
 ) {
     use std::arch::aarch64::{
         int8x16_t, int32x4_t, vcvtq_f32_s32, vdupq_n_f32, vdupq_n_s32, vfmaq_f32, vld1q_s8,
-        vmaxq_f32, vmovq_n_f32, vreinterpretq_s16_s8, vreinterpretq_s8_s16, vst1q_f32, vzip1q_s16,
-        vzip1q_s8, vzip2q_s16, vzip2q_s8,
+        vmaxq_f32, vmovq_n_f32, vreinterpretq_s8_s16, vreinterpretq_s16_s8, vst1q_f32, vzip1q_s8,
+        vzip1q_s16, vzip2q_s8, vzip2q_s16,
     };
     let k_pad = conv.k_pad;
     let wp = conv.q_w_pad.as_ptr();

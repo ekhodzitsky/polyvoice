@@ -96,9 +96,7 @@ fn compile(path: &Path) -> Option<Graph> {
 static GRAPH: OnceLock<Option<Graph>> = OnceLock::new();
 
 fn graph(path: &Path) -> Option<&'static Graph> {
-    GRAPH
-        .get_or_init(|| compile(path))
-        .as_ref()
+    GRAPH.get_or_init(|| compile(path)).as_ref()
 }
 
 /// Compile the graph if a `mlmodelc` is present. True on success.

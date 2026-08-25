@@ -396,7 +396,10 @@ mod tests {
                 .unwrap();
             agree += usize::from(ia == ib);
         }
-        eprintln!("powerset int8↔fp32 logits cosine={cos:.6} frames={fa} argmax={agree}/{fa} lstm_i8={}", a.lstm.iter().filter(|l| l.has_i8_weights()).count());
+        eprintln!(
+            "powerset int8↔fp32 logits cosine={cos:.6} frames={fa} argmax={agree}/{fa} lstm_i8={}",
+            a.lstm.iter().filter(|l| l.has_i8_weights()).count()
+        );
         assert!(cos > 0.98, "powerset int8 vs fp32 cosine={cos}");
     }
 

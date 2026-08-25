@@ -574,13 +574,7 @@ fn after_stem(x: &mut Tensor, layer1: &[Block]) {
     }
 }
 
-fn run_layers(
-    l1: &[Block],
-    l2: &[Block],
-    l3: &[Block],
-    l4: &[Block],
-    x: Tensor,
-) -> Tensor {
+fn run_layers(l1: &[Block], l2: &[Block], l3: &[Block], l4: &[Block], x: Tensor) -> Tensor {
     let x = run_layer(l1, x, in_q(l2.first()));
     let x = run_layer(l2, x, in_q(l3.first()));
     let x = run_layer(l3, x, in_q(l4.first()));
@@ -653,11 +647,10 @@ fn try_i8_identity(b: &Block, x: &mut Tensor, next_q: Option<(f32, i8)>) -> bool
         return false;
     };
     let (oh, ow) = b.conv1.out_hw_dims(x.h, x.w);
-    let yq_len = x
-        .n
-        .saturating_mul(b.conv1.oc)
-        .saturating_mul(oh)
-        .saturating_mul(ow);
+    let yq_len =
+        x.n.saturating_mul(b.conv1.oc)
+            .saturating_mul(oh)
+            .saturating_mul(ow);
     let ok = BLOCK_YQ.with(|yc| {
         BLOCK_Z.with(|zc| {
             let mut yq = yc.borrow_mut();
@@ -741,9 +734,7 @@ fn stats_row_scalar(row: &[f32], inv: f32, unb: f32) -> (f32, f32) {
 
 #[cfg(target_arch = "aarch64")]
 fn stats_row_neon(row: &[f32], inv: f32, unb: f32) -> (f32, f32) {
-    use std::arch::aarch64::{
-        vaddq_f32, vaddvq_f32, vdupq_n_f32, vfmaq_f32, vld1q_f32, vsubq_f32,
-    };
+    use std::arch::aarch64::{vaddq_f32, vaddvq_f32, vdupq_n_f32, vfmaq_f32, vld1q_f32, vsubq_f32};
     let n = row.len();
     let p = row.as_ptr();
     let mut i = 0usize;
@@ -1172,12 +1163,19 @@ mod tests {
                 *v = ((i % 13) as f32) * 0.07 - 0.4;
             }
             let inv = 1.0 / t as f32;
-            let unb = if t > 1 { t as f32 / (t as f32 - 1.0) } else { 0.0 };
+            let unb = if t > 1 {
+                t as f32 / (t as f32 - 1.0)
+            } else {
+                0.0
+            };
             let (mn, vv) = stats_row(&row, inv, unb);
             let (ms, vs) = stats_row_scalar(&row, inv, unb);
             let dm = (mn - ms).abs();
             let dv = (vv - vs).abs();
-            assert!(dm < 2e-4 && dv < 2e-4, "t={t} dm={dm} dv={dv} {mn}/{ms} {vv}/{vs}");
+            assert!(
+                dm < 2e-4 && dv < 2e-4,
+                "t={t} dm={dm} dv={dv} {mn}/{ms} {vv}/{vs}"
+            );
         }
     }
 

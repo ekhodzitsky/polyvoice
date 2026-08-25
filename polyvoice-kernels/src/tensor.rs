@@ -126,13 +126,7 @@ pub fn relu_quantize_inplace(a: &mut Tensor, scale: f32, zp: i8, dst: &mut [i8])
 
 /// `a = relu(a + b)` and write the QDQ i8 of the result (vdiv, same as
 /// standalone activation quantize). One map pass instead of add then quantize.
-pub fn add_relu_quantize_inplace(
-    a: &mut Tensor,
-    b: &Tensor,
-    scale: f32,
-    zp: i8,
-    dst: &mut [i8],
-) {
+pub fn add_relu_quantize_inplace(a: &mut Tensor, b: &Tensor, scale: f32, zp: i8, dst: &mut [i8]) {
     debug_assert_eq!(a.data.len(), b.data.len());
     let n = a.data.len().min(dst.len());
     let s = if scale.abs() < 1e-12 { 1.0 } else { scale };

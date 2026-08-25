@@ -21,3 +21,14 @@ pkg-config = "0.3"
 
 [lints.clippy]
 unwrap_used = "deny"
+# Hand-tuned numeric kernels: wide kernel signatures, weight-scale literals, and
+# index-style inner loops are deliberate. Keep semantic lints on; allow the
+# style lints that fight this domain.
+too_many_arguments = "allow"
+excessive_precision = "allow"
+needless_range_loop = "allow"
+needless_return = "allow"
+manual_clamp = "allow"
+type_complexity = "allow"
+let_and_return = "allow"
+approx_constant = "allow"

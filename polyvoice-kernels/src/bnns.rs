@@ -123,11 +123,7 @@ fn bnns_threads_for(ih: usize, iw: usize) -> i32 {
     if let Some(n) = bnns_threads_override() {
         return n;
     }
-    if ih.saturating_mul(iw) >= 8_000 {
-        2
-    } else {
-        1
-    }
+    if ih.saturating_mul(iw) >= 8_000 { 2 } else { 1 }
 }
 
 /// Fill `y` with `conv(x)`. False → caller must use the im2col path.

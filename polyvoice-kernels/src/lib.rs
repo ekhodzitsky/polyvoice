@@ -11,23 +11,23 @@
 
 #[cfg(target_vendor = "apple")]
 mod accelerate;
-#[cfg(linux_cblas)]
-mod linux_cblas;
 #[cfg(target_vendor = "apple")]
 mod bnns;
 #[cfg(target_vendor = "apple")]
 mod bnns_graph;
 mod conv;
 mod conv_i8;
-mod intra;
-mod rten_matmul;
 mod error;
 mod gemm;
+mod intra;
+#[cfg(linux_cblas)]
+mod linux_cblas;
 mod lstm;
 mod onnx_init;
 mod powerset;
 mod qlinear;
 mod resnet34;
+mod rten_matmul;
 mod seq1d;
 mod tensor;
 

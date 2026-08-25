@@ -563,9 +563,24 @@ mod tests {
         let (hv, cv, yv) = run(&ct0, true);
         let (hs, cs, ys) = run(&ct0, false);
         for i in 0..h {
-            assert!((hv[i] - hs[i]).abs() < 1e-6, "ht[{i}] {} vs {}", hv[i], hs[i]);
-            assert!((cv[i] - cs[i]).abs() < 1e-6, "ct[{i}] {} vs {}", cv[i], cs[i]);
-            assert!((yv[i] - ys[i]).abs() < 1e-6, "y[{i}] {} vs {}", yv[i], ys[i]);
+            assert!(
+                (hv[i] - hs[i]).abs() < 1e-6,
+                "ht[{i}] {} vs {}",
+                hv[i],
+                hs[i]
+            );
+            assert!(
+                (cv[i] - cs[i]).abs() < 1e-6,
+                "ct[{i}] {} vs {}",
+                cv[i],
+                cs[i]
+            );
+            assert!(
+                (yv[i] - ys[i]).abs() < 1e-6,
+                "y[{i}] {} vs {}",
+                yv[i],
+                ys[i]
+            );
         }
     }
 

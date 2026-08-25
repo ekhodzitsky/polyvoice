@@ -126,16 +126,7 @@ fn try_accel_rowbias(
         c[mi * n..mi * n + n].fill(bias[mi]);
     }
     // SAFETY: slices match m,n,k; C was just written.
-    sgemm(
-        a.as_ptr(),
-        b.as_ptr(),
-        c.as_mut_ptr(),
-        m,
-        n,
-        k,
-        1.0,
-        1.0,
-    );
+    sgemm(a.as_ptr(), b.as_ptr(), c.as_mut_ptr(), m, n, k, 1.0, 1.0);
     true
 }
 
@@ -156,16 +147,7 @@ fn try_accel_colbias(
     for mi in 0..m {
         c[mi * n..mi * n + n].copy_from_slice(bias);
     }
-    sgemm(
-        a.as_ptr(),
-        b.as_ptr(),
-        c.as_mut_ptr(),
-        m,
-        n,
-        k,
-        1.0,
-        1.0,
-    );
+    sgemm(a.as_ptr(), b.as_ptr(), c.as_mut_ptr(), m, n, k, 1.0, 1.0);
     true
 }
 
@@ -181,16 +163,7 @@ fn try_accel_add(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usi
         return false;
     }
     pin_blas();
-    sgemm(
-        a.as_ptr(),
-        b.as_ptr(),
-        c.as_mut_ptr(),
-        m,
-        n,
-        k,
-        1.0,
-        1.0,
-    );
+    sgemm(a.as_ptr(), b.as_ptr(), c.as_mut_ptr(), m, n, k, 1.0, 1.0);
     true
 }
 
@@ -693,7 +666,12 @@ mod tests {
         }
         gemm_add(&a, &b, &mut c, m, n, k);
         for i in 0..c.len() {
-            assert!((c[i] - want[i]).abs() < 1e-4, "i={i} {} vs {}", c[i], want[i]);
+            assert!(
+                (c[i] - want[i]).abs() < 1e-4,
+                "i={i} {} vs {}",
+                c[i],
+                want[i]
+            );
         }
     }
 

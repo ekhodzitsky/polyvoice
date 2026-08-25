@@ -41,22 +41,23 @@ fn pool() -> &'static Pool {
             workers,
         }
     });
-    SPAWN.call_once(|| {
+    SPAWN.call_once(move || {
         for _ in 0..p.workers {
-            std::thread::spawn(worker_loop);
+            std::thread::spawn(move || worker_loop(p));
         }
     });
     p
 }
 
-fn worker_loop() {
-    let p = POOL.get().expect("intra pool");
+// Poison-tolerant locking: pool state lives in the atomics; the mutex only
+// pairs with the condvars, so a panicked worker must not wedge the pool.
+fn worker_loop(p: &Pool) {
     let mut seen = 0usize;
     loop {
         {
-            let mut g = p.mu.lock().unwrap();
+            let mut g = p.mu.lock().unwrap_or_else(|e| e.into_inner());
             while p.batch.load(Ordering::Acquire) == seen {
-                g = p.start.wait(g).unwrap();
+                g = p.start.wait(g).unwrap_or_else(|e| e.into_inner());
             }
             seen = p.batch.load(Ordering::Acquire);
         }
@@ -72,7 +73,7 @@ fn worker_loop() {
             func(data, i);
         }
         if p.left.fetch_sub(1, Ordering::AcqRel) == 1 {
-            let _g = p.mu.lock().unwrap();
+            let _g = p.mu.lock().unwrap_or_else(|e| e.into_inner());
             p.done.notify_one();
         }
     }
@@ -117,7 +118,7 @@ fn dispatch(p: &Pool, n: usize, func: fn(*const (), usize), data: *const ()) {
     p.next.store(0, Ordering::Relaxed);
     p.left.store(p.workers, Ordering::SeqCst);
     {
-        let _g = p.mu.lock().unwrap();
+        let _g = p.mu.lock().unwrap_or_else(|e| e.into_inner());
         p.batch.fetch_add(1, Ordering::Release);
         p.start.notify_all();
     }
@@ -128,8 +129,8 @@ fn dispatch(p: &Pool, n: usize, func: fn(*const (), usize), data: *const ()) {
         }
         func(data, i);
     }
-    let mut g = p.mu.lock().unwrap();
+    let mut g = p.mu.lock().unwrap_or_else(|e| e.into_inner());
     while p.left.load(Ordering::Acquire) != 0 {
-        g = p.done.wait(g).unwrap();
+        g = p.done.wait(g).unwrap_or_else(|e| e.into_inner());
     }
 }
