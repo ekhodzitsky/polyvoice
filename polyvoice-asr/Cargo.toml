@@ -38,11 +38,12 @@ anyhow = { version = "1", optional = true }
 [features]
 default = []
 # transcribe binary: pulls the full diarization stack from the core crate (the
-# legacy pipeline + registry) plus the attribution cascade, and CLI helpers. This
-# resolves the package cycle — the who-said-what CLI lives here, not in the core
-# crate (which cannot depend on this companion).
+# ONNX Runtime v2 pipeline + registry — who-said-what runs the ort path) plus the
+# attribution cascade, and CLI helpers. This resolves the package cycle — the
+# who-said-what CLI lives here, not in the core crate (which cannot depend on
+# this companion). Core `cli` is native-only (no ort), hence `cli-ort`.
 cli = [
-    "polyvoice/cli",
+    "polyvoice/cli-ort",
     "polyvoice/attribution",
     "dep:clap",
     "dep:serde",
