@@ -2302,7 +2302,7 @@ dependencies = [
 
 [[package]]
 name = "polyvoice-kernels"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "cc",
  "pkg-config",

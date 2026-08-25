@@ -247,7 +247,7 @@ pub fn gemm_i8_static(
     k: usize,
     accumulate: bool,
 ) -> bool {
-    if m == 0 || n == 0 || k == 0 || a_scale.abs() < 1e-12 {
+    if m == 0 || n == 0 || k == 0 || a_scale.abs() < 1e-12 || !i8_exact_on_this_cpu() {
         return false;
     }
     if a.len() != m.saturating_mul(k)
@@ -338,6 +338,29 @@ pub fn gemm_i8_static(
 
 /// `C = ((A_u8 - a_zp) @ (B_[n,k]^T - b_zp)) * a_scale * b_scale + bias`.
 ///
+/// True when rten's int8 GEMM accumulates exactly on this CPU.
+///
+/// rten's x86_64 int8 kernels use VPMADDUBSW (pairwise i16 sums) unless
+/// AVX512-VNNI is present, which saturates on full-range i8 weights — a
+/// documented upstream hazard. Exact paths: aarch64 (SDOT/generic, i32
+/// accumulate) and x86_64 with AVX512-VNNI (VPDPBUSD). Elsewhere callers
+/// must fall back to the in-crate integer path.
+#[cfg(not(target_vendor = "apple"))]
+fn i8_exact_on_this_cpu() -> bool {
+    #[cfg(target_arch = "aarch64")]
+    {
+        true
+    }
+    #[cfg(target_arch = "x86_64")]
+    {
+        std::arch::is_x86_feature_detected!("avx512vnni")
+    }
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    {
+        false
+    }
+}
+
 /// `B` is qlinear `[n, k]`. Transposed to `[k, n]` and run Unpacked: rten's
 /// prepacked B path does not apply per-column zp (LSTM weights are zp 0).
 #[cfg(not(target_vendor = "apple"))]
@@ -355,7 +378,7 @@ pub fn gemm_u8i8_nk(
     k: usize,
     a_scale: f32,
 ) -> bool {
-    if m == 0 || n == 0 || k == 0 || a_scale.abs() < 1e-12 {
+    if m == 0 || n == 0 || k == 0 || a_scale.abs() < 1e-12 || !i8_exact_on_this_cpu() {
         return false;
     }
     if a_u8.len() != m.saturating_mul(k)
@@ -589,7 +612,7 @@ fn quant_u8_neon(src: &[f32], s: f32, z: f32, dst: &mut [u8], n: usize) {
 /// column buffer. Pad pixels are `act_zp`.
 #[cfg(not(target_vendor = "apple"))]
 pub fn try_conv_i8(conv: &Conv2d, x: &Tensor, y: &mut Tensor, relu: bool) -> bool {
-    if conv.q_w.is_empty() || conv.out_scale.is_empty() || x.n == 0 {
+    if conv.q_w.is_empty() || conv.out_scale.is_empty() || x.n == 0 || !i8_exact_on_this_cpu() {
         return false;
     }
     let k_raw = conv.ic.saturating_mul(conv.k).saturating_mul(conv.k);
@@ -971,6 +994,12 @@ mod tests {
 
     #[test]
     fn virtual_im2col_tracks_implicit_3x3() {
+        if !super::i8_exact_on_this_cpu() {
+            eprintln!(
+                "skip: no exact int8 GEMM on this CPU (x86_64 without AVX512-VNNI saturates)"
+            );
+            return;
+        }
         let (conv, x) = quantized_fixture(8, 16, 3, 6, 10);
         let want = implicit_fwd(&conv, &x);
         let mut got = Tensor::zeros(x.n, conv.oc, x.h, x.w);
@@ -981,6 +1010,12 @@ mod tests {
 
     #[test]
     fn virtual_im2col_tracks_implicit_1x1() {
+        if !super::i8_exact_on_this_cpu() {
+            eprintln!(
+                "skip: no exact int8 GEMM on this CPU (x86_64 without AVX512-VNNI saturates)"
+            );
+            return;
+        }
         let (conv, x) = quantized_fixture(8, 16, 1, 5, 9);
         let want = implicit_fwd(&conv, &x);
         let mut got = Tensor::zeros(x.n, conv.oc, x.h, x.w);

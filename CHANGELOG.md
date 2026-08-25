@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **x86_64 / Windows builds compile again.** aarch64-only INT8 zip kernels
+  leaked into off-aarch64 compilation; they are now gated to aarch64.
+- **Correctness on x86_64 CPUs without AVX512-VNNI.** rten's int8 GEMM uses
+  saturating VPMADDUBSW there (upstream-documented hazard with full-range i8
+  weights); the rten int8 path is now used only where accumulation is exact
+  (aarch64 dotprod, x86_64 AVX512-VNNI), with the in-crate integer GEMM as the
+  exact fallback elsewhere.
+- polyvoice-asr's `cli` feature now wires `polyvoice/cli-ort` (the transcribe
+  binary needs the ONNX stack; core `cli` is native-only since 0.18.0).
+
 ## [0.18.0] - 2026-08-25
 
 ### Changed
