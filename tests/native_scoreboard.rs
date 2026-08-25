@@ -22,8 +22,11 @@ use std::process::Command;
 struct Floors {
     der_no_collar_micro_max: f64,
     der_no_collar_macro_max: f64,
+    /// RTF/RSS floors are enforced only on the macOS scoreboard host.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     rt_factor_min: f64,
     model_bytes_max: u64,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     rss_mib_max: f64,
 }
 
@@ -58,6 +61,8 @@ fn vox3() -> Option<PathBuf> {
 
 struct Run {
     out: BenchOut,
+    /// Read only by the macOS `/usr/bin/time -l` RSS parse.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     stderr: String,
 }
 
