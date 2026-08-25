@@ -69,6 +69,9 @@ id_rsa.pub
 # Local git worktrees
 .worktrees/
 
+# Local tool caches (model downloads etc.)
+.cache/
+
 # Python caches
 __pycache__/
 *.pyc
