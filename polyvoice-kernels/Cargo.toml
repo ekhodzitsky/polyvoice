@@ -1,6 +1,6 @@
 [package]
 name = "polyvoice-kernels"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.94.0"
 description = "Hand-written WeSpeaker ResNet34 kernels for polyvoice — not a general ONNX runtime."
