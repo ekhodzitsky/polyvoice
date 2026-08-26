@@ -12,7 +12,7 @@ crate's `ort`. That is why this crate:
 
 - is strictly **opt-in** and deliberately **outside the polyvoice workspace**
   (own lockfile, own build) — it can never leak into the core dependency
-  graph, the ~30 MB default footprint, or the wasm target;
+  graph, the ~8.4 MB INT8 default footprint, or the wasm target;
 - should only be chosen when you actually need CJK.
 
 ## Choosing a companion

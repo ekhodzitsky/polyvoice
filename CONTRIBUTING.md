@@ -1,6 +1,6 @@
 # Contributing to polyvoice
 
-Thanks for your interest. This guide matches the **0.15** tree.
+Thanks for your interest. This guide matches the **0.18** tree.
 
 ## Setup
 
@@ -11,13 +11,16 @@ cd polyvoice
 # Ort-free core (default features are empty)
 cargo test
 
-# Full ONNX production stack (crate-root Pipeline = pipeline v2)
+# Product stack (kernels, crate-root Pipeline = pipeline v2)
+cargo test --features "pipeline-native,vbx"
+
+# ONNX Runtime stack (Python / cli-ort)
 cargo test --features "pipeline-full,vbx"
 
-# CLI binary
+# Product CLI binary (no libonnxruntime)
 cargo build --features cli
 
-# Download profile models (~30 MB FP32 balanced; signed in release)
+# Download profile models (~8.4 MB INT8 balanced; signed in release)
 cargo run --features cli --bin polyvoice -- download-models --profile balanced
 # or: bash scripts/download-models.sh
 ```
@@ -74,7 +77,8 @@ pytest tests/ -v
 | `cargo test` | Ort-free unit + integration |
 | `cargo test -p polyvoice-kernels` | Hand-written ResNet / powerset kernels |
 | `cargo test --no-default-features --features cli-native --test cli_native_smoke` | Kernel-only CLI (no ort/tract) |
-| `cargo test --features "pipeline-full,vbx"` | Production stack lib tests |
+| `cargo test --features "pipeline-native,vbx"` | Product stack lib tests (kernels) |
+| `cargo test --features "pipeline-full,vbx"` | ONNX Runtime stack lib tests |
 | `cargo test --features cli --bin polyvoice` | CLI-related (when applicable) |
 | `cargo test --features ffi` | C FFI bindings |
 | Full DER gates | CI / `polyvoice-bench` with datasets — not default unit tests |
@@ -83,12 +87,11 @@ Ignored tests that need models or network are intentional; release DER gates liv
 
 ## Areas for contribution
 
-Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues) and the local `roadmap/` tracker. High-impact directions (as of 0.15):
+Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues) and the local `roadmap/` tracker. High-impact directions (as of 0.18):
 
 - **Cross-corpus DER** — CALLHOME / DIHARD-style gates beyond VoxConverse + AMI
-- **Second inference backend** — tract / load-dynamic ORT parity with measured DER
-- **EP wiring** — Nnapi / Cuda (CoreML and XNNPACK already feature-gated)
-- **VBx PLDA signing** — minisign for default-path PLDA artifacts
+- **Linux native RTF** — kernels hold AMI DER within the ort ceiling; RTF still trails Linux ort
+- **Python kernels path** — pip still ships ONNX Runtime; CLI / FFI / MCP are native
 - **Streaming productization** — powerset-quality online path (batch v2 is production)
 - **Docs / DX** — keep README feature recipes and readiness version truth current
 

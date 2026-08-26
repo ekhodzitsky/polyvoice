@@ -6,9 +6,10 @@
 
 **Speaker diarization for Python — who spoke when.**
 
-Rust-powered, ONNX-based speaker diarization that runs on CPU, fits in 30 MB,
-and requires zero Python runtime overhead. Pipeline v2 with VBx clustering
-and overlap detection.
+Rust-powered speaker diarization that runs on CPU, fits in ~8.4 MB INT8, and
+requires zero Python runtime overhead. The wheel still uses ONNX Runtime (the
+Rust CLI default since 0.18 is hand-written kernels). Pipeline v2 with VBx
+clustering and overlap detection.
 
 ## Install
 
@@ -23,7 +24,7 @@ Requires Python 3.9+.
 ```python
 import polyvoice
 
-# Models auto-download on first run (~30 MB)
+# Models auto-download on first run (~8.4 MB INT8)
 pipeline = polyvoice.Pipeline.balanced()
 
 result = pipeline.run(samples, sample_rate=16000)
@@ -49,7 +50,7 @@ for turn in result["turns"]:
 
 | Pipeline | VoxConverse-test DER (collar 0, overlap-scored) | Model size |
 |----------|-------------------------------------------------|------------|
-| default (v2+VBx) | **15.2%** | ~30 MB |
+| default (v2+VBx, INT8) | **15.2%** | ~8.4 MB |
 
 Full protocol, collar/averaging disclosure, and competitor numbers:
 [docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/master/docs/BENCHMARKS.md).

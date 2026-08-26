@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.18.0] - 2026-08-25
+
+### Changed
+
+- Lockstep with core **0.18.0**. Python still ships the ONNX Runtime INT8
+  stack (`onnx` + stage features). The Rust CLI default moved to hand-written
+  kernels; `pip install polyvoice` is unchanged on that axis. Models remain
+  the INT8 pair (~8.4 MB).
+
 ## [0.17.0] - 2026-08-10
 
 ### Changed

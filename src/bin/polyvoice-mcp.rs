@@ -2,8 +2,8 @@
 //!
 //! Exposes `polyvoice.diarize` (+ `transcribe`/`diarize_and_transcribe` stubbed
 //! until the opt-in `polyvoice-asr` crate exists, and `capabilities`) over stdio.
-//! Diarization uses the same production path as the CLI (**pipeline v2 + VBx**
-//! by default). Tools project the canonical `DiarizationResult` v1. **stdout is
+//! Diarization uses the same production path as the CLI (**pipeline v2 + VBx
+//! kernels** by default). Tools project the canonical `DiarizationResult` v1. **stdout is
 //! reserved for JSON-RPC** — nothing else is ever printed to it (no `println!`,
 //! no tracing subscriber installed, pipeline runs quietly), so the protocol
 //! stream stays clean. Errors carry the polyvoice FFI numeric codes as

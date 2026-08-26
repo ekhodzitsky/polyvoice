@@ -1,7 +1,8 @@
 //! C FFI ABI v3 for polyvoice Pipeline (v0.6.5+).
 //!
 //! The pipeline matches the CLI/MCP production default: pipeline v2 with VBx
-//! clustering. On first use the builder resolves the VBx PLDA params from
+//! clustering on hand-written INT8 kernels (no `libonnxruntime`). On first use
+//! the builder resolves the VBx PLDA params from
 //! `POLYVOICE_VBX_PLDA_DIR` or downloads them via the model registry (needs
 //! network access unless pre-cached).
 //!

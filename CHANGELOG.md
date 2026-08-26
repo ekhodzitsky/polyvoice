@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- Align readiness, architecture, library-mode, competitors, contributor, and
+  Python docs with the 0.18 kernels default. CLI / FFI / MCP run
+  `pipeline-native` (no `libonnxruntime`). ONNX Runtime is opt-in (`cli-ort`
+  / the Python wheel).
+
 ### Removed
 
 - Intermediate kernel-tuning DER snapshots (3-file / 1-file smokes), unused

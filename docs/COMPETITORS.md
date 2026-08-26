@@ -3,7 +3,8 @@
 > Research snapshot: 2026-06-23. Stars are approximate and change daily.
 
 Polyvoice positions itself as a **Rust-native, CPU-first, MIT-licensed, ungated**
-speaker diarization engine (ort-free core; production path uses ONNX Runtime)
+speaker diarization engine (ort-free library core; product CLI/FFI/MCP is
+hand-written INT8 kernels; ONNX Runtime is opt-in via `cli-ort` / Python)
 with first-class streaming and a small (~8.4 MB INT8) footprint. The list below
 compares the main open-source alternatives and what polyvoice can learn from them.
 
@@ -12,9 +13,9 @@ compares the main open-source alternatives and what polyvoice can learn from the
 | Property | Value |
 |---|---|
 | Repository | https://github.com/ekhodzitsky/polyvoice |
-| Language | Rust (pure-Rust core, ONNX via `ort`) |
+| Language | Rust (pure-Rust core; product CLI is kernels; ONNX via `ort` is opt-in) |
 | License | MIT (code and shipped models) |
-| Deployment | CPU-first, ~8.4 MB INT8, no Python runtime |
+| Deployment | CPU-first, ~8.4 MB INT8, no Python runtime, no `libonnxruntime` on the product CLI |
 | Bindings | Rust library, Python (maturin), C FFI, CLI, MCP server |
 | Streaming | First-class `streaming::StreamingPipeline` |
 | DER benchmark | 15.22% on VoxConverse-test (collar 0, overlap-scored; v2+VBx, H2H 2026-08 vs speakrs 11.08%) |
@@ -74,8 +75,9 @@ compares the main open-source alternatives and what polyvoice can learn from the
 
 Polyvoice owns a defensible niche that the Python/C++ incumbents do not serve
 well: a **Rust-native, CPU-first, MIT-licensed, ungated, streaming diarization
-engine** that embeds into apps without a PyTorch stack (production ONNX path
-still uses the `ort` native runtime). Competitors are stronger on accuracy,
+engine** that embeds into apps without a PyTorch stack. The product CLI is
+hand-written INT8 kernels (no `libonnxruntime`); Python and `cli-ort` still
+use the `ort` native runtime. Competitors are stronger on accuracy,
 ecosystem, and bindings, but they are heavier, GPU-oriented, and often gated
 or commercially restricted.
 

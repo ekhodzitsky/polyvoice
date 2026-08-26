@@ -38,18 +38,18 @@ DOCKER=1 bash scripts/linux-cpu-der-gate.sh   # or native Linux host
 |--|--|--|--|--|
 | **VoxConverse-test DER** | **15.0 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
 | **Model size** | **~8.4 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
-| **Runtime** | **CPU ~80–95× (Linux aarch64) / CoreML ~111–130× (M1)** | CPU/GPU (PyTorch) | GPU recommended | GPU |
+| **Runtime** | **Kernels ~117–130× Darwin / ~28× Linux Vox-3; ort ~80–95× Linux** | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
-| **Dependencies** | **Rust API, optional ONNX Runtime; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
+| **Dependencies** | **Rust kernels by default; ONNX Runtime opt-in; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
 | **Streaming** | **Yes** | No | No | No |
 
 ¹ VoxConverse-test, **no forgiveness collar (collar 0), overlap scored** — the
 strict protocol pyannote 3.1 reports against, so these two are collar-matched.
 polyvoice trails the accuracy leader by ~4 DER points and trades that for
-deployability: a Rust-native, CPU, MIT, **ungated** engine (ONNX Runtime for
-the production path) with four bindings and streaming. It is **not** the
-accuracy leader.
+deployability: a Rust-native, CPU, MIT, **ungated** engine (hand-written INT8
+kernels on the product CLI; ONNX Runtime via `cli-ort` / Python) with four
+bindings and streaming. It is **not** the accuracy leader.
 
 ## The collar caveat (read this first)
 
@@ -234,7 +234,7 @@ retained below for history only — prefer the full-split rows above.
 Measured end-to-end with `polyvoice-bench` on **Apple M1 Pro (10 cores)**,
 release build, single file stream at a time.
 
-### Current default — INT8 (2026-08-10/11, v0.17+)
+### ONNX Runtime / CoreML — INT8 (2026-08-10/11, v0.17+)
 
 | Configuration | Corpus | RTFx (× realtime) | RTF | DER₀ micro |
 |---|---|---:|---:|---:|
@@ -254,6 +254,23 @@ CoreML: [`int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-0
 Mac CPU N=8:
 [`int8-batch8-default-2026-08-10/`](../benchmarks/results/int8-batch8-default-2026-08-10/).
 CoreML forces powerset micro-batch **N=1**; **N=8 is the default on CPU**.
+
+### Native kernels — product CLI since 0.18
+
+The table above is the **ONNX Runtime / CoreML** campaign (0.17). Since 0.18 the
+product CLI (`--features cli`) is hand-written INT8 kernels. Darwin full-split
+is measured; Linux native full-split rows in `tests/der_baseline.json` are still
+pending fill (ceilings copied from the ort protocol).
+
+| Configuration | Corpus | RTFx (× realtime) | DER₀ micro |
+|---|---|---:|---:|
+| **v2 + VBx INT8 Darwin kernels (M1 Pro)** | VoxConverse-test (232) | **~130×** | **15.47 %** |
+| **v2 + VBx INT8 Darwin kernels (M1 Pro)** | AMI-test (16) | **~109×** | **25.19 %** |
+| **v2 + VBx INT8 Darwin kernels Vox-3 scoreboard** | euqef / fuzfh / msbyq | **≥117×** | **7.11 %** |
+| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~28×** | AMI DER within ort ceiling |
+
+Locked Darwin floors: `tests/native_scoreboard.json`. Linux native gate:
+`scripts/linux-cpu-native-der-gate.sh`.
 
 ### Historical — FP32, CPU EP (2026-07-30/31, v0.14.0)
 
@@ -286,7 +303,7 @@ are steady-state in-process numbers.
 
 | Engine | Deployable size | License | Gated weights? | Runtime |
 |---|---|---|---|---|
-| **polyvoice** | **~8.4 MB** INT8 production pair (+ PLDA for VBx) | **MIT** | **No** | Rust + ONNX Runtime, CPU/CoreML |
+| **polyvoice** | **~8.4 MB** INT8 production pair (+ PLDA for VBx) | **MIT** | **No** | Rust kernels (default CLI); ONNX Runtime opt-in |
 | pyannote 3.1 | ~32.5 MB (seg 5.9 + embed 26.6) | MIT code | **Yes** (HF token + accept) | PyTorch, CPU/GPU |
 | WhisperX | ~32.5 MB + Whisper model | BSD code | Yes (pyannote) | PyTorch, GPU |
 | sherpa-onnx | seg ~5.9 MB + embed (int8 avail.) | Apache-2.0 | No | ONNX, CPU |
@@ -354,7 +371,7 @@ python benchmark.py --dataset voxconverse_test --runners all
   AMI **24.63 %** — `int8-batch8-default-2026-08-10/`. Historical FP32 hop-2.0
   (15.24 / 23.42) remains under `powerset-hop2-2026-07-30/` and early full-split
   under `full-der-2026-07-25/`. Default (0.11+ pipeline): v2 + VBx; models INT8
-  since 0.17; legacy via `--legacy`
+  since 0.17; product CLI kernels since 0.18; legacy via `--legacy`
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
 - ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands
 - ⁸ speakrs CoreML warm on Apple M1 Pro, full VoxConverse-test 232, scored with `benchmarks/der.py` (collar 0, overlap scored): DER 11.08% micro (miss 3.35 / FA 4.10 / conf 3.63), RTFx ~144×. Artifact `benchmarks/results/speakrs-h2h-2026-08-03/full-232-matched-score.json` (2026-08-03/04). speakrs code Apache-2.0: https://github.com/avencera/speakrs. polyvoice on the **same** scorer/split: 15.22% no-collar micro (conf 8.04) — gap **4.14 pp**, confusion-dominated. speakrs' own README quotes 11.1% / 631× on M4 Pro; do not mix hardware for RTFx.

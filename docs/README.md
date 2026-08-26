@@ -1,7 +1,8 @@
-# Documentation index (polyvoice 0.17)
+# Documentation index (polyvoice 0.18)
 
-Crate version: **0.17.x** ([CHANGELOG](../CHANGELOG.md)). Production profiles
-use **INT8** models only. Canonical accuracy protocol:
+Crate version: **0.18.x** ([CHANGELOG](../CHANGELOG.md)). Production profiles
+use **INT8** models only. CLI / FFI / MCP default is **kernels**
+(`pipeline-native`), not ONNX Runtime. Canonical accuracy protocol:
 [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
 [PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md).
 
@@ -11,18 +12,22 @@ use **INT8** models only. Canonical accuracy protocol:
 - [../README.md](../README.md) — install, 60-second diarize, headline DER
 - [BENCHMARKS.md](BENCHMARKS.md) — full protocol, RTF, competitor orientation
 
-### Rust library (ONNX production)
-- Features: `pipeline-full` + `vbx` (enable code); set `ClustererKind::Vbx` for CLI parity
-- [API.md](API.md) — dual pipelines, types, streaming presets
+### Rust library (kernels / production)
+- Features: `pipeline-native` + `vbx` (same as `cli`); set `ClustererKind::Vbx` for CLI parity
+- [API.md](API.md) — three layers, types, streaming presets
 - [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md) — who calls whom
 - rustdoc: https://docs.rs/polyvoice
+
+### Rust library (ONNX Runtime)
+- Features: `pipeline-full` + `vbx` (Python still ships this stack)
+- Same crate-root `Pipeline` as kernels; engine is `ort` instead of `polyvoice-kernels`
 
 ### Rust library (BYO / no ONNX)
 - [library-mode.md](library-mode.md) — empty default features, surface inventory
 - [../examples/byo_embedder.rs](../examples/byo_embedder.rs)
 
 ### Python
-- [../python/README.md](../python/README.md) — install, API, defaults (VBx)
+- [../python/README.md](../python/README.md) — install, API, VBx default; engine is still ONNX Runtime
 
 ### C FFI
 - [FFI.md](FFI.md) — build, lifecycle, status codes, audio caps
@@ -73,7 +78,8 @@ use **INT8** models only. Canonical accuracy protocol:
 | Goal | Features |
 |------|----------|
 | Ort-free BYO | `--no-default-features` (+ `clusterer`, `vbx` optional) |
-| ONNX library | `pipeline-full` (+ set `ClustererKind::Vbx`) |
+| Kernels library | `pipeline-native` + `vbx` (CLI parity) |
+| ONNX library | `pipeline-full` + `vbx` (Python still ships this) |
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (= `pipeline-native` + `vbx`; no `ort`) |
 | CLI with ONNX Runtime | `cli-ort` |
 | CLI with tract | `cli-tract` |

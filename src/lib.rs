@@ -16,15 +16,13 @@
 //!
 //! ## Quick start
 //!
-//! **ONNX production path:** the crate-root `Pipeline` (re-exported from
-//! `pipeline_v2`) + `ModelRegistry`, gated on features `infer`, `download`,
-//! `segmentation`, `embedder`, `clusterer`, `resegmentation` (CLI also
-//! enables `vbx`). `infer` comes from `onnx` (ort) and/or `backend-tract`.
-//! CLI / FFI / MCP default to **kernels** via `cli` / `pipeline-native`
-//! (no `ort`). ONNX Runtime is `--features cli-ort` / `onnx` /
-//! `pipeline-full`. `cli-tract` is the same v2 stack on tract. With the
-//! gate off there is deliberately no crate-root `Pipeline` — inference-free
-//! builds use [`pipeline::LegacyPipeline`].
+//! **Product path (CLI / FFI / MCP):** crate-root `Pipeline` via
+//! `pipeline-native` (`cli`) — hand-written INT8 kernels, no
+//! `libonnxruntime`. ONNX Runtime is `--features cli-ort` / `onnx` /
+//! `pipeline-full`. Tract is `cli-tract`. The v2 gate is `download` +
+//! stage features plus an engine (`pipeline-native`, `onnx`, or
+//! `backend-tract`). With the gate off there is deliberately no crate-root
+//! `Pipeline` — inference-free builds use [`pipeline::LegacyPipeline`].
 //!
 //! **Library mode (no ONNX):** `default-features = false`, implement
 //! [`Embedder`], pair with [`EnergyVad`] and [`pipeline::LegacyPipeline`] /
@@ -182,13 +180,15 @@ pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
 /// Shared wiring helpers for the CLI-family binaries (`polyvoice`,
 /// `polyvoice-bench`, `polyvoice-measure`, `polyvoice-mcp`): flag-to-config
 /// translation, pipeline construction, and bench-dataset walking, so each
-/// binary stays a thin wrapper. Compiled with `cli` / `cli-tract` (`cli-bin`)
-/// or `mcp`. `cli` is the ort product front door; `cli-tract` is the same
-/// binaries without `ort`.
+/// binary stays a thin wrapper. Compiled with `cli` / `cli-ort` / `cli-tract`
+/// (`cli-bin`) or `mcp`.
 ///
 /// Hidden from docs: not a supported library API (bin wiring only). Kept
 /// `pub` (not `pub(crate)`) so field uses from bin targets do not trip
 /// `dead_code` when building the lib alone.
+///
+/// `cli` is the product front door (kernels, no ort). `cli-ort` is the
+/// previous ONNX Runtime stack. `cli-tract` is the same binaries on tract.
 #[doc(hidden)]
 #[cfg(any(feature = "cli-bin", feature = "mcp"))]
 pub mod cli_common;

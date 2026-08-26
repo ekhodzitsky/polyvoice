@@ -102,8 +102,10 @@ and [docs/API.md](docs/API.md).
   realtime** on a laptop CPU — no GPU. Powerset windows micro-batch (N=8)
   on non-CoreML EPs.
 - **Rust-native, four surfaces.** Rust + Python + C FFI + CLI from one crate;
-  no PyTorch stack. Production ONNX path uses ONNX Runtime (`ort`); the default
-  feature set is empty (ort-free BYO core).
+  no PyTorch stack. CLI / FFI / MCP default is hand-written INT8 kernels
+  (`cli`, no `libonnxruntime`). ONNX Runtime is `--features cli-ort` and the
+  Python wheel. The published crate default feature set is empty (ort-free BYO
+  core).
 - **MIT, ungated.** No HF token, no non-commercial rider, no gated weights.
   Streaming included.
 - **Honest trade-off.** Not the accuracy leader: pyannote 3.1 is ~4 DER

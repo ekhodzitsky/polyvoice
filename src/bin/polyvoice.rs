@@ -3,7 +3,9 @@
 //! `polyvoice meeting.wav` diarizes a file (implicit `diarize`); subcommands
 //! `models` / `download-models` / `completions` are still available. Default
 //! pipeline (since 0.11): **v2 + VBx** (powerset segmentation, ResNet34
-//! embeddings, VB-HMM + PLDA clustering). PLDA weights come from
+//! embeddings, VB-HMM + PLDA clustering). Default engine (since 0.18):
+//! hand-written INT8 kernels (`--features cli`). ONNX Runtime:
+//! `--features cli-ort`. Tract: `--features cli-tract`. PLDA weights come from
 //! `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or are auto-downloaded via the
 //! model registry when neither is set (or pass `--clusterer ahc`).
 //! Use `--legacy` for the pre-0.11 Silero + AHC path.

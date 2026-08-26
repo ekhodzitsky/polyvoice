@@ -1,6 +1,6 @@
 # Optional ERes2NetV2 (and CAM++-zh) embedders
 
-These models are **not** part of the default ~30 MB profile. They are optional
+These models are **not** part of the default ~8.4 MB INT8 profile. They are optional
 downloads for accuracy experiments on short segments and CJK audio.
 
 ## Enable

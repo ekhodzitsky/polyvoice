@@ -42,8 +42,8 @@ pub enum InferenceBackend {
 impl InferenceBackend {
     /// Backend used when env / force do not pick one.
     ///
-    /// Ort when `onnx` is on (product default). Tract when the build is
-    /// tract-only (`backend-tract` without `onnx`).
+    /// Ort when `onnx` is on (default for ONNX builds, not the product CLI).
+    /// Tract when the build is tract-only (`backend-tract` without `onnx`).
     pub fn default_backend() -> Self {
         #[cfg(feature = "onnx")]
         {

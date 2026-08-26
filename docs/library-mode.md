@@ -8,9 +8,9 @@ not want the ONNX Runtime (`ort`) native dylib.
 ```toml
 # Cargo.toml
 [dependencies]
-polyvoice = { version = "0.17", default-features = false }
+polyvoice = { version = "0.18", default-features = false }
 # optional pure-Rust extras:
-# polyvoice = { version = "0.17", default-features = false, features = ["clusterer", "vbx"] }
+# polyvoice = { version = "0.18", default-features = false, features = ["clusterer", "vbx"] }
 ```
 
 CI enforces that `ort` never appears in the normal dependency graph for
@@ -62,7 +62,6 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | `FbankOnnxExtractor` | ONNX fbank embedder (`Embedder`; feature `onnx`) |
 | `CamPlusPlusExtractor`, `ResNet34Adapter`, `ERes2NetV2Extractor` | Need `onnx` + `embedder` |
 | `PowersetSegmenter` | Need `onnx` + `segmentation` |
-| `pipeline_v2` / crate-root `Pipeline` | Full stack: needs `pipeline-full` (or the six stage flags) |
 | `sortformer` | Optional E2E diarizer (`onnx`-gated, never default) |
 | EP features (`coreml`, `nnapi`, `xnnpack`), `backend-tract` | Inference backends |
 
@@ -71,6 +70,7 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | Feature / surface | Notes |
 |-------------------|--------|
 | `download` / `ModelRegistry` | HTTP registry + SHA-256 / minisign; **no ort by itself** |
+| crate-root `Pipeline` (`pipeline_v2`) | `pipeline-native` (kernels), `pipeline-full` (ort), or `pipeline-tract` |
 | `pipeline-full` | `onnx` + `download` + stage markers — ONNX library bundle |
 | `pipeline-tract` | same v2 stack, tract only — **no ort** |
 | `cli`, `ffi`, `mcp` | `pipeline-native` + `vbx` (+ extras). Front doors **set** VBx; library `PipelineConfig::default()` is still AHC |
@@ -185,7 +185,8 @@ let mut pipeline = StreamingPipeline::with_latency_preset(
 ### Explicit non-goals of library mode
 
 - No bundled WeSpeaker / Silero ONNX weights on this path.
-- No `pipeline_v2` (ONNX production stack) — that is the CLI/FFI default, not BYO.
+- No `pipeline_v2` — that is the CLI/FFI default (`pipeline-native` kernels
+  since 0.18), not the BYO surface.
 - DER quality tracks **your** embedder; library mode does not claim SOTA alone.
 - VBx PLDA is **caller-supplied** (`from_dir`); library mode never auto-downloads.
 
@@ -204,7 +205,7 @@ an update to this section. CI job `ort-free-core` must stay green.
 | BYO example / mock multi-speaker | `byo_embedder` example + `byo_embedder_library` test |
 
 Do **not** move production CLI accuracy onto this path without an explicit
-product decision (`pipeline_v2` remains the ONNX default).
+product decision (`pipeline_v2` on kernels remains the CLI default).
 
 ## Related docs
 

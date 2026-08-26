@@ -15,22 +15,25 @@ For the **development process** checklist (spec → types → verify), see
                     └─────────────────────────────────────┘
 
                     ┌─────────────────────────────────────┐
-  onnx production   │  pipeline_v2::Pipeline (+ Builder)  │── Segmenter/Embedder/
-  CLI/FFI/Python/MCP│  seg → embed → cluster → reseg      │   Clusterer/Resegmenter
-  default since 0.11│  default clusterer: VBx             │
+  production v2     │  pipeline_v2::Pipeline (+ Builder)  │── Segmenter/Embedder/
+  CLI/FFI/MCP       │  seg → embed → cluster → reseg      │   Clusterer/Resegmenter
+  default since 0.11│  engine: kernels (0.18+);           │
+                    │  ort (`cli-ort` / Python); tract    │
+                    │  clusterer: VBx on front doors      │
                     │  re-exported at crate root as       │
-                    │  `Pipeline` (full feature gate)     │
+                    │  `Pipeline` (v2 feature gate)       │
                     └─────────────────────────────────────┘
 ```
 
 | Consumer | Path |
 |----------|------|
-| CLI `polyvoice` | **v2 + VBx** default; `--legacy` → BYO offline stack |
-| FFI | v2 only |
-| Python | **v2 + VBx** default (same as CLI); `clusterer="ahc"` opt-out |
-| MCP `polyvoice-mcp` | v2 + VBx default (`clusterer=ahc` opt-out) |
-| `polyvoice-bench` | **v2 + VBx** default; `--pipeline legacy` for comparison |
+| CLI `polyvoice` | **v2 + VBx kernels** (`--features cli`); `--legacy` → BYO offline stack |
+| FFI | v2 kernels only (`ffi` = `pipeline-native`) |
+| Python | **v2 + VBx** on **ONNX Runtime** (same pipeline, different engine); `clusterer="ahc"` opt-out |
+| MCP `polyvoice-mcp` | v2 + VBx kernels (`clusterer=ahc` opt-out) |
+| `polyvoice-bench` | **v2 + VBx** default (kernels when built with `cli`); `--pipeline legacy` for comparison |
 | Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |
+| Library kernels | `features = ["pipeline-native", "vbx"]` → crate-root `Pipeline` |
 | Library ONNX | `features = ["pipeline-full", "vbx"]` → crate-root `Pipeline` |
 
 **Library vs front doors:** CLI / Python / FFI / MCP **set** `ClustererKind::Vbx`.
@@ -58,7 +61,7 @@ samples → segment_speech(VAD) → WindowIter → Embedder::embed
        → ahc::agglomerative_cluster → merge_segments → DiarizationResult
 ```
 
-### Production ONNX (`src/pipeline_v2`)
+### Production v2 (`src/pipeline_v2`) — kernels, ort, or tract
 
 ```
 samples → Segmenter::segment
@@ -71,8 +74,8 @@ samples → Segmenter::segment
 
 ## Name collision note
 
-Crate root re-exports the **production v2** types under the full ONNX feature
-gate:
+Crate root re-exports the **production v2** types under the v2 feature gate
+(`pipeline-native`, `pipeline-full`, or `pipeline-tract`):
 
 ```rust
 pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};

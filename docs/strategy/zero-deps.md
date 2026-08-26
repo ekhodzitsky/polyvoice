@@ -1,7 +1,7 @@
 # Zero-dependency aspiration (pure Rust / no native dylib)
 
 **Status:** active engineering constraint (Claude.md / AGENTS.md).  
-**Updated:** 2026-08-13  
+**Updated:** 2026-08-26  
 
 ## Goal
 
@@ -16,7 +16,7 @@ Do **not** clone ONNX Runtime, tract, or a general ONNX executor.
 
 | Step | What | Not |
 |------|------|-----|
-| **0** | Honest feature graph: `infer` / `onnx` / `backend-tract`. `pipeline-tract` has **no** `ort`. Product default stays `cli`+ort until a pure-Rust path is product-grade. | Switching product default |
+| **0** | Honest feature graph: `infer` / `onnx` / `backend-tract`. `pipeline-tract` has **no** `ort`. | (done) |
 | **1** | Optional `cli-tract` (same CLI bins, tract engine, no dylib). `--legacy` rejected. | Rewriting the CLI |
 | **2** | `polyvoice-kernels`: **WeSpeaker ResNet34 only** (fused-BN Conv2d, ReLU, residual, stats-pool, GEMM). Initializers from shipping ONNX. Feature `embedder-native`. | Candle/Burn/tract clone |
 | **3** | Same crate: **powerset LSTM** (SincNet + 4× biLSTM). Feature `segmenter-native`. N>1 works. | Generic Scan / all ONNX ops |
@@ -25,7 +25,7 @@ Do **not** clone ONNX Runtime, tract, or a general ONNX executor.
 
 Cross-platform is the default of this path: no `libonnxruntime`, no glibc pin, no CoreML/XNNPACK. Linux / macOS / Windows; clustering is already wasm32-clean.
 
-Keep `ort` as an optional `onnx` feature until step 4 so INT8 + EP + Sortformer keep working. Do not add another general ML framework.
+Keep `ort` as an optional `onnx` feature so INT8 + EP + Sortformer + Python keep working. Do not add another general ML framework. Do not pull `ort` back into `cli`.
 
 ## Current matrix
 
@@ -53,12 +53,18 @@ bash scripts/check-zero-deps.sh   # includes check-ort-free.sh
 
 ## What “done” looks like for production
 
-A shipping profile where:
+The product CLI (`cli` / `ffi` / `mcp`) already meets this bar via
+`polyvoice-kernels` (step 4): powerset + ResNet34 INT8 without `ort`, VAD
+folded into powerset, clustering already Rust-only. Residual: Linux native
+RTF still trails the old ort band; Python still links `ort`; tract remains
+the slower ONNX-shaped opt-in.
 
-1. Powerset segmentation runs without ort (tract or successor, or re-exported graph).
-2. Embedder runs without ort (tract already can for ResNet34-class).
-3. VAD is either unused (v2 powerset) or pure-Rust with DER gate ≤ ε vs Silero.
-4. Clustering stays Rust-only (already: AHC / VBx / optional faer spectral).
+A shipping *tract* profile would still need:
+
+1. Powerset segmentation without ort (rewrite graph — done, not product).
+2. Embedder without ort (tract can for FP32 ResNet34; INT8 collapses).
+3. VAD unused (v2 powerset) or pure-Rust with DER gate ≤ ε vs Silero.
+4. Clustering Rust-only (already: AHC / VBx / optional faer spectral).
 
 ## Unblockers (ordered)
 
@@ -86,7 +92,7 @@ A shipping profile where:
 6. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
 7. **Earshot** re-tune if legacy pure path is needed (current Δ fails 0.3 pp gate).
 8. **Optional rten spike** only if fixed-T tract remains too slow/limited after accuracy work.
-9. Do **not** bump crate MSRV solely for tract until productizing (tract MSRV 1.91 vs crate 1.88).
+9. Do **not** bump crate MSRV solely for tract (tract MSRV 1.91; crate is already 1.94 for `rten-simd`).
 
 ## Install tract assets
 
@@ -116,9 +122,12 @@ python3 scripts/export-powerset-tract.py --verify
 cargo test --lib --features "onnx,segmentation,backend-tract" powerset_fp32_tract_friendly -- --nocapture
 cargo test --lib --features "onnx,segmentation,backend-tract" tract_backend_segments -- --nocapture
 
-# Optional pure-Rust CLI (not product default):
+# Optional tract CLI (not product default):
 # bash scripts/install-tract-models.sh
 # cargo run --release --features cli-tract -- …
+
+# Product CLI (kernels, no ort/tract):
+# cargo run --release --features cli -- …
 
 
 # Native ResNet34 + powerset (no ONNX runtime)

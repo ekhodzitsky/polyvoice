@@ -8,10 +8,12 @@ for the who-said-what cascade.
 ## Why a separate crate
 
 The Parakeet TDT 0.6B v3 model is ~600 MB — incompatible with polyvoice's core
-footprint (default build ~30 MB, wasm-clean). So ASR lives here, **never** as a
-core default feature. The two crates **share one ONNX runtime**: this crate pins
-the exact same `ort = 2.0.0-rc.12` as the core, enforced by
-`scripts/check-ort-version.sh` in CI (two `ort` versions = two runtimes = crashes).
+footprint (INT8 production pair ~8.4 MB, wasm-clean clustering). So ASR lives
+here, **never** as a core default feature. When this crate enables `onnx`, it
+**shares one ONNX runtime** with core: it pins the exact same
+`ort = 2.0.0-rc.12`, enforced by `scripts/check-ort-version.sh` in CI (two
+`ort` versions = two runtimes = crashes). The product polyvoice CLI itself no
+longer links `ort`.
 
 ## Usage
 
