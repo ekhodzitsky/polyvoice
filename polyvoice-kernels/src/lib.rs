@@ -36,5 +36,5 @@ pub use bnns::prof as bnns_prof;
 pub use conv_i8::set_intra_threads;
 pub use error::KernelError;
 pub use gemm::gemm_bias_row;
-pub use powerset::{MIN_SAMPLES as POWERSET_MIN_SAMPLES, N_CLASSES, Powerset};
+pub use powerset::{N_CLASSES, Powerset};
 pub use resnet34::{EMBED_DIM, N_MELS, ResNet34};

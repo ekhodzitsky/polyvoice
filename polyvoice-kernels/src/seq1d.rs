@@ -25,19 +25,19 @@ impl Seq1d {
     }
 
     #[inline]
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn idx(&self, n: usize, c: usize, l: usize) -> usize {
         (n * self.c + c) * self.l + l
     }
 
     #[inline]
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get(&self, n: usize, c: usize, l: usize) -> f32 {
         self.data[self.idx(n, c, l)]
     }
 
     #[inline]
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn set(&mut self, n: usize, c: usize, l: usize, v: f32) {
         let i = self.idx(n, c, l);
         self.data[i] = v;

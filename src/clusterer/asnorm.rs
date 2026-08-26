@@ -169,23 +169,30 @@ pub(crate) struct AsNormScorer {
     stats: Vec<(f32, f32)>,
     /// Cohort cosine evaluations performed at construction — test-visible so
     /// the stats-once-per-run guarantee is asserted, not assumed.
-    #[allow(dead_code)] // read by tests only
+    #[cfg(test)]
     cohort_evals: usize,
 }
 
 impl AsNormScorer {
     pub(crate) fn new(cohort: &AsNormCohort, embeddings: &[Vec<f32>], top_n: usize) -> Self {
+        #[cfg(test)]
         let mut cohort_evals = 0;
         let stats = embeddings
             .iter()
             .map(|e| {
                 let (mean, std, evals) = top_score_stats(cohort.rows(), e, top_n);
-                cohort_evals += evals;
+                #[cfg(test)]
+                {
+                    cohort_evals += evals;
+                }
+                #[cfg(not(test))]
+                let _ = evals;
                 (mean, std)
             })
             .collect();
         Self {
             stats,
+            #[cfg(test)]
             cohort_evals,
         }
     }

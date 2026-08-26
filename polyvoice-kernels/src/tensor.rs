@@ -57,7 +57,7 @@ impl Tensor {
     }
 
     #[inline]
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub fn get(&self, n: usize, c: usize, h: usize, w: usize) -> f32 {
         self.data[self.idx(n, c, h, w)]
     }

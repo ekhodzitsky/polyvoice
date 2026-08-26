@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Intermediate kernel-tuning DER snapshots (3-file / 1-file smokes), unused
+  ECAPA signature fixtures, the v1.0 `release-gate.sh` stub (superseded by
+  `release-check.sh`), the duplicate fbank dump script, and the unused
+  HuggingFace VoxConverse extractor.
+
 ### Fixed
 
 - **x86_64 / Windows builds compile again.** aarch64-only INT8 zip kernels
