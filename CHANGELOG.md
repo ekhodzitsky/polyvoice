@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Skip the Kani CI job until a Kani release bundles rustc ≥ 1.94. Running
+  it against MSRV 1.94 failed on rustc 1.93 even with `continue-on-error`,
+  which still showed a red X.
+
 ### Documentation
 
 - Align readiness, architecture, library-mode, competitors, contributor, and
