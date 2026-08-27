@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "polyvoice"
 version = "0.18.0"
-description = "Speaker diarization for Python — who spoke when. Rust + ONNX Runtime, ~8.4 MB INT8, no Python runtime overhead. VBx clustering, overlap detection."
+description = "Speaker diarization for Python — who spoke when. Wheel uses ONNX Runtime INT8 (~8.4 MB); the Rust CLI default is hand-written kernels. VBx clustering, overlap detection."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"

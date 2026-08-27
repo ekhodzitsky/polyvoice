@@ -20,7 +20,7 @@ fn reject_path_traversal(path: &str) -> PyResult<()> {
         .any(|c| matches!(c, Component::ParentDir))
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
-            "models_cache path traversal rejected",
+            "path traversal rejected",
         ));
     }
     Ok(())
@@ -243,6 +243,9 @@ impl Pipeline {
         vbx_plda_dir: Option<&str>,
     ) -> PyResult<Self> {
         if let Some(path) = models_cache {
+            reject_path_traversal(path)?;
+        }
+        if let Some(path) = vbx_plda_dir {
             reject_path_traversal(path)?;
         }
         let registry = match models_cache {

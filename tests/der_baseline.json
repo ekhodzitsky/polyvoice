@@ -1,6 +1,6 @@
 {
   "schema": "polyvoice-der-baseline-v2",
-  "crate_version": "0.17.0",
+  "crate_version": "0.18.0",
   "git_sha": "2aa1e7030dc796e4f3e04ee1629889e62f908e27",
   "command_line": "target/release/polyvoice-bench data/<dataset> --profile balanced --pipeline v2 --clusterer vbx --collar <0|0.25> --output benchmarks/results/int8-full-der-2026-08-10/<name>.json",
   "voxconverse_test": {
@@ -143,7 +143,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "pending first Linux native full split — DER ceiling copied from voxconverse_test_linux_cpu (must not be worse than ort INT8). RTFx filled after scripts/linux-cpu-native-der-gate.sh.",
+    "_status": "unmeasured-ceiling — not a product number. DER copied from voxconverse_test_linux_cpu as a fail-closed weekly smoke cap (must not exceed ort INT8) until scripts/linux-cpu-native-der-gate.sh fills a full split on the intended host.",
     "_filled_by": null
   },
   "ami_test_linux_cpu_native": {
@@ -166,7 +166,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "pending first Linux native AMI-16 — DER ceiling copied from ami_test_linux_cpu. RTFx filled after the native Linux gate.",
+    "_status": "unmeasured-ceiling — not a product number. DER copied from ami_test_linux_cpu as a fail-closed weekly smoke cap until the native Linux AMI-16 split is filled.",
     "_filled_by": null
   },
   "voxconverse_dev": {

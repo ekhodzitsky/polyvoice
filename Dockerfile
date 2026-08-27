@@ -13,7 +13,10 @@ RUN cargo build --release --features cli --bin polyvoice
 FROM ubuntu:24.04
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 65532 --create-home --home-dir /home/polyvoice \
+        --shell /usr/sbin/nologin polyvoice
 COPY --from=builder /usr/src/polyvoice/target/release/polyvoice /usr/local/bin/polyvoice
+USER polyvoice
 ENTRYPOINT ["polyvoice"]
 CMD ["--help"]

@@ -557,6 +557,7 @@ fn build_fast_with_local_models_succeeds() {
 }
 
 #[test]
+#[cfg(feature = "spectral")]
 fn build_with_nme_sc_clusterer_succeeds() {
     let Some(_ort) = pin_ort_or_skip() else {
         eprintln!("skip: product builder tests require feature onnx");
@@ -588,6 +589,9 @@ fn build_with_min_cluster_size_pruning_succeeds() {
         return;
     };
     let cfg = PipelineConfig {
+        clusterer: ClustererKind::Ahc {
+            threshold: crate::types::DEFAULT_AHC_THRESHOLD,
+        },
         min_cluster_size: 4,
         ..PipelineConfig::default()
     };

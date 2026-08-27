@@ -42,7 +42,7 @@ Keep `ort` as an optional `onnx` feature so INT8 + EP + Sortformer + Python keep
 | `cli-tract` | **Yes** (tract-onnx; **no ort**) | Same `polyvoice` / `polyvoice-bench` / `polyvoice-measure` bins; `--legacy` rejected |
 | `embedder-native` (`ResNet34Native`) | **Yes** | Hand-written ResNet34; ort cosine 1.0 on 1 s fixture; no dylib |
 | `segmenter-native` (`PowersetNative`) | **Yes** | SincNet + 4× biLSTM; N>1; 1 s vs ort cosine 1.0 |
-| `pipeline-native` / `cli` / `ffi` | **Yes** (Apple Accelerate; Linux `rten-gemm`) | **Product default.** Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux AMI DER within ort ceiling; RTF ~28× (Vox-3) |
+| `pipeline-native` / `cli` / `ffi` | **Kernels** (Darwin: C shims + Accelerate/BNNS; Linux: `rten-gemm`) | **Product default.** No `ort`. Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux AMI DER within ort ceiling; RTF ~28× (Vox-3). BYO `default = []` stays pure Rust. |
 | `cli-ort` / `pipeline-full` | **No** (ort + INT8) | Opt-in previous product |
 
 CI freezes the pure-Rust **invariants** via:

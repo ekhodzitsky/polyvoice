@@ -95,10 +95,9 @@ pub(crate) fn build_profile_clusterer(
             config.max_speakers as usize,
         ))),
         #[cfg(not(feature = "spectral"))]
-        ClustererKind::NmeSc => Ok(Box::new(crate::clusterer::AhcClusterer::with_threshold(
-            config.max_speakers as usize,
-            config.profile.default_threshold(),
-        ))),
+        ClustererKind::NmeSc => Err(ConfigError::UnknownModel {
+            model_id: "nme-sc (requires the `spectral` feature)".to_owned(),
+        }),
         #[cfg(feature = "vbx")]
         ClustererKind::Vbx => {
             let max = config.max_speakers as usize;
@@ -133,5 +132,36 @@ pub(crate) fn build_profile_clusterer(
         ClustererKind::Vbx => Err(ConfigError::UnknownModel {
             model_id: "vbx (requires the `vbx` feature)".to_owned(),
         }),
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipeline_v2::config::{ClustererKind, PipelineConfig};
+
+    #[cfg(not(feature = "spectral"))]
+    #[test]
+    fn nme_sc_without_spectral_is_an_error() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let registry = ModelRegistry::with_cache_dir(tmp.path()).unwrap();
+        let cfg = PipelineConfig {
+            clusterer: ClustererKind::NmeSc,
+            ..PipelineConfig::default()
+        };
+        let err = match build_profile_clusterer(&cfg, &registry) {
+            Err(e) => e,
+            Ok(_) => panic!("NME-SC without spectral must fail"),
+        };
+        match err {
+            ConfigError::UnknownModel { model_id } => {
+                assert!(
+                    model_id.contains("spectral"),
+                    "error should name the feature, got {model_id}"
+                );
+            }
+            other => panic!("expected UnknownModel, got {other:?}"),
+        }
     }
 }

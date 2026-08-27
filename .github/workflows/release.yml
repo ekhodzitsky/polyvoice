@@ -16,33 +16,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       # Cache the hash-pinned native ONNX Runtime that ort-sys downloads
       # (verified against the SHA-256 embedded in the crate; see
       # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
       # an ort bump re-pins the binary. A cache miss makes any cold network
       # fetch observable in the log.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cache/ort.pyke.io
             ~/Library/Caches/ort.pyke.io
             ~/AppData/Local/ort.pyke.io
           key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@fcf5432d9f50d67e37ee6e29bdb7a224ff67b4a7 # v2
         with:
           tool: cargo-nextest,cargo-audit,cargo-deny
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: data/ami-test-single
           key: ami-test-single-${{ hashFiles('scripts/download-ami-test-single.sh') }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: data/voxconverse-test
           key: voxconverse-test-${{ hashFiles('scripts/download-voxconverse-test.sh') }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/polyvoice/models
           key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
@@ -71,19 +71,19 @@ jobs:
             asset: polyvoice-windows-x86_64.exe
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # Deterministic Xcode on macOS — the floating image occasionally ships a
       # default selection whose clang runtime (libclang_rt.osx.a) is missing,
       # which would fail the link mid-release. Keep release builds reproducible.
       - if: runner.os == 'macOS'
         id: xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           # Key the cache to the Xcode version: build-script outputs embed
           # absolute toolchain paths, so a cache built under another Xcode
@@ -94,7 +94,7 @@ jobs:
       # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
       # an ort bump re-pins the binary. A cache miss makes any cold network
       # fetch observable in the log.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cache/ort.pyke.io
@@ -108,7 +108,7 @@ jobs:
       - name: Rename binary (windows)
         if: runner.os == 'Windows'
         run: cp target/${{ matrix.target }}/release/polyvoice.exe ${{ matrix.asset }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}
@@ -130,18 +130,18 @@ jobs:
       run:
         working-directory: python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # See cli-binaries: deterministic Xcode so macOS wheels link reproducibly.
       - if: runner.os == 'macOS'
         id: xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           # Key the cache to the Xcode version: build-script outputs embed
           # absolute toolchain paths, so a cache built under another Xcode
@@ -152,7 +152,7 @@ jobs:
       # docs/security/ort-native-binary-provenance.md). Keyed by Cargo.lock —
       # an ort bump re-pins the binary. A cache miss makes any cold network
       # fetch observable in the log.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cache/ort.pyke.io
@@ -161,7 +161,7 @@ jobs:
           key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - run: pip install maturin
       - run: maturin build --release --out dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wheels-${{ matrix.os }}
           path: python/dist/*.whl
@@ -172,8 +172,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
       # TODO(follow-up): migrate to crates.io trusted publishing (OIDC).
       # Token supplied via env so it never appears in the process argv / command logs.
       - run: cargo publish --locked
@@ -186,11 +186,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           generate_release_notes: true
           files: |
@@ -203,11 +203,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: wheels-*
           path: dist
           merge-multiple: true
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: dist

@@ -11,7 +11,7 @@ The crate exposes three intentional pipeline layers (see
 | Layer | Entry point | Status | Best for |
 |-------|-------------|--------|----------|
 | **BYO / ort-free** (`polyvoice::pipeline::LegacyPipeline`) | `LegacyPipeline::new(DiarizationConfig, VadConfig)` + inject `Embedder` | Stable library surface; CLI `--legacy` | No ONNX; custom embedders; streaming sibling |
-| **Native kernels** (`polyvoice::Pipeline` via `pipeline-native`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/MCP default since 0.18** (v2 + VBx, hand-written INT8 kernels, no libonnxruntime) | CPU deployment with no native dylibs |
+| **Native kernels** (`polyvoice::Pipeline` via `pipeline-native`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/MCP default since 0.18** (v2 + VBx, hand-written INT8 kernels, no libonnxruntime). Darwin links Accelerate. | CPU deployment without ONNX Runtime |
 | **ONNX Runtime** (`polyvoice::Pipeline` via `pipeline-full`) | `Pipeline::builder()` + `ModelRegistry` | Opt-in since 0.18 (`cli-ort`); the Python bindings still ship this stack | Same v2 pipeline on `ort` |
 
 ```
@@ -169,25 +169,27 @@ geometry (ms per frame, silence/speech duration limits in whole frames) from
 the sample rate — the single derivation point, so callers do not re-implement
 the conversion.
 
-## Pipeline v2 (production ONNX)
+## Pipeline v2 (production)
 
 > **Since 0.11:** CLI, FFI, Python, and MCP default to `pipeline_v2` with the
-> **VBx** clusterer. Escape hatches: CLI `--legacy` / `--clusterer ahc`.
+> **VBx** clusterer. Escape hatches: CLI `--legacy` (needs `cli-ort`) /
+> `--clusterer ahc`.
 >
-> **Library trap:** `PipelineConfig::default().clusterer` is **AHC**
-> (`DEFAULT_AHC_THRESHOLD` = 0.45). Front doors set `ClustererKind::Vbx`
-> themselves. For CLI parity in library code, set `clusterer: ClustererKind::Vbx`.
+> **Since 0.18:** `PipelineConfig::default().clusterer` is **VBx** when the
+> `vbx` feature is on (same as the front doors). Without `vbx` it falls back
+> to AHC (`DEFAULT_AHC_THRESHOLD` = 0.45). Pass `ClustererKind::Ahc { .. }` to
+> opt out.
 
-Features: `pipeline-full` (or the six stage flags) exports crate-root
-`Pipeline` / `PipelineConfig` / `PipelineError`. Add `vbx` for the VBx type and
-CLI-parity default path.
+Features: `pipeline-native` / `pipeline-full` / `pipeline-tract` export
+crate-root `Pipeline` / `PipelineConfig` / `PipelineError`. Add `vbx` for the
+VBx type and the CLI-parity default.
 
 ### `PipelineConfig` (selected fields)
 
 | Field | Default | Notes |
 |-------|---------|--------|
 | `profile` | `Balanced` | `Mobile` / `Balanced` / `Fast` (INT8) / `Custom` |
-| `clusterer` | **AHC @ 0.45** | Front doors override to **VBx** |
+| `clusterer` | **VBx** when `vbx` is on; else AHC @ 0.45 | Opt out with `ClustererKind::Ahc` |
 | `min_cluster_size` | **1** | No prune on powerset; legacy path uses **2** |
 | `max_speakers` | 20 | Ceiling for AHC / NME-SC; VBx is prior-driven |
 | `vbx_plda_dir` | `None` | Else `POLYVOICE_VBX_PLDA_DIR` → registry download |

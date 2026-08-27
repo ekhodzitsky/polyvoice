@@ -16,7 +16,21 @@ pub(crate) enum NpyError {
     Io { path: String, detail: String },
 }
 
+/// PLDA dumps are ~265 KiB; AS-norm cohorts are a few MiB. Reject huge
+/// files before `read` so a local `--vbx-plda-dir` cannot OOM the process.
+const MAX_NPY_BYTES: u64 = 8 * 1024 * 1024;
+
 fn read_file(path: &Path) -> Result<Vec<u8>, NpyError> {
+    let meta = std::fs::metadata(path).map_err(|e| NpyError::Io {
+        path: path.display().to_string(),
+        detail: e.to_string(),
+    })?;
+    if meta.len() > MAX_NPY_BYTES {
+        return Err(NpyError::Io {
+            path: path.display().to_string(),
+            detail: format!("npy file is {} bytes; max is {MAX_NPY_BYTES}", meta.len()),
+        });
+    }
     std::fs::read(path).map_err(|e| NpyError::Io {
         path: path.display().to_string(),
         detail: e.to_string(),
@@ -319,6 +333,19 @@ mod tests {
         std::fs::write(&path, &bytes).unwrap();
         let err = read_npy_flat(&path).unwrap_err();
         assert!(format!("{err}").contains("fortran-order"), "{err}");
+    }
+
+    #[test]
+    fn read_npy_rejects_file_over_size_cap() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("huge.npy");
+        let f = std::fs::File::create(&path).unwrap();
+        f.set_len(MAX_NPY_BYTES + 1).unwrap();
+        drop(f);
+        let err = read_npy_flat(&path).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("max is"), "{msg}");
+        assert!(msg.contains(&MAX_NPY_BYTES.to_string()), "{msg}");
     }
 
     #[test]

@@ -89,8 +89,8 @@ struct DiarizeArgs {
     #[arg(long)]
     json: bool,
     /// Use the pre-0.11 legacy pipeline (Silero VAD + sliding-window embeddings
-    /// + AHC) instead of the default v2 + VBx path.
-    #[arg(long)]
+    /// + AHC) instead of the default v2 + VBx path. Requires `--features cli-ort`.
+    #[arg(long, hide = !cfg!(feature = "onnx"))]
     legacy: bool,
     /// Deprecated no-op: pipeline v2 is the default since 0.11. Kept so scripts
     /// that still pass `--v2` keep working.

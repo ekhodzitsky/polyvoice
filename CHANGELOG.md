@@ -12,9 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skip the Kani CI job until a Kani release bundles rustc ≥ 1.94. Running
   it against MSRV 1.94 failed on rustc 1.93 even with `continue-on-error`,
   which still showed a red X.
+- `PipelineConfig::default()` is VBx when the `vbx` feature is on (CLI / FFI /
+  Python / MCP parity). AHC remains available via `ClustererKind::Ahc`.
+- Docker runtime image drops to a non-root `polyvoice` user. `.dockerignore`
+  keeps `.git` and `*.key` out of the build context.
+- MCP `path` / `vbx_plda_dir` reject `..`. Set `POLYVOICE_MCP_ROOT` to confine
+  tools to a workspace directory.
+- `scripts/download-models.sh` verifies SHA-256 (same hashes as the manifest)
+  and re-downloads on mismatch.
+- Selecting NME-SC without the `spectral` feature is an error, not a silent
+  AHC fallback.
+- NPY readers reject files larger than 8 MiB before loading (PLDA / AS-norm).
+- `--legacy` is hidden from kernel-CLI help (`--features cli`); the flag still
+  errors without `cli-ort`.
+- Linux native full-split baseline rows are labelled `unmeasured-ceiling`
+  until a filled host run exists. Ubuntu PR CI now includes a `--features cli`
+  lane. macOS runs the native Vox-3 DER + INT8-size scoreboard fail-closed
+  against vendored `tests/data/native-vox3/`. `tests/der_baseline.json`
+  `crate_version` tracks 0.18.0. Release workflow actions are pinned to
+  commit SHAs.
 
 ### Documentation
 
+- README collar table no longer puts Darwin native 15.5 % in the 0.25 s
+  column. Streaming is described as the BYO energy-VAD path, not product v2.
 - Align readiness, architecture, library-mode, competitors, contributor, and
   Python docs with the 0.18 kernels default. CLI / FFI / MCP run
   `pipeline-native` (no `libonnxruntime`). ONNX Runtime is opt-in (`cli-ort`

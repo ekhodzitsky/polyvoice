@@ -4,8 +4,10 @@
 //! cargo test --test native_scoreboard --features cli -- --nocapture
 //! ```
 //!
-//! Vox-3 and RSS/RTF gates skip when the smoke dataset or `polyvoice-bench`
-//! is missing. Model-size always runs if `models/int8/` is present.
+//! Vox-3 audio lives at `tests/data/native-vox3/` (checked in). Model-size
+//! and DER fail when `POLYVOICE_REQUIRE_DATA=1` and fixtures are missing.
+//! RTF/RSS stay macOS + release-binary only (shared CI runners are not the
+//! locked host).
 
 #![allow(clippy::unwrap_used)]
 #![cfg(all(
@@ -42,6 +44,12 @@ fn floors() -> Floors {
     serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
 }
 
+fn require_data() -> bool {
+    std::env::var("POLYVOICE_REQUIRE_DATA")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
+
 fn int8_paths() -> Option<(PathBuf, PathBuf)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
     let a = root.join("int8/powerset_int8.onnx");
@@ -54,9 +62,15 @@ fn int8_paths() -> Option<(PathBuf, PathBuf)> {
 }
 
 fn vox3() -> Option<PathBuf> {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("benchmarks/results/powerset-tract-rtf-der-2026-08-12/smoke-vox3");
-    (p.join("audio").is_dir() && p.join("rttm").is_dir()).then_some(p)
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let vendored = root.join("tests/data/native-vox3");
+    let legacy = root.join("benchmarks/results/powerset-tract-rtf-der-2026-08-12/smoke-vox3");
+    for p in [&vendored, &legacy] {
+        if p.join("audio").is_dir() && p.join("rttm").is_dir() {
+            return Some(p.clone());
+        }
+    }
+    None
 }
 
 struct Run {
@@ -68,8 +82,10 @@ struct Run {
 
 fn run_bench(bench: &Path, dataset: &Path) -> Run {
     let out_json = tempfile::NamedTempFile::with_suffix(".json").unwrap();
+    let plda = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda");
     #[cfg(target_os = "macos")]
     let output = Command::new("/usr/bin/time")
+        .env("POLYVOICE_VBX_PLDA_DIR", &plda)
         .args([
             "-l",
             bench.to_str().unwrap(),
@@ -89,6 +105,7 @@ fn run_bench(bench: &Path, dataset: &Path) -> Run {
         .expect("run timed bench");
     #[cfg(not(target_os = "macos"))]
     let output = Command::new(bench)
+        .env("POLYVOICE_VBX_PLDA_DIR", &plda)
         .args([
             dataset.to_str().unwrap(),
             "--profile",
@@ -132,6 +149,10 @@ fn assert_der(out: &BenchOut, floors: &Floors) {
 #[test]
 fn int8_pair_stays_under_size_floor() {
     let Some((seg, emb)) = int8_paths() else {
+        assert!(
+            !require_data(),
+            "POLYVOICE_REQUIRE_DATA=1 but models/int8 pair is missing"
+        );
         eprintln!("skip: models/int8 pair missing");
         return;
     };
@@ -159,6 +180,10 @@ fn parse_max_rss_mib(time_stderr: &str) -> Option<f64> {
 #[test]
 fn vox3_holds_der_rtf_rss_floors() {
     let Some(dataset) = vox3() else {
+        assert!(
+            !require_data(),
+            "POLYVOICE_REQUIRE_DATA=1 but tests/data/native-vox3 is missing"
+        );
         eprintln!("skip: Vox-3 smoke dataset missing");
         return;
     };
@@ -175,9 +200,13 @@ fn vox3_holds_der_rtf_rss_floors() {
     assert_der(&run.out, &floors);
 
     #[cfg(target_os = "macos")]
-    if is_release {
-        // Isolated idle-host runs sit at 117–121×. A cold BNNS cache or a
-        // busy workstation can land a hair under; one retry is the gate.
+    if is_release
+        && std::env::var("POLYVOICE_SCOREBOARD_PERF")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+    {
+        // Isolated idle-host runs sit at 117–121×. Shared CI macOS is not
+        // that host — set POLYVOICE_SCOREBOARD_PERF=1 locally to lock RTF/RSS.
         let run = if run.out.rt_factor_avg + 1e-6 < floors.rt_factor_min {
             eprintln!(
                 "RTFx {:.2} < {}; retrying once",
@@ -202,6 +231,9 @@ fn vox3_holds_der_rtf_rss_floors() {
             "peak RSS {rss:.2} MiB > floor {} MiB",
             floors.rss_mib_max
         );
+    } else if is_release {
+        let _ = run;
+        eprintln!("skip RTF/RSS floors: set POLYVOICE_SCOREBOARD_PERF=1 on the locked Darwin host");
     } else {
         let _ = run;
         eprintln!("skip RTF/RSS floors: using debug polyvoice-bench");

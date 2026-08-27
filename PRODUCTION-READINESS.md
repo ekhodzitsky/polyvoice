@@ -73,7 +73,7 @@ multi-corpus proof.
 | Inference (opt-in tract) | `POLYVOICE_INFERENCE_BACKEND=tract` + `backend-tract`: signed `powerset_fp32_tract` + **FP32** ResNet; smoke DER only |
 | Models | Profile segmenter/embedder minisign-signed in release; VBx PLDA registry downloads are minisign-signed; opt-in `powerset_fp32_tract` is minisign-signed (release `models-tract-v1`) |
 | Native ORT binary | Hash-pinned via ort-sys `dist.txt` **when `onnx` is enabled**; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
-| Library features | `pipeline-native` + `vbx` (CLI parity) or `pipeline-full` + `vbx` (ONNX). Crate-root `Pipeline` needs that gate; `PipelineConfig::default()` is still **AHC** |
+| Library features | `pipeline-native` + `vbx` (CLI parity) or `pipeline-full` + `vbx` (ONNX). Crate-root `Pipeline` needs that gate; `PipelineConfig::default()` is **VBx** when `vbx` is on |
 
 Honest reading: v2+VBx INT8 is the **measured product pipeline**. The **default
 binary** is kernels (no `ort`). Linux/CPU **ort** remains the published
@@ -214,9 +214,9 @@ still trails pyannote-class systems by roughly ~4 pp no-collar on VoxConverse
 **Gap:** The pipeline default flipped at 0.11 (v2+VBx) and the engine default
 flipped at 0.18 (kernels). Legacy still ships as an escape hatch, so dual
 pipelines continue to tax docs, gates, and bindings. Library
-`PipelineConfig::default()` is still **AHC** while every front door sets
-**VBx**. 1.0 should not ship with two first-class paths; retire or clearly
-demote legacy once v2+VBx has broader multi-corpus proof.
+`PipelineConfig::default()` matches the front doors (**VBx** when the `vbx`
+feature is on). 1.0 should not ship with two first-class paths; retire or
+clearly demote legacy once v2+VBx has broader multi-corpus proof.
 
 ---
 
@@ -295,8 +295,7 @@ All items must be true before declaring production-ready / shipping `1.0.0` as
 - [ ] **Single default pipeline.** One validated CLI/Python/FFI path; no dual
       “legacy vs experimental” default. Experimental flags may remain for R&D
       but must not be required for the shipped claim. Library
-      `PipelineConfig::default()` should match front-door VBx or stop looking
-      like a safe default.
+      `PipelineConfig::default()` matches front-door VBx when `vbx` is on.
 - [ ] **Public API freeze + semver policy.** Documented stability rules; no
       silent breaking churn on the advertised surface for a freeze window; then
       `1.0.0`.

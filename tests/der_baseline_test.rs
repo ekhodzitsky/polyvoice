@@ -10,6 +10,11 @@ fn load() -> common::DerBaseline {
 fn der_baseline_json_parses() {
     let parsed = load();
     assert_eq!(parsed.schema, "polyvoice-der-baseline-v2");
+    assert_eq!(
+        parsed.crate_version.as_deref(),
+        Some(env!("CARGO_PKG_VERSION")),
+        "der_baseline.json crate_version must match the crate"
+    );
     assert_eq!(parsed.voxconverse_test.profile, "balanced");
     assert_eq!(parsed.voxconverse_test.tolerance, Some(1.0));
     assert!(parsed.voxconverse_test.status.contains("operational"));
@@ -98,6 +103,34 @@ fn der_baseline_linux_cpu_product_rows() {
         "linux ami DER0 micro should be ~24.2%, got {ami_der0}"
     );
     assert!(ami.status.contains("operational"));
+}
+
+#[test]
+fn der_baseline_linux_native_rows_are_unmeasured_ceilings() {
+    let parsed = load();
+    let vox = &parsed.voxconverse_test_linux_cpu_native;
+    assert_eq!(vox.files, Some(232));
+    assert_eq!(vox.engine.as_deref(), Some("cli-native"));
+    assert!(
+        vox.status.contains("unmeasured"),
+        "native Vox row must not look operational, got {}",
+        vox.status
+    );
+    assert!(
+        vox.filled_by.is_none(),
+        "unmeasured ceiling must not claim an artifact"
+    );
+    let ami = &parsed.ami_test_linux_cpu_native;
+    assert_eq!(ami.files, Some(16));
+    assert!(
+        ami.status.contains("unmeasured"),
+        "native AMI row must not look operational, got {}",
+        ami.status
+    );
+    assert!(
+        ami.filled_by.is_none(),
+        "unmeasured ceiling must not claim an artifact"
+    );
 }
 
 /// Artifact lock: committed linux-cpu full-split JSON must match baseline rows.

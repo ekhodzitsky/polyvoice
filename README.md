@@ -24,8 +24,8 @@ optional). ONNX Runtime remains `--features cli-ort`.
 
 | Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed |
 |---|---:|---:|---:|
-| VoxConverse-test (232) | **10.3 %** (ort) / **~15.5 %** Darwin native | **14.9 %** Linux ort / **15.5 %** Darwin native | **~117–130×** Darwin native / **~82×** Linux ort / **~28×** Linux native (Vox-3) |
-| AMI-test (16) | **16.6 %** Linux ort / **~16.9 %** Darwin native | **24.2 %** Linux ort / **25.2 %** native | **~110×** Darwin native / **~95×** Linux ort / **~21×** Linux native (AMI-1) |
+| VoxConverse-test (232) | **10.3 %** Linux ort | **14.9 %** Linux ort / **15.5 %** Darwin kernels | Darwin kernels **~130×** / Linux ort **~82×** / Linux kernels **~28×** (Vox-3 smoke) |
+| AMI-test (16) | **16.6 %** Linux ort | **24.2 %** Linux ort / **25.2 %** Darwin kernels | Darwin kernels **~110×** / Linux ort **~95×** / Linux kernels **~21×** (AMI-1 smoke) |
 
 Like-for-like (strict collar 0) VoxConverse-test **15.0 %** vs pyannote 3.1
 **11.3 %** — accuracy traded for a CPU-only, MIT, **ungated** INT8 deploy.
@@ -60,7 +60,7 @@ A 1-hour meeting diarizes in about a minute on a laptop.
 | Platform | Get it |
 |---|---|
 | Linux x86_64 / ARM64, macOS, Windows | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) — put them on your `PATH` |
-| Rust library (kernels, no ort) | `cargo add polyvoice --features "pipeline-native,vbx"` — crate-root `Pipeline` (v2); set `clusterer: Vbx` for CLI parity |
+| Rust library (kernels, no ort) | `cargo add polyvoice --features "pipeline-native,vbx"` — crate-root `Pipeline` (v2); default clusterer is VBx |
 | Rust library (ONNX Runtime) | `cargo add polyvoice --features "pipeline-full,vbx"` |
 | Rust, no models (BYO embedder) | `cargo add polyvoice --no-default-features` (extras: `clusterer,vbx`) — [library mode](docs/library-mode.md) |
 | Python | `pip install polyvoice` — [python/README.md](python/README.md) |
@@ -70,16 +70,14 @@ A 1-hour meeting diarizes in about a minute on a laptop.
 
 ```rust,no_run
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::ClustererKind;
 use polyvoice::types::{Profile, SampleRate};
 use polyvoice::{Pipeline, PipelineConfig};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // CLI / Python / FFI default is VBx. PipelineConfig::default() alone is AHC.
+    // PipelineConfig::default() is VBx when the `vbx` feature is on (CLI parity).
     let pipeline = Pipeline::builder()
         .config(PipelineConfig {
             profile: Profile::Balanced, // INT8 pair (mobile/fast are the same models)
-            clusterer: ClustererKind::Vbx,
             ..PipelineConfig::default()
         })
         .with_models_from(ModelRegistry::default()?) // models auto-download
@@ -107,7 +105,8 @@ and [docs/API.md](docs/API.md).
   Python wheel. The published crate default feature set is empty (ort-free BYO
   core).
 - **MIT, ungated.** No HF token, no non-commercial rider, no gated weights.
-  Streaming included.
+  Online `StreamingPipeline` is the BYO energy-VAD path; product diarization
+  is batch pipeline v2.
 - **Honest trade-off.** Not the accuracy leader: pyannote 3.1 is ~4 DER
   points better on VoxConverse (strict collar). You trade those points for
   deployability. [Benchmarks](docs/BENCHMARKS.md) has the full protocol.

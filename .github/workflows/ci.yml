@@ -26,6 +26,8 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            flags: --all-targets --features cli
+          - os: ubuntu-latest
             flags: --all-targets --all-features
           - os: macos-latest
             flags: --all-targets --features cli
@@ -80,6 +82,8 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            flags: --all-targets --features cli
+          - os: ubuntu-latest
             flags: --all-targets --all-features
           - os: macos-latest
             flags: --all-targets --features cli
@@ -102,14 +106,14 @@ jobs:
           # clippy-scoped cache, additionally keyed to the Xcode version:
           # build-script outputs embed absolute toolchain paths, so a cache
           # built under another Xcode poisons the link line.
-          key: clippy-xcode-${{ steps.xcode.outputs.version }}-${{ matrix.os }}-${{ hashFiles('Cargo.toml', '**/Cargo.toml', '**/Cargo.lock') }}
+          key: clippy-xcode-${{ steps.xcode.outputs.version }}-${{ matrix.os }}-${{ matrix.flags }}-${{ hashFiles('Cargo.toml', '**/Cargo.toml', '**/Cargo.lock') }}
           cache-on-failure: false
       - shell: bash
         run: cargo clippy ${{ matrix.flags }} -- -D warnings 2>&1 | tee clippy.log
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: clippy-log-${{ matrix.os }}
+          name: clippy-log-${{ matrix.os }}-${{ matrix.flags }}
           path: clippy.log
 
   test:
@@ -117,6 +121,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-latest
+            flags: --features cli
           - os: ubuntu-latest
             flags: --all-features
           - os: macos-latest
@@ -143,6 +149,35 @@ jobs:
         with:
           tool: cargo-nextest
       - run: cargo nextest run --profile ci ${{ matrix.flags }} --locked
+
+  # Locked Darwin Vox-3 floors (DER + INT8 pair size). RTF/RSS still need an
+  # isolated release host; they skip here because GHA macOS is not that host.
+  native-scoreboard:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        id: xcode
+        with:
+          xcode-version: latest-stable
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: scoreboard-xcode-${{ steps.xcode.outputs.version }}
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: scoreboard-models-${{ hashFiles('src/models/manifest.toml') }}
+      - name: INT8 pair into models/int8
+        run: bash scripts/download-models.sh
+      - name: Release bench binary
+        run: cargo build --release --features cli --bin polyvoice-bench --locked
+      - name: Scoreboard DER + model-size (fail closed)
+        env:
+          POLYVOICE_REQUIRE_DATA: "1"
+          POLYVOICE_VBX_PLDA_DIR: ${{ github.workspace }}/fixtures/vbx-plda
+        run: cargo test --release --features cli --test native_scoreboard --locked -- --nocapture
 
   asr-companion:
     # Opt-in ASR companion (polyvoice-asr). Enforces the shared-runtime invariant

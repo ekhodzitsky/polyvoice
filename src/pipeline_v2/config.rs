@@ -60,11 +60,9 @@ impl Default for PipelineConfig {
         Self {
             profile: Profile::Balanced,
             sample_rate: SampleRate::new(16000).unwrap_or_default(),
-            // Match Profile::Balanced / CLI AHC / DiarizationConfig — single source
-            // is `DEFAULT_AHC_THRESHOLD` so library builders and CLI stay aligned.
-            clusterer: ClustererKind::Ahc {
-                threshold: crate::types::DEFAULT_AHC_THRESHOLD,
-            },
+            // CLI / FFI / Python / MCP all set VBx. `vbx` off (rare library
+            // combo) falls back to AHC so `build()` still constructs.
+            clusterer: default_clusterer(),
             max_speakers: 20,
             // v2 ships unpruned: min-cluster pruning is net-negative for the
             // powerset pipeline and collapses short clips (a 26 s clip has every
@@ -124,6 +122,19 @@ impl ExecutionProvider {
     }
 }
 
+fn default_clusterer() -> ClustererKind {
+    #[cfg(feature = "vbx")]
+    {
+        ClustererKind::Vbx
+    }
+    #[cfg(not(feature = "vbx"))]
+    {
+        ClustererKind::Ahc {
+            threshold: crate::types::DEFAULT_AHC_THRESHOLD,
+        }
+    }
+}
+
 fn default_pool_size() -> usize {
     std::thread::available_parallelism()
         .map(|n| n.get())
@@ -142,6 +153,9 @@ mod tests {
         let cfg = PipelineConfig::default();
         assert_eq!(cfg.profile, Profile::Balanced);
         assert_eq!(cfg.sample_rate.get(), 16000);
+        #[cfg(feature = "vbx")]
+        assert_eq!(cfg.clusterer, ClustererKind::Vbx);
+        #[cfg(not(feature = "vbx"))]
         assert!(matches!(
             cfg.clusterer,
             ClustererKind::Ahc {
@@ -162,14 +176,17 @@ mod tests {
     }
 
     #[test]
-    fn default_ahc_threshold_matches_shared_constant() {
+    fn default_clusterer_matches_front_doors() {
         let cfg = PipelineConfig::default();
+        #[cfg(feature = "vbx")]
+        assert_eq!(cfg.clusterer, ClustererKind::Vbx);
+        #[cfg(not(feature = "vbx"))]
         match cfg.clusterer {
             ClustererKind::Ahc { threshold } => {
                 assert!((threshold - crate::types::DEFAULT_AHC_THRESHOLD).abs() < f32::EPSILON);
                 assert!((threshold - Profile::Balanced.default_threshold()).abs() < f32::EPSILON);
             }
-            other => panic!("expected default AHC clusterer, got {other:?}"),
+            other => panic!("expected AHC fallback without vbx, got {other:?}"),
         }
     }
 

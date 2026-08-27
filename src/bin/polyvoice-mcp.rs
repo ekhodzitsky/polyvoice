@@ -276,17 +276,63 @@ fn resolve_max_speakers(max_speakers: Option<usize>) -> Result<u8, ErrorData> {
     }
 }
 
+fn mcp_root() -> Result<Option<std::path::PathBuf>, ErrorData> {
+    let Some(raw) = std::env::var_os("POLYVOICE_MCP_ROOT") else {
+        return Ok(None);
+    };
+    std::path::PathBuf::from(raw)
+        .canonicalize()
+        .map(Some)
+        .map_err(|e| err(ERR_INVALID_ARG, format!("POLYVOICE_MCP_ROOT: {e}")))
+}
+
+fn reject_parent_dir(p: &Path, label: &str) -> Result<(), ErrorData> {
+    if p.components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(err(
+            ERR_INVALID_ARG,
+            format!("{label} path traversal rejected"),
+        ));
+    }
+    Ok(())
+}
+
+fn confine_path(
+    p: &Path,
+    root: Option<&Path>,
+    label: &str,
+) -> Result<std::path::PathBuf, ErrorData> {
+    reject_parent_dir(p, label)?;
+    let canon = p
+        .canonicalize()
+        .map_err(|e| err(ERR_INVALID_ARG, format!("{label}: {e}")))?;
+    if let Some(root) = root
+        && !canon.starts_with(root)
+    {
+        return Err(err(
+            ERR_INVALID_ARG,
+            format!("{label} is outside POLYVOICE_MCP_ROOT"),
+        ));
+    }
+    Ok(canon)
+}
+
 /// Run the production (pipeline v2) diarization path quietly, mapping failures
 /// to FFI-coded MCP errors. Defaults match the CLI: VBx clusterer + registry
-/// PLDA auto-download when `vbx_plda_dir` is unset.
+/// PLDA auto-download when `vbx_plda_dir` is unset. `..` components are
+/// always rejected. When `POLYVOICE_MCP_ROOT` is set, paths must stay under it.
 fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
+    let root = mcp_root()?;
     let path = Path::new(&input.path);
+    reject_parent_dir(path, "audio")?;
     if !path.is_file() {
         return Err(err(
             ERR_INVALID_ARG,
             format!("no such file: {}", input.path),
         ));
     }
+    let path = confine_path(path, root.as_deref(), "audio")?;
     let profile: Profile = input
         .profile
         .as_deref()
@@ -310,16 +356,16 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
         profile,
         clusterer: clusterer_kind,
         max_speakers,
-        vbx_plda_dir: input
-            .vbx_plda_dir
-            .as_ref()
-            .map(|s| Path::new(s).to_path_buf()),
+        vbx_plda_dir: match input.vbx_plda_dir.as_ref() {
+            Some(s) => Some(confine_path(Path::new(s), root.as_deref(), "vbx_plda_dir")?),
+            None => None,
+        },
         ..PipelineConfig::default()
     };
     let pipeline = cli_common::build_v2_pipeline(config, registry)
         .map_err(|e| err(ERR_MODEL_LOAD, format!("{e:#}")))?;
 
-    let (samples, sr_hz) = read_wav(path).map_err(|e| err(ERR_INVALID_ARG, e.to_string()))?;
+    let (samples, sr_hz) = read_wav(&path).map_err(|e| err(ERR_INVALID_ARG, e.to_string()))?;
     let sr = SampleRate::new(sr_hz)
         .ok_or_else(|| err(ERR_INVALID_ARG, format!("invalid sample rate {sr_hz} Hz")))?;
 
@@ -491,6 +537,46 @@ mod tests {
         let data = e.data.expect("data");
         assert_eq!(data["code"], ERR_INVALID_ARG);
         assert!(data["message"].as_str().unwrap().contains("no such file"));
+    }
+
+    #[test]
+    fn run_diarize_rejects_parent_dir() {
+        let e = run_diarize(&input("../secret.wav")).unwrap_err();
+        assert_eq!(e.code.0, -32602);
+        let msg = e.data.expect("data")["message"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(msg.contains("traversal"), "{msg}");
+    }
+
+    #[test]
+    fn reject_parent_dir_allows_plain_paths() {
+        reject_parent_dir(Path::new("meeting.wav"), "audio").unwrap();
+        reject_parent_dir(Path::new("/abs/meeting.wav"), "audio").unwrap();
+    }
+
+    #[test]
+    fn confine_path_rejects_outside_root() {
+        let root = tempfile::TempDir::new().unwrap();
+        let root_canon = root.path().canonicalize().unwrap();
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        let e = confine_path(outside.path(), Some(&root_canon), "audio").unwrap_err();
+        assert_eq!(e.code.0, -32602);
+        let msg = e.data.expect("data")["message"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(msg.contains("outside"), "{msg}");
+    }
+
+    #[test]
+    fn confine_path_accepts_inside_root() {
+        let root = tempfile::TempDir::new().unwrap();
+        let root_canon = root.path().canonicalize().unwrap();
+        let inside = tempfile::NamedTempFile::new_in(root.path()).unwrap();
+        let got = confine_path(inside.path(), Some(&root_canon), "audio").unwrap();
+        assert!(got.starts_with(&root_canon));
     }
 
     #[test]

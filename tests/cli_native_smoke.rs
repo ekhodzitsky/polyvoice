@@ -22,7 +22,14 @@ fn help_top_level() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("diarize"));
+        .stdout(predicate::str::contains("diarize"))
+        // Hidden `--legacy` must not appear as its own option. Other docs may
+        // still say "Ignored with `--legacy`".
+        .stdout(
+            predicate::str::is_match(r"(?m)^\s+--legacy(\s|$)")
+                .unwrap()
+                .not(),
+        );
 }
 
 #[test]

@@ -93,6 +93,10 @@ pub struct DerBaseline {
     pub voxconverse_test_linux_cpu: DatasetBaseline,
     /// Full-split Linux CPU product gate (EP=cpu, powerset N=8).
     pub ami_test_linux_cpu: DatasetBaseline,
+    /// Unmeasured fail-closed ceiling for Linux native Vox until filled.
+    pub voxconverse_test_linux_cpu_native: DatasetBaseline,
+    /// Unmeasured fail-closed ceiling for Linux native AMI until filled.
+    pub ami_test_linux_cpu_native: DatasetBaseline,
     pub voxconverse_dev: DatasetBaseline,
     pub voxconverse_test_10files: DatasetBaseline,
     pub e2e_smoke: DatasetBaseline,
@@ -119,6 +123,8 @@ pub struct DatasetBaseline {
     pub profile: String,
     pub pipeline: Option<String>,
     pub clusterer: Option<String>,
+    /// `cli-native` / `cli-ort` when recorded.
+    pub engine: Option<String>,
     /// Recorded EP when the baseline was measured (`cpu`, `CoreMl`, …).
     pub execution_provider: Option<String>,
     /// Powerset ONNX micro-batch size used for the measurement (e.g. 8).
@@ -155,8 +161,10 @@ pub struct DatasetBaseline {
     pub model_versions: Option<ModelVersions>,
     #[serde(rename = "_status")]
     pub status: String,
+    /// Provenance of a filled row. `None` (JSON `null` or absent) means the
+    /// numbers are a copied ceiling / placeholder, not a measured artifact.
     #[serde(rename = "_filled_by")]
-    pub filled_by: String,
+    pub filled_by: Option<String>,
 }
 
 /// Speaker-count accuracy breakdown attached to the full-corpus entries.

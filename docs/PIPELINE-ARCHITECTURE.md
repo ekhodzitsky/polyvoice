@@ -36,15 +36,15 @@ For the **development process** checklist (spec → types → verify), see
 | Library kernels | `features = ["pipeline-native", "vbx"]` → crate-root `Pipeline` |
 | Library ONNX | `features = ["pipeline-full", "vbx"]` → crate-root `Pipeline` |
 
-**Library vs front doors:** CLI / Python / FFI / MCP **set** `ClustererKind::Vbx`.
-`PipelineConfig::default()` is still **AHC** — library callers must set
-`clusterer: ClustererKind::Vbx` for CLI parity (see crate-root README example).
+**Library vs front doors:** `PipelineConfig::default()` is **VBx** when the
+`vbx` feature is on (same as CLI / Python / FFI / MCP). Without `vbx` it
+falls back to AHC. Pass `clusterer: ClustererKind::Ahc { .. }` to opt out.
 
 ## Config defaults (do not mix blindly)
 
 | Knob | Legacy (`DiarizationConfig` / `ClusterConfig`) | v2 (`PipelineConfig`) |
 |------|-----------------------------------------------|------------------------|
-| Default clusterer (CLI/Python/FFI) | AHC when `--legacy` | **VBx** (front doors); library `default()` is **AHC** |
+| Default clusterer (CLI/Python/FFI) | AHC when `--legacy` | **VBx** (`PipelineConfig::default()` with feature `vbx`) |
 | AHC threshold | `DEFAULT_AHC_THRESHOLD` (0.45) | same constant when AHC is selected |
 | `min_cluster_size` | **2** (prunes singletons on the dense-window path) | **1** (no prune; powerset + short clips) |
 

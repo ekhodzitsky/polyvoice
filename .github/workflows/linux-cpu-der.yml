@@ -32,6 +32,10 @@ permissions:
 
 jobs:
   linux-cpu-der:
+    # GitHub-hosted ubuntu-latest is x86_64. Committed Linux/CPU *ort*
+    # numbers were measured on aarch64; native full-split rows are unmeasured
+    # ceilings (see tests/der_baseline.json `_status`). Do not treat this
+    # runner as the Darwin or aarch64 scoreboard host.
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:

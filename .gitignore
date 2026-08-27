@@ -27,6 +27,11 @@ Thumbs.db
 # Tiny audio-io decode fixtures (checked in on purpose).
 !tests/data/audio-io/
 !tests/data/audio-io/**
+# e2e + native Vox-3 smoke clips (short, checked in so CI can fail closed).
+!tests/data/e2e-smoke/
+!tests/data/e2e-smoke/**
+!tests/data/native-vox3/
+!tests/data/native-vox3/**
 
 # ONNX model files (should be downloaded, not committed)
 *.onnx
