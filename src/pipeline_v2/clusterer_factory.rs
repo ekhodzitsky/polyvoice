@@ -136,12 +136,11 @@ pub(crate) fn build_profile_clusterer(
 }
 
 #[allow(clippy::unwrap_used)]
-#[cfg(test)]
+#[cfg(all(test, not(feature = "spectral")))]
 mod tests {
     use super::*;
     use crate::pipeline_v2::config::{ClustererKind, PipelineConfig};
 
-    #[cfg(not(feature = "spectral"))]
     #[test]
     fn nme_sc_without_spectral_is_an_error() {
         let tmp = tempfile::TempDir::new().unwrap();

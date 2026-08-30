@@ -50,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Kernel-CLI help snapshot no longer lists `--legacy`. Docker smoke writes
+  RTTM to stdout so the non-root image user does not need a writable bind
+  mount. NME-SC factory tests compile only when `spectral` is off.
 - **x86_64 / Windows builds compile again.** aarch64-only INT8 zip kernels
   leaked into off-aarch64 compilation; they are now gated to aarch64.
 - **Correctness on x86_64 CPUs without AVX512-VNNI.** rten's int8 GEMM uses

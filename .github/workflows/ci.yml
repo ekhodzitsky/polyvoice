@@ -493,11 +493,11 @@ jobs:
           # Default path is v2+VBx (0.11+); mount checked-in PLDA fixtures so the
           # container does not need POLYVOICE_VBX_PLDA_DIR baked into the image.
           docker run --rm \
-            -v "${{ github.workspace }}/tests/data/e2e-smoke/audio:/audio" \
+            -v "${{ github.workspace }}/tests/data/e2e-smoke/audio:/audio:ro" \
             -v "${{ github.workspace }}/fixtures/vbx-plda:/plda:ro" \
             -e POLYVOICE_VBX_PLDA_DIR=/plda \
-            polyvoice:ci diarize /audio/fuzfh.wav --output /audio/out.rttm
-          test -s tests/data/e2e-smoke/audio/out.rttm
+            polyvoice:ci diarize /audio/fuzfh.wav --quiet > out.rttm
+          test -s out.rttm
 
   e2e-der-regression:
     runs-on: ubuntu-latest
