@@ -1,8 +1,9 @@
 # Production Readiness Assessment
 
-> **Version:** 0.18.x | **Date:** 2026-08-26 | **Scope:** Rust library + Python bindings + FFI + CLI
+> **Version:** 0.19.x | **Date:** 2026-09-02 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
-> **Last updated:** 2026-08-26 — crate **0.18.0** ships **INT8-only** profiles
+> **Last updated:** 2026-09-02 — crate **0.19.0** WAVE ingest is `ryf` (not
+> `hound`). Kernels default and INT8-only profiles shipped in **0.18.0**.
 > (`powerset_int8` + `resnet34_int8`). Pipeline v2+VBx default since 0.11.
 > **Product CLI / FFI / MCP** run hand-written kernels (`pipeline-native`),
 > not `libonnxruntime`. ONNX Runtime is opt-in (`cli-ort` / `pipeline-full` /
@@ -16,7 +17,7 @@
 
 **Status: NOT GO for public unattended production. OK for controlled internal use.**
 
-As of **0.18.x**, polyvoice is a hardened pre-1.0 engine: model signing is
+As of **0.19.x**, polyvoice is a hardened pre-1.0 engine: model signing is
 enforced on release builds for profile-resolved models, CI covers the main
 desktop targets, and **full VoxConverse-test + AMI-test DER** keeps
 **pipeline v2 + VBx** as the CLI / FFI / Python / MCP default. The **engine**
@@ -55,11 +56,12 @@ multi-corpus proof.
 
 ---
 
-## Current surface (0.18.x truth)
+## Current surface (0.19.x truth)
 
 | Area | State |
 |------|--------|
-| Crate version | `0.18.0` |
+| Crate version | `0.19.0` |
+| WAVE ingest | **`ryf`** (WAVE family → mono f32); `audio-io` still `symphonia` + `rubato` for non-WAV |
 | Production models | **INT8 only** (`powerset_int8` + `resnet34_int8`, ~8.4 MB) |
 | CLI / FFI / MCP engine | **kernels** (`pipeline-native`); `--legacy` / `--clusterer ahc` opt out |
 | Python engine | **ONNX Runtime** INT8 (same v2 + VBx; pass `clusterer="ahc"` to opt out) |
@@ -90,12 +92,12 @@ native full-split numbers that are measured rather than copied ceilings.
 
 | Item | Status | Risk |
 |------|--------|------|
-| Semantic version | `0.18.0` | Pre-1.0 — API may change between `0.x` minors |
+| Semantic version | `0.19.0` | Pre-1.0 — API may change between `0.x` minors |
 | `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
-| CHANGELOG | Maintained | Tracks 0.11→0.18; CLI default flip to v2+VBx was 0.11; kernels default was 0.18 |
+| CHANGELOG | Maintained | Tracks 0.11→0.19; CLI default flip to v2+VBx was 0.11; kernels default was 0.18; WAVE `ryf` was 0.19 |
 
 **Gap:** No commitment to backward compatibility until `1.0.0`. Consumers should
-pin a `0.18.x` (or tighter) and read the CHANGELOG before upgrading.
+pin a `0.19.x` (or tighter) and read the CHANGELOG before upgrading.
 
 **Remediation:** Freeze the public API, publish a semver policy, then ship
 `1.0.0`.
@@ -333,11 +335,11 @@ Until every box is checked, the honest status remains:
 
 ---
 
-## Metrics (snapshot, 0.18.x)
+## Metrics (snapshot, 0.19.x)
 
 | Metric | Value |
 |--------|-------|
-| Crate version | 0.18.0 |
+| Crate version | 0.19.0 |
 | Deployable footprint | **~8.4 MB** INT8 production pair (FP32 ids optional / not profile-default) |
 | Product CLI engine | kernels (`pipeline-native`); no `libonnxruntime` |
 | Speed (kernels, Darwin Vox-3 scoreboard) | ≥**117×** realtime; peak RSS ≤ **556 MiB** |

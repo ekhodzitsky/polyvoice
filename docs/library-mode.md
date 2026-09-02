@@ -8,9 +8,9 @@ not want the ONNX Runtime (`ort`) native dylib.
 ```toml
 # Cargo.toml
 [dependencies]
-polyvoice = { version = "0.18", default-features = false }
+polyvoice = { version = "0.19", default-features = false }
 # optional pure-Rust extras:
-# polyvoice = { version = "0.18", default-features = false, features = ["clusterer", "vbx"] }
+# polyvoice = { version = "0.19", default-features = false, features = ["clusterer", "vbx"] }
 ```
 
 CI enforces that `ort` never appears in the normal dependency graph for
@@ -30,7 +30,7 @@ CI enforces that `ort` never appears in the normal dependency graph for
 | Config / result types | `DiarizationConfig`, `ClusterConfig`, `SpeakerTurn`, `DiarizationResult`, `Segment`, `SampleRate`, … | `types` |
 | AHC / k-means math | `ahc`, `kmeans` | Pure-Rust clustering primitives |
 | DER helpers | `compute_der`, `compute_wder`, … | Evaluation |
-| Window / overlap / RTTM / WAV | `window`, `overlap`, `rttm`, `wav`, `format` | I/O and post-processing |
+| Window / overlap / RTTM / WAV | `window`, `overlap`, `rttm`, `wav`, `format` | I/O and post-processing. WAV is `ryf` (WAVE family → mono f32; 16 kHz without `audio-io`) |
 | Fbank features | `FbankConfig`, `FbankExtractor` | Pure-Rust front-end features |
 | ASR trait stubs | `Asr`, `AsrError` | Trait surface only |
 | Word midpoint labeling | `labeling::{speaker_at, speaker_at_stable, assign_speakers_by_midpoint, label_words, UncoveredPolicy}` | STT product join; see module docs for offline vs streaming |
@@ -52,7 +52,7 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | `resegmentation` | `OverlapResegmenter`, `compute_centroids`, … | Post-clustering resegmentation |
 | `attribution` | `who_said_what`, `attribute_words`, … | Word → speaker join (no models) |
 | `vad-earshot` | `EarshotVad` | Optional pure-Rust VAD (`earshot` crate) |
-| `audio-io` | multi-format decode + resample via `wav::load_audio` | `symphonia` + `rubato`; no `ort` |
+| `audio-io` | multi-format decode + resample via `wav::load_audio` | `symphonia` + `rubato` for mp3/flac/ogg/m4a/…; WAV still `ryf`; no `ort` |
 
 ### Requires `onnx` (native ORT / tract)
 

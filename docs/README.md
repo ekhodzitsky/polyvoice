@@ -1,6 +1,6 @@
-# Documentation index (polyvoice 0.18)
+# Documentation index (polyvoice 0.19)
 
-Crate version: **0.18.x** ([CHANGELOG](../CHANGELOG.md)). Production profiles
+Crate version: **0.19.x** ([CHANGELOG](../CHANGELOG.md)). Production profiles
 use **INT8** models only. CLI / FFI / MCP default is **kernels**
 (`pipeline-native`), not ONNX Runtime. Canonical accuracy protocol:
 [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
@@ -83,6 +83,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (= `pipeline-native` + `vbx`; no `ort`) |
 | CLI with ONNX Runtime | `cli-ort` |
 | CLI with tract | `cli-tract` |
-| Multi-format audio | `audio-io` (often with `cli` or `cli-tract`) |
+| WAVE ingest | always-on (`ryf`); 16 kHz WAV without extra features |
+| Multi-format audio | `audio-io` (often with `cli` or `cli-tract`): other containers + resample |
 
 Full table: [library-mode.md](library-mode.md) and [CONTRIBUTING.md](../CONTRIBUTING.md).

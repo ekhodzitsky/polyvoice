@@ -72,6 +72,15 @@ config groups plus a DoS guard:
 `DiarizationConfig::validate()` checks the field ranges up front and returns a
 typed `ConfigError` on bad input.
 
+### WAV ingest (`wav`)
+
+Always-on. `read_wav` / `load_audio` decode WAVE-family files through `ryf`
+(RIFF / RIFX / RF64 / G.711 / ADPCM → mono f32). Caps: 1 GiB on disk, 1 hour
+declared duration, sample rate ≤ 192 kHz. Without `audio-io`, `load_audio`
+accepts 16 kHz WAV only. With `audio-io`, mp3/flac/ogg/m4a/… go through
+symphonia and any rate is resampled to 16 kHz; `.wav` still uses `ryf`.
+`WavError::Read` is a message string (not a decoder crate's error type).
+
 ### `DiarizationResult`
 ```rust
 pub struct DiarizationResult {

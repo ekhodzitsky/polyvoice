@@ -1,6 +1,6 @@
 # Contributing to polyvoice
 
-Thanks for your interest. This guide matches the **0.18** tree.
+Thanks for your interest. This guide matches the **0.19** tree.
 
 ## Setup
 
@@ -38,7 +38,8 @@ cargo run --features cli --bin polyvoice -- download-models --profile balanced
 | CLI with tract | `cli-tract` |
 | Native ResNet34 embedder | `embedder-native` (`ResNet34Native`, no ONNX runtime) |
 | Native powerset segmenter | `segmenter-native` (`PowersetNative`, N>1 LSTM) |
-| Multi-format audio decode | `audio-io` (with `cli`, `cli-tract`, or `cli-native` for the binary) |
+| WAVE ingest (always on) | `ryf` via `wav::read_wav` / `wav::load_audio` (16 kHz WAV without extra features) |
+| Multi-format audio decode | `audio-io` (with `cli`, `cli-tract`, or `cli-native` for the binary): mp3/flac/ogg/m4a plus resample; WAV still uses `ryf` |
 
 Architecture map: [docs/PIPELINE-ARCHITECTURE.md](docs/PIPELINE-ARCHITECTURE.md).
 Full doc index: [docs/README.md](docs/README.md). C FFI: [docs/FFI.md](docs/FFI.md).
@@ -87,7 +88,7 @@ Ignored tests that need models or network are intentional; release DER gates liv
 
 ## Areas for contribution
 
-Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues) and the local `roadmap/` tracker. High-impact directions (as of 0.18):
+Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues) and the local `roadmap/` tracker. High-impact directions (as of 0.19):
 
 - **Cross-corpus DER** — CALLHOME / DIHARD-style gates beyond VoxConverse + AMI
 - **Linux native RTF** — kernels hold AMI DER within the ort ceiling; RTF still trails Linux ort

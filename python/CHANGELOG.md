@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Lockstep with core **0.19.0**. The wheel still takes PCM samples + sample
+  rate (no file decode). Rust WAVE ingest moved to `ryf`; Python API unchanged
+  on that axis.
+
 ## [0.18.0] - 2026-08-25
 
 ### Changed

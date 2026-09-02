@@ -82,6 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_models_from(ModelRegistry::default()?) // models auto-download
         .build()?;
+    // 16 kHz WAV via ryf. Other rates/formats: `--features audio-io`.
     let (samples, sr) = polyvoice::wav::load_audio(std::path::Path::new("meeting.wav"))?;
     let result = pipeline.run(&samples, SampleRate::new(sr).ok_or("bad sample rate")?)?;
     for turn in &result.turns {
