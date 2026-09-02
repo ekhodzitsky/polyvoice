@@ -369,7 +369,6 @@ impl LegacyPipeline {
 mod tests {
     use super::*;
     use crate::Embedder;
-    use std::io::Cursor;
 
     #[test]
     fn pipeline_new_with_defaults() {
@@ -405,25 +404,11 @@ mod tests {
     #[test]
     fn wav_sample_rate_mismatch_error() {
         // Create a 1-second mono WAV at 22050 Hz while the pipeline expects 16000 Hz.
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: 22050,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
-        let mut buf = Vec::new();
-        {
-            let cursor = Cursor::new(&mut buf);
-            let mut writer = hound::WavWriter::new(cursor, spec).unwrap();
-            for i in 0..22050 {
-                let sample = ((i as f32 / 22050.0) * std::f32::consts::TAU * 440.0).sin();
-                writer.write_sample((sample * 32767.0) as i16).unwrap();
-            }
-            writer.finalize().unwrap();
-        }
-
+        let samples: Vec<f32> = (0..22050)
+            .map(|i| ((i as f32 / 22050.0) * std::f32::consts::TAU * 440.0).sin())
+            .collect();
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(tmp.path(), &buf).unwrap();
+        crate::wav::write_pcm16_mono(tmp.path(), 22050, &samples);
 
         let config = DiarizationConfig::default();
         let pipeline = LegacyPipeline::new(config, VadConfig::default());
@@ -723,23 +708,8 @@ mod tests {
         let sr = 16_000u32;
         let samples = sine_wave(440.0, 1.0, sr);
 
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: sr,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
-        let mut buf = Vec::new();
-        {
-            let cursor = Cursor::new(&mut buf);
-            let mut writer = hound::WavWriter::new(cursor, spec).unwrap();
-            for &s in &samples {
-                writer.write_sample((s * 32767.0) as i16).unwrap();
-            }
-            writer.finalize().unwrap();
-        }
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(tmp.path(), &buf).unwrap();
+        crate::wav::write_pcm16_mono(tmp.path(), sr, &samples);
 
         let pipeline = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::default());
         let embedder = crate::embedder::DummyExtractor::new(256);

@@ -159,12 +159,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec9d92d097f4749b64e8cc33d924d9f40a2d4eb91402b458014b781f5733d60f"
 
 [[package]]
-name = "hound"
-version = "3.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
-
-[[package]]
 name = "http"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -337,15 +331,15 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "polyvoice"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "dirs",
- "hound",
  "minisign-verify",
  "ndarray",
  "ort",
  "realfft",
+ "ryf",
  "serde",
  "serde_json",
  "sha2",
@@ -357,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "polyvoice-python"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "polyvoice",
  "pyo3",
@@ -552,6 +546,12 @@ dependencies = [
  "rustls-pki-types",
  "untrusted",
 ]
+
+[[package]]
+name = "ryf"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11e6d16ce08a661ff9d22b1303115cf61b40bfd7de8d1d17c7302d1a2b05d93e"
 
 [[package]]
 name = "serde"

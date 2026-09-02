@@ -617,12 +617,12 @@ checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "polyvoice"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
- "hound",
  "ndarray",
  "realfft",
+ "ryf",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
@@ -847,6 +847,12 @@ dependencies = [
  "rustls-pki-types",
  "untrusted",
 ]
+
+[[package]]
+name = "ryf"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11e6d16ce08a661ff9d22b1303115cf61b40bfd7de8d1d17c7302d1a2b05d93e"
 
 [[package]]
 name = "serde"

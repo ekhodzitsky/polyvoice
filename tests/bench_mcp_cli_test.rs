@@ -40,19 +40,7 @@ fn require_models(files: &[&str]) -> bool {
 
 /// Write a mono 16-bit WAV of `secs` seconds of `speech_pcm` at rate `sr`.
 fn write_wav(path: &Path, secs: f32, sr: u32) {
-    let spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: sr,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut writer = hound::WavWriter::create(path, spec).unwrap();
-    for s in common::speech_pcm(secs, sr) {
-        writer
-            .write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
-            .unwrap();
-    }
-    writer.finalize().unwrap();
+    common::write_pcm16_mono(path, sr, &common::speech_pcm(secs, sr));
 }
 
 /// A {audio,rttm} dataset dir: `a.wav` with a reference RTTM, `b.wav` without
@@ -210,7 +198,7 @@ fn bench_v2_skip_overlap_mode_runs() {
     assert_eq!(json["files_processed"], 1);
 }
 
-#[cfg(feature = "cli")]
+#[cfg(all(feature = "cli", feature = "onnx"))]
 #[test]
 fn bench_legacy_end_to_end_runs() {
     // Balanced profile embedder is the INT8 shipping pair (0.17+).

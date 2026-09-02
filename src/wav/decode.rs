@@ -144,48 +144,20 @@ pub(super) fn decode_with_symphonia(path: &Path) -> Result<(Vec<f32>, u32), WavE
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
+    use super::super::{crafted_pcm_wav, write_pcm16};
     use super::*;
 
     fn write_sine_wav(path: &Path, sample_rate: u32, channels: u16, secs: f32) {
-        let spec = hound::WavSpec {
-            channels,
-            sample_rate,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
         let n = (sample_rate as f32 * secs) as usize;
-        let mut writer = hound::WavWriter::create(path, spec).unwrap();
+        let mut interleaved = Vec::with_capacity(n * usize::from(channels));
         for i in 0..n {
             let t = i as f32 / sample_rate as f32;
-            let sample = (t * std::f32::consts::TAU * 440.0).sin();
-            let v = (sample * 32767.0 * 0.5) as i16;
+            let v = (t * std::f32::consts::TAU * 440.0).sin() * 0.5;
             for _ in 0..channels {
-                writer.write_sample(v).unwrap();
+                interleaved.push(v);
             }
         }
-        writer.finalize().unwrap();
-    }
-
-    /// Minimal PCM WAV header with a caller-controlled declared data length.
-    fn crafted_pcm_wav(sample_rate: u32, bits_per_sample: u16, data_len: u32) -> Vec<u8> {
-        let channels: u16 = 1;
-        let block_align = channels * (bits_per_sample / 8);
-        let byte_rate = sample_rate * u32::from(block_align);
-        let mut b = Vec::new();
-        b.extend_from_slice(b"RIFF");
-        b.extend_from_slice(&(36u32 + data_len).to_le_bytes());
-        b.extend_from_slice(b"WAVE");
-        b.extend_from_slice(b"fmt ");
-        b.extend_from_slice(&16u32.to_le_bytes());
-        b.extend_from_slice(&1u16.to_le_bytes());
-        b.extend_from_slice(&channels.to_le_bytes());
-        b.extend_from_slice(&sample_rate.to_le_bytes());
-        b.extend_from_slice(&byte_rate.to_le_bytes());
-        b.extend_from_slice(&block_align.to_le_bytes());
-        b.extend_from_slice(&bits_per_sample.to_le_bytes());
-        b.extend_from_slice(b"data");
-        b.extend_from_slice(&data_len.to_le_bytes());
-        b
+        write_pcm16(path, sample_rate, channels, &interleaved);
     }
 
     #[test]
@@ -281,7 +253,7 @@ mod tests {
         // Header declares far more frames than the file holds; the guard must
         // fire on the container-reported duration before decoding packets.
         let data_len = (MAX_DURATION_SECS as u64 * 16_000 * 2 + 2) as u32;
-        let bytes = crafted_pcm_wav(16_000, 16, data_len);
+        let bytes = crafted_pcm_wav(1, 16_000, 16, data_len);
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("long.wav");
         std::fs::write(&path, &bytes).unwrap();

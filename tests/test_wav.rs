@@ -1,42 +1,26 @@
 #![allow(clippy::unwrap_used)]
 use polyvoice::wav;
-use std::io::Cursor;
 use std::path::Path;
 
+mod common;
+
 fn write_tone_wav(path: &Path, sample_rate: u32, n_samples: usize) {
-    let spec = hound::WavSpec {
-        channels: 1,
-        sample_rate,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut writer = hound::WavWriter::create(path, spec).unwrap();
-    for i in 0..n_samples {
-        let t = i as f32 / sample_rate as f32;
-        let s = (t * std::f32::consts::TAU * 440.0).sin();
-        writer.write_sample((s * 16000.0) as i16).unwrap();
-    }
-    writer.finalize().unwrap();
+    let samples: Vec<f32> = (0..n_samples)
+        .map(|i| {
+            let t = i as f32 / sample_rate as f32;
+            (t * std::f32::consts::TAU * 440.0).sin() * (16000.0 / 32768.0)
+        })
+        .collect();
+    common::write_pcm16_mono(path, sample_rate, &samples);
 }
 
 #[test]
 fn test_read_wav_mono_16bit() {
-    let spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: 16000,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut buf = Vec::new();
-    {
-        let cursor = Cursor::new(&mut buf);
-        let mut writer = hound::WavWriter::new(cursor, spec).unwrap();
-        for i in 0..16000 {
-            let sample = ((i as f32 / 16000.0) * std::f32::consts::TAU * 440.0).sin();
-            writer.write_sample((sample * 32767.0) as i16).unwrap();
-        }
-        writer.finalize().unwrap();
-    }
+    let samples: Vec<f32> = (0..16000)
+        .map(|i| ((i as f32 / 16000.0) * std::f32::consts::TAU * 440.0).sin())
+        .collect();
+    let pcm = ryf::f32_to_s16le(&samples);
+    let buf = ryf::encode_s16(&pcm, 16000).unwrap();
 
     let tmp = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(tmp.path(), &buf).unwrap();
@@ -49,22 +33,12 @@ fn test_read_wav_mono_16bit() {
 
 #[test]
 fn test_read_wav_stereo_downmix() {
-    let spec = hound::WavSpec {
-        channels: 2,
-        sample_rate: 16000,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut buf = Vec::new();
-    {
-        let cursor = Cursor::new(&mut buf);
-        let mut writer = hound::WavWriter::new(cursor, spec).unwrap();
-        for _ in 0..8000 {
-            writer.write_sample(16383i16).unwrap(); // left
-            writer.write_sample(-16383i16).unwrap(); // right
-        }
-        writer.finalize().unwrap();
+    let mut pcm = Vec::with_capacity(8000 * 4);
+    for _ in 0..8000 {
+        pcm.extend_from_slice(&16383i16.to_le_bytes());
+        pcm.extend_from_slice(&(-16383i16).to_le_bytes());
     }
+    let buf = ryf::encode(ryf::WriteSpec::s16(16000, 2), &pcm).unwrap();
 
     let tmp = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(tmp.path(), &buf).unwrap();

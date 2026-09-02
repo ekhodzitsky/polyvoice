@@ -19,21 +19,15 @@ use common::polyvoice_cmd;
 /// Write a 16 kHz mono 16-bit WAV holding `secs` seconds of a two-tone signal.
 fn write_tone_wav(path: &Path, secs: f32) {
     let sr = 16_000_u32;
-    let spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: sr,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut writer = hound::WavWriter::create(path, spec).unwrap();
     let n = (secs * sr as f32) as usize;
-    for i in 0..n {
-        let t = i as f32 / sr as f32;
-        let f = if i < n / 2 { 220.0 } else { 440.0 };
-        let s = (t * std::f32::consts::TAU * f).sin() * 0.3;
-        writer.write_sample((s * 16000.0) as i16).unwrap();
-    }
-    writer.finalize().unwrap();
+    let samples: Vec<f32> = (0..n)
+        .map(|i| {
+            let t = i as f32 / sr as f32;
+            let f = if i < n / 2 { 220.0 } else { 440.0 };
+            (t * std::f32::consts::TAU * f).sin() * 0.3
+        })
+        .collect();
+    common::write_pcm16_mono(path, sr, &samples);
 }
 
 const SEEDED_MODELS: [(&str, &str); 3] = [

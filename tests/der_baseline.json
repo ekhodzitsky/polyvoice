@@ -1,6 +1,6 @@
 {
   "schema": "polyvoice-der-baseline-v2",
-  "crate_version": "0.18.0",
+  "crate_version": "0.19.0",
   "git_sha": "2aa1e7030dc796e4f3e04ee1629889e62f908e27",
   "command_line": "target/release/polyvoice-bench data/<dataset> --profile balanced --pipeline v2 --clusterer vbx --collar <0|0.25> --output benchmarks/results/int8-full-der-2026-08-10/<name>.json",
   "voxconverse_test": {

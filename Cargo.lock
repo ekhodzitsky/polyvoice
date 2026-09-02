@@ -2251,7 +2251,7 @@ dependencies = [
 
 [[package]]
 name = "polyvoice"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2261,7 +2261,6 @@ dependencies = [
  "dirs",
  "earshot",
  "faer",
- "hound",
  "insta",
  "loom",
  "minisign-verify",
@@ -2273,6 +2272,7 @@ dependencies = [
  "realfft",
  "rmcp",
  "rubato",
+ "ryf",
  "schemars",
  "serde",
  "serde_json",
@@ -2943,6 +2943,12 @@ dependencies = [
  "tempfile",
  "wait-timeout",
 ]
+
+[[package]]
+name = "ryf"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11e6d16ce08a661ff9d22b1303115cf61b40bfd7de8d1d17c7302d1a2b05d93e"
 
 [[package]]
 name = "ryu"

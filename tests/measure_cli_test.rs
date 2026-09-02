@@ -50,18 +50,7 @@ fn models_cached(files: &[&str]) -> bool {
 
 #[cfg(feature = "onnx")]
 fn write_wav_16k(path: &Path, samples: &[f32]) {
-    let spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: 16_000,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut w = hound::WavWriter::create(path, spec).expect("create wav");
-    for &s in samples {
-        w.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
-            .expect("write sample");
-    }
-    w.finalize().expect("finalize wav");
+    common::write_pcm16_mono(path, 16_000, samples);
 }
 
 /// Minimal diarization dataset: one 6 s file, two speakers, speaker A with two

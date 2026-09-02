@@ -14,6 +14,12 @@ use polyvoice::types::{SpeakerId, SpeakerTurn, TimeRange};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
+/// Write a mono PCM16 WAVE file from `[-1, 1]` samples.
+pub fn write_pcm16_mono(path: &Path, sample_rate: u32, samples: &[f32]) {
+    let pcm = ryf::f32_to_s16le(samples);
+    ryf::write_s16(path, &pcm, sample_rate).expect("write wav");
+}
+
 /// Fixed 10-file VoxConverse-test subset used by the fast DER gates.
 pub const VOXCONVERSE_SUBSET_10: &[&str] = &[
     "aepyx", "aggyz", "aiqwk", "aorju", "auzru", "bgvvt", "bidnq", "bjruf", "bmsyn", "bpzsc",

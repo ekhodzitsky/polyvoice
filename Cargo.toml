@@ -10,7 +10,7 @@ resolver = "2"
 
 [package]
 name = "polyvoice"
-version = "0.18.0"
+version = "0.19.0"
 edition = "2024"
 # MSRV: rten-gemm / rten-simd (Linux INT8 GEMM) need 1.94.
 rust-version = "1.94.0"
@@ -213,8 +213,8 @@ polyvoice-kernels = { path = "polyvoice-kernels", version = "0.1.0", optional = 
 # no ONNX Runtime session. Default builds must not pull this dependency.
 earshot = { version = "1.2", optional = true, default-features = true }
 
-# WAV file I/O (always available; multi-format decode is behind `audio-io`)
-hound = "3.5"
+# WAV family ingest (always available; multi-format decode is behind `audio-io`)
+ryf = "0.3.2"
 
 # Opt-in multi-format audio decode + resampling (feature `audio-io`)
 rubato = { version = "4.0", optional = true }

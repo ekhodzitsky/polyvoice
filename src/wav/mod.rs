@@ -1,6 +1,6 @@
 //! Audio file I/O for the loading layer.
 //!
-//! - [`read_wav`] — raw WAV decode via `hound` (any sample rate; caller decides).
+//! - [`read_wav`] — raw WAVE-family decode via `ryf` (any sample rate; caller decides).
 //! - [`load_audio`] — pipeline-ready mono f32 at 16 kHz.
 //!
 //! Without the `audio-io` feature, [`load_audio`] accepts only 16 kHz WAV and
@@ -8,6 +8,7 @@
 //! symphonia decodes mp3/flac/ogg/m4a/aac (and other supported containers) and
 //! rubato resamples any rate → 16 kHz mono (multi-channel is averaged).
 
+use std::io::{Seek, SeekFrom};
 use std::path::Path;
 
 const MAX_WAV_FILE_SIZE: u64 = 1_073_741_824; // 1 GiB
@@ -24,7 +25,7 @@ mod resample;
 #[derive(thiserror::Error, Debug)]
 pub enum WavError {
     #[error("failed to read WAV: {0}")]
-    Read(#[from] hound::Error),
+    Read(String),
     #[error("unsupported sample format: {0}")]
     UnsupportedFormat(String),
     #[error("WAV file too large: {size} bytes (max {max} bytes)")]
@@ -54,11 +55,45 @@ pub enum WavError {
     Resample(String),
 }
 
+fn decode_opts() -> ryf::DecodeOptions {
+    // Mix-to-mono + speech ingest. Keep speech's 192 kHz sample-rate ceiling
+    // and 4 GiB planar-f32 budget; do not inherit the 48 kHz *frame-budget*
+    // clamp, or a 96 kHz file would hit DurationTooLong at 30 minutes.
+    let speech = ryf::DecodeOptions::speech();
+    let rate_ceiling = speech.max_sample_rate;
+    speech
+        .with_max_duration_secs(MAX_DURATION_SECS)
+        .with_max_decode_sample_rate(rate_ceiling)
+}
+
+fn map_ryf(err: ryf::WavError) -> WavError {
+    match err {
+        ryf::WavError::TooLong {
+            observed_secs,
+            max_secs,
+        } => WavError::DurationTooLong {
+            duration_secs: observed_secs,
+            max_secs,
+        },
+        ryf::WavError::UnsupportedCodec { tag } => {
+            WavError::UnsupportedFormat(format!("WAVE codec tag {tag}"))
+        }
+        ryf::WavError::FeatureDisabled { feature } => {
+            WavError::UnsupportedFormat(format!("WAVE codec requires `{feature}`"))
+        }
+        ryf::WavError::Format(
+            kind @ (ryf::FormatKind::UnsupportedWaveFormat | ryf::FormatKind::InvalidSize),
+        ) => WavError::UnsupportedFormat(kind.to_string()),
+        other => WavError::Read(other.to_string()),
+    }
+}
+
 /// Read a WAV file and return mono f32 samples normalized to [-1.0, 1.0] and its sample rate.
 ///
-/// Stereo (and multi-channel) files are downmixed by averaging channels. 16-bit
-/// integer and 32-bit float formats are supported. The returned sample rate is
-/// whatever the WAV header declares — this function does **not** resample.
+/// Stereo (and multi-channel) files are downmixed by averaging channels. PCM,
+/// IEEE float, G.711, and MS/IMA ADPCM WAVE containers are supported. The
+/// returned sample rate is whatever the WAV header declares (up to 192 kHz) —
+/// this function does **not** resample.
 ///
 /// # Guards
 ///
@@ -77,42 +112,33 @@ pub fn read_wav(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
         });
     }
 
-    let reader = hound::WavReader::open(path)?;
-    let spec = reader.spec();
-    let channels = spec.channels as usize;
-    let sample_rate = spec.sample_rate;
+    let opts = decode_opts();
+    let file = std::fs::File::open(path)?;
+    let mut src = ryf::ByteSource::from_file(file);
+    let probe = ryf::probe_with(&mut src, &opts).map_err(map_ryf)?;
 
-    let duration = reader.duration();
-    let duration_secs = duration as f64 / sample_rate as f64;
-    if duration_secs > MAX_DURATION_SECS {
-        return Err(WavError::DurationTooLong {
-            duration_secs,
-            max_secs: MAX_DURATION_SECS,
-        });
-    }
-
-    let bps = spec.bits_per_sample;
-    if bps == 0 || bps > 32 {
-        return Err(WavError::UnsupportedFormat(format!(
-            "bits_per_sample {bps} out of supported range 1..=32"
-        )));
-    }
-
-    let interleaved: Vec<f32> = match spec.sample_format {
-        hound::SampleFormat::Int => {
-            let max_val = (1i64 << (bps - 1)) as f32;
-            reader
-                .into_samples::<i32>()
-                .map(|s| s.map(|v| v as f32 / max_val))
-                .collect::<Result<Vec<f32>, _>>()?
+    if let Some(frames) = probe.declared_frames
+        && probe.sample_rate > 0
+    {
+        let duration_secs = frames as f64 / f64::from(probe.sample_rate);
+        if duration_secs > MAX_DURATION_SECS {
+            return Err(WavError::DurationTooLong {
+                duration_secs,
+                max_secs: MAX_DURATION_SECS,
+            });
         }
-        hound::SampleFormat::Float => reader
-            .into_samples::<f32>()
-            .collect::<Result<Vec<f32>, _>>()?,
-    };
+    }
 
-    let mono = downmix_to_mono(interleaved, channels);
-    Ok((mono, sample_rate))
+    src.seek(SeekFrom::Start(0))
+        .map_err(|e| WavError::Read(e.to_string()))?;
+    match ryf::decode_with(&mut src, &opts) {
+        Ok(wav) => {
+            let samples = wav.channels.into_iter().next().unwrap_or_default();
+            Ok((samples, wav.sample_rate))
+        }
+        Err(ryf::WavError::Empty) => Ok((Vec::new(), probe.sample_rate)),
+        Err(e) => Err(map_ryf(e)),
+    }
 }
 
 /// Load audio for the diarization pipeline: mono f32 at [`TARGET_SAMPLE_RATE`] (16 kHz).
@@ -128,7 +154,7 @@ pub fn read_wav(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
 /// Decodes common formats (mp3, flac, ogg/vorbis, m4a/aac, wav, aiff, caf, …)
 /// via symphonia, downmixes multi-channel to mono by averaging, and resamples
 /// any rate to 16 kHz with rubato (FFT synchronous resampler). WAV continues
-/// to use hound. Opus is not supported (no native libopus dep); you get a
+/// to use ryf. Opus is not supported (no native libopus dep); you get a
 /// named decode error.
 ///
 /// Multi-channel downmix discards spatial information (e.g. stereo telephony).
@@ -188,14 +214,15 @@ fn decode_path(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
         .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "wav" | "wave"));
 
     if is_wav {
-        // Prefer hound for the existing WAV path (stable, zero media-codec deps on
-        // the hot path when the file really is WAV).
+        // Prefer ryf for WAVE (zero media-codec deps on the hot path when the
+        // file really is WAV, including telephony / RF64 containers).
         return read_wav(path);
     }
 
     decode::decode_with_symphonia(path)
 }
 
+#[cfg(feature = "audio-io")]
 fn downmix_to_mono(interleaved: Vec<f32>, channels: usize) -> Vec<f32> {
     if channels <= 1 {
         return interleaved;
@@ -206,35 +233,68 @@ fn downmix_to_mono(interleaved: Vec<f32>, channels: usize) -> Vec<f32> {
         .collect()
 }
 
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+pub(crate) fn write_pcm16(path: &Path, sample_rate: u32, channels: u16, interleaved: &[f32]) {
+    let pcm = ryf::f32_to_s16le(interleaved);
+    ryf::write(path, ryf::WriteSpec::s16(sample_rate, channels), &pcm).expect("write pcm16 wav");
+}
+
+#[cfg(test)]
+pub(crate) fn write_pcm16_mono(path: &Path, sample_rate: u32, samples: &[f32]) {
+    write_pcm16(path, sample_rate, 1, samples);
+}
+
+/// Minimal PCM WAV header with caller-controlled fields (invalid widths, lying
+/// `data` sizes) that a well-formed writer will not emit.
+#[cfg(test)]
+pub(crate) fn crafted_pcm_wav(
+    channels: u16,
+    sample_rate: u32,
+    bits_per_sample: u16,
+    data_len: u32,
+) -> Vec<u8> {
+    let block_align = channels * (bits_per_sample / 8);
+    let byte_rate = sample_rate * u32::from(block_align);
+    let mut b = Vec::new();
+    b.extend_from_slice(b"RIFF");
+    b.extend_from_slice(&(36u32 + data_len).to_le_bytes());
+    b.extend_from_slice(b"WAVE");
+    b.extend_from_slice(b"fmt ");
+    b.extend_from_slice(&16u32.to_le_bytes());
+    b.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    b.extend_from_slice(&channels.to_le_bytes());
+    b.extend_from_slice(&sample_rate.to_le_bytes());
+    b.extend_from_slice(&byte_rate.to_le_bytes());
+    b.extend_from_slice(&block_align.to_le_bytes());
+    b.extend_from_slice(&bits_per_sample.to_le_bytes());
+    b.extend_from_slice(b"data");
+    b.extend_from_slice(&data_len.to_le_bytes());
+    b
+}
+
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
 
     fn write_sine_wav(path: &Path, sample_rate: u32, duration_secs: f32, freq_hz: f32) {
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
         let n = (sample_rate as f32 * duration_secs) as usize;
-        let mut writer = hound::WavWriter::create(path, spec).unwrap();
-        for i in 0..n {
-            let t = i as f32 / sample_rate as f32;
-            let sample = (t * std::f32::consts::TAU * freq_hz).sin();
-            writer
-                .write_sample((sample * 32767.0 * 0.5) as i16)
-                .unwrap();
-        }
-        writer.finalize().unwrap();
+        let samples: Vec<f32> = (0..n)
+            .map(|i| {
+                let t = i as f32 / sample_rate as f32;
+                (t * std::f32::consts::TAU * freq_hz).sin() * 0.5
+            })
+            .collect();
+        write_pcm16_mono(path, sample_rate, &samples);
     }
 
     #[test]
     fn missing_file_error() {
-        let result = read_wav(Path::new("/nonexistent/path/file.wav"));
-        assert!(result.is_err());
+        match read_wav(Path::new("/nonexistent/path/file.wav")) {
+            Err(WavError::Metadata(_)) => {}
+            other => panic!("expected Metadata error, got: {other:?}"),
+        }
     }
 
     #[test]
@@ -328,33 +388,6 @@ mod tests {
         assert_eq!(via_load, via_read);
     }
 
-    /// Minimal PCM WAV header bytes with caller-controlled fields, so tests
-    /// can exercise header guards that hound's writer refuses to emit.
-    fn crafted_pcm_wav(
-        channels: u16,
-        sample_rate: u32,
-        bits_per_sample: u16,
-        data_len: u32,
-    ) -> Vec<u8> {
-        let block_align = channels * (bits_per_sample / 8);
-        let byte_rate = sample_rate * u32::from(block_align);
-        let mut b = Vec::new();
-        b.extend_from_slice(b"RIFF");
-        b.extend_from_slice(&(36u32 + data_len).to_le_bytes());
-        b.extend_from_slice(b"WAVE");
-        b.extend_from_slice(b"fmt ");
-        b.extend_from_slice(&16u32.to_le_bytes());
-        b.extend_from_slice(&1u16.to_le_bytes()); // PCM
-        b.extend_from_slice(&channels.to_le_bytes());
-        b.extend_from_slice(&sample_rate.to_le_bytes());
-        b.extend_from_slice(&byte_rate.to_le_bytes());
-        b.extend_from_slice(&block_align.to_le_bytes());
-        b.extend_from_slice(&bits_per_sample.to_le_bytes());
-        b.extend_from_slice(b"data");
-        b.extend_from_slice(&data_len.to_le_bytes());
-        b
-    }
-
     #[test]
     fn read_wav_rejects_oversized_file() {
         // Sparse file: large logical length without writing real data.
@@ -406,18 +439,38 @@ mod tests {
 
     #[test]
     fn read_wav_rejects_bits_per_sample_above_32() {
-        // A 16-byte PCM fmt chunk with bits_per_sample = 40 parses in hound
-        // (multiple of 8, fits block_align) but is out of our supported range.
-        let bytes = crafted_pcm_wav(1, 16_000, 40, 0);
+        // A 16-byte PCM fmt chunk with bits_per_sample = 40 is a valid-looking
+        // RIFF header but an unsupported PCM width.
+        let bytes = crafted_pcm_wav(1, 16_000, 40, 5);
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("forty_bit.wav");
         std::fs::write(&path, &bytes).unwrap();
         match read_wav(&path) {
-            Err(WavError::UnsupportedFormat(msg)) => {
-                assert!(msg.contains("40"), "got: {msg}");
-            }
+            Err(WavError::UnsupportedFormat(_)) => {}
             other => panic!("expected UnsupportedFormat, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn decode_opts_does_not_clamp_frame_budget_below_rate_ceiling() {
+        let opts = decode_opts();
+        assert_eq!(opts.max_duration_secs, MAX_DURATION_SECS);
+        assert!(
+            opts.max_decode_sample_rate >= opts.max_sample_rate,
+            "frame-budget rate {} < sample-rate ceiling {}",
+            opts.max_decode_sample_rate,
+            opts.max_sample_rate
+        );
+    }
+
+    #[test]
+    fn read_wav_empty_header_only_returns_empty_samples() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty16k.wav");
+        write_pcm16_mono(&path, 16_000, &[]);
+        let (samples, sr) = read_wav(&path).unwrap();
+        assert!(samples.is_empty());
+        assert_eq!(sr, 16_000);
     }
 
     #[cfg(feature = "audio-io")]
@@ -435,6 +488,14 @@ mod tests {
     fn wav_error_display_covers_all_variants() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "nope");
         let cases: Vec<(WavError, &str)> = vec![
+            (WavError::Read("truncated riff".into()), "truncated riff"),
+            (
+                WavError::FileTooLarge {
+                    size: 2_000_000_000,
+                    max: MAX_WAV_FILE_SIZE,
+                },
+                "too large",
+            ),
             (
                 WavError::UnsupportedFormat("bits_per_sample 40".into()),
                 "unsupported sample format",
@@ -471,23 +532,10 @@ mod tests {
 
     #[test]
     fn read_wav_stereo_roundtrip_via_cursor_buffer() {
-        // Smoke that hound path still works when writing via Cursor (mirrors
-        // integration tests that build synthetic WAVs in memory).
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: 16_000,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
-        let mut buf = Vec::new();
-        {
-            let cursor = Cursor::new(&mut buf);
-            let mut writer = hound::WavWriter::new(cursor, spec).unwrap();
-            for _ in 0..100 {
-                writer.write_sample(0i16).unwrap();
-            }
-            writer.finalize().unwrap();
-        }
+        // Smoke that the WAVE path still works when encoding in memory (mirrors
+        // integration tests that build synthetic WAVs without a filesystem writer).
+        let pcm = vec![0u8; 200];
+        let buf = ryf::encode_s16(&pcm, 16_000).unwrap();
         let tmp = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(tmp.path(), &buf).unwrap();
         let (samples, sr) = read_wav(tmp.path()).unwrap();

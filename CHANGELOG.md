@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- WAVE ingest uses `ryf` instead of `hound` (RIFF/RIFX/RF64, G.711, ADPCM →
+  mono f32; zero default deps). `audio-io` still decodes non-WAV via
+  symphonia and resamples with rubato. `WavError::Read` is a message string
+  (no longer wraps `hound::Error`). Crate version 0.19.0.
+
 - Skip the Kani CI job until a Kani release bundles rustc ≥ 1.94. Running
   it against MSRV 1.94 failed on rustc 1.93 even with `continue-on-error`,
   which still showed a red X.
