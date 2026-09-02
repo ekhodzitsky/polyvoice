@@ -209,9 +209,11 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
-    # Two instrumented nextest passes (cli-native + all-features) exceed 30 min
-    # on a cold cache.
-    timeout-minutes: 45
+    # Two instrumented nextest passes (cli-native + all-features). The native
+    # pass runs full diarization e2e plus Vox-3 in debug + llvm-cov; on a slow
+    # runner that alone can exceed 45 min if those children share the CPUs.
+    # Heavy tests are exclusive via nextest profile `coverage`.
+    timeout-minutes: 90
     permissions:
       contents: read
     steps:
@@ -241,8 +243,8 @@ jobs:
       # when onnx is off, so accumulate a cli-native pass first and merge via
       # --no-report + a final report (llvm-cov's multi-run pattern).
       - run: cargo llvm-cov clean --workspace
-      - run: cargo llvm-cov nextest --profile ci --no-default-features --features cli-native --no-report
-      - run: cargo llvm-cov nextest --profile ci --all-features --no-report
+      - run: cargo llvm-cov nextest --profile coverage --no-default-features --features cli-native --no-report
+      - run: cargo llvm-cov nextest --profile coverage --all-features --no-report
       # llvm-cov 0.9's --fail-under-lines ignores --ignore-filename-regex (it
       # checks the unfiltered total, which includes kernels' never-executed
       # aarch64 lines). Gate on the filtered number we actually publish.

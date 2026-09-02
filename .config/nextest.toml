@@ -13,3 +13,18 @@ junit = { path = "junit.xml" }
 status-level = "slow"
 # Show failure output immediately and at the end.
 failure-output = "immediate-final"
+
+# llvm-cov instruments the native kernels. Four concurrent debug diarization
+# children on a 2–4 vCPU runner stretch the coverage job past 45 minutes.
+[profile.coverage]
+retries = { count = 1, backoff = "fixed", delay = "1s" }
+junit = { path = "junit.xml" }
+status-level = "slow"
+failure-output = "immediate-final"
+# 20 × 120 s = 40 min: fail a hung child instead of eating the GHA timeout.
+slow-timeout = { period = "120s", terminate-after = 20 }
+
+[[profile.coverage.overrides]]
+filter = 'test(/^e2e_/) | test(vox3_holds_der_rtf_rss_floors)'
+# Capped to available test-threads: one heavy child at a time.
+threads-required = 64
