@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-03
+
 ### Changed
 
 - Lockstep with core **0.19.0**. The wheel still takes PCM samples + sample

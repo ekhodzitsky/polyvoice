@@ -27,7 +27,8 @@
 //! **Library mode (no ONNX):** `default-features = false`, implement
 //! [`Embedder`], pair with [`EnergyVad`] and [`pipeline::LegacyPipeline`] /
 //! [`streaming::StreamingPipeline`] — see the crate README and
-//! `docs/library-mode.md`.
+//! `docs/library-mode.md`. WAVE ingest (`wav`) is always-on via `ryf`;
+//! mp3/flac/ogg/m4a need `--features audio-io`.
 //!
 //! ## Module organization
 //!

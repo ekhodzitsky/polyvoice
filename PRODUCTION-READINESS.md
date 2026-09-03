@@ -1,8 +1,8 @@
 # Production Readiness Assessment
 
-> **Version:** 0.19.x | **Date:** 2026-09-02 | **Scope:** Rust library + Python bindings + FFI + CLI
+> **Version:** 0.19.x | **Date:** 2026-09-03 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
-> **Last updated:** 2026-09-02 — crate **0.19.0** WAVE ingest is `ryf` (not
+> **Last updated:** 2026-09-03 — crate **0.19.0** WAVE ingest is `ryf` (not
 > `hound`). Kernels default and INT8-only profiles shipped in **0.18.0**.
 > (`powerset_int8` + `resnet34_int8`). Pipeline v2+VBx default since 0.11.
 > **Product CLI / FFI / MCP** run hand-written kernels (`pipeline-native`),
@@ -207,7 +207,7 @@ still trails pyannote-class systems by roughly ~4 pp no-collar on VoxConverse
 
 ### 6. Pipeline story (honest dual path) ⚠️
 
-| Path | How to run | Role in 0.18.x |
+| Path | How to run | Role in 0.19.x |
 |------|------------|----------------|
 | **v2 + VBx kernels (CLI/FFI/MCP default)** | `cargo install polyvoice --features cli` | Product binary; Darwin scoreboard + Darwin full-split |
 | **v2 + VBx ONNX Runtime** | Python wheel; `--features cli-ort` | Measured Linux/CPU full-split protocol |
@@ -275,7 +275,7 @@ audit remain active.
 
 ## Go/No-Go Matrix
 
-_As of 0.18.x — product CLI is kernels, Python/`cli-ort` still `ort` 2.0.0-rc.12,
+_As of 0.19.x — product CLI is kernels, Python/`cli-ort` still `ort` 2.0.0-rc.12,
 INT8 profiles + v2+VBx default, legacy as an escape hatch, and multi-corpus DER
 is incomplete. Public unattended stays NO-GO._
 

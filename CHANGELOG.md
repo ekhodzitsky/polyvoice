@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-03
+
 ### Changed
 
-- WAVE ingest uses `ryf` instead of `hound` (RIFF/RIFX/RF64, G.711, ADPCM →
-  mono f32; zero default deps). `audio-io` still decodes non-WAV via
-  symphonia and resamples with rubato. `WavError::Read` is a message string
-  (no longer wraps `hound::Error`). Crate version 0.19.0.
+- **WAVE ingest is `ryf`, not `hound`.** RIFF/RIFX/RF64, G.711, ADPCM →
+  mono f32; zero default deps. `audio-io` still decodes non-WAV via
+  symphonia and resamples with rubato. **Breaking:** `WavError::Read` is
+  a message string (no longer wraps `hound::Error`).
 
 - Skip the Kani CI job until a Kani release bundles rustc ≥ 1.94. Running
   it against MSRV 1.94 failed on rustc 1.93 even with `continue-on-error`,
@@ -34,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until a filled host run exists. Ubuntu PR CI now includes a `--features cli`
   lane. macOS runs the native Vox-3 DER + INT8-size scoreboard fail-closed
   against vendored `tests/data/native-vox3/`. `tests/der_baseline.json`
-  `crate_version` tracks 0.18.0. Release workflow actions are pinned to
+  `crate_version` tracks 0.19.0. Release workflow actions are pinned to
   commit SHAs.
 
 ### Documentation
@@ -44,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Align readiness, architecture, library-mode, competitors, contributor, and
   Python docs with the 0.18 kernels default. CLI / FFI / MCP run
   `pipeline-native` (no `libonnxruntime`). ONNX Runtime is opt-in (`cli-ort`
-  / the Python wheel).
+  / the Python wheel). WAVE ingest is documented as `ryf`; `audio-io` stays
+  symphonia + rubato for non-WAV.
 
 ### Removed
 
