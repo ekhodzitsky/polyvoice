@@ -61,8 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Coverage job uses a `coverage` nextest profile (heavy native e2e / Vox-3
   run one at a time) and a 90-minute timeout, so instrumented debug
   diarization is not cancelled at 45 minutes.
-- Release gate timeout is 90 minutes so VoxConverse 10-file DER in
-  `release-check.sh` is not cancelled at 60 minutes.
+- Release-gate DER regressions in `release-check.sh` run `--release`.
+  Debug CLI AMI (EN2002a) exceeded both the 60- and 90-minute job caps;
+  VoxConverse 10-file itself finished in ~8 minutes. The gate job
+  timeout is 120 minutes so a cold cache still finishes.
 - Kernel-CLI help snapshot no longer lists `--legacy`. Docker smoke writes
   RTTM to stdout so the non-root image user does not need a writable bind
   mount. NME-SC factory tests compile only when `spectral` is off.
