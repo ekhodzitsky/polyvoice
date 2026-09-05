@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- WAVE ingest uses `ryf` 0.7.2 (was 0.3.2): G.722 / GSM decode, ffmpeg-tolerant
+  headers, `non_exhaustive` probe/error types. Public `WavError` is unchanged.
+
 ## [0.19.0] - 2026-09-03
 
 ### Changed

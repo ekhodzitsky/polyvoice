@@ -120,11 +120,12 @@ fn read_wav_on_truncated_file_returns_error() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn read_wav_on_oversized_duration_header_returns_error() {
+fn read_wav_on_oversized_duration_header_does_not_inflate_duration() {
     let mut temp = NamedTempFile::new().expect("failed to create temp file");
 
-    // Build a minimal WAV header declaring 2 hours of 16-bit mono @ 16 kHz
-    // but only write a few bytes of actual data.
+    // Header claims 2 hours of 16-bit mono @ 16 kHz; payload is 4 bytes.
+    // ryf 0.7 clamps probe/decode to the file, so this must not be a
+    // DurationTooLong (that would mean we trusted the lying chunk size).
     let sample_rate = 16000u32;
     let channels = 1u16;
     let bits_per_sample = 16u16;
@@ -156,22 +157,18 @@ fn read_wav_on_oversized_duration_header_returns_error() {
 
     let result = read_wav(temp.path());
     match result {
-        Err(WavError::DurationTooLong {
-            duration_secs,
-            max_secs,
-        }) => {
+        Ok((samples, sr)) => {
+            assert_eq!(sr, 16_000);
             assert!(
-                duration_secs > 3600.0,
-                "expected duration > 3600, got {}",
-                duration_secs
-            );
-            assert!(
-                (max_secs - 3600.0).abs() < 0.01,
-                "expected max_secs = 3600.0, got {}",
-                max_secs
+                samples.len() <= 4,
+                "payload was 4 bytes, got {} samples",
+                samples.len()
             );
         }
-        other => panic!("expected DurationTooLong error, got {:?}", other),
+        Err(WavError::DurationTooLong { duration_secs, .. }) => {
+            panic!("lying data size inflated duration to {duration_secs}s");
+        }
+        Err(_) => {}
     }
 }
 

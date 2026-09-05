@@ -91,15 +91,16 @@ fn map_ryf(err: ryf::WavError) -> WavError {
 /// Read a WAV file and return mono f32 samples normalized to [-1.0, 1.0] and its sample rate.
 ///
 /// Stereo (and multi-channel) files are downmixed by averaging channels. PCM,
-/// IEEE float, G.711, and MS/IMA ADPCM WAVE containers are supported. The
+/// IEEE float, G.711, G.722, GSM, and MS/IMA ADPCM WAVE containers are
+/// supported. The
 /// returned sample rate is whatever the WAV header declares (up to 192 kHz) —
 /// this function does **not** resample.
 ///
 /// # Guards
 ///
 /// - If the file size exceeds 1 GiB, returns [`WavError::FileTooLarge`].
-/// - If the declared duration in the WAV header exceeds 1 hour, returns
-///   [`WavError::DurationTooLong`] before reading any samples.
+/// - If duration (clamped to the file, not a lying `data` size) exceeds
+///   1 hour, returns [`WavError::DurationTooLong`] before reading samples.
 ///
 /// For pipeline-ready 16 kHz mono, prefer [`load_audio`].
 pub fn read_wav(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
@@ -407,13 +408,17 @@ mod tests {
 
     #[test]
     fn read_wav_rejects_declared_duration_over_limit() {
-        // The header declares far more data than the file holds; the guard
-        // must fire on the declared length before any samples are read.
+        // Sparse file whose payload length really is > 1 h of PCM16 @ 16 kHz.
+        // ryf 0.7 clamps probe frames to the file, so a lying-small file no
+        // longer inflates duration; the product 1 h cap still fires here.
         let data_len = (MAX_DURATION_SECS as u64 * 16_000 * 2 + 2) as u32;
         let bytes = crafted_pcm_wav(1, 16_000, 16, data_len);
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("long.wav");
         std::fs::write(&path, &bytes).unwrap();
+        let f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+        f.set_len(u64::from(44u32 + data_len)).unwrap();
+        drop(f);
         match read_wav(&path) {
             Err(WavError::DurationTooLong {
                 duration_secs,
