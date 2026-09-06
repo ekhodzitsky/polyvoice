@@ -850,9 +850,9 @@ dependencies = [
 
 [[package]]
 name = "ryf"
-version = "0.3.2"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11e6d16ce08a661ff9d22b1303115cf61b40bfd7de8d1d17c7302d1a2b05d93e"
+checksum = "de37b7676e8286b13e24c863d4b6da5f42cd73c5f6a4bcecf9f5a084099fe64e"
 
 [[package]]
 name = "serde"
