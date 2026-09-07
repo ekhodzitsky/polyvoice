@@ -1,0 +1,132 @@
+{
+  "schema": "polyvoice-linux-cpu-der-gate-v1",
+  "protocol": {
+    "profile": "balanced",
+    "pipeline": "v2+vbx",
+    "execution_provider": "cpu",
+    "powerset_batch": 8,
+    "collar_request": 0.25,
+    "note": "collar 0.25 JSON also carries no-collar micro/macro; miss/FA/conf are for the requested collar"
+  },
+  "host": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43"
+  },
+  "assert_baseline": true,
+  "runs": {
+    "voxconverse-test": {
+      "files_processed": 232,
+      "resolved_execution_provider": "Cpu",
+      "der_no_collar_micro": 15.328877469309344,
+      "der_no_collar_macro": 15.237187912738111,
+      "der_collar_micro": 10.791684503833425,
+      "der_collar_macro": 10.896006434782567,
+      "miss": 2.4311848082751912,
+      "false_alarm": 1.6338071236893241,
+      "confusion": 6.831014502818059,
+      "miss_fa_conf_collar_secs": 0.25,
+      "rt_factor_avg": 141.4934737160183,
+      "speaker_count": {
+        "exact": 84,
+        "plus_minus_1": 64,
+        "off_by_2_or_more": 84
+      },
+      "crate_version": "0.19.0",
+      "git_sha": "bf1c25a4622ec969bcad562e1bd6192b8a53b591",
+      "model_hashes": [
+        {
+          "model_id": "powerset_int8",
+          "sha256": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+        },
+        {
+          "model_id": "resnet34_int8",
+          "sha256": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+        }
+      ],
+      "stage_totals": {
+        "segmentation_secs": 437.321773201,
+        "embedding_secs": 669.4391338470001,
+        "clustering_secs": 0.7470391529999999,
+        "resegmentation_secs": 0.07030928100000007
+      },
+      "baseline_key": "voxconverse_test_linux_cpu_native",
+      "max_files": null,
+      "powerset_batch": 8
+    },
+    "ami-test": {
+      "files_processed": 16,
+      "resolved_execution_provider": "Cpu",
+      "der_no_collar_micro": 25.464111216808927,
+      "der_no_collar_macro": 24.540322174929994,
+      "der_collar_micro": 18.147462427870533,
+      "der_collar_macro": 17.461096423814272,
+      "miss": 8.159879552814472,
+      "false_alarm": 1.504666548258802,
+      "confusion": 7.796550322741,
+      "miss_fa_conf_collar_secs": 0.25,
+      "rt_factor_avg": 162.1504650026707,
+      "speaker_count": {
+        "exact": 3,
+        "plus_minus_1": 3,
+        "off_by_2_or_more": 10
+      },
+      "crate_version": "0.19.0",
+      "git_sha": "bf1c25a4622ec969bcad562e1bd6192b8a53b591",
+      "model_hashes": [
+        {
+          "model_id": "powerset_int8",
+          "sha256": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b"
+        },
+        {
+          "model_id": "resnet34_int8",
+          "sha256": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
+        }
+      ],
+      "stage_totals": {
+        "segmentation_secs": 88.76310497799999,
+        "embedding_secs": 112.10783403300002,
+        "clustering_secs": 0.283400163,
+        "resegmentation_secs": 0.00020622500000000004
+      },
+      "baseline_key": "ami_test_linux_cpu_native",
+      "max_files": null,
+      "powerset_batch": 8
+    }
+  },
+  "gate": {
+    "ok": true,
+    "checks": [
+      {
+        "split": "voxconverse-test",
+        "ok": true,
+        "msg": "EP resolved='Cpu' want Cpu"
+      },
+      {
+        "split": "voxconverse-test",
+        "ok": true,
+        "msg": "files_processed=232 want 232"
+      },
+      {
+        "split": "voxconverse-test",
+        "ok": true,
+        "msg": "DER0 micro=15.3289 <= baseline 15.4000 + tol 1.00 (= 16.4000)"
+      },
+      {
+        "split": "ami-test",
+        "ok": true,
+        "msg": "EP resolved='Cpu' want Cpu"
+      },
+      {
+        "split": "ami-test",
+        "ok": true,
+        "msg": "files_processed=16 want 16"
+      },
+      {
+        "split": "ami-test",
+        "ok": true,
+        "msg": "DER0 micro=25.4641 <= baseline 25.5000 + tol 1.50 (= 27.0000)"
+      }
+    ]
+  }
+}

@@ -54,13 +54,15 @@ is not acceptable: keep the win and cut memory.
 
 Product default is `cli` = kernels (`pipeline-native`), no `libonnxruntime`.
 ONNX Runtime is opt-in (`cli-ort` / `onnx`). Darwin native holds the
-scoreboard floors above. Linux x86_64 native, full-split 2026-09-07
-(Ryzen AI 9 HX 370): VoxConverse-test DER₀ 15.33 % / RTFx ~145×,
-AMI DER₀ 25.46 % / RTFx ~172× (same-host ort ~156× — kernels ahead on
-long files), Vox-3 smoke RTFx ~101× (same-host ort ~127× — ort's
-intra-op threading wins on 3–5-window files; peak RSS 539 vs 578 MiB).
-INT8 conv defaults on x86_64 with AVX-512 VNNI (exact integer math,
-same as the aarch64 SDOT path); CPUs without it keep FP32.
+scoreboard floors above. Linux x86_64 native, 2026-09-08
+(Ryzen AI 9 HX 370): VoxConverse-test DER₀ 15.33 % / RTFx ~141×,
+AMI DER₀ 25.46 % / RTFx ~162× (same-host ort ~137× / ~156× — kernels
+ahead on long files), Vox-3 smoke RTFx ~103× at jobs=1 (ort ~129×) but
+**~158× wall at `--jobs 3`** (ort ~151×; peak RSS ~470 vs ~740 MiB,
+jobs=1 ~310 vs ~620 MiB) — the v2 pipeline is shared across file
+workers, DER is bit-identical to jobs=1. INT8 conv defaults on x86_64
+with AVX-512 VNNI (exact integer math, same as the aarch64 SDOT path);
+CPUs without it keep FP32.
 
 ## Backlog.md
 

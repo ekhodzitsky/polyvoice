@@ -267,26 +267,34 @@ are operational (asserted by the native gate).
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | VoxConverse-test (232) | **~130×** | **15.47 %** |
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | AMI-test (16) | **~109×** | **25.19 %** |
 | **v2 + VBx INT8 Darwin kernels Vox-3 scoreboard** | euqef / fuzfh / msbyq | **≥117×** | **7.11 %** |
-| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~145×** | **15.33 %** |
-| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~172×** | **25.46 %** |
-| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~101×** | **7.03 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~141×** | **15.33 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~162×** | **25.46 %** |
+| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~103×** (jobs=1), **~158×** wall (`--jobs 3`) | **7.03 %** |
 
-Linux x86_64 numbers: 2026-09-07,
-[`benchmarks/results/linux-cpu-native-der-2026-09-07/`](../benchmarks/results/linux-cpu-native-der-2026-09-07/).
+Linux x86_64 numbers: 2026-09-08,
+[`benchmarks/results/linux-cpu-native-der-2026-09-08/`](../benchmarks/results/linux-cpu-native-der-2026-09-08/).
 The INT8 conv path (default on aarch64 + dotprod) also defaults on x86_64 with
 AVX-512 VNNI — same exact-integer math as the aarch64 kernels; CPUs without it
 keep the FP32 conv default. LSTM gates are AVX-512 vectorized (same minimax
-approximation as the NEON path), and the embedder worker pool scales with core
-count (3 on ≤10-core hosts, up to 8 on 24 threads). Locked Darwin floors:
+approximation as the NEON path), the embedder worker pool scales with core
+count (3 on ≤10-core hosts, up to 8 on 24 threads), and SincNet im2col is
+tiled, which bounds the per-window memory slab (Vox-3 peak RSS 539 →
+~310 MiB at jobs=1). With `polyvoice-bench --jobs N>1` the v2 pipeline is
+shared across file workers (no per-worker model memory, internal fan-out
+divided by jobs) and the report carries `rt_factor_wall` next to the
+per-file `rt_factor_avg`; per-file DER is bit-identical to jobs=1
+(`tests/bench_jobs_determinism.rs`). Locked Darwin floors:
 `tests/native_scoreboard.json`. Linux native gate:
 `scripts/linux-cpu-native-der-gate.sh`.
 
-Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-07, EP=cpu, N=8): on the
-full splits kernels are **ahead** — VoxConverse-test ~145× vs ort ~137×,
-AMI-16 ~172× vs ort ~156×; on the short Vox-3 smoke ort's intra-op threading
-still wins (~127× vs ~101×) because 3–5 windows per file cannot fill 24 cores
-at the window/segment granularity. Kernels stay ahead on footprint: Vox-3 peak
-RSS **539 MiB** vs ort **578 MiB**, no `libonnxruntime` dylib. DER trade:
+Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-08, same-source
+`cli-ort` build, EP=cpu, N=8, interleaved best-of-5): kernels are **ahead
+everywhere**. Full splits at jobs=1: VoxConverse-test ~141× vs ort ~137×,
+AMI-16 ~162× vs ort ~156×. Short Vox-3 smoke: at jobs=1 ort's intra-op
+threading still wins the per-file metric (~129× vs ~103×), but with
+`--jobs 3` kernels take the wall-clock lead (**~158× vs ort ~151×**) at
+much lower footprint — peak RSS **~470 MiB** vs ort **~740 MiB** (jobs=1:
+**~310 MiB** vs ~620 MiB), no `libonnxruntime` dylib. DER trade:
 Vox-3 7.03 % vs ort 7.51 % for kernels, Vox-232 15.33 % vs 14.74 % and
 AMI 25.46 % vs 24.23 % for ort.
 
