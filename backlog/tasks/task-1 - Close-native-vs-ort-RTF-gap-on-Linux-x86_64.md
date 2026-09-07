@@ -1,9 +1,10 @@
 ---
 id: TASK-1
 title: Close native-vs-ort RTF gap on Linux x86_64
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-07 18:42'
+updated_date: '2026-09-07 20:19'
 labels: []
 dependencies: []
 ordinal: 1000
