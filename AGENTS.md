@@ -1,4 +1,4 @@
-agent-dev-kb: 0.7.0
+agent-dev-kb: 0.8.0
 
 # Contributing conventions (humans & agents)
 
@@ -92,3 +92,16 @@ The queue is Backlog.md. No second spec or task framework.
 No `unwrap` / `expect` on production paths. Honor clippy (often
 `-D warnings`). Write the failing test first when that area is
 already tested.
+
+### Minimal code
+<!-- Ladder adapted from ponytail (MIT), github.com/DietrichGebert/ponytail -->
+Stop at the first rung that holds:
+1. Needed at all? No: skip it (YAGNI).
+2. Already in this codebase? Reuse, do not rewrite.
+3. Stdlib does it? Use it.
+4. Native platform feature? Use it.
+5. Installed dependency? Use it.
+6. One line? One line.
+7. Only then: the minimum that works.
+Never cut trust-boundary validation, data-loss handling, security,
+or accessibility.
