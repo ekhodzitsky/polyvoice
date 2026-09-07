@@ -42,7 +42,7 @@ Keep `ort` as an optional `onnx` feature so INT8 + EP + Sortformer + Python keep
 | `cli-tract` | **Yes** (tract-onnx; **no ort**) | Same `polyvoice` / `polyvoice-bench` / `polyvoice-measure` bins; `--legacy` rejected |
 | `embedder-native` (`ResNet34Native`) | **Yes** | Hand-written ResNet34; ort cosine 1.0 on 1 s fixture; no dylib |
 | `segmenter-native` (`PowersetNative`) | **Yes** | SincNet + 4× biLSTM; N>1; 1 s vs ort cosine 1.0 |
-| `pipeline-native` / `cli` / `ffi` | **Kernels** (Darwin: C shims + Accelerate/BNNS; Linux: `rten-gemm`) | **Product default.** No `ort`. Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux AMI DER within ort ceiling; RTF ~28× (Vox-3). BYO `default = []` stays pure Rust. |
+| `pipeline-native` / `cli` / `ffi` | **Kernels** (Darwin: C shims + Accelerate/BNNS; Linux: `rten-gemm` + in-crate INT8 conv) | **Product default.** No `ort`. Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux x86_64 at parity (AVX-512 VNNI INT8 conv): full-split VoxConverse DER₀ 15.40% / RTFx ~110×, AMI 25.50% / ~113×. BYO `default = []` stays pure Rust. |
 | `cli-ort` / `pipeline-full` | **No** (ort + INT8) | Opt-in previous product |
 
 CI freezes the pure-Rust **invariants** via:
@@ -55,9 +55,9 @@ bash scripts/check-zero-deps.sh   # includes check-ort-free.sh
 
 The product CLI (`cli` / `ffi` / `mcp`) already meets this bar via
 `polyvoice-kernels` (step 4): powerset + ResNet34 INT8 without `ort`, VAD
-folded into powerset, clustering already Rust-only. Residual: Linux native
-RTF still trails the old ort band; Python still links `ort`; tract remains
-the slower ONNX-shaped opt-in.
+folded into powerset, clustering already Rust-only. Linux native RTF reached
+the old ort band via in-crate AVX-512 VNNI conv kernels. Residual: Python
+still links `ort`; tract remains the slower ONNX-shaped opt-in.
 
 A shipping *tract* profile would still need:
 

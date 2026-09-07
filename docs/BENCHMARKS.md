@@ -38,7 +38,7 @@ DOCKER=1 bash scripts/linux-cpu-der-gate.sh   # or native Linux host
 |--|--|--|--|--|
 | **VoxConverse-test DER** | **15.0 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
 | **Model size** | **~8.4 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
-| **Runtime** | **Kernels ~117–130× Darwin / ~28× Linux Vox-3; ort ~80–95× Linux** | CPU/GPU (PyTorch) | GPU recommended | GPU |
+| **Runtime** | **Kernels ~110–130× Darwin / ~110× Linux x86_64; ort ~80–95× Linux** | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
 | **Dependencies** | **Rust kernels by default; ONNX Runtime opt-in; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
@@ -258,19 +258,32 @@ CoreML forces powerset micro-batch **N=1**; **N=8 is the default on CPU**.
 ### Native kernels — product CLI since 0.18
 
 The table above is the **ONNX Runtime / CoreML** campaign (0.17). Since 0.18 the
-product CLI (`--features cli`) is hand-written INT8 kernels. Darwin full-split
-is measured; Linux native full-split rows in `tests/der_baseline.json` are still
-pending fill (ceilings copied from the ort protocol).
+product CLI (`--features cli`) is hand-written INT8 kernels. Full-split DER/RTF
+is measured on Darwin and on Linux x86_64; both rows in `tests/der_baseline.json`
+are operational (asserted by the native gate).
 
 | Configuration | Corpus | RTFx (× realtime) | DER₀ micro |
 |---|---|---:|---:|
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | VoxConverse-test (232) | **~130×** | **15.47 %** |
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | AMI-test (16) | **~109×** | **25.19 %** |
 | **v2 + VBx INT8 Darwin kernels Vox-3 scoreboard** | euqef / fuzfh / msbyq | **≥117×** | **7.11 %** |
-| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~28×** | AMI DER within ort ceiling |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~110×** | **15.40 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~113×** | **25.50 %** |
+| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~95×** | **7.03 %** |
 
-Locked Darwin floors: `tests/native_scoreboard.json`. Linux native gate:
-`scripts/linux-cpu-native-der-gate.sh`.
+Linux x86_64 numbers: 2026-09-07,
+[`benchmarks/results/linux-cpu-native-der-2026-09-07/`](../benchmarks/results/linux-cpu-native-der-2026-09-07/).
+The INT8 conv path (default on aarch64 + dotprod) also defaults on x86_64 with
+AVX-512 VNNI — same exact-integer math as the aarch64 kernels; CPUs without it
+keep the FP32 conv default. Locked Darwin floors: `tests/native_scoreboard.json`.
+Linux native gate: `scripts/linux-cpu-native-der-gate.sh`.
+
+Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-07, EP=cpu, N=8): ort is
+still ahead on raw speed — Vox-3 **~104×** vs kernels ~95×, AMI-16 **~145×**
+vs ~113× (the "~82–95× ort band" in older rows was measured on weaker
+hardware). Kernels stay ahead on footprint: Vox-3 peak RSS **543 MiB** vs ort
+**578 MiB**, no `libonnxruntime` dylib, and Vox-3 DER₀ 7.03 % vs ort 7.51 %
+(AMI is the reverse: 25.50 % vs 24.23 %).
 
 ### Historical — FP32, CPU EP (2026-07-30/31, v0.14.0)
 

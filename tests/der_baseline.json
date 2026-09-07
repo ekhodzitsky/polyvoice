@@ -131,20 +131,20 @@
     "execution_provider": "cpu",
     "engine": "cli-native",
     "powerset_batch": 8,
-    "der_collar_0_25": 10.27,
-    "der_no_collar": 14.94,
-    "der_collar_macro": 10.75,
-    "der_collar_micro": 10.27,
-    "der_no_collar_macro": 15.2,
-    "der_no_collar_micro": 14.94,
+    "der_collar_0_25": 10.87,
+    "der_no_collar": 15.4,
+    "der_collar_macro": 10.9,
+    "der_collar_micro": 10.87,
+    "der_no_collar_macro": 15.25,
+    "der_no_collar_micro": 15.4,
     "tolerance": 1.0,
     "model_versions": {
       "segmenter": "powerset_int8",
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "unmeasured-ceiling — not a product number. DER copied from voxconverse_test_linux_cpu as a fail-closed weekly smoke cap (must not exceed ort INT8) until scripts/linux-cpu-native-der-gate.sh fills a full split on the intended host.",
-    "_filled_by": null
+    "_status": "operational — Linux x86_64 CPU product gate 2026-09-07 (Ryzen AI 9 HX 370); v2+VBx INT8; powerset N=8. micro no-collar 15.40% / collar 10.87% / RTFx ~110.1×. miss/FA/conf are @ collar 0.25. Asserted by scripts/linux-cpu-native-der-gate.sh when files=232.",
+    "_filled_by": "benchmarks/results/linux-cpu-native-der-2026-09-07/voxconverse-test.json via scripts/linux-cpu-native-der-gate.sh"
   },
   "ami_test_linux_cpu_native": {
     "files": 16,
@@ -154,20 +154,20 @@
     "execution_provider": "cpu",
     "engine": "cli-native",
     "powerset_batch": 8,
-    "der_collar_0_25": 16.6,
-    "der_no_collar": 24.19,
-    "der_collar_macro": 15.97,
-    "der_collar_micro": 16.6,
-    "der_no_collar_macro": 23.22,
-    "der_no_collar_micro": 24.19,
+    "der_collar_0_25": 18.17,
+    "der_no_collar": 25.5,
+    "der_collar_macro": 17.48,
+    "der_collar_micro": 18.17,
+    "der_no_collar_macro": 24.57,
+    "der_no_collar_micro": 25.5,
     "tolerance": 1.5,
     "model_versions": {
       "segmenter": "powerset_int8",
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "unmeasured-ceiling — not a product number. DER copied from ami_test_linux_cpu as a fail-closed weekly smoke cap until the native Linux AMI-16 split is filled.",
-    "_filled_by": null
+    "_status": "operational — Linux x86_64 CPU product gate 2026-09-07 (Ryzen AI 9 HX 370); v2+VBx INT8; powerset N=8. micro no-collar 25.50% / collar 18.17% / RTFx ~123.1×. miss/FA/conf are @ collar 0.25. Asserted by scripts/linux-cpu-native-der-gate.sh when files=16 (CI smoke + full).",
+    "_filled_by": "benchmarks/results/linux-cpu-native-der-2026-09-07/ami-test.json via scripts/linux-cpu-native-der-gate.sh"
   },
   "voxconverse_dev": {
     "files": null,

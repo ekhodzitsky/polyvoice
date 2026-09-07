@@ -54,9 +54,13 @@ is not acceptable: keep the win and cut memory.
 
 Product default is `cli` = kernels (`pipeline-native`), no `libonnxruntime`.
 ONNX Runtime is opt-in (`cli-ort` / `onnx`). Darwin native holds the
-scoreboard floors above. Linux native holds AMI DER within the ort
-ceiling; RTF there is ~28× on a Vox-3 smoke (still below the old ort
-band of ~82× / ~95×) and is not a reason to pull `ort` back into `cli`.
+scoreboard floors above. Linux x86_64 native, full-split 2026-09-07
+(Ryzen AI 9 HX 370): VoxConverse-test DER₀ 15.40 % / RTFx ~110×,
+AMI DER₀ 25.50 % / RTFx ~113×, Vox-3 smoke RTFx ~95×. Same-host ort is
+still faster on raw RTF (Vox-3 ~104×, AMI ~145× — the older ~82×/~95×
+band was weaker hardware); kernels win on RSS (543 vs 578 MiB), size and
+zero dylib. INT8 conv defaults on x86_64 with AVX-512 VNNI (exact integer
+math, same as the aarch64 SDOT path); CPUs without it keep FP32.
 
 ## Backlog.md
 
