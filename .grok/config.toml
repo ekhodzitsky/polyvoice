@@ -1,0 +1,10 @@
+[mcp_servers.codebase-memory]
+command = "codebase-memory-mcp"
+enabled = true
+startup_timeout_sec = 60
+
+[mcp_servers.serena]
+command = "serena"
+args = ["start-mcp-server", "--context", "ide-assistant"]
+enabled = true
+startup_timeout_sec = 60

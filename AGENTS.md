@@ -1,3 +1,5 @@
+agent-dev-kb: 0.7.0
+
 # Contributing conventions (humans & agents)
 
 ## No internal task references in shipped artifacts
@@ -55,3 +57,38 @@ ONNX Runtime is opt-in (`cli-ort` / `onnx`). Darwin native holds the
 scoreboard floors above. Linux native holds AMI DER within the ort
 ceiling; RTF there is ~28× on a Vox-3 smoke (still below the old ort
 band of ~82× / ~95×) and is not a reason to pull `ort` back into `cli`.
+
+## Backlog.md
+
+This repo uses Backlog.md (not GitHub Issues, not a second spec tool).
+Run `backlog instructions overview` before work. Mutate via the CLI
+(`--plain` / `--json`). One task = one session = one PR.
+Docs → `doc create`; conclusions → `decision create`; work →
+`task create`. Labels: `audit`, `research`.
+
+## Coding principles
+
+Karpathy-inspired. Caution over speed; skip ceremony on one-liners.
+The queue is Backlog.md. No second spec or task framework.
+
+1. **Think before coding.** State assumptions. Show interpretations
+   when the request is ambiguous. Push back if something simpler
+   exists. Stop and ask when unclear.
+2. **Simplicity first.** No extra features, single-use abstractions,
+   or speculative config. If 200 lines could be 50, rewrite.
+3. **Surgical changes.** Touch only the requested lines. Match the
+   surrounding style. Mention unrelated dead code; do not delete it.
+   Remove only your own unused imports.
+4. **Goal-driven.** Tests for invalid input, bug repro, and
+   before-and-after. Every step has a verify. "Make it work" is not
+   a criterion.
+5. **Always.** Run this repo's checks before claiming done. No new
+   dependency without a why and its transitive cost. No secrets, no
+   tracker ids. Comments and commits follow the repo language, else
+   English.
+
+### Rust
+
+No `unwrap` / `expect` on production paths. Honor clippy (often
+`-D warnings`). Write the failing test first when that area is
+already tested.
