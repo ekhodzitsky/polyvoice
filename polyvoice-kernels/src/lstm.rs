@@ -31,11 +31,12 @@ thread_local! {
 
 /// ONNX gates `i,o,f,c` then `h = o * tanh(f*c + i*tanh(c̃))`.
 ///
-/// On aarch64 the four gate planes (`i`, `o`, `f`, `c̃` are contiguous
-/// `h`-runs) are processed four lanes at a time with NEON. The vector
-/// transcendentals are minimax approximations accurate to a few ulp against
-/// scalar libm, so logits can drift by ~1e-7 relative; the scalar path below
-/// remains the reference for other targets.
+/// On aarch64 (NEON, 4 lanes) and on x86_64 with AVX-512F (16 lanes) the
+/// four gate planes (`i`, `o`, `f`, `c̃` are contiguous `h`-runs) are
+/// processed a vector at a time. The vector transcendentals are minimax
+/// approximations accurate to a few ulp against scalar libm, so logits can
+/// drift by ~1e-7 relative; the scalar path below remains the reference for
+/// other targets.
 #[inline]
 fn apply_gates(gates: &[f32], ht: &mut [f32], ct: &mut [f32], y: &mut [f32], h: usize) {
     debug_assert_eq!(gates.len(), 4 * h);
@@ -44,7 +45,9 @@ fn apply_gates(gates: &[f32], ht: &mut [f32], ct: &mut [f32], y: &mut [f32], h: 
     debug_assert_eq!(y.len(), h);
     #[cfg(target_arch = "aarch64")]
     let mut hh = neon_gates::apply_gates_vec(gates, ht, ct, y, h);
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(target_arch = "x86_64")]
+    let mut hh = avx512_gates::apply_gates_vec(gates, ht, ct, y, h);
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     let mut hh = 0;
     while hh < h {
         let it = sigmoid(gates[hh]);
@@ -161,6 +164,148 @@ mod neon_gates {
                 vst1q_f32(ht[hh..].as_mut_ptr(), hv);
                 vst1q_f32(y[hh..].as_mut_ptr(), hv);
                 hh += 4;
+            }
+        }
+        hh
+    }
+}
+
+/// AVX-512 gate evaluation — the same Cephes-style minimax transcendentals
+/// as `neon_gates` (same coefficients, clamps and branch cut), 16 lanes at a
+/// time. Runtime-gated on `avx512f` so the binary stays portable.
+#[cfg(target_arch = "x86_64")]
+mod avx512_gates {
+    use core::arch::x86_64::*;
+
+    fn has_avx512f() -> bool {
+        static HAS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *HAS.get_or_init(|| std::arch::is_x86_feature_detected!("avx512f"))
+    }
+
+    /// exp(x) for finite x, clamped to [-87, 87] (beyond that f32 overflows
+    /// or flushes toward 0 anyway). ~1–2 ulp.
+    #[target_feature(enable = "avx512f")]
+    #[inline]
+    #[allow(unused_unsafe)]
+    unsafe fn exp16(x: __m512) -> __m512 {
+        unsafe {
+            let x = _mm512_min_ps(x, _mm512_set1_ps(87.0));
+            let x = _mm512_max_ps(x, _mm512_set1_ps(-87.0));
+            // n = rint(x * log2(e)); r = x − n·ln2 via Cody–Waite split.
+            let ni = _mm512_cvtps_epi32(_mm512_mul_ps(x, _mm512_set1_ps(1.442_695_040_888_963_4)));
+            let nf = _mm512_cvtepi32_ps(ni);
+            let r = _mm512_fnmadd_ps(nf, _mm512_set1_ps(0.693_359_375), x);
+            let r = _mm512_fnmadd_ps(nf, _mm512_set1_ps(-2.121_944_40e-4), r);
+            let z = _mm512_mul_ps(r, r);
+            let mut p = _mm512_set1_ps(1.987_569_150_0e-4);
+            p = _mm512_fmadd_ps(p, r, _mm512_set1_ps(1.398_199_950_7e-3));
+            p = _mm512_fmadd_ps(p, r, _mm512_set1_ps(8.333_451_907_3e-3));
+            p = _mm512_fmadd_ps(p, r, _mm512_set1_ps(4.166_579_589_4e-2));
+            p = _mm512_fmadd_ps(p, r, _mm512_set1_ps(1.666_666_545_9e-1));
+            p = _mm512_fmadd_ps(p, r, _mm512_set1_ps(5.000_000_120_1e-1));
+            let y = _mm512_fmadd_ps(p, z, _mm512_add_ps(r, _mm512_set1_ps(1.0)));
+            let pow2n = _mm512_castsi512_ps(_mm512_slli_epi32::<23>(_mm512_add_epi32(
+                ni,
+                _mm512_set1_epi32(127),
+            )));
+            _mm512_mul_ps(y, pow2n)
+        }
+    }
+
+    /// Same clamp-then-`1/(1+e^-x)` shape as the scalar sigmoid.
+    #[target_feature(enable = "avx512f")]
+    #[inline]
+    #[allow(unused_unsafe)]
+    pub(super) unsafe fn sigmoid16(x: __m512) -> __m512 {
+        unsafe {
+            let x = _mm512_max_ps(x, _mm512_set1_ps(-40.0));
+            let x = _mm512_min_ps(x, _mm512_set1_ps(40.0));
+            let e = exp16(_mm512_sub_ps(_mm512_setzero_ps(), x));
+            _mm512_div_ps(_mm512_set1_ps(1.0), _mm512_add_ps(_mm512_set1_ps(1.0), e))
+        }
+    }
+
+    /// Cephes-style tanhf: for |x| < 0.625 the odd rational form
+    /// `x + x·z·P(z)/Q(z)`, z = x² (avoids the `1 − 2/(e^{2x}+1)`
+    /// cancellation near zero); larger |x| take the exp form, which
+    /// saturates to ±1 like libm. ~2–4 ulp overall.
+    #[target_feature(enable = "avx512f")]
+    #[inline]
+    #[allow(unused_unsafe)]
+    pub(super) unsafe fn tanh16(x: __m512) -> __m512 {
+        unsafe {
+            // Small-|x| branch: polynomial in z = x², odd in x.
+            let z = _mm512_mul_ps(x, x);
+            let mut p = _mm512_set1_ps(-9.643_991_794_250_522_4e-1);
+            p = _mm512_fmadd_ps(p, z, _mm512_set1_ps(-9.928_772_310_019_185_9e1));
+            p = _mm512_fmadd_ps(p, z, _mm512_set1_ps(-1.614_687_684_417_084_5e3));
+            let mut q = _mm512_add_ps(z, _mm512_set1_ps(1.128_116_784_916_329_3e2));
+            q = _mm512_fmadd_ps(q, z, _mm512_set1_ps(2.235_488_390_601_004_5e3));
+            q = _mm512_fmadd_ps(q, z, _mm512_set1_ps(4.844_063_053_251_254_9e3));
+            let small = _mm512_fmadd_ps(_mm512_mul_ps(x, z), _mm512_div_ps(p, q), x);
+            // Large-|x| branch: sign(x)·(1 − 2/(e^{2|x|} + 1)).
+            let ax = _mm512_castsi512_ps(_mm512_and_si512(
+                _mm512_castps_si512(x),
+                _mm512_set1_epi32(0x7fff_ffff),
+            ));
+            let e = exp16(_mm512_add_ps(ax, ax));
+            let m = _mm512_sub_ps(
+                _mm512_set1_ps(1.0),
+                _mm512_div_ps(_mm512_set1_ps(2.0), _mm512_add_ps(e, _mm512_set1_ps(1.0))),
+            );
+            let sign = _mm512_set1_epi32(i32::MIN);
+            let large = _mm512_castsi512_ps(_mm512_or_si512(
+                _mm512_and_si512(_mm512_castps_si512(x), sign),
+                _mm512_andnot_si512(sign, _mm512_castps_si512(m)),
+            ));
+            let is_small = _mm512_cmp_ps_mask::<_CMP_LT_OQ>(ax, _mm512_set1_ps(0.625));
+            _mm512_mask_blend_ps(is_small, large, small)
+        }
+    }
+
+    /// Vector body of [`super::apply_gates`]; returns the first index not yet
+    /// processed (the scalar tail continues from there). Returns 0 when the
+    /// CPU lacks AVX-512F. Linear terms keep the scalar operand order (two
+    /// multiplies, one add — no FMA) so only the transcendentals differ from
+    /// the scalar path.
+    pub(super) fn apply_gates_vec(
+        gates: &[f32],
+        ht: &mut [f32],
+        ct: &mut [f32],
+        y: &mut [f32],
+        h: usize,
+    ) -> usize {
+        if !has_avx512f() {
+            return 0;
+        }
+        unsafe { apply_gates_vec_avx512(gates, ht, ct, y, h) }
+    }
+
+    #[target_feature(enable = "avx512f")]
+    #[allow(unused_unsafe)]
+    unsafe fn apply_gates_vec_avx512(
+        gates: &[f32],
+        ht: &mut [f32],
+        ct: &mut [f32],
+        y: &mut [f32],
+        h: usize,
+    ) -> usize {
+        let mut hh = 0;
+        unsafe {
+            while hh + 16 <= h {
+                let it = sigmoid16(_mm512_loadu_ps(gates[hh..].as_ptr()));
+                let ot = sigmoid16(_mm512_loadu_ps(gates[h + hh..].as_ptr()));
+                let ft = sigmoid16(_mm512_loadu_ps(gates[2 * h + hh..].as_ptr()));
+                let c_tilde = tanh16(_mm512_loadu_ps(gates[3 * h + hh..].as_ptr()));
+                let c = _mm512_add_ps(
+                    _mm512_mul_ps(ft, _mm512_loadu_ps(ct[hh..].as_ptr())),
+                    _mm512_mul_ps(it, c_tilde),
+                );
+                _mm512_storeu_ps(ct[hh..].as_mut_ptr(), c);
+                let hv = _mm512_mul_ps(ot, tanh16(c));
+                _mm512_storeu_ps(ht[hh..].as_mut_ptr(), hv);
+                _mm512_storeu_ps(y[hh..].as_mut_ptr(), hv);
+                hh += 16;
             }
         }
         hh
@@ -482,7 +627,7 @@ mod tests {
     }
 
     /// Monotonic bit map so `|a − b|` in this space counts ulps.
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
     fn ordered_bits(f: f32) -> i64 {
         let i = f.to_bits() as i32 as i64;
         if i < 0 { i64::from(i32::MIN) - i } else { i }
@@ -579,6 +724,111 @@ mod tests {
                 (yv[i] - ys[i]).abs() < 1e-6,
                 "y[{i}] {} vs {}",
                 yv[i],
+                ys[i]
+            );
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn avx512_gates_within_a_few_ulp_of_scalar() {
+        use core::arch::x86_64::*;
+        if !std::arch::is_x86_feature_detected!("avx512f") {
+            return;
+        }
+        // Same grid as the NEON ulp test: dense over the clamp domain plus
+        // sparse large magnitudes for the un-clamped tanh-on-c path.
+        let mut vals: Vec<f32> = Vec::new();
+        let mut v = -45.0f32;
+        while v <= 45.0 {
+            vals.push(v);
+            v += 0.0007;
+        }
+        for k in 1..200 {
+            vals.push(45.0 * 1.1f32.powi(k));
+            vals.push(-45.0 * 1.1f32.powi(k));
+        }
+        let mut max_sig = 0i64;
+        let mut max_tanh = 0i64;
+        let mut chunk = vals.chunks_exact(16);
+        for c16 in &mut chunk {
+            unsafe {
+                let x = _mm512_loadu_ps(c16.as_ptr());
+                let s = avx512_gates::sigmoid16(x);
+                let t = avx512_gates::tanh16(x);
+                let mut sv = [0.0f32; 16];
+                let mut tv = [0.0f32; 16];
+                _mm512_storeu_ps(sv.as_mut_ptr(), s);
+                _mm512_storeu_ps(tv.as_mut_ptr(), t);
+                for (lane, &xv) in c16.iter().enumerate() {
+                    let ds = (ordered_bits(sv[lane]) - ordered_bits(sigmoid(xv))).abs();
+                    let dt = (ordered_bits(tv[lane]) - ordered_bits(xv.tanh())).abs();
+                    max_sig = max_sig.max(ds);
+                    max_tanh = max_tanh.max(dt);
+                }
+            }
+        }
+        eprintln!("max ulp: sigmoid={max_sig} tanh={max_tanh}");
+        assert!(max_sig <= 6, "sigmoid ulp {max_sig}");
+        assert!(max_tanh <= 6, "tanh ulp {max_tanh}");
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn avx512_apply_gates_close_to_scalar() {
+        if !std::arch::is_x86_feature_detected!("avx512f") {
+            return;
+        }
+        // h=37: two 16-lane iterations plus a 5-wide scalar tail. Gate values
+        // span the ±40 sigmoid clamps, the 0.625 tanh branch cut and
+        // saturating magnitudes; ct0 drives the un-clamped tanh-on-c path.
+        let h = 37usize;
+        let mut gates: Vec<f32> = (0..4 * h).map(|i| ((i % 29) as f32) * 3.7 - 52.0).collect();
+        gates[0] = -40.0;
+        gates[h] = 40.0;
+        gates[2 * h + 1] = -150.0;
+        gates[3 * h + 2] = 150.0;
+        gates[3 * h + 3] = 0.624;
+        gates[3 * h + 4] = 0.625;
+        gates[3 * h + 5] = 0.626;
+        let ct0: Vec<f32> = (0..h).map(|i| ((i % 11) as f32) * 53.0 - 260.0).collect();
+        let mut ht = vec![0.0f32; h];
+        let mut ct = ct0.clone();
+        let mut y = vec![0.0f32; h];
+        apply_gates(&gates, &mut ht, &mut ct, &mut y, h);
+        let mut hs = vec![0.0f32; h];
+        let mut cs = ct0;
+        let mut ys = vec![0.0f32; h];
+        for hh in 0..h {
+            let it = sigmoid(gates[hh]);
+            let ot = sigmoid(gates[h + hh]);
+            let ft = sigmoid(gates[2 * h + hh]);
+            let c_tilde = gates[3 * h + hh].tanh();
+            let c = ft * cs[hh] + it * c_tilde;
+            cs[hh] = c;
+            let hv = ot * c.tanh();
+            hs[hh] = hv;
+            ys[hh] = hv;
+        }
+        // ~4–8 ulp on the transcendentals, scaled by |c| for the recurrence.
+        for i in 0..h {
+            let tol = |v: f32| 1e-6f32.max(2e-7 * v.abs());
+            assert!(
+                (ht[i] - hs[i]).abs() < tol(hs[i]),
+                "ht[{i}] {} vs {}",
+                ht[i],
+                hs[i]
+            );
+            assert!(
+                (ct[i] - cs[i]).abs() < tol(cs[i]),
+                "ct[{i}] {} vs {}",
+                ct[i],
+                cs[i]
+            );
+            assert!(
+                (y[i] - ys[i]).abs() < tol(ys[i]),
+                "y[{i}] {} vs {}",
+                y[i],
                 ys[i]
             );
         }
