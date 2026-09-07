@@ -130,18 +130,27 @@ impl Embedder for ResNet34Native {
         // Job::One the packed-batch default leaves a core idle; those
         // batches get one more serial worker. 3 still beats 2/4/8 for
         // packed batches on the Linux ARM VM: more thrash L2 on INT8
-        // tiles, fewer leave cores idle.
+        // tiles, fewer leave cores idle. On many-core hosts (x86 servers)
+        // the pool keeps scaling to 8 without that thrash, so the default
+        // grows with core count instead of staying at 3.
         let ones = jobs.iter().filter(|j| matches!(j, Job::One(_))).count();
+        let cores = std::thread::available_parallelism()
+            .map(std::num::NonZeroUsize::get)
+            .unwrap_or(1);
         let cap = std::env::var("POLYVOICE_EMBED_THREADS")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or(if ones * 2 > jobs.len() { 4 } else { 3 })
+            .unwrap_or_else(|| {
+                if ones * 2 > jobs.len() {
+                    4
+                } else {
+                    3
+                }
+                .max(cores / 3)
+                .clamp(1, 8)
+            })
             .max(1);
-        let threads = std::thread::available_parallelism()
-            .map(std::num::NonZeroUsize::get)
-            .unwrap_or(1)
-            .min(jobs.len())
-            .min(cap);
+        let threads = cores.min(jobs.len()).min(cap);
         #[cfg(not(target_vendor = "apple"))]
         polyvoice_kernels::set_intra_threads(3);
         let jobs = std::sync::Mutex::new(jobs);
