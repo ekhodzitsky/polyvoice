@@ -76,6 +76,8 @@ impl PowersetNative {
         let threads = std::thread::available_parallelism()
             .map(std::num::NonZeroUsize::get)
             .unwrap_or(1)
+            // Several files in flight: each gets a fair share of the cores.
+            .div_ceil(polyvoice_kernels::file_parallelism())
             .min(n);
         if threads <= 1 {
             return self.infer_chunk(audio, specs, win);

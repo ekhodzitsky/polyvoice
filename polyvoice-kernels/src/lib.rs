@@ -33,7 +33,7 @@ mod tensor;
 
 #[cfg(target_vendor = "apple")]
 pub use bnns::prof as bnns_prof;
-pub use conv_i8::set_intra_threads;
+pub use conv_i8::{file_parallelism, set_file_parallelism, set_intra_threads};
 pub use error::KernelError;
 pub use gemm::gemm_bias_row;
 pub use powerset::{N_CLASSES, Powerset};

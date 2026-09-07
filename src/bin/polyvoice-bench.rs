@@ -45,10 +45,11 @@ struct Args {
     skip_overlap: bool,
     #[arg(long)]
     max_files: Option<usize>,
-    /// How many files to diarize in parallel (each worker owns a pipeline).
-    /// Default 1 keeps historical DER/RTF reports single-threaded. Window
-    /// parallelism inside a file is `POLYVOICE_SESSION_POOL_SIZE`. Prefer
-    /// `jobs × pool ≤ cores` so workers do not oversubscribe.
+    /// How many files to diarize in parallel. Default 1 keeps historical
+    /// DER/RTF reports single-threaded. The v2 pipeline is shared by all
+    /// workers (jobs>1 adds no model memory); legacy builds a pipeline per
+    /// worker. Internal window/embed fan-out is divided by jobs, so jobs ×
+    /// workers stays near core count.
     #[arg(long, default_value_t = 1)]
     jobs: usize,
     /// AHC merge threshold on the active scorer's scale: raw cosine (default
@@ -201,6 +202,10 @@ struct BenchReport {
     false_alarm: f64,
     confusion: f64,
     rt_factor_avg: f64,
+    /// Total audio seconds / wall-clock seconds of the file loop. Unlike
+    /// `rt_factor_avg` (sum of per-file runtimes) this reflects file-level
+    /// parallelism when `--jobs > 1`.
+    rt_factor_wall: f64,
     speaker_count: SpeakerCountDiagnostics,
     model_hashes: Vec<ModelHash>,
     per_file: Vec<PerFileResult>,
@@ -467,9 +472,12 @@ struct FileOutcome {
     runtime_secs: f64,
 }
 
-/// Process `wavs` with one pipeline (`jobs == 1`) or `jobs` independent
-/// pipelines (file-level parallelism). Window fan-out stays inside each
-/// pipeline (`POLYVOICE_SESSION_POOL_SIZE`).
+/// Process `wavs` serially (`jobs == 1`) or with file-level parallelism. The
+/// v2 pipeline is shared by all workers (every stage is `&self` and the
+/// traits are `Send + Sync`), so `jobs > 1` costs no extra model memory; the
+/// legacy path needs `&mut` state and keeps one runner per worker. Internal
+/// fan-out (windows, embed pool) is divided by `jobs` via the kernels
+/// file-parallelism hint.
 fn run_all_files(
     args: &Args,
     first: &mut BenchRunner,
@@ -478,29 +486,53 @@ fn run_all_files(
     uem_map: Option<&HashMap<String, Vec<TimeRange>>>,
 ) -> Result<Accum> {
     let jobs = args.jobs.max(1).min(wavs.len().max(1));
+    #[cfg(feature = "segmenter-native")]
+    polyvoice_kernels::set_file_parallelism(jobs);
     if jobs == 1 {
+        let wall = Instant::now();
         let mut acc = Accum::default();
+        let mut run = |s: &[f32], sr: SampleRate| first.runner.run(s, sr);
         for wav in wavs {
-            match run_file(&mut first.runner, wav, rttm_dir, uem_map, args)? {
+            match run_file(&mut run, wav, rttm_dir, uem_map, args)? {
                 Some(outcome) => acc.record(outcome),
                 None => acc.files_skipped += 1,
             }
         }
+        acc.wall_secs = wall.elapsed().as_secs_f64();
         return Ok(acc);
     }
 
-    eprintln!("file-parallel jobs={jobs} (session pool still per worker)");
-    let mut extra: Vec<BenchRunner> = Vec::with_capacity(jobs.saturating_sub(1));
-    for _ in 1..jobs {
-        extra.push(build_runner(args)?);
+    match &mut first.runner {
+        Runner::V2(p) => run_v2_shared(p, args, wavs, rttm_dir, uem_map, jobs),
+        #[cfg(feature = "onnx")]
+        Runner::Legacy(_) => run_legacy_parallel(first, args, wavs, rttm_dir, uem_map, jobs),
     }
+}
 
+/// v2 file fan-out on one shared pipeline: workers pull paths off a queue,
+/// results are collected under a mutex and sorted by filename, so the report
+/// is identical to the serial run.
+fn run_v2_shared(
+    pipeline: &V2Pipeline,
+    args: &Args,
+    wavs: &[PathBuf],
+    rttm_dir: &Path,
+    uem_map: Option<&HashMap<String, Vec<TimeRange>>>,
+    jobs: usize,
+) -> Result<Accum> {
+    eprintln!("file-parallel jobs={jobs} (shared pipeline)");
     let queue = Mutex::new(wavs.iter().cloned().collect::<VecDeque<_>>());
     let collected = Mutex::new(Vec::new());
     let skipped = AtomicUsize::new(0);
     let err = Mutex::new(None::<String>);
 
-    let drain = |runner: &mut Runner| {
+    let drain = || {
+        let mut run = |s: &[f32], sr: SampleRate| {
+            pipeline
+                .run_with_timings(s, sr)
+                .map(|(r, t)| (r, Some(t)))
+                .map_err(anyhow::Error::from)
+        };
         loop {
             if err
                 .lock()
@@ -516,7 +548,7 @@ fn run_all_files(
             let Some(wav) = next else {
                 return;
             };
-            match run_file(runner, &wav, rttm_dir, uem_map, args) {
+            match run_file(&mut run, &wav, rttm_dir, uem_map, args) {
                 Ok(Some(outcome)) => collected
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -533,12 +565,16 @@ fn run_all_files(
         }
     };
 
+    let wall = Instant::now();
+    // Spawn the same `Fn` closure `jobs` times: a shared reference is
+    // `FnOnce + Send`, so no per-spawn wrapper closure is needed.
+    let drain_ref = &drain;
     std::thread::scope(|s| {
-        s.spawn(|| drain(&mut first.runner));
-        for br in &mut extra {
-            s.spawn(|| drain(&mut br.runner));
+        for _ in 0..jobs {
+            s.spawn(drain_ref);
         }
     });
+    let wall_secs = wall.elapsed().as_secs_f64();
 
     if let Some(msg) = err
         .lock()
@@ -554,6 +590,7 @@ fn run_all_files(
     rows.sort_by(|a, b| a.row.filename.cmp(&b.row.filename));
     let mut acc = Accum {
         files_skipped: skipped.load(Ordering::Relaxed),
+        wall_secs,
         ..Accum::default()
     };
     for outcome in rows {
@@ -562,15 +599,108 @@ fn run_all_files(
     Ok(acc)
 }
 
-/// Run one wav through the pipeline and score it. `Ok(None)` means the file
-/// was skipped (no reference RTTM).
-fn run_file(
-    runner: &mut Runner,
+/// Legacy file fan-out: `LegacyPipeline::run` needs `&mut` (VAD state), so
+/// each worker builds its own runner — models are loaded `jobs` times.
+#[cfg(feature = "onnx")]
+fn run_legacy_parallel(
+    first: &mut BenchRunner,
+    args: &Args,
+    wavs: &[PathBuf],
+    rttm_dir: &Path,
+    uem_map: Option<&HashMap<String, Vec<TimeRange>>>,
+    jobs: usize,
+) -> Result<Accum> {
+    eprintln!("file-parallel jobs={jobs} (legacy: one pipeline per worker)");
+    let mut extra: Vec<BenchRunner> = Vec::with_capacity(jobs.saturating_sub(1));
+    for _ in 1..jobs {
+        extra.push(build_runner(args)?);
+    }
+
+    let queue = Mutex::new(wavs.iter().cloned().collect::<VecDeque<_>>());
+    let collected = Mutex::new(Vec::new());
+    let skipped = AtomicUsize::new(0);
+    let err = Mutex::new(None::<String>);
+
+    let drain = |runner: &mut Runner| {
+        let mut run = |s: &[f32], sr: SampleRate| runner.run(s, sr);
+        loop {
+            if err
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+            {
+                return;
+            }
+            let next = queue
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pop_front();
+            let Some(wav) = next else {
+                return;
+            };
+            match run_file(&mut run, &wav, rttm_dir, uem_map, args) {
+                Ok(Some(outcome)) => collected
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(outcome),
+                Ok(None) => {
+                    skipped.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(e) => {
+                    *err.lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(e.to_string());
+                    return;
+                }
+            }
+        }
+    };
+
+    let wall = Instant::now();
+    std::thread::scope(|s| {
+        s.spawn(|| drain(&mut first.runner));
+        for br in &mut extra {
+            s.spawn(|| drain(&mut br.runner));
+        }
+    });
+    let wall_secs = wall.elapsed().as_secs_f64();
+
+    if let Some(msg) = err
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+    {
+        anyhow::bail!("{msg}");
+    }
+
+    let mut rows = collected
+        .into_inner()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    rows.sort_by(|a, b| a.row.filename.cmp(&b.row.filename));
+    let mut acc = Accum {
+        files_skipped: skipped.load(Ordering::Relaxed),
+        wall_secs,
+        ..Accum::default()
+    };
+    for outcome in rows {
+        acc.record(outcome);
+    }
+    Ok(acc)
+}
+
+/// Run one wav through the pipeline and score it. `run` maps PCM to the
+/// diarization result (plus v2 stage timings); callers decide whether it
+/// borrows a shared pipeline or a per-worker runner. `Ok(None)` means the
+/// file was skipped (no reference RTTM).
+fn run_file<F>(
+    run: &mut F,
     wav: &Path,
     rttm_dir: &Path,
     uem_map: Option<&HashMap<String, Vec<TimeRange>>>,
     args: &Args,
-) -> Result<Option<FileOutcome>> {
+) -> Result<Option<FileOutcome>>
+where
+    F: FnMut(&[f32], SampleRate) -> Result<(DiarizationResult, Option<StageTimings>)>,
+{
     let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let rttm = rttm_dir.join(format!("{stem}.rttm"));
     if !rttm.is_file() {
@@ -583,7 +713,7 @@ fn run_file(
     let audio_secs = samples.len() as f64 / sr_hz as f64;
 
     let t0 = Instant::now();
-    let (result, stage_timings) = runner.run(&samples, sr)?;
+    let (result, stage_timings) = run(&samples, sr)?;
     let runtime_secs = t0.elapsed().as_secs_f64();
 
     let ref_turns = cli_common::load_ref_turns(rttm_dir, stem)?;
@@ -683,6 +813,9 @@ struct Accum {
     files_skipped: usize,
     total_audio_secs: f64,
     total_runtime_secs: f64,
+    /// Wall-clock seconds of the file loop (parallel jobs overlap, so this is
+    /// less than `total_runtime_secs` when jobs > 1).
+    wall_secs: f64,
     stage_totals: Option<StageTimings>,
     per_file: Vec<PerFileResult>,
 }
@@ -781,6 +914,7 @@ fn build_report(
         false_alarm: (acc.totals.false_alarm / n) * 100.0,
         confusion: (acc.totals.confusion / n) * 100.0,
         rt_factor_avg: acc.total_audio_secs / acc.total_runtime_secs.max(1e-6),
+        rt_factor_wall: acc.total_audio_secs / acc.wall_secs.max(1e-6),
         speaker_count: SpeakerCountDiagnostics {
             exact: acc.speaker_exact,
             plus_minus_1: acc.speaker_pm1,

@@ -141,13 +141,16 @@ impl Embedder for ResNet34Native {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or_else(|| {
-                if ones * 2 > jobs.len() {
-                    4
-                } else {
-                    3
-                }
-                .max(cores / 3)
-                .clamp(1, 8)
+                // Several files in flight: shrink the pool so jobs × workers
+                // stays near core count. Embedding is the long stage of a
+                // shared-pipeline run, so the divisor grows at half the rate
+                // of the job count. The env override above keeps priority.
+                let per_file = polyvoice_kernels::file_parallelism();
+                (if ones * 2 > jobs.len() { 4 } else { 3 }
+                    .max(cores / 3)
+                    .clamp(1, 8)
+                    / per_file.div_ceil(2))
+                .max(1)
             })
             .max(1);
         let threads = cores.min(jobs.len()).min(cap);

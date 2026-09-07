@@ -26,6 +26,19 @@ fn intra_threads() -> usize {
         .max(1)
 }
 
+static FILE_PARALLELISM: AtomicUsize = AtomicUsize::new(1);
+
+/// How many files the caller diarizes concurrently. Front doors that fan out
+/// internally (segmentation windows, embed pool) divide their fan-out by this
+/// so jobs × workers stays near core count. 1 (default) = single-file.
+pub fn set_file_parallelism(n: usize) {
+    FILE_PARALLELISM.store(n.max(1), Ordering::Relaxed);
+}
+
+pub fn file_parallelism() -> usize {
+    FILE_PARALLELISM.load(Ordering::Relaxed).max(1)
+}
+
 #[cfg(test)]
 #[test]
 fn quantize_matches_scalar_round_clip() {
