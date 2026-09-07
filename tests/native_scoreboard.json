@@ -7,22 +7,24 @@
   "rss_mib_max": 556.0,
   "linux_x86_64_measured": {
     "host": "Ryzen AI 9 HX 370, Ubuntu 26.04, 2026-09-07",
-    "vox3_rtfx_best_of_5": 95.4,
+    "vox3_rtfx_best_of_5": 101.1,
     "vox3_der0_micro": 7.03,
     "vox3_der0_macro": 7.36,
-    "vox3_peak_rss_mib": 543,
-    "voxconverse_test_232_der0_micro": 15.4,
-    "voxconverse_test_232_rtfx": 110.1,
-    "ami_test_16_der0_micro": 25.5,
-    "ami_test_16_rtfx": 113.4,
+    "vox3_peak_rss_mib": 539,
+    "voxconverse_test_232_der0_micro": 15.33,
+    "voxconverse_test_232_rtfx": 144.7,
+    "ami_test_16_der0_micro": 25.46,
+    "ami_test_16_rtfx": 172.5,
     "ort_same_host": {
-      "vox3_rtfx": 104.5,
-      "ami_test_16_rtfx": 145.4,
+      "vox3_rtfx": 126.6,
+      "voxconverse_test_232_rtfx": 136.5,
+      "ami_test_16_rtfx": 156.5,
       "vox3_der0_micro": 7.51,
+      "voxconverse_test_232_der0_micro": 14.74,
       "ami_test_16_der0_micro": 24.23,
       "vox3_peak_rss_mib": 578
     },
-    "note": "Informational (not CI-enforced): Linux x86_64 native reached the Darwin band via in-crate AVX-512 VNNI INT8 conv. Same-host ort remains faster on raw RTF (~0.78-0.91x of ort); kernels win on RSS, size and zero dylib. Full-split artifacts: benchmarks/results/linux-cpu-native-der-2026-09-07/."
+    "note": "Informational (not CI-enforced): Linux x86_64 native via in-crate AVX-512 VNNI INT8 conv, AVX-512 LSTM gates and a core-scaled embedder pool. Kernels beat same-host ort on both full splits (Vox-232 1.06x, AMI 1.16x); ort keeps the short Vox-3 smoke (3-5 windows cannot fill 24 cores at window granularity). Kernels win on RSS, size and zero dylib. Full-split artifacts: benchmarks/results/linux-cpu-native-der-2026-09-07/."
   },
   "notes": "Floors are the best locked native numbers as of 2026-08-14. DER and model size must never get worse. RTF must stay at least 117. Peak RSS must stay at or below 556 MiB, which is below live ort INT8 CPU on the same Vox-3 protocol (~580-585 MiB)."
 }

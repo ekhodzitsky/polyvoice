@@ -143,7 +143,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — Linux x86_64 CPU product gate 2026-09-07 (Ryzen AI 9 HX 370); v2+VBx INT8; powerset N=8. micro no-collar 15.40% / collar 10.87% / RTFx ~110.1×. miss/FA/conf are @ collar 0.25. Asserted by scripts/linux-cpu-native-der-gate.sh when files=232.",
+    "_status": "operational — Linux x86_64 CPU product gate 2026-09-07 (Ryzen AI 9 HX 370); v2+VBx INT8; powerset N=8. micro no-collar 15.33% / collar 10.79% / RTFx ~144.7×. miss/FA/conf are @ collar 0.25. Asserted by scripts/linux-cpu-native-der-gate.sh when files=232.",
     "_filled_by": "benchmarks/results/linux-cpu-native-der-2026-09-07/voxconverse-test.json via scripts/linux-cpu-native-der-gate.sh"
   },
   "ami_test_linux_cpu_native": {
@@ -166,7 +166,7 @@
       "embedder": "resnet34_int8",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — Linux x86_64 CPU product gate 2026-09-07 (Ryzen AI 9 HX 370); v2+VBx INT8; powerset N=8. micro no-collar 25.50% / collar 18.17% / RTFx ~123.1×. miss/FA/conf are @ collar 0.25. Asserted by scripts/linux-cpu-native-der-gate.sh when files=16 (CI smoke + full).",
+    "_status": "operational — Linux x86_64 CPU product gate 2026-09-07 (Ryzen AI 9 HX 370); v2+VBx INT8; powerset N=8. micro no-collar 25.46% / collar 18.15% / RTFx ~172.5× (same-host ort: 156.5×). miss/FA/conf are @ collar 0.25. Asserted by scripts/linux-cpu-native-der-gate.sh when files=16 (CI smoke + full).",
     "_filled_by": "benchmarks/results/linux-cpu-native-der-2026-09-07/ami-test.json via scripts/linux-cpu-native-der-gate.sh"
   },
   "voxconverse_dev": {

@@ -1,4 +1,4 @@
-date: 2026-09-07T17:48:54Z
+date: 2026-09-07T19:32:10Z
 uname: Linux x1pro 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026 x86_64 GNU/Linux
 os: Linux
 arch: x86_64
@@ -12,5 +12,5 @@ powerset_batch: 8
 assert_baseline: 1
 max_vox: 0
 max_ami: 0
-git: b96c97e010efd239c7479eb0151fcbe55019c163
+git: 5b7d12bb504cf4952982d8f9fef5d2ce78d68e46
 polyvoice: polyvoice 0.19.0

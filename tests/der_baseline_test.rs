@@ -106,30 +106,39 @@ fn der_baseline_linux_cpu_product_rows() {
 }
 
 #[test]
-fn der_baseline_linux_native_rows_are_unmeasured_ceilings() {
+fn der_baseline_linux_native_rows_are_operational() {
     let parsed = load();
     let vox = &parsed.voxconverse_test_linux_cpu_native;
     assert_eq!(vox.files, Some(232));
     assert_eq!(vox.engine.as_deref(), Some("cli-native"));
+    let der0 = vox
+        .der_no_collar_micro
+        .or(vox.der_no_collar)
+        .expect("linux native vox DER0");
     assert!(
-        vox.status.contains("unmeasured"),
-        "native Vox row must not look operational, got {}",
-        vox.status
+        (14.0..17.0).contains(&der0),
+        "linux native vox DER0 micro should be ~15.3%, got {der0}"
     );
+    assert!(vox.status.contains("operational"));
     assert!(
-        vox.filled_by.is_none(),
-        "unmeasured ceiling must not claim an artifact"
+        vox.filled_by.is_some(),
+        "operational row must name its artifact"
     );
     let ami = &parsed.ami_test_linux_cpu_native;
     assert_eq!(ami.files, Some(16));
+    assert_eq!(ami.engine.as_deref(), Some("cli-native"));
+    let ami_der0 = ami
+        .der_no_collar_micro
+        .or(ami.der_no_collar)
+        .expect("linux native ami DER0");
     assert!(
-        ami.status.contains("unmeasured"),
-        "native AMI row must not look operational, got {}",
-        ami.status
+        (23.0..28.0).contains(&ami_der0),
+        "linux native ami DER0 micro should be ~25.5%, got {ami_der0}"
     );
+    assert!(ami.status.contains("operational"));
     assert!(
-        ami.filled_by.is_none(),
-        "unmeasured ceiling must not claim an artifact"
+        ami.filled_by.is_some(),
+        "operational row must name its artifact"
     );
 }
 

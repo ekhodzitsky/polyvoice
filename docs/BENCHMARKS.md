@@ -267,23 +267,28 @@ are operational (asserted by the native gate).
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | VoxConverse-test (232) | **~130×** | **15.47 %** |
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | AMI-test (16) | **~109×** | **25.19 %** |
 | **v2 + VBx INT8 Darwin kernels Vox-3 scoreboard** | euqef / fuzfh / msbyq | **≥117×** | **7.11 %** |
-| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~110×** | **15.40 %** |
-| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~113×** | **25.50 %** |
-| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~95×** | **7.03 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~145×** | **15.33 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~172×** | **25.46 %** |
+| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~101×** | **7.03 %** |
 
 Linux x86_64 numbers: 2026-09-07,
 [`benchmarks/results/linux-cpu-native-der-2026-09-07/`](../benchmarks/results/linux-cpu-native-der-2026-09-07/).
 The INT8 conv path (default on aarch64 + dotprod) also defaults on x86_64 with
 AVX-512 VNNI — same exact-integer math as the aarch64 kernels; CPUs without it
-keep the FP32 conv default. Locked Darwin floors: `tests/native_scoreboard.json`.
-Linux native gate: `scripts/linux-cpu-native-der-gate.sh`.
+keep the FP32 conv default. LSTM gates are AVX-512 vectorized (same minimax
+approximation as the NEON path), and the embedder worker pool scales with core
+count (3 on ≤10-core hosts, up to 8 on 24 threads). Locked Darwin floors:
+`tests/native_scoreboard.json`. Linux native gate:
+`scripts/linux-cpu-native-der-gate.sh`.
 
-Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-07, EP=cpu, N=8): ort is
-still ahead on raw speed — Vox-3 **~104×** vs kernels ~95×, AMI-16 **~145×**
-vs ~113× (the "~82–95× ort band" in older rows was measured on weaker
-hardware). Kernels stay ahead on footprint: Vox-3 peak RSS **543 MiB** vs ort
-**578 MiB**, no `libonnxruntime` dylib, and Vox-3 DER₀ 7.03 % vs ort 7.51 %
-(AMI is the reverse: 25.50 % vs 24.23 %).
+Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-07, EP=cpu, N=8): on the
+full splits kernels are **ahead** — VoxConverse-test ~145× vs ort ~137×,
+AMI-16 ~172× vs ort ~156×; on the short Vox-3 smoke ort's intra-op threading
+still wins (~127× vs ~101×) because 3–5 windows per file cannot fill 24 cores
+at the window/segment granularity. Kernels stay ahead on footprint: Vox-3 peak
+RSS **539 MiB** vs ort **578 MiB**, no `libonnxruntime` dylib. DER trade:
+Vox-3 7.03 % vs ort 7.51 % for kernels, Vox-232 15.33 % vs 14.74 % and
+AMI 25.46 % vs 24.23 % for ort.
 
 ### Historical — FP32, CPU EP (2026-07-30/31, v0.14.0)
 

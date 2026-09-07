@@ -18,22 +18,22 @@
     "voxconverse-test": {
       "files_processed": 232,
       "resolved_execution_provider": "Cpu",
-      "der_no_collar_micro": 15.39944618062041,
-      "der_no_collar_macro": 15.247638863698201,
-      "der_collar_micro": 10.870259706092382,
-      "der_collar_macro": 10.899416106506667,
-      "miss": 2.4335687207789483,
-      "false_alarm": 1.634343526263427,
-      "confusion": 6.831503859464302,
+      "der_no_collar_micro": 15.328877469309344,
+      "der_no_collar_macro": 15.237187912738111,
+      "der_collar_micro": 10.791684503833425,
+      "der_collar_macro": 10.896006434782567,
+      "miss": 2.4311848082751912,
+      "false_alarm": 1.6338071236893241,
+      "confusion": 6.831014502818059,
       "miss_fa_conf_collar_secs": 0.25,
-      "rt_factor_avg": 110.1370390695023,
+      "rt_factor_avg": 144.7314217808062,
       "speaker_count": {
-        "exact": 83,
-        "plus_minus_1": 65,
+        "exact": 84,
+        "plus_minus_1": 64,
         "off_by_2_or_more": 84
       },
       "crate_version": "0.19.0",
-      "git_sha": "b96c97e010efd239c7479eb0151fcbe55019c163",
+      "git_sha": "5b7d12bb504cf4952982d8f9fef5d2ce78d68e46",
       "model_hashes": [
         {
           "model_id": "powerset_int8",
@@ -45,10 +45,10 @@
         }
       ],
       "stage_totals": {
-        "segmentation_secs": 425.3425835050002,
-        "embedding_secs": 996.8150186250004,
-        "clustering_secs": 0.7500203239999998,
-        "resegmentation_secs": 0.073794573
+        "segmentation_secs": 401.3873834290001,
+        "embedding_secs": 680.6506785560005,
+        "clustering_secs": 0.7490831309999999,
+        "resegmentation_secs": 0.08175986399999993
       },
       "baseline_key": "voxconverse_test_linux_cpu_native",
       "max_files": null,
@@ -57,22 +57,22 @@
     "ami-test": {
       "files_processed": 16,
       "resolved_execution_provider": "Cpu",
-      "der_no_collar_micro": 25.504661859386907,
-      "der_no_collar_macro": 24.573402416570477,
-      "der_collar_micro": 18.17414763016343,
-      "der_collar_macro": 17.48148684937325,
-      "miss": 8.17829673688464,
-      "false_alarm": 1.5047234335458033,
-      "confusion": 7.798466678942803,
+      "der_no_collar_micro": 25.464111216808927,
+      "der_no_collar_macro": 24.540322174929994,
+      "der_collar_micro": 18.147462427870533,
+      "der_collar_macro": 17.461096423814272,
+      "miss": 8.159879552814472,
+      "false_alarm": 1.504666548258802,
+      "confusion": 7.796550322741,
       "miss_fa_conf_collar_secs": 0.25,
-      "rt_factor_avg": 113.42293938521848,
+      "rt_factor_avg": 172.51037873713014,
       "speaker_count": {
-        "exact": 2,
-        "plus_minus_1": 4,
+        "exact": 3,
+        "plus_minus_1": 3,
         "off_by_2_or_more": 10
       },
       "crate_version": "0.19.0",
-      "git_sha": "b96c97e010efd239c7479eb0151fcbe55019c163",
+      "git_sha": "5b7d12bb504cf4952982d8f9fef5d2ce78d68e46",
       "model_hashes": [
         {
           "model_id": "powerset_int8",
@@ -84,10 +84,10 @@
         }
       ],
       "stage_totals": {
-        "segmentation_secs": 85.769058814,
-        "embedding_secs": 201.556521854,
-        "clustering_secs": 0.296876213,
-        "resegmentation_secs": 0.00023655199999999995
+        "segmentation_secs": 80.311793674,
+        "embedding_secs": 108.40896098399998,
+        "clustering_secs": 0.24086302499999998,
+        "resegmentation_secs": 0.000189887
       },
       "baseline_key": "ami_test_linux_cpu_native",
       "max_files": null,
@@ -110,7 +110,7 @@
       {
         "split": "voxconverse-test",
         "ok": true,
-        "msg": "DER0 micro=15.3994 <= baseline 14.9400 + tol 1.00 (= 15.9400)"
+        "msg": "DER0 micro=15.3289 <= baseline 15.4000 + tol 1.00 (= 16.4000)"
       },
       {
         "split": "ami-test",
@@ -125,7 +125,7 @@
       {
         "split": "ami-test",
         "ok": true,
-        "msg": "DER0 micro=25.5047 <= baseline 25.5000 + tol 1.50 (= 27.0000)"
+        "msg": "DER0 micro=25.4641 <= baseline 25.5000 + tol 1.50 (= 27.0000)"
       }
     ]
   }
