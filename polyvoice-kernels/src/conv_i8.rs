@@ -57,6 +57,87 @@ fn sdot_signed_ones() {
     assert_eq!(got, -16, "sdot (-1)·1");
 }
 
+#[cfg(all(test, target_arch = "x86_64"))]
+#[test]
+fn vnni_dot_matches_scalar() {
+    if !has_avx512_vnni() {
+        return;
+    }
+    for n in [16usize, 23, 64, 80, 144, 288, 1152] {
+        let a: Vec<i8> = (0..n)
+            .map(|i| (i as i8).wrapping_mul(37).wrapping_add(11))
+            .collect();
+        let b: Vec<i8> = (0..n)
+            .map(|i| (i as i8).wrapping_mul(-19).wrapping_add(7))
+            .collect();
+        let want: i32 = a
+            .iter()
+            .zip(b.iter())
+            .map(|(&x, &y)| i32::from(x) * i32::from(y))
+            .sum();
+        assert_eq!(unsafe { dot_i8_vnni(&a, &b) }, want, "n={n}");
+    }
+    // Full-range extremes: VPMADDUBSW would saturate; VPDPBUSD stays exact.
+    let lo = vec![-128i8; 64];
+    assert_eq!(unsafe { dot_i8_vnni(&lo, &lo) }, 64 * 16384);
+    let hi = vec![127i8; 64];
+    assert_eq!(unsafe { dot_i8_vnni(&hi, &lo) }, 64 * -16256);
+}
+
+#[cfg(all(test, target_arch = "x86_64"))]
+#[test]
+fn vnni_zip_kernel_matches_scalar() {
+    if !has_avx512_vnni() {
+        return;
+    }
+    let (oc, ic) = (8usize, 4usize);
+    let k_raw = ic * 9;
+    let k_pad = k_raw.div_ceil(16) * 16;
+    let q_w: Vec<i8> = (0..oc * k_raw)
+        .map(|i| (i as i8).wrapping_mul(29).wrapping_sub(40))
+        .collect();
+    let q_scale = vec![0.003f32; oc];
+    let bias: Vec<f32> = (0..oc).map(|o| o as f32 * 0.01 - 0.03).collect();
+    let conv = crate::conv::Conv2d::quantized(oc, ic, 3, 1, q_w, q_scale, bias)
+        .with_input_quant(0.04, -128);
+    let pn = 32usize;
+    let kn: Vec<i8> = (0..k_pad * pn)
+        .map(|i| (i as i8).wrapping_mul(13).wrapping_add(5))
+        .collect();
+    let mut zip = vec![0i8; k_pad * pn];
+    pack_kn_zip16(&kn, &mut zip, k_pad, pn);
+    let (yh, yw) = (1usize, 64usize);
+    let mut got = vec![0f32; oc * yh * yw];
+    for mo in (0..oc).step_by(MR) {
+        // Zip variant, second 16-px tile, no relu.
+        unsafe {
+            kernel_4x16_zip_store(&conv, &mut got, 0, yh, yw, 0, 16, mo, &zip, pn, 16, false, None);
+        }
+        // KN register-interleave variant, first tile, relu on.
+        unsafe {
+            kernel_4x16_kn_store(&conv, &mut got, 0, yh, yw, 0, 0, mo, &kn, pn, 0, true, None);
+        }
+    }
+    for o in 0..oc {
+        let wr = &conv.q_w_pad[o * k_pad..(o + 1) * k_pad];
+        for t in 0..pn {
+            let mut acc = 0i32;
+            for (kk, &wv) in wr.iter().enumerate() {
+                acc += i32::from(wv) * i32::from(kn[kk * pn + t]);
+            }
+            let mut want = acc as f32 * conv.out_scale[o] + conv.eff_bias[o];
+            if t < 16 {
+                want = want.max(0.0);
+            }
+            let got_v = got[o * yw + t];
+            assert!(
+                (got_v - want).abs() < 1e-3,
+                "oc={o} t={t} got={got_v} want={want}"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     static FORCE_I8: Cell<bool> = const { Cell::new(false) };
@@ -161,6 +242,12 @@ pub(crate) fn i8_conv_on() -> bool {
             if std::env::var_os("POLYVOICE_I8_CONV").is_some() {
                 return true;
             }
+            // x86_64: exact only with AVX-512 VNNI (VPDPBUSD); VPMADDUBSW
+            // kernels saturate on full-range i8, so scalar stays the default.
+            #[cfg(target_arch = "x86_64")]
+            if has_avx512_vnni() {
+                return true;
+            }
             cfg!(all(target_os = "linux", target_arch = "aarch64"))
         })
     }
@@ -172,8 +259,8 @@ pub fn try_conv(conv: &Conv2d, x: &Tensor, y: &mut Tensor, relu: bool) -> bool {
         return false;
     }
     // Apple: BNNS Winograd is faster; keep integer GEMM opt-in.
-    // Linux aarch64: no BNNS, OpenBLAS FP32 is ~10 GFLOP/s in the Desktop
-    // VM — SDOT integer GEMM is the faster default. POLYVOICE_NO_I8_CONV=1
+    // Linux aarch64 (SDOT) and x86_64 with AVX-512 VNNI: no BNNS — the
+    // exact integer GEMM is the faster default. POLYVOICE_NO_I8_CONV=1
     // forces the float path; POLYVOICE_I8_CONV=1 forces integer everywhere.
     if !i8_conv_on() {
         return false;
@@ -652,12 +739,12 @@ fn s1_scan(
             &mut rows[slot * plane..(slot + 1) * plane],
         );
     }
-    #[cfg(target_arch = "aarch64")]
-    let row_zip = has_dotprod() && conv.k_pad.is_multiple_of(4);
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+    let row_zip = zip_ok(conv.k_pad);
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     let row_zip = false;
     if oc_par > 1 && row_zip {
-        #[cfg(target_arch = "aarch64")]
+        #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
         {
             s1_scan_shared_oc(
                 conv, ximg, h, w, yd, ybase, oh, ow, rows, kn, nk, relu, i8d, oy0, oy1, oc_par,
@@ -681,7 +768,7 @@ fn s1_scan(
         // A pn-wide tile at `ox` reads padded x in [ox, ox+pn+1]. The row
         // is `w+2` wide, so ox+pn <= w. For 3x3 s1 pad=1, ow == w.
         if row_zip {
-            #[cfg(target_arch = "aarch64")]
+            #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
             s1_scan_row_zip(
                 conv, rows, plane, wp, yd, ybase, oh, ow, oy, kn, nk, relu, i8d, oc0, oc1,
             );
@@ -716,7 +803,7 @@ fn s1_scan(
 /// 4-row weight panel stays hot. Bound is `ox+pn <= ow` (right halo fits).
 /// Zip every output row once, then one intra-op OC stream. Per-row pool
 /// wakeups cost more than a T=400 layer-3 row; one dispatch amortizes.
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 #[allow(clippy::too_many_arguments)]
 fn s1_scan_shared_oc(
     conv: &Conv2d,
@@ -851,7 +938,7 @@ fn s1_scan_shared_oc(
         for t in 0..ntiles {
             let pn = pns[t];
             gather_kn_from_rows(conv, rows, plane, wp, oy, oxs[t], pn, kn);
-            pack_kn_sdot16(kn, &mut dest[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
+            pack_kn_zip16(kn, &mut dest[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
         }
         let mut x = tail_ox;
         while x < ow {
@@ -948,7 +1035,7 @@ fn s1_scan_shared_oc(
     }
 }
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 #[allow(clippy::too_many_arguments)]
 fn s1_scan_row_zip(
     conv: &Conv2d,
@@ -1001,7 +1088,7 @@ fn s1_scan_row_zip(
                 let ox0 = ow - NR16;
                 let pn = NR16;
                 gather_kn_from_rows(conv, rows, plane, wp, oy, ox0, pn, kn);
-                pack_kn_sdot16(kn, &mut zip[..k_pad * pn], k_pad, pn);
+                pack_kn_zip16(kn, &mut zip[..k_pad * pn], k_pad, pn);
                 let z = &zip[..k_pad * pn];
                 let mut mo = oc0;
                 while mo < oc1 {
@@ -1077,7 +1164,7 @@ fn s1_scan_row_zip(
             for t in 0..ntiles {
                 let pn = pns[t];
                 gather_kn_from_rows(conv, rows, plane, wp, oy, oxs[t], pn, kn);
-                pack_kn_sdot16(kn, &mut zip[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
+                pack_kn_zip16(kn, &mut zip[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
                 let ox0 = oxs[t];
                 let z = &zip[zoff[t]..zoff[t] + k_pad * pn];
                 let mut mo = oc0;
@@ -1138,7 +1225,7 @@ fn s1_scan_row_zip(
             for t in 0..ntiles {
                 let pn = pns[t];
                 gather_kn_from_rows(conv, rows, plane, wp, oy, oxs[t], pn, kn);
-                pack_kn_sdot16(kn, &mut zip[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
+                pack_kn_zip16(kn, &mut zip[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
             }
             let mut mo = oc0;
             while mo < oc1 {
@@ -1309,8 +1396,8 @@ fn implicit_tile_from_rows(
     oc1: usize,
 ) {
     gather_kn_from_rows(conv, rows, plane, wp, oy, ox, pn, kn);
-    #[cfg(target_arch = "aarch64")]
-    if has_dotprod() && pn.is_multiple_of(NR16) {
+    #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+    if zip_ok(conv.k_pad) && pn.is_multiple_of(NR16) {
         gemm_panel_kn16(
             conv, yd, ybase, oh, ow, oy, ox, pn, kn, nk, relu, i8d, oc0, oc1,
         );
@@ -1597,11 +1684,11 @@ fn s2_scan_row_zip(
     let mut zoff = [0usize; WAVE];
     let mut ox = 0usize;
     let use_zip = {
-        #[cfg(target_arch = "aarch64")]
+        #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
         {
-            has_dotprod() && k_pad.is_multiple_of(4)
+            zip_ok(k_pad)
         }
-        #[cfg(not(target_arch = "aarch64"))]
+        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
         {
             false
         }
@@ -1665,8 +1752,8 @@ fn s2_scan_row_zip(
         for t in 0..ntiles {
             let pn = pns[t];
             gather_kn_s2(conv, rows, plane, wp, slots, oxs[t], pn, kn);
-            #[cfg(target_arch = "aarch64")]
-            pack_kn_sdot16(kn, &mut zip[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
+            #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+            pack_kn_zip16(kn, &mut zip[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
         }
         // Fat-K s2 only (layer-4 3x3 downsample, k_pad=1152). Narrower s2
         // stays W-hot OC-outer; k_pad>=512 on s2 already lost on product.
@@ -1675,7 +1762,7 @@ fn s2_scan_row_zip(
             for t in 0..ntiles {
                 let pn = pns[t];
                 let ox0 = oxs[t];
-                #[cfg(target_arch = "aarch64")]
+                #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
                 let z = &zip[zoff[t]..zoff[t] + k_pad * pn];
                 let mut mo = oc0;
                 while mo < oc1 {
@@ -1683,7 +1770,7 @@ fn s2_scan_row_zip(
                     let mut no = 0usize;
                     while no < pn {
                         if mr == MR && no + NR16 <= pn {
-                            #[cfg(target_arch = "aarch64")]
+                            #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
                             unsafe {
                                 kernel_4x16_zip_store(
                                     conv,
@@ -1739,12 +1826,12 @@ fn s2_scan_row_zip(
                 for t in 0..ntiles {
                     let pn = pns[t];
                     let ox0 = oxs[t];
-                    #[cfg(target_arch = "aarch64")]
+                    #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
                     let z = &zip[zoff[t]..zoff[t] + k_pad * pn];
                     let mut no = 0usize;
                     while no < pn {
                         if mr == MR && no + NR16 <= pn {
-                            #[cfg(target_arch = "aarch64")]
+                            #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
                             unsafe {
                                 kernel_4x16_zip_store(
                                     conv,
@@ -1959,8 +2046,8 @@ fn implicit_tile_3x3(
             }
         }
     }
-    #[cfg(target_arch = "aarch64")]
-    if has_dotprod() && pn.is_multiple_of(NR16) {
+    #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+    if zip_ok(k_pad) && pn.is_multiple_of(NR16) {
         gemm_panel_kn16(
             conv,
             &mut y.data,
@@ -2019,9 +2106,9 @@ fn conv1x1(
 ) {
     let (ic, k_pad, sx) = (conv.ic, conv.k_pad, conv.stride.max(1));
     let (oh, ow, oc) = (y.h, y.w, conv.oc);
-    #[cfg(target_arch = "aarch64")]
-    let row_zip = has_dotprod() && k_pad.is_multiple_of(4);
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+    let row_zip = zip_ok(k_pad);
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     let row_zip = false;
     for ni in 0..n {
         let xbase = ni * ic * h * w;
@@ -2030,7 +2117,7 @@ fn conv1x1(
         for oy in 0..oh {
             let iy = oy * sx;
             if row_zip {
-                #[cfg(target_arch = "aarch64")]
+                #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
                 conv1x1_row_zip(
                     conv,
                     ximg,
@@ -2129,7 +2216,7 @@ fn gather_1x1(
 
 /// Gather every in-row 1×1 tile, zip once, then stream OC so the 4-row
 /// weight panel stays hot (same schedule as 3×3 s1).
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 #[allow(clippy::too_many_arguments)]
 fn conv1x1_row_zip(
     conv: &Conv2d,
@@ -2162,7 +2249,7 @@ fn conv1x1_row_zip(
             break;
         }
         gather_1x1(conv, ximg, h, w, iy, ox, pn, sx, kn);
-        pack_kn_sdot16(kn, &mut zip[acc..acc + k_pad * pn], k_pad, pn);
+        pack_kn_zip16(kn, &mut zip[acc..acc + k_pad * pn], k_pad, pn);
         oxs[ntiles] = ox;
         pns[ntiles] = pn;
         zoff[ntiles] = acc;
@@ -2234,7 +2321,7 @@ fn conv1x1_row_zip(
         let ox0 = ow - NR16;
         let pn = NR16;
         gather_1x1(conv, ximg, h, w, iy, ox0, pn, sx, kn);
-        pack_kn_sdot16(kn, &mut zip[..k_pad * pn], k_pad, pn);
+        pack_kn_zip16(kn, &mut zip[..k_pad * pn], k_pad, pn);
         let z = &zip[..k_pad * pn];
         let mut mo = 0usize;
         while mo < oc {
@@ -2474,11 +2561,41 @@ fn has_dotprod() -> bool {
     }
 }
 
+/// AVX-512 VNNI (VPDPBUSD): the x86_64 exact-integer i8 dot. VPMADDUBSW
+/// kernels are not exact for full-range i8, so VNNI is the only gate.
+#[cfg(target_arch = "x86_64")]
+fn has_avx512_vnni() -> bool {
+    static HAS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *HAS.get_or_init(|| {
+        std::arch::is_x86_feature_detected!("avx512f")
+            && std::arch::is_x86_feature_detected!("avx512bw")
+            && std::arch::is_x86_feature_detected!("avx512vl")
+            && std::arch::is_x86_feature_detected!("avx512vnni")
+    })
+}
+
+/// True when the zip 4×16 tile kernels can run on this CPU.
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+fn zip_ok(k_pad: usize) -> bool {
+    #[cfg(target_arch = "aarch64")]
+    {
+        has_dotprod() && k_pad.is_multiple_of(4)
+    }
+    #[cfg(target_arch = "x86_64")]
+    {
+        has_avx512_vnni() && k_pad.is_multiple_of(4)
+    }
+}
+
 fn dot_i8(a: &[i8], b: &[i8]) -> i32 {
     debug_assert_eq!(a.len(), b.len());
     #[cfg(target_arch = "aarch64")]
     if has_dotprod() {
         return unsafe { dot_i8_sdot(a, b) };
+    }
+    #[cfg(target_arch = "x86_64")]
+    if has_avx512_vnni() {
+        return unsafe { dot_i8_vnni(a, b) };
     }
     let mut acc = 0i32;
     for (&x, &y) in a.iter().zip(b.iter()) {
@@ -2505,6 +2622,61 @@ unsafe fn dot_i8_sdot(a: &[i8], b: &[i8]) -> i32 {
     }
     let _: int32x4_t = acc;
     unsafe { vaddvq_s32(acc) }
+}
+
+/// Full-range i8×i8 dot via VPDPBUSD (u8×i8→i32). `a` is offset by +128
+/// (sign-bit flip) to fit u8; the 128·Σb bias is subtracted in the epilogue.
+/// Unlike VPMADDUBSW there is no intermediate saturation, so this is exact.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx512vnni")]
+#[allow(unused_unsafe)]
+unsafe fn dot_i8_vnni(a: &[i8], b: &[i8]) -> i32 {
+    use std::arch::x86_64::{
+        _mm512_dpbusd_epi32, _mm512_loadu_si512, _mm512_reduce_add_epi32, _mm512_set1_epi8,
+        _mm512_setzero_si512, _mm512_xor_si512, _mm_cvtsi128_si32, _mm_dpbusd_epi32,
+        _mm_extract_epi32, _mm_loadu_si128, _mm_set1_epi8, _mm_setzero_si128, _mm_xor_si128,
+    };
+    let n = a.len().min(b.len());
+    let mut acc = unsafe { _mm512_setzero_si512() };
+    let mut bsum = unsafe { _mm512_setzero_si512() };
+    let flip = unsafe { _mm512_set1_epi8(-128) };
+    let ones = unsafe { _mm512_set1_epi8(1) };
+    let mut k = 0usize;
+    while k + 64 <= n {
+        unsafe {
+            let av = _mm512_xor_si512(_mm512_loadu_si512(a.as_ptr().add(k).cast()), flip);
+            let bv = _mm512_loadu_si512(b.as_ptr().add(k).cast());
+            acc = _mm512_dpbusd_epi32(acc, av, bv);
+            bsum = _mm512_dpbusd_epi32(bsum, ones, bv);
+        }
+        k += 64;
+    }
+    let mut total = unsafe { _mm512_reduce_add_epi32(acc) - 128 * _mm512_reduce_add_epi32(bsum) };
+    // 16-byte tail chunks (k_pad is a multiple of 16, so the scalar tail is
+    // only a safety net for non-padded callers).
+    while k + 16 <= n {
+        unsafe {
+            let av = _mm_xor_si128(_mm_loadu_si128(a.as_ptr().add(k).cast()), _mm_set1_epi8(-128));
+            let bv = _mm_loadu_si128(b.as_ptr().add(k).cast());
+            let acc4 = _mm_dpbusd_epi32(_mm_setzero_si128(), av, bv);
+            let bsum4 = _mm_dpbusd_epi32(_mm_setzero_si128(), _mm_set1_epi8(1), bv);
+            total += _mm_cvtsi128_si32(acc4)
+                + _mm_extract_epi32::<1>(acc4)
+                + _mm_extract_epi32::<2>(acc4)
+                + _mm_extract_epi32::<3>(acc4)
+                - 128
+                    * (_mm_cvtsi128_si32(bsum4)
+                        + _mm_extract_epi32::<1>(bsum4)
+                        + _mm_extract_epi32::<2>(bsum4)
+                        + _mm_extract_epi32::<3>(bsum4));
+        }
+        k += 16;
+    }
+    let mut rest = 0i32;
+    for i in k..n {
+        rest += i32::from(a[i]) * i32::from(b[i]);
+    }
+    total + rest
 }
 
 fn kernel_mxn(conv: &Conv2d, mo: usize, tile: &[i8], out: &mut [[i32; NR]; MR]) {
@@ -2555,8 +2727,8 @@ unsafe fn kernel_mxn_sdot(conv: &Conv2d, mo: usize, tile: &[i8], out: &mut [[i32
     }
 }
 
-/// KN-panel GEMM: each `q`-reg holds 4 adjacent output pixels (not a K-reduction).
-#[cfg(target_arch = "aarch64")]
+/// KN-panel GEMM: each vector holds adjacent output pixels (not a K-reduction).
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 #[allow(clippy::too_many_arguments)]
 fn gemm_panel_kn16(
     conv: &Conv2d,
@@ -2577,7 +2749,7 @@ fn gemm_panel_kn16(
     let zip_len = conv.k_pad.saturating_mul(pn);
     let use_zip = zip.len() >= zip_len && pn.is_multiple_of(NR16) && conv.k_pad.is_multiple_of(4);
     if use_zip {
-        pack_kn_sdot16(kn, &mut zip[..zip_len], conv.k_pad, pn);
+        pack_kn_zip16(kn, &mut zip[..zip_len], conv.k_pad, pn);
     }
     let mut mo = oc0;
     while mo < oc1 {
@@ -2659,8 +2831,209 @@ unsafe fn store4_i8(dst: *mut i8, v: std::arch::aarch64::float32x4_t, inv: f32, 
     }
 }
 
+#[cfg(target_arch = "x86_64")]
+fn pack_kn_zip16(kn: &[i8], zip: &mut [i8], k_pad: usize, pn: usize) {
+    let mut o = 0usize;
+    let mut k = 0usize;
+    while k + 4 <= k_pad {
+        let mut n0 = 0usize;
+        while n0 + 16 <= pn {
+            for j in 0..16 {
+                zip[o + 4 * j] = kn[k * pn + n0 + j];
+                zip[o + 4 * j + 1] = kn[(k + 1) * pn + n0 + j];
+                zip[o + 4 * j + 2] = kn[(k + 2) * pn + n0 + j];
+                zip[o + 4 * j + 3] = kn[(k + 3) * pn + n0 + j];
+            }
+            o += 64;
+            n0 += 16;
+        }
+        k += 4;
+    }
+}
+
+/// Sum of one padded weight row — the `128·Σw` correction the VNNI kernels
+/// subtract after offsetting activations by +128.
+#[cfg(target_arch = "x86_64")]
+fn w_row_sum(conv: &Conv2d, oc: usize) -> i32 {
+    if let Some(&s) = conv.w_sum.get(oc) {
+        return s;
+    }
+    let row = &conv.q_w_pad[oc * conv.k_pad..(oc + 1) * conv.k_pad];
+    row.iter().map(|&v| i32::from(v)).sum()
+}
+
+/// Dequant + relu + store of 16 adjacent output pixels held in one zmm
+/// (dword lane j = pixel ox+j). Mirrors the f32/i8 store of `write_out_sl`.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx512f,avx512bw,avx512vl")]
+#[allow(unused_unsafe)]
+#[inline]
+#[allow(clippy::too_many_arguments)]
+unsafe fn store16_out(
+    conv: &Conv2d,
+    yd: &mut [f32],
+    ybase: usize,
+    yh: usize,
+    yw: usize,
+    oy: usize,
+    ox: usize,
+    oc: usize,
+    acc: std::arch::x86_64::__m512i,
+    relu: bool,
+    i8d: Option<I8Dest>,
+) {
+    use std::arch::x86_64::{
+        _mm512_cvtsepi32_epi8, _mm512_cvtepi32_ps, _mm512_cvtps_epi32, _mm512_fmadd_ps,
+        _mm512_max_ps, _mm512_min_ps, _mm512_set1_ps, _mm512_setzero_ps, _mm512_storeu_ps,
+        _mm_storeu_si128,
+    };
+    unsafe {
+        let mut v = _mm512_fmadd_ps(
+            _mm512_cvtepi32_ps(acc),
+            _mm512_set1_ps(conv.out_scale[oc]),
+            _mm512_set1_ps(conv.eff_bias[oc]),
+        );
+        if relu {
+            v = _mm512_max_ps(v, _mm512_setzero_ps());
+        }
+        let idx = ybase + (oc * yh + oy) * yw + ox;
+        if let Some(d) = i8d {
+            let q = _mm512_fmadd_ps(v, _mm512_set1_ps(d.inv_scale), _mm512_set1_ps(d.zp));
+            let qi = _mm512_cvtps_epi32(_mm512_max_ps(
+                _mm512_min_ps(q, _mm512_set1_ps(127.0)),
+                _mm512_set1_ps(-128.0),
+            ));
+            _mm_storeu_si128((d.p as *mut i8).add(idx).cast(), _mm512_cvtsepi32_epi8(qi));
+        } else {
+            _mm512_storeu_ps(yd.as_mut_ptr().add(idx), v);
+        }
+    }
+}
+
+/// 4 output rows × 16 pixels from the zipped panel: dword lane j of the
+/// accumulator is the dot for pixel `n0+j`. VPDPBUSD is u8×i8, so the
+/// activation vector is offset by +128 (sign-bit flip) and each row's
+/// `128·Σw` is subtracted in the epilogue — exact, no saturation.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx512vnni")]
+#[allow(unused_unsafe)]
+#[allow(clippy::too_many_arguments)]
+unsafe fn kernel_4x16_zip_store(
+    conv: &Conv2d,
+    yd: &mut [f32],
+    ybase: usize,
+    yh: usize,
+    yw: usize,
+    oy: usize,
+    ox: usize,
+    mo: usize,
+    zip: &[i8],
+    pn: usize,
+    n0: usize,
+    relu: bool,
+    i8d: Option<I8Dest>,
+) {
+    use std::arch::x86_64::{
+        _mm512_dpbusd_epi32, _mm512_loadu_si512, _mm512_set1_epi32, _mm512_set1_epi8,
+        _mm512_setzero_si512, _mm512_slli_epi32, _mm512_sub_epi32, _mm512_xor_si512,
+    };
+    let k_pad = conv.k_pad;
+    let tiles_n = pn / NR16;
+    let tile = n0 / NR16;
+    let zp = zip.as_ptr();
+    let wp = conv.q_w_pad.as_ptr();
+    unsafe {
+        let flip = _mm512_set1_epi8(-128);
+        let mut acc = [_mm512_setzero_si512(); MR];
+        let mut k = 0usize;
+        while k + 4 <= k_pad {
+            let off = (k / 4) * tiles_n * 64 + tile * 64;
+            let xv = _mm512_xor_si512(_mm512_loadu_si512(zp.add(off).cast()), flip);
+            for r in 0..MR {
+                let w4 = core::ptr::read_unaligned(wp.add((mo + r) * k_pad + k).cast::<i32>());
+                acc[r] = _mm512_dpbusd_epi32(acc[r], xv, _mm512_set1_epi32(w4));
+            }
+            k += 4;
+        }
+        for r in 0..MR {
+            let corr = _mm512_slli_epi32::<7>(_mm512_set1_epi32(w_row_sum(conv, mo + r)));
+            let a = _mm512_sub_epi32(acc[r], corr);
+            store16_out(conv, yd, ybase, yh, yw, oy, ox, mo + r, a, relu, i8d);
+        }
+    }
+}
+
+/// Same 4×16 tile straight from the KN panel: the 4-K × 16-pixel interleave
+/// the zip packer writes is done in registers instead.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx512f,avx512bw,avx512vl,avx512vnni")]
+#[allow(unused_unsafe)]
+#[allow(clippy::too_many_arguments)]
+unsafe fn kernel_4x16_kn_store(
+    conv: &Conv2d,
+    yd: &mut [f32],
+    ybase: usize,
+    yh: usize,
+    yw: usize,
+    oy: usize,
+    ox: usize,
+    mo: usize,
+    kn: &[i8],
+    pn: usize,
+    n0: usize,
+    relu: bool,
+    i8d: Option<I8Dest>,
+) {
+    use std::arch::x86_64::{
+        _mm512_castsi128_si512, _mm512_dpbusd_epi32, _mm512_inserti32x4, _mm512_set1_epi32,
+        _mm512_set1_epi8, _mm512_setzero_si512, _mm512_slli_epi32, _mm512_sub_epi32,
+        _mm512_xor_si512, _mm_loadu_si128, _mm_unpackhi_epi16, _mm_unpackhi_epi8,
+        _mm_unpacklo_epi16, _mm_unpacklo_epi8,
+    };
+    let k_pad = conv.k_pad;
+    let wp = conv.q_w_pad.as_ptr();
+    let kp = kn.as_ptr();
+    unsafe {
+        let flip = _mm512_set1_epi8(-128);
+        let mut acc = [_mm512_setzero_si512(); MR];
+        let mut k = 0usize;
+        while k + 4 <= k_pad {
+            let b0 = _mm_loadu_si128(kp.add(k * pn + n0).cast());
+            let b1 = _mm_loadu_si128(kp.add((k + 1) * pn + n0).cast());
+            let b2 = _mm_loadu_si128(kp.add((k + 2) * pn + n0).cast());
+            let b3 = _mm_loadu_si128(kp.add((k + 3) * pn + n0).cast());
+            let z01l = _mm_unpacklo_epi8(b0, b1);
+            let z01h = _mm_unpackhi_epi8(b0, b1);
+            let z23l = _mm_unpacklo_epi8(b2, b3);
+            let z23h = _mm_unpackhi_epi8(b2, b3);
+            let q0 = _mm_unpacklo_epi16(z01l, z23l);
+            let q1 = _mm_unpackhi_epi16(z01l, z23l);
+            let q2 = _mm_unpacklo_epi16(z01h, z23h);
+            let q3 = _mm_unpackhi_epi16(z01h, z23h);
+            let xb = _mm512_inserti32x4::<3>(
+                _mm512_inserti32x4::<2>(
+                    _mm512_inserti32x4::<1>(_mm512_castsi128_si512(q0), q1),
+                    q2,
+                ),
+                q3,
+            );
+            let xv = _mm512_xor_si512(xb, flip);
+            for r in 0..MR {
+                let w4 = core::ptr::read_unaligned(wp.add((mo + r) * k_pad + k).cast::<i32>());
+                acc[r] = _mm512_dpbusd_epi32(acc[r], xv, _mm512_set1_epi32(w4));
+            }
+            k += 4;
+        }
+        for r in 0..MR {
+            let corr = _mm512_slli_epi32::<7>(_mm512_set1_epi32(w_row_sum(conv, mo + r)));
+            let a = _mm512_sub_epi32(acc[r], corr);
+            store16_out(conv, yd, ybase, yh, yw, oy, ox, mo + r, a, relu, i8d);
+        }
+    }
+}
+
 #[cfg(target_arch = "aarch64")]
-fn pack_kn_sdot16(kn: &[i8], zip: &mut [i8], k_pad: usize, pn: usize) {
+fn pack_kn_zip16(kn: &[i8], zip: &mut [i8], k_pad: usize, pn: usize) {
     use std::arch::aarch64::{
         vld1q_s8, vreinterpretq_s8_s16, vreinterpretq_s16_s8, vst1q_s8, vzip1q_s8, vzip1q_s16,
         vzip2q_s8, vzip2q_s16,
