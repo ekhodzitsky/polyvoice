@@ -4,7 +4,13 @@ use std::cell::RefCell;
 
 thread_local! {
     static IM2COL: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
+    static TILE_Y: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
 }
+
+/// Output positions per im2col tile. Bounds the TLS slab (and the GEMM's
+/// packed-operand copy, same size) so each concurrent window worker holds a
+/// few MiB instead of a full-length `[k, L]` matrix.
+const IM2COL_TILE: usize = 2048;
 
 #[derive(Clone, Debug)]
 pub struct Seq1d {
@@ -169,29 +175,44 @@ fn conv1d_ic1(
         }
     };
     IM2COL.with(|cell| {
-        let mut col = cell.borrow_mut();
-        col.resize(k * ol, 0.0);
-        for n in 0..x.n {
-            let xrow = &x.data[n * x.l..n * x.l + x.l];
-            for kk in 0..k {
-                let dst = &mut col[kk * ol..(kk + 1) * ol];
-                let mut i0 = kk;
-                for slot in dst.iter_mut() {
-                    *slot = xrow[i0];
-                    i0 += stride;
+        TILE_Y.with(|tcell| {
+            let mut col = cell.borrow_mut();
+            let mut ty = tcell.borrow_mut();
+            for n in 0..x.n {
+                let xrow = &x.data[n * x.l..n * x.l + x.l];
+                let yoff = n * oc * ol;
+                let mut o0 = 0usize;
+                while o0 < ol {
+                    let tn = (ol - o0).min(IM2COL_TILE);
+                    col.resize(k * tn, 0.0);
+                    for kk in 0..k {
+                        let dst = &mut col[kk * tn..(kk + 1) * tn];
+                        let mut i0 = o0 * stride + kk;
+                        for slot in dst.iter_mut() {
+                            *slot = xrow[i0];
+                            i0 += stride;
+                        }
+                    }
+                    // GEMM writes C packed, y rows are `ol`-strided: land the
+                    // tile in a side buffer, then copy rows into place.
+                    ty.resize(oc * tn, 0.0);
+                    crate::gemm::gemm_bias_row(
+                        weight,
+                        &col[..k * tn],
+                        bias_row,
+                        &mut ty,
+                        oc,
+                        tn,
+                        k,
+                    );
+                    for o in 0..oc {
+                        let dst = &mut y.data[yoff + o * ol + o0..yoff + o * ol + o0 + tn];
+                        dst.copy_from_slice(&ty[o * tn..(o + 1) * tn]);
+                    }
+                    o0 += tn;
                 }
             }
-            let yoff = n * oc * ol;
-            crate::gemm::gemm_bias_row(
-                weight,
-                &col,
-                bias_row,
-                &mut y.data[yoff..yoff + oc * ol],
-                oc,
-                ol,
-                k,
-            );
-        }
+        });
     });
     y
 }
@@ -212,31 +233,46 @@ fn conv1d_k5(x: &Seq1d, weight: &[f32], bias: Option<&[f32]>, oc: usize, stride:
         }
     };
     IM2COL.with(|cell| {
-        let mut col = cell.borrow_mut();
-        col.resize(k_col * ol, 0.0);
-        for n in 0..x.n {
-            for ic in 0..ic_n {
-                let src = &x.data[(n * ic_n + ic) * x.l..(n * ic_n + ic) * x.l + x.l];
-                for kk in 0..K {
-                    let dst = &mut col[(ic * K + kk) * ol..(ic * K + kk + 1) * ol];
-                    let mut i0 = kk;
-                    for slot in dst.iter_mut() {
-                        *slot = src[i0];
-                        i0 += stride;
+        TILE_Y.with(|tcell| {
+            let mut col = cell.borrow_mut();
+            let mut ty = tcell.borrow_mut();
+            for n in 0..x.n {
+                let yoff = n * oc * ol;
+                let mut o0 = 0usize;
+                while o0 < ol {
+                    let tn = (ol - o0).min(IM2COL_TILE);
+                    col.resize(k_col * tn, 0.0);
+                    for ic in 0..ic_n {
+                        let src = &x.data[(n * ic_n + ic) * x.l..(n * ic_n + ic) * x.l + x.l];
+                        for kk in 0..K {
+                            let dst = &mut col[(ic * K + kk) * tn..(ic * K + kk + 1) * tn];
+                            let mut i0 = o0 * stride + kk;
+                            for slot in dst.iter_mut() {
+                                *slot = src[i0];
+                                i0 += stride;
+                            }
+                        }
                     }
+                    // GEMM writes C packed, y rows are `ol`-strided: land the
+                    // tile in a side buffer, then copy rows into place.
+                    ty.resize(oc * tn, 0.0);
+                    crate::gemm::gemm_bias_row(
+                        weight,
+                        &col[..k_col * tn],
+                        bias_row,
+                        &mut ty,
+                        oc,
+                        tn,
+                        k_col,
+                    );
+                    for o in 0..oc {
+                        let dst = &mut y.data[yoff + o * ol + o0..yoff + o * ol + o0 + tn];
+                        dst.copy_from_slice(&ty[o * tn..(o + 1) * tn]);
+                    }
+                    o0 += tn;
                 }
             }
-            let yoff = n * oc * ol;
-            crate::gemm::gemm_bias_row(
-                weight,
-                &col,
-                bias_row,
-                &mut y.data[yoff..yoff + oc * ol],
-                oc,
-                ol,
-                k_col,
-            );
-        }
+        });
     });
     y
 }
