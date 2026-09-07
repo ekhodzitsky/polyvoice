@@ -637,6 +637,7 @@ fn cmd_models_info(name: String) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    cli_common::limit_malloc_arenas();
     let cli = Cli::parse();
     match cli.command {
         Some(Command::Diarize(d)) => cmd_diarize(d),

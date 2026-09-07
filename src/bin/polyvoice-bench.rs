@@ -792,6 +792,7 @@ fn build_report(
 }
 
 fn main() -> Result<()> {
+    cli_common::limit_malloc_arenas();
     let args = Args::parse();
     // The DER library has no single-speaker-regions + UEM scorer, so this
     // combination cannot be honoured — fail loudly instead of scoring the

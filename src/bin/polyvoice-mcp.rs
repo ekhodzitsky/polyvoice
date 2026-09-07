@@ -376,6 +376,7 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    cli_common::limit_malloc_arenas();
     // No tracing subscriber and no stdout writes anywhere — stdout is the JSON-RPC
     // channel. ort emits via the `tracing` crate (dropped without a subscriber).
     let service = PolyvoiceMcp::new()

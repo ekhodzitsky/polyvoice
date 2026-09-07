@@ -939,6 +939,7 @@ fn run_embedder_short(
 }
 
 fn main() -> Result<()> {
+    cli_common::limit_malloc_arenas();
     let args = Args::parse();
     match args.cmd {
         Cmd::Streaming {

@@ -19,6 +19,26 @@ compile_error!("feature `cli-bin` needs `cli`, `cli-ort`, `cli-tract`, or `cli-n
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
+/// glibc scales malloc arenas with core count (up to 8 per core); with the
+/// thread pools in the native pipeline that shows up as hundreds of MiB of
+/// fragmented arena RSS on many-core hosts. Cap the arenas for the CLI-family
+/// binaries. `MALLOC_ARENA_MAX` in the environment wins over this default.
+#[cfg(target_os = "linux")]
+pub fn limit_malloc_arenas() {
+    const M_ARENA_MAX: std::ffi::c_int = -8;
+    unsafe extern "C" {
+        fn mallopt(param: std::ffi::c_int, value: std::ffi::c_int) -> std::ffi::c_int;
+    }
+    if std::env::var_os("MALLOC_ARENA_MAX").is_none() {
+        // SAFETY: mallopt has no preconditions; a zero return only means the
+        // hint was ignored.
+        unsafe { mallopt(M_ARENA_MAX, 4) };
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn limit_malloc_arenas() {}
+
 use crate::models::ModelRegistry;
 use crate::pipeline_v2::{ClustererKind, ExecutionProvider, Pipeline, PipelineConfig};
 use crate::rttm::{RttmSegment, group_by_file, parse_rttm_file, to_speaker_turns};
