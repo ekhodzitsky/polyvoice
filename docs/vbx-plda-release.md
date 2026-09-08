@@ -41,9 +41,9 @@ Manifest model ids (not profile-resolved):
 
 Host URLs point at the commit-pinned fixtures under
 `https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/`.
-Integrity is **SHA-256 only** until minisign signatures are added (same optional
-model pattern as `sortformer_v2` / `eres2netv2`). Profile resolution never
-pulls these entries, so release builds do not require signatures for them.
+Integrity is SHA-256 plus a minisign signature from the release key (the six
+`[models.vbx_plda_*]` entries carry `signature` fields). Profile resolution
+never pulls these entries, so release builds do not require them.
 
 ## Rebuilding the weights (reproducible)
 
@@ -89,16 +89,11 @@ AHC_ASC_MEMBERS}` through `VbxClustererConfig::from_env()`.
 
 ## Remaining release steps (need the release signing key)
 
-Registry wiring and SHA-256 integrity are in place. A release engineer should
-still:
+Registry wiring, SHA-256 integrity and minisign signatures are in place.
+A release engineer could still:
 
 1. **Optionally re-host** the six `.npy` on a GitHub Release asset or HF repo
    (the commit-pinned raw.githubusercontent.com host is stable via the SHA-256
    gate; a release asset is nicer for bandwidth/CDN).
-2. **Sign** each file with the minisign release secret (same flow as the ONNX
-   models) and fill the `signature = '''...'''` fields on the six
-   `[models.vbx_plda_*]` entries in `src/models/manifest.toml`.
-3. **Do not** add PLDA ids to `[profiles.*]` — they stay ad-hoc `ensure()` /
-   `from_registry` only so missing signatures never fail profile resolution.
-
-Until signatures land, VBx keeps working with SHA-256 verification alone.
+2. **Do not** add PLDA ids to `[profiles.*]` — they stay ad-hoc `ensure()` /
+   `from_registry` only so profile resolution never depends on them.

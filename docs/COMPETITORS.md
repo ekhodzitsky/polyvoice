@@ -18,7 +18,7 @@ compares the main open-source alternatives and what polyvoice can learn from the
 | Deployment | CPU-first, ~8.4 MB INT8, no Python runtime, no `libonnxruntime` on the product CLI |
 | Bindings | Rust library, Python (maturin), C FFI, CLI, MCP server |
 | Streaming | First-class `streaming::StreamingPipeline` |
-| DER benchmark | 15.22% on VoxConverse-test (collar 0, overlap-scored; v2+VBx, H2H 2026-08 vs speakrs 11.08%) |
+| DER benchmark | 15.33% on VoxConverse-test (collar 0, overlap-scored; v2+VBx kernels, 2026-09-08; H2H 2026-08 vs speakrs 11.08%) |
 
 ## Competitor comparison
 
@@ -81,7 +81,7 @@ use the `ort` native runtime. Competitors are stronger on accuracy,
 ecosystem, and bindings, but they are heavier, GPU-oriented, and often gated
 or commercially restricted.
 
-The main **peer threat** is **speakrs** (same Rust/ONNX niche): measured **11.08%** vs our **15.22%** on VoxConverse-test under one scorer (gap ~4 pp, confusion-dominated). VBx + PLDA already cut an earlier ~7 pp gap to pyannote (~11.2%); if the residual stalls, accuracy-sensitive users will pick speakrs or the heavier Python stacks. The roadmap already targets the rest with better segmentation, embeddings, and EEND/Sortformer spikes. The priority should be:
+The main **peer threat** is **speakrs** (same Rust/ONNX niche): measured **11.08%** vs our **15.33%** on VoxConverse-test under one scorer (gap ~4 pp, confusion-dominated). VBx + PLDA already cut an earlier ~7 pp gap to pyannote (~11.2%); if the residual stalls, accuracy-sensitive users will pick speakrs or the heavier Python stacks. The roadmap already targets the rest with better segmentation, embeddings, and EEND/Sortformer spikes. The priority should be:
 
 1. **Close the DER gap** with optional ONNX accuracy profiles (EEND/Sortformer, WavLM/CAM++ embeddings) while keeping the CPU-first default.
 2. **Own the deployability story** — pre-built binaries, Docker, WASM, mobile, and clear "no Python, no GPU, no token" messaging.

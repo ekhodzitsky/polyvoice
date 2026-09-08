@@ -31,7 +31,7 @@ For the **development process** checklist (spec → types → verify), see
 | FFI | v2 kernels only (`ffi` = `pipeline-native`) |
 | Python | **v2 + VBx** on **ONNX Runtime** (same pipeline, different engine); `clusterer="ahc"` opt-out |
 | MCP `polyvoice-mcp` | v2 + VBx kernels (`clusterer=ahc` opt-out) |
-| `polyvoice-bench` | **v2 + VBx** default (kernels when built with `cli`); `--pipeline legacy` for comparison |
+| `polyvoice-bench` | **v2 + VBx** default (kernels when built with `cli`); `--jobs N` runs files in parallel on one shared pipeline and adds `rt_factor_wall` to the report; `--pipeline legacy` for comparison |
 | Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |
 | Library kernels | `features = ["pipeline-native", "vbx"]` → crate-root `Pipeline` |
 | Library ONNX | `features = ["pipeline-full", "vbx"]` → crate-root `Pipeline` |

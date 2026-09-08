@@ -1,7 +1,7 @@
 # Migrating from polyvoice 0.5 → 0.6 (archival)
 
 > **Archival guide.** This is **not** a migration to product 1.0 (crate is
-> still pre-1.0; current line is **0.15.x**). It documents the **0.5 → 0.6**
+> still pre-1.0; current line is **0.20.x**). It documents the **0.5 → 0.6**
 > API break. For what ships **today**, use [README](../README.md),
 > [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md), and
 > [CHANGELOG.md](../CHANGELOG.md).
@@ -12,11 +12,11 @@ from 0.5.
 
 > **Status box (read first):** sections marked *archival* describe APIs that
 > have since been removed (`HybridPipeline`, `OnlineDiarizer`,
-> `OnnxEmbeddingExtractor`, FFI ABI v2). As of **0.11+**, CLI, FFI, Python, and
-> MCP default to **`pipeline_v2` + VBx**; the crate-root `Pipeline` is the v2
-> pipeline (re-exported under the full ONNX feature gate), and the ort-free /
-> BYO library surface is `pipeline::LegacyPipeline` (also the CLI `--legacy`
-> escape hatch).
+> `OnnxEmbeddingExtractor`, FFI ABI v2). Today the CLI, FFI and MCP default is
+> the **kernels pipeline (`pipeline-native`) + VBx** with no ONNX Runtime;
+> Python defaults to **`pipeline_v2` (ort) + VBx**; the ort-free BYO library
+> surface is `pipeline::LegacyPipeline` (also the CLI `--legacy` escape hatch,
+> available only in `cli-ort` builds).
 
 ## Rust API
 
@@ -93,7 +93,7 @@ print(result["num_speakers"], len(result["turns"]))
 | Before                                                     | After (0.11+)                                              |
 |------------------------------------------------------------|------------------------------------------------------------|
 | `polyvoice diarize meeting.wav --threshold 0.4`            | `polyvoice meeting.wav` (v2 + VBx default)                 |
-| legacy Silero + AHC                                        | `polyvoice meeting.wav --legacy` or `--clusterer ahc`      |
+| legacy Silero + AHC                                        | `polyvoice meeting.wav --legacy` (`cli-ort` builds) or `--clusterer ahc` |
 | `polyvoice download-models --dir ./models`                 | `polyvoice download-models --profile balanced`             |
 
 > **Update (0.11):** CLI default is pipeline v2 + VBx after a full-split DER
@@ -112,7 +112,7 @@ for the contract.
 
 | Removed / renamed             | Replacement / note                       |
 |-------------------------------|------------------------------------------|
-| `OfflineDiarizer`             | `pipeline_v2::Pipeline::run` (ONNX) or `pipeline::LegacyPipeline` (BYO) |
+| `OfflineDiarizer`             | Crate-root `Pipeline` (kernels via `pipeline-native`, ONNX via `pipeline-full`) or `pipeline::LegacyPipeline` (BYO) |
 | ONNX profile builder          | `pipeline_v2::Pipeline::builder()` + `PipelineConfig` |
 | `DiarizationConfig`           | Still the BYO/`--legacy` config; ONNX uses `pipeline_v2::PipelineConfig` |
 | `VadConfig` / `EnergyVad`     | Still public for BYO/streaming; ONNX v2 uses `Segmenter` |

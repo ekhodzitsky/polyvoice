@@ -1,72 +1,22 @@
 # polyvoice
 
-[![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ekhodzitsky/polyvoice)](https://github.com/ekhodzitsky/polyvoice/releases)
+WAV in, speaker turns out.
+
 [![Crates.io](https://img.shields.io/crates/v/polyvoice)](https://crates.io/crates/polyvoice)
 [![Docs.rs](https://docs.rs/polyvoice/badge.svg)](https://docs.rs/polyvoice)
-[![Codecov](https://codecov.io/gh/ekhodzitsky/polyvoice/branch/master/graph/badge.svg)](https://codecov.io/gh/ekhodzitsky/polyvoice)
+[![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Speaker diarization for Rust — who spoke when, on CPU, without Python.**
+A speaker diarization crate. Powerset neural segmentation, WeSpeaker
+ResNet34 embeddings, VBx clustering with automatic speaker count. One
+`Pipeline` call from 16 kHz mono to timestamped turns. The default build
+pulls **no ONNX Runtime**: hand-written INT8 kernels, ~8.4 MB production
+model pair, MIT, ungated. ONNX Runtime is a feature (`cli-ort`), not a
+requirement. Python, C FFI and a CLI ship from the same crate.
 
-Built for meeting-notes pipelines, voice agents, and on-prem deployments that
-can't ship a PyTorch stack. One crate, four surfaces: Rust library, Python,
-C FFI, and a CLI. MIT, ungated **INT8** models (~8.4 MB production pair).
+## Examples
 
-![polyvoice CLI demo — real diarization run](docs/assets/demo.gif)
-
-## Numbers
-
-**Default stack is INT8 kernels** (`powerset_int8` + `resnet34_int8`, no
-`libonnxruntime`) for every profile. Protocol: [Benchmarks](docs/BENCHMARKS.md).
-Darwin uses Accelerate/BNNS. Linux uses pure-Rust `rten-gemm` (OpenBLAS
-optional). ONNX Runtime remains `--features cli-ort`.
-
-| Corpus | DER, forgiving (0.25 s collar) | DER, strict (collar 0) | Speed |
-|---|---:|---:|---:|
-| VoxConverse-test (232) | **10.3 %** Linux ort | **14.9 %** Linux ort / **15.5 %** Darwin kernels | Darwin kernels **~130×** / Linux ort **~82×** / Linux kernels **~28×** (Vox-3 smoke) |
-| AMI-test (16) | **16.6 %** Linux ort | **24.2 %** Linux ort / **25.2 %** Darwin kernels | Darwin kernels **~110×** / Linux ort **~95×** / Linux kernels **~21×** (AMI-1 smoke) |
-
-Like-for-like (strict collar 0) VoxConverse-test **15.0 %** vs pyannote 3.1
-**11.3 %** — accuracy traded for a CPU-only, MIT, **ungated** INT8 deploy.
-(VoxConverse-dev FP32-era 11.4 / 7.7 % is retained in the benchmarks doc; not
-re-measured on INT8 in this gate.)
-
-## 60 seconds to first result
-
-```bash
-# 1. Get the CLI (macOS Apple Silicon here; see Install for other platforms)
-curl -LO https://github.com/ekhodzitsky/polyvoice/releases/latest/download/polyvoice-macos-arm64
-chmod +x polyvoice-macos-arm64
-
-# 2. Fetch the INT8 models (~8.4 MB, MIT, no token)
-./polyvoice-macos-arm64 download-models --profile balanced
-
-# 3. Diarize
-./polyvoice-macos-arm64 diarize meeting.wav --output meeting.rttm
-cat meeting.rttm
-```
-
-```
-SPEAKER meeting 1   0.000  12.784  <NA> <NA> SPEAKER_00 <NA> <NA>
-SPEAKER meeting 1  13.005   2.530  <NA> <NA> SPEAKER_01 <NA> <NA>
-SPEAKER meeting 1  15.688  10.323  <NA> <NA> SPEAKER_02 <NA> <NA>
-```
-
-A 1-hour meeting diarizes in about a minute on a laptop.
-
-## Install
-
-| Platform | Get it |
-|---|---|
-| Linux x86_64 / ARM64, macOS, Windows | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) — put them on your `PATH` |
-| Rust library (kernels, no ort) | `cargo add polyvoice --features "pipeline-native,vbx"` — crate-root `Pipeline` (v2); default clusterer is VBx |
-| Rust library (ONNX Runtime) | `cargo add polyvoice --features "pipeline-full,vbx"` |
-| Rust, no models (BYO embedder) | `cargo add polyvoice --no-default-features` (extras: `clusterer,vbx`) — [library mode](docs/library-mode.md) |
-| Python | `pip install polyvoice` — [python/README.md](python/README.md) |
-| From source | `cargo install polyvoice --features cli` · `"cli,audio-io"` · `cli-ort` (ONNX Runtime) · `cli-tract` · `ffi` |
-
-## Library usage
+Library (kernels, models auto-download):
 
 ```rust,no_run
 use polyvoice::models::ModelRegistry;
@@ -74,13 +24,13 @@ use polyvoice::types::{Profile, SampleRate};
 use polyvoice::{Pipeline, PipelineConfig};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // PipelineConfig::default() is VBx when the `vbx` feature is on (CLI parity).
+    // PipelineConfig::default() is VBx when the `vbx` feature is on.
     let pipeline = Pipeline::builder()
         .config(PipelineConfig {
-            profile: Profile::Balanced, // INT8 pair (mobile/fast are the same models)
+            profile: Profile::Balanced,
             ..PipelineConfig::default()
         })
-        .with_models_from(ModelRegistry::default()?) // models auto-download
+        .with_models_from(ModelRegistry::default()?)
         .build()?;
     // 16 kHz WAV via ryf. Other rates/formats: `--features audio-io`.
     let (samples, sr) = polyvoice::wav::load_audio(std::path::Path::new("meeting.wav"))?;
@@ -92,25 +42,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Python: [python/README.md](python/README.md). Full Rust API: [docs.rs](https://docs.rs/polyvoice)
-and [docs/API.md](docs/API.md).
+CLI:
 
-## Why polyvoice
+```bash
+polyvoice download-models --profile balanced   # ~8.4 MB, MIT, no token
+polyvoice diarize meeting.wav --output meeting.rttm
+```
 
-- **Fast on CPU.** INT8 production models (~8.4 MB); order-of **tens–hundreds×
-  realtime** on a laptop CPU — no GPU. Powerset windows micro-batch (N=8)
-  on non-CoreML EPs.
-- **Rust-native, four surfaces.** Rust + Python + C FFI + CLI from one crate;
-  no PyTorch stack. CLI / FFI / MCP default is hand-written INT8 kernels
-  (`cli`, no `libonnxruntime`). ONNX Runtime is `--features cli-ort` and the
-  Python wheel. The published crate default feature set is empty (ort-free BYO
-  core).
-- **MIT, ungated.** No HF token, no non-commercial rider, no gated weights.
-  Online `StreamingPipeline` is the BYO energy-VAD path; product diarization
-  is batch pipeline v2.
-- **Honest trade-off.** Not the accuracy leader: pyannote 3.1 is ~4 DER
-  points better on VoxConverse (strict collar). You trade those points for
-  deployability. [Benchmarks](docs/BENCHMARKS.md) has the full protocol.
+```
+SPEAKER meeting 1   0.000  12.784  <NA> <NA> SPEAKER_00 <NA> <NA>
+SPEAKER meeting 1  13.005   2.530  <NA> <NA> SPEAKER_01 <NA> <NA>
+SPEAKER meeting 1  15.688  10.323  <NA> <NA> SPEAKER_02 <NA> <NA>
+```
+
+A 1-hour meeting diarizes in about a minute on a laptop. Python:
+`pip install polyvoice` ([python/README.md](python/README.md)). C FFI:
+[docs/FFI.md](docs/FFI.md).
+
+## Surfaces
+
+| Surface | Engine | Links ort |
+|---|---|---|
+| CLI, `--features cli` | INT8 kernels | no |
+| Rust library, `pipeline-native,vbx` | INT8 kernels | no |
+| C FFI, `--features ffi` | INT8 kernels | no |
+| BYO embedder, `--no-default-features` | yours | no |
+| Python wheel, `pip install polyvoice` | ONNX Runtime | yes |
+| CLI / library, `cli-ort` / `pipeline-full` | ONNX Runtime | yes |
+
+## Compared to pyannote
+
+Like-for-like, strict collar 0, VoxConverse-test (232 files). Full matrix
+(incl. diart, whisperx, speakrs): [compare](docs/COMPETITORS.md).
+
+| | polyvoice | pyannote 3.1 |
+|---|---|---|
+| Job | diarization crate | research diarization |
+| Runtime | Rust, CPU-only | PyTorch, GPU recommended |
+| Weights | MIT, ungated | HF token required |
+| Default deps | none | PyTorch stack |
+| DER₀ | 15.3 % | **11.3 %** |
+| Speed | **~141× realtime** (Ryzen AI 9 HX 370) | GPU-bound |
+
+The trade is explicit: ~4 DER points for a CPU-only, MIT, ungated deploy
+with no Python. Not the accuracy leader — the deployability leader.
+
+## Speed
+
+Kernels (product default) vs same-host ONNX Runtime, EP=cpu, INT8.
+Linux x86_64: Ryzen AI 9 HX 370, 2026-09-08. Darwin: Apple Silicon.
+DER₀ is strict collar 0. Protocol: [benchmarks](docs/BENCHMARKS.md).
+
+| Corpus | DER₀ | kernels Linux | ort Linux | kernels Darwin |
+|---|---:|---:|---:|---:|
+| VoxConverse-test (232) | 15.3 % | **~141×** | ~137× | ~130× |
+| AMI-test (16) | 25.5 % | **~162×** | ~156× | ~109× |
+| Vox-3 smoke | 7.0 % | ~103×, **~158×** wall at `--jobs 3` | ~129×, ~151× at `--jobs 3` | ≥117× |
+
+Peak RSS on the Vox-3 smoke: **~310 MiB** kernels vs ~620 MiB ort at
+jobs=1; ~470 MiB vs ~740 MiB at `--jobs 3` (one shared pipeline, DER
+bit-identical to jobs=1). On-disk INT8 pair: **8,414,314 bytes** — a
+locked scoreboard floor, as are DER and RSS (`tests/native_scoreboard.json`).
 
 ## How it works
 
@@ -122,28 +114,34 @@ audio (f32 PCM)
   → overlap resegmentation → speaker turns
 ```
 
-Streaming (`streaming::StreamingPipeline`) and batch (crate-root `Pipeline`;
-`pipeline::LegacyPipeline` on the ort-free BYO path), with a single-speaker
-guard so quiet or single-voice audio does not hallucinate clusters.
+## Install
 
-## Status
+| Platform | Get it |
+|---|---|
+| Linux x86_64 / ARM64, macOS, Windows | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) |
+| Rust library (kernels, no ort) | `cargo add polyvoice --features "pipeline-native,vbx"` |
+| Rust library (ONNX Runtime) | `cargo add polyvoice --features "pipeline-full,vbx"` |
+| From source | `cargo install polyvoice --features cli` · `"cli,audio-io"` · `cli-ort` · `cli-tract` · `ffi` |
 
+```toml
+[dependencies]
+polyvoice = { version = "0.20", features = ["pipeline-native", "vbx"] }
+```
+
+rustc **1.94**. Default features are empty: the published crate is the
+ort-free BYO core; models and engines are opt-in features
+([library mode](docs/library-mode.md)).
+
+[benchmarks](docs/BENCHMARKS.md) | [api](docs/API.md) |
+[architecture](docs/PIPELINE-ARCHITECTURE.md) |
+[library mode](docs/library-mode.md) | [ffi](docs/FFI.md) |
+[python](python/README.md) |
+[production readiness](PRODUCTION-READINESS.md) |
+[CHANGELOG](CHANGELOG.md)
+
+Batch diarization only: no ASR, no speaker identification.
 Beta (0.x): the public API may break between minor versions — pin an exact
-version in production. Deployment guidance and known gaps:
-[Production readiness](PRODUCTION-READINESS.md).
-
-## Documentation
-
-- **[docs/README.md](docs/README.md)** — full index by audience (CLI, Rust, Python, FFI, security)
-- [Benchmarks](docs/BENCHMARKS.md) — DER per corpus, speed, collar protocols, competitor context
-- [API](docs/API.md) · [Pipeline architecture](docs/PIPELINE-ARCHITECTURE.md) · [Library mode (no ONNX)](docs/library-mode.md)
-- [C FFI](docs/FFI.md) · [Python](python/README.md)
-- [Production readiness](PRODUCTION-READINESS.md) — deployment guidance (GO / NO-GO)
-- [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
-
-## License
-
-MIT
+version in production. MIT.
 
 ---
 
