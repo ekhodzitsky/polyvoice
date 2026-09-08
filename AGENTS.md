@@ -66,8 +66,9 @@ CPUs without it keep FP32.
 
 ## Backlog.md
 
-This repo uses Backlog.md (not GitHub Issues, not a second spec tool).
-Run `backlog instructions overview` before work. Mutate via the CLI
+Task tracking uses Backlog.md **locally** (the `backlog/` directory is
+gitignored — tool state does not belong in the repo). Run
+`backlog instructions overview` before work. Mutate via the CLI
 (`--plain` / `--json`). One task = one session = one PR.
 Docs → `doc create`; conclusions → `decision create`; work →
 `task create`. Labels: `audit`, `research`.
