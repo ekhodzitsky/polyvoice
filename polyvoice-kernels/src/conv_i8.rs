@@ -124,7 +124,9 @@ fn vnni_zip_kernel_matches_scalar() {
     for mo in (0..oc).step_by(MR) {
         // Zip variant, second 16-px tile, no relu.
         unsafe {
-            kernel_4x16_zip_store(&conv, &mut got, 0, yh, yw, 0, 16, mo, &zip, pn, 16, false, None);
+            kernel_4x16_zip_store(
+                &conv, &mut got, 0, yh, yw, 0, 16, mo, &zip, pn, 16, false, None,
+            );
         }
         // KN register-interleave variant, first tile, relu on.
         unsafe {
@@ -2645,9 +2647,9 @@ unsafe fn dot_i8_sdot(a: &[i8], b: &[i8]) -> i32 {
 #[allow(unused_unsafe)]
 unsafe fn dot_i8_vnni(a: &[i8], b: &[i8]) -> i32 {
     use std::arch::x86_64::{
-        _mm512_dpbusd_epi32, _mm512_loadu_si512, _mm512_reduce_add_epi32, _mm512_set1_epi8,
-        _mm512_setzero_si512, _mm512_xor_si512, _mm_cvtsi128_si32, _mm_dpbusd_epi32,
-        _mm_extract_epi32, _mm_loadu_si128, _mm_set1_epi8, _mm_setzero_si128, _mm_xor_si128,
+        _mm_cvtsi128_si32, _mm_dpbusd_epi32, _mm_extract_epi32, _mm_loadu_si128, _mm_set1_epi8,
+        _mm_setzero_si128, _mm_xor_si128, _mm512_dpbusd_epi32, _mm512_loadu_si512,
+        _mm512_reduce_add_epi32, _mm512_set1_epi8, _mm512_setzero_si512, _mm512_xor_si512,
     };
     let n = a.len().min(b.len());
     let mut acc = unsafe { _mm512_setzero_si512() };
@@ -2669,7 +2671,10 @@ unsafe fn dot_i8_vnni(a: &[i8], b: &[i8]) -> i32 {
     // only a safety net for non-padded callers).
     while k + 16 <= n {
         unsafe {
-            let av = _mm_xor_si128(_mm_loadu_si128(a.as_ptr().add(k).cast()), _mm_set1_epi8(-128));
+            let av = _mm_xor_si128(
+                _mm_loadu_si128(a.as_ptr().add(k).cast()),
+                _mm_set1_epi8(-128),
+            );
             let bv = _mm_loadu_si128(b.as_ptr().add(k).cast());
             let acc4 = _mm_dpbusd_epi32(_mm_setzero_si128(), av, bv);
             let bsum4 = _mm_dpbusd_epi32(_mm_setzero_si128(), _mm_set1_epi8(1), bv);
@@ -2896,9 +2901,9 @@ unsafe fn store16_out(
     i8d: Option<I8Dest>,
 ) {
     use std::arch::x86_64::{
-        _mm512_cvtsepi32_epi8, _mm512_cvtepi32_ps, _mm512_cvtps_epi32, _mm512_fmadd_ps,
-        _mm512_max_ps, _mm512_min_ps, _mm512_set1_ps, _mm512_setzero_ps, _mm512_storeu_ps,
-        _mm_storeu_si128,
+        _mm_storeu_si128, _mm512_cvtepi32_ps, _mm512_cvtps_epi32, _mm512_cvtsepi32_epi8,
+        _mm512_fmadd_ps, _mm512_max_ps, _mm512_min_ps, _mm512_set1_ps, _mm512_setzero_ps,
+        _mm512_storeu_ps,
     };
     unsafe {
         let mut v = _mm512_fmadd_ps(
@@ -2947,7 +2952,7 @@ unsafe fn kernel_4x16_zip_store(
     i8d: Option<I8Dest>,
 ) {
     use std::arch::x86_64::{
-        _mm512_dpbusd_epi32, _mm512_loadu_si512, _mm512_set1_epi32, _mm512_set1_epi8,
+        _mm512_dpbusd_epi32, _mm512_loadu_si512, _mm512_set1_epi8, _mm512_set1_epi32,
         _mm512_setzero_si512, _mm512_slli_epi32, _mm512_sub_epi32, _mm512_xor_si512,
     };
     let k_pad = conv.k_pad;
@@ -2998,10 +3003,10 @@ unsafe fn kernel_4x16_kn_store(
     i8d: Option<I8Dest>,
 ) {
     use std::arch::x86_64::{
-        _mm512_castsi128_si512, _mm512_dpbusd_epi32, _mm512_inserti32x4, _mm512_set1_epi32,
-        _mm512_set1_epi8, _mm512_setzero_si512, _mm512_slli_epi32, _mm512_sub_epi32,
-        _mm512_xor_si512, _mm_loadu_si128, _mm_unpackhi_epi16, _mm_unpackhi_epi8,
-        _mm_unpacklo_epi16, _mm_unpacklo_epi8,
+        _mm_loadu_si128, _mm_unpackhi_epi8, _mm_unpackhi_epi16, _mm_unpacklo_epi8,
+        _mm_unpacklo_epi16, _mm512_castsi128_si512, _mm512_dpbusd_epi32, _mm512_inserti32x4,
+        _mm512_set1_epi8, _mm512_set1_epi32, _mm512_setzero_si512, _mm512_slli_epi32,
+        _mm512_sub_epi32, _mm512_xor_si512,
     };
     let k_pad = conv.k_pad;
     let wp = conv.q_w_pad.as_ptr();
