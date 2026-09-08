@@ -10,7 +10,7 @@ resolver = "2"
 
 [package]
 name = "polyvoice"
-version = "0.19.0"
+version = "0.20.0"
 edition = "2024"
 # MSRV: rten-gemm / rten-simd (Linux INT8 GEMM) need 1.94.
 rust-version = "1.94.0"

@@ -7,10 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-08
+
+### Added
+
+- `polyvoice-bench --jobs N` now runs files in parallel on **one shared v2
+  pipeline** (previously one pipeline per worker, +350–470 MiB RSS each).
+  Internal window/embed fan-out is divided by a kernels file-parallelism
+  hint so `jobs × workers` stays near core count. Per-file DER is
+  bit-identical to `--jobs 1` (`tests/bench_jobs_determinism.rs`).
+- New bench report field `rt_factor_wall` (total audio / file-loop wall
+  clock) next to the per-file `rt_factor_avg`, so file-level parallelism
+  is visible in the metric.
+- x86_64 AVX-512 VNNI INT8 conv kernels (exact integer math, mirrors the
+  aarch64 SDOT path); INT8 conv now defaults on x86_64 with `avx512vnni`.
+- AVX-512 vectorized LSTM gates (same minimax approximation as NEON).
+
 ### Changed
 
 - WAVE ingest uses `ryf` 0.7.2 (was 0.3.2): G.722 / GSM decode, ffmpeg-tolerant
   headers, `non_exhaustive` probe/error types. Public `WavError` is unchanged.
+- SincNet im2col is tiled (2048 output positions per tile): segmentation peak
+  RSS no longer grows with file length. Vox-3 peak RSS 539 → ~310 MiB at
+  jobs=1; `--jobs 3` peaks at ~470 MiB (scoreboard floor: 556 MiB).
+- Embedder worker pool scales with core count (up to 8 on 24-thread hosts).
+- CLI binaries cap glibc malloc arenas (`M_ARENA_MAX=4`).
+
+### Performance (Linux x86_64, Ryzen AI 9 HX 370, 2026-09-08, same-host ort reference)
+
+- VoxConverse-test (232): **~141×** RTF, DER₀ 15.33 % (ort ~137× / 14.74 %).
+- AMI-test (16): **~162×** RTF, DER₀ 25.46 % (ort ~156× / 24.23 %).
+- Vox-3 smoke: **~158×** wall RTF at `--jobs 3` vs ort ~151×; RSS ~470 vs
+  ~740 MiB. Kernels are ahead of same-host ort on all three protocols.
 
 ## [0.19.0] - 2026-09-03
 
