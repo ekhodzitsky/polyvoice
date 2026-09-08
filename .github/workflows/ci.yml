@@ -212,8 +212,9 @@ jobs:
     # Two instrumented nextest passes (cli-native + all-features). The native
     # pass runs full diarization e2e plus Vox-3 in debug + llvm-cov; on a slow
     # runner that alone can exceed 45 min if those children share the CPUs.
-    # Heavy tests are exclusive via nextest profile `coverage`.
-    timeout-minutes: 90
+    # Heavy tests are exclusive via nextest profile `coverage`. Cold instrumented
+    # builds have measured 85+ min, so the cap carries headroom for slow runners.
+    timeout-minutes: 150
     permissions:
       contents: read
     steps:
