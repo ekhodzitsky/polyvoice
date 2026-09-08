@@ -356,6 +356,14 @@ pub struct ResNet34 {
     mean_vec: Vec<f32>,
     fc_act_scale: Option<f32>,
     fc_act_zp: i8,
+    /// QDQ lattices inside the stats-pool chain of the int8 graph. `None` on
+    /// the FP32 model.
+    pool_q: Option<PoolQuant>,
+    /// QDQ lattices around the stats-pool concat: mean half, std half, and the
+    /// Gemm output before `mean_vec` is subtracted. `None` on the FP32 model.
+    pool_mean_q: Option<(f32, i8)>,
+    pool_std_q: Option<(f32, i8)>,
+    fc_out_q: Option<(f32, i8)>,
     onnx_path: PathBuf,
     /// Compiled graph is the only conv path; layer weights were not loaded.
     graph_only: bool,
@@ -410,6 +418,25 @@ impl ResNet34 {
             Some((s, z)) => (Some(s), z),
             None => (None, 0),
         };
+        let pool_mean_q = take_act(init, Some("onnx::Concat_361"));
+        let pool_std_q = take_act(init, Some("onnx::Concat_362"));
+        let fc_out_q = take_act(init, Some("onnx::Sub_364"));
+        let pool_q = match (
+            take_act(init, Some("onnx::Mul_350")),
+            take_act(init, Some("onnx::Mul_352")),
+            take_act(init, Some("onnx::Mul_353")),
+            take_act(init, Some("onnx::Add_357")),
+            take_act(init, Some("onnx::Add_358")),
+        ) {
+            (Some(diff), Some(var), Some(t), Some(var_u), Some(eps)) => Some(PoolQuant {
+                diff,
+                var,
+                t,
+                var_u,
+                eps,
+            }),
+            _ => None,
+        };
         Ok(Self {
             stem,
             layer1,
@@ -421,6 +448,10 @@ impl ResNet34 {
             mean_vec,
             fc_act_scale,
             fc_act_zp,
+            pool_q,
+            pool_mean_q,
+            pool_std_q,
+            fc_out_q,
             onnx_path: PathBuf::new(),
             graph_only: false,
         })
@@ -464,9 +495,12 @@ impl ResNet34 {
             after_stem(&mut x, &self.layer1);
             x = run_layers(&self.layer1, &self.layer2, &self.layer3, &self.layer4, x);
         }
-        let mut pooled = stats_pool_n(&x, 0, x.w);
-        fake_quant_slice(&mut pooled, self.fc_act_scale, self.fc_act_zp);
-        Ok(gemm_sub(&pooled, &self.fc_w, &self.fc_b, &self.mean_vec))
+        let mut pooled = match &self.pool_q {
+            Some(q) => stats_pool_q(&x, 0, x.w, q),
+            None => stats_pool_n(&x, 0, x.w),
+        };
+        self.fake_quant_tail(&mut pooled);
+        Ok(self.gemm_out(&pooled))
     }
 
     /// Batch of CMVN fbank sequences. Every item must have the same `T`
@@ -525,11 +559,44 @@ impl ResNet34 {
         x = run_layers(&self.layer1, &self.layer2, &self.layer3, &self.layer4, x);
         let mut out = Vec::with_capacity(n_img);
         for ni in 0..n_img {
-            let mut pooled = stats_pool_n(&x, ni, x.w);
-            fake_quant_slice(&mut pooled, self.fc_act_scale, self.fc_act_zp);
-            out.push(gemm_sub(&pooled, &self.fc_w, &self.fc_b, &self.mean_vec));
+            let mut pooled = match &self.pool_q {
+                Some(q) => stats_pool_q(&x, ni, x.w, q),
+                None => stats_pool_n(&x, ni, x.w),
+            };
+            self.fake_quant_tail(&mut pooled);
+            out.push(self.gemm_out(&pooled));
         }
         Ok(out)
+    }
+
+    /// QDQ chain around the stats-pool output: the mean and std halves are
+    /// quantized onto their own lattices before the concat, and the concat
+    /// again before the Gemm — matching the shipping graph's
+    /// QuantizeLinear nodes.
+    fn fake_quant_tail(&self, pooled: &mut [f32]) {
+        let half = pooled.len() / 2;
+        if let Some((s, zp)) = self.pool_mean_q {
+            fake_quant_slice(&mut pooled[..half], Some(s), zp);
+        }
+        if let Some((s, zp)) = self.pool_std_q {
+            fake_quant_slice(&mut pooled[half..], Some(s), zp);
+        }
+        fake_quant_slice(pooled, self.fc_act_scale, self.fc_act_zp);
+    }
+
+    /// `pooled @ W^T + b − mean_vec`; the Gemm output is requantized onto its
+    /// QDQ lattice before the mean subtraction, as in the graph.
+    fn gemm_out(&self, pooled: &[f32]) -> Vec<f32> {
+        let Some((s, zp)) = self.fc_out_q else {
+            return gemm_sub(pooled, &self.fc_w, &self.fc_b, &self.mean_vec);
+        };
+        let zeros = [0.0f32; EMBED_DIM];
+        let mut pre = gemm_sub(pooled, &self.fc_w, &self.fc_b, &zeros);
+        fake_quant_slice(&mut pre, Some(s), zp);
+        for (v, m) in pre.iter_mut().zip(self.mean_vec.iter()) {
+            *v -= m;
+        }
+        pre
     }
 }
 
@@ -677,6 +744,66 @@ fn try_i8_identity(b: &Block, x: &mut Tensor, next_q: Option<(f32, i8)>) -> bool
         })
     });
     ok
+}
+
+/// QDQ lattices inside the stats-pool chain of the int8 graph: the
+/// `(x − mean)` diff before squaring, the biased mean of squares, the frame
+/// count, the corrected variance, and the eps.
+#[derive(Clone, Copy)]
+struct PoolQuant {
+    diff: (f32, i8),
+    var: (f32, i8),
+    t: (f32, i8),
+    var_u: (f32, i8),
+    eps: (f32, i8),
+}
+
+/// Quantized square of the stats-pool diff: `(dequant(Q(d)))^2`.
+fn fq_square(d: f32, lat: (f32, i8)) -> f32 {
+    let dq = fq_scalar(d, lat);
+    dq * dq
+}
+
+/// Scalar QDQ fake-quant (round, clamp to i8, dequant).
+fn fq_scalar(v: f32, (s, z): (f32, i8)) -> f32 {
+    let s = if s.abs() < 1e-12 { 1.0 } else { s };
+    let zf = f32::from(z);
+    let q = (v / s).round() + zf;
+    (q.clamp(-128.0, 127.0) - zf) * s
+}
+
+/// Stats pool following the graph's QDQ chain: the `(x − mean)` diff is
+/// quantized before squaring, and the frame count passes an int8
+/// QuantizeLinear — it clamps into i8 range, so the graph's "unbiased"
+/// variance correction is a constant (~1.033) rather than `T/(T−1)`.
+fn stats_pool_q(x: &Tensor, n: usize, t: usize, q: &PoolQuant) -> Vec<f32> {
+    let t = t.max(1).min(x.w);
+    let spatial = x.c * x.h;
+    let tf = fq_scalar(t as f32, q.t);
+    let tf = if tf > 1.0 { tf } else { t as f32 };
+    let eps = fq_scalar(STD_EPS, q.eps);
+    let mut means = vec![0.0f32; spatial];
+    let mut stds = vec![0.0f32; spatial];
+    for c in 0..x.c {
+        for h in 0..x.h {
+            let base = x.idx(n, c, h, 0);
+            let row = &x.data[base..base + t];
+            let m = row.iter().sum::<f32>() / t as f32;
+            let mut acc = 0.0f32;
+            for &v in row {
+                acc += fq_square(v - m, q.diff);
+            }
+            let var = fq_scalar(acc / t as f32, q.var);
+            let var = fq_scalar(var * tf / (tf - 1.0), q.var_u);
+            let i = c * x.h + h;
+            means[i] = m;
+            stds[i] = (var + eps).sqrt();
+        }
+    }
+    let mut out = Vec::with_capacity(spatial * 2);
+    out.extend_from_slice(&means);
+    out.extend_from_slice(&stds);
+    out
 }
 
 /// Unbiased std-pool over the last (time) axis of image `n`, first `t` steps.
@@ -868,6 +995,17 @@ fn take_conv(
     };
     if let Some((scale, zp)) = take_act(init, qin) {
         conv = conv.with_input_quant(scale, zp);
+    }
+    // The graph requantizes conv2/downsample outputs onto an `onnx::Add_*`
+    // lattice before the residual add; the weight `onnx::Conv_{N}` pairs with
+    // `onnx::Add_{N-1}` (conv1 outputs quantize as the next conv's input).
+    if let Some(n) = w_name
+        .strip_prefix("onnx::Conv_")
+        .and_then(|s| s.parse::<usize>().ok())
+        && n > 0
+    {
+        conv.out_q = None; // BISECT VB2: epilogue requant off
+        let _ = take_act(init, Some(&format!("onnx::Add_{}", n - 1)));
     }
     Ok(conv)
 }

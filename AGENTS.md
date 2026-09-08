@@ -55,9 +55,10 @@ is not acceptable: keep the win and cut memory.
 Product default is `cli` = kernels (`pipeline-native`), no `libonnxruntime`.
 ONNX Runtime is opt-in (`cli-ort` / `onnx`). Darwin native holds the
 scoreboard floors above. Linux x86_64 native, 2026-09-08
-(Ryzen AI 9 HX 370): VoxConverse-test DER₀ 15.33 % / RTFx ~141×,
-AMI DER₀ 25.46 % / RTFx ~162× (same-host ort ~137× / ~156× — kernels
-ahead on long files), Vox-3 smoke RTFx ~103× at jobs=1 (ort ~129×) but
+(Ryzen AI 9 HX 370): VoxConverse-test DER₀ 14.86 % / RTFx ~162×,
+AMI DER₀ 24.73 % / RTFx ~193× (same-host ort 14.74 % / 24.23 %,
+~137× / ~156× — kernels ahead on long files), Vox-3 smoke RTFx ~110×
+at jobs=1 (ort ~129×) but
 **~158× wall at `--jobs 3`** (ort ~151×; peak RSS ~470 vs ~740 MiB,
 jobs=1 ~310 vs ~620 MiB) — the v2 pipeline is shared across file
 workers, DER is bit-identical to jobs=1. INT8 conv defaults on x86_64

@@ -2,14 +2,6 @@
 
 use crate::tensor::Tensor;
 use std::cell::RefCell;
-use std::sync::OnceLock;
-
-fn skip_qdq() -> bool {
-    static S: OnceLock<bool> = OnceLock::new();
-    // Activation fake-quant does not move Vox-3 DER and costs a full map
-    // write per layer. Keep it behind POLYVOICE_QDQ=1 for bit-exact QDQ.
-    *S.get_or_init(|| std::env::var_os("POLYVOICE_QDQ").is_none())
-}
 
 thread_local! {
     static COL_BUF: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
@@ -38,6 +30,10 @@ pub struct Conv2d {
     pub(crate) k_pad: usize,
     pub(crate) out_scale: Vec<f32>,
     pub(crate) eff_bias: Vec<f32>,
+    /// QDQ lattice of this conv's output when the graph quantizes it before
+    /// the residual add (`onnx::Add_*` nodes): (scale, zero_point). Only
+    /// conv2/downsample convs carry it; the i8 epilogue requantizes onto it.
+    pub(crate) out_q: Option<(f32, i8)>,
 }
 
 impl Conv2d {
@@ -68,6 +64,7 @@ impl Conv2d {
             k_pad: 0,
             out_scale: Vec::new(),
             eff_bias: Vec::new(),
+            out_q: None,
         }
     }
 
@@ -115,6 +112,7 @@ impl Conv2d {
             k_pad,
             out_scale: Vec::new(),
             eff_bias: Vec::new(),
+            out_q: None,
         }
     }
 
@@ -169,18 +167,19 @@ impl Conv2d {
         if crate::conv_i8::try_conv(self, x, y, relu) {
             return;
         }
+        // f32 path keeps the graph's QDQ semantics: fake-quant the input and
+        // requantize the output onto its pre-add lattice when it has one.
         let qbuf;
         let x = if let Some(scale) = self.act_scale {
-            if skip_qdq() {
-                x
-            } else {
-                qbuf = fake_quant_tensor(x, scale, self.act_zp);
-                &qbuf
-            }
+            qbuf = fake_quant_tensor(x, scale, self.act_zp);
+            &qbuf
         } else {
             x
         };
         self.with_weight_f32(|w| self.forward_with_weight(x, w, y, oh, ow, relu));
+        if let Some((s, z)) = self.out_q {
+            crate::tensor::fake_quant_inplace(y, s, z);
+        }
     }
 
     /// Like `forward_into`, but fake-quant may overwrite `x`.
@@ -190,12 +189,13 @@ impl Conv2d {
         if crate::conv_i8::try_conv(self, x, y, relu) {
             return;
         }
-        if let Some(scale) = self.act_scale
-            && !skip_qdq()
-        {
+        if let Some(scale) = self.act_scale {
             crate::tensor::fake_quant_inplace(x, scale, self.act_zp);
         }
         self.with_weight_f32(|w| self.forward_with_weight(x, w, y, oh, ow, relu));
+        if let Some((s, z)) = self.out_q {
+            crate::tensor::fake_quant_inplace(y, s, z);
+        }
     }
 
     /// Identity of the live weight buffer — BNNS filter cache key (Apple only).

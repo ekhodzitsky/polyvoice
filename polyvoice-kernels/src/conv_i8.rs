@@ -183,20 +183,29 @@ const MR: usize = 4;
 #[derive(Clone, Copy)]
 struct I8Dest {
     p: usize,
-    inv_scale: f32,
+    scale: f32,
     zp: f32,
 }
 
 impl I8Dest {
     #[inline(always)]
     fn store(self, idx: usize, v: f32) {
-        let q = (v * self.inv_scale).round() + self.zp;
+        let q = (v / self.scale).round() + self.zp;
         // SAFETY: try_conv_to_i8 sizes the dest to N·OC·OH·OW; idx is the
         // same NCHW address the f32 store would have used.
         unsafe {
             *(self.p as *mut i8).add(idx) = q.clamp(-128.0, 127.0) as i8;
         }
     }
+}
+
+/// Requantize a dequantized conv output onto its QDQ pre-add lattice
+/// (ONNX `QuantizeLinear`/`DequantizeLinear`: round, clamp, dequant).
+#[inline(always)]
+fn requant_f32(v: f32, scale: f32, zp: i8) -> f32 {
+    let z = f32::from(zp);
+    let q = (v / scale).round() + z;
+    (q.clamp(-128.0, 127.0) - z) * scale
 }
 /// Output pixels in one implicit panel. Fat enough for GEMM, small enough
 /// that the pack stays in L1 (~ k_pad × PN bytes).
@@ -331,7 +340,7 @@ pub fn try_conv_to_i8(
     }
     let dest = I8Dest {
         p: yq.as_mut_ptr() as usize,
-        inv_scale: 1.0 / next_scale,
+        scale: next_scale,
         zp: f32::from(next_zp),
     };
     let xq_len = x.data.len();
@@ -2560,6 +2569,9 @@ fn write_out_sl(
     if let Some(d) = i8d {
         d.store(idx, v);
     } else {
+        if let Some((s, z)) = conv.out_q {
+            v = requant_f32(v, s, z);
+        }
         yd[idx] = v;
     }
 }
@@ -2831,13 +2843,16 @@ fn gemm_panel_kn16(
 
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
-unsafe fn store4_i8(dst: *mut i8, v: std::arch::aarch64::float32x4_t, inv: f32, zp: f32) {
+unsafe fn store4_i8(dst: *mut i8, v: std::arch::aarch64::float32x4_t, scale: f32, zp: f32) {
     use std::arch::aarch64::{
-        vaddq_f32, vcombine_s16, vcvtq_s32_f32, vdupq_n_f32, vget_lane_s32, vmaxq_f32, vminq_f32,
-        vmulq_f32, vqmovn_s16, vqmovn_s32, vreinterpret_s32_s8, vrndaq_f32,
+        vaddq_f32, vcombine_s16, vcvtq_s32_f32, vdivq_f32, vdupq_n_f32, vget_lane_s32, vmaxq_f32,
+        vminq_f32, vqmovn_s16, vqmovn_s32, vreinterpret_s32_s8, vrndaq_f32,
     };
     unsafe {
-        let q = vaddq_f32(vrndaq_f32(vmulq_f32(v, vdupq_n_f32(inv))), vdupq_n_f32(zp));
+        let q = vaddq_f32(
+            vrndaq_f32(vdivq_f32(v, vdupq_n_f32(scale))),
+            vdupq_n_f32(zp),
+        );
         let qi = vcvtq_s32_f32(vmaxq_f32(
             vminq_f32(q, vdupq_n_f32(127.0)),
             vdupq_n_f32(-128.0),
@@ -2846,6 +2861,27 @@ unsafe fn store4_i8(dst: *mut i8, v: std::arch::aarch64::float32x4_t, inv: f32, 
         let i8x8 = vqmovn_s16(vcombine_s16(i16, i16));
         let bits = vget_lane_s32::<0>(vreinterpret_s32_s8(i8x8)) as u32;
         core::ptr::write_unaligned(dst as *mut u32, bits);
+    }
+}
+
+/// Requant 4 lanes onto the pre-add QDQ lattice (round half away, clamp).
+#[cfg(target_arch = "aarch64")]
+#[inline(always)]
+unsafe fn requant4_f32(
+    v: std::arch::aarch64::float32x4_t,
+    scale: f32,
+    zp: f32,
+) -> std::arch::aarch64::float32x4_t {
+    use std::arch::aarch64::{
+        vaddq_f32, vdivq_f32, vdupq_n_f32, vmaxq_f32, vminq_f32, vmulq_f32, vrndaq_f32, vsubq_f32,
+    };
+    unsafe {
+        let vs = vdupq_n_f32(scale);
+        let vz = vdupq_n_f32(zp);
+        let q = vrndaq_f32(vdivq_f32(v, vs));
+        let q = vaddq_f32(q, vz);
+        let q = vmaxq_f32(vminq_f32(q, vdupq_n_f32(127.0)), vdupq_n_f32(-128.0));
+        vmulq_f32(vsubq_f32(q, vz), vs)
     }
 }
 
@@ -2880,6 +2916,31 @@ fn w_row_sum(conv: &Conv2d, oc: usize) -> i32 {
     row.iter().map(|&v| i32::from(v)).sum()
 }
 
+/// copysign(0.5, x) — the half-away-from-zero rounding addend.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx512f")]
+#[allow(unused_unsafe)]
+#[inline]
+pub(crate) unsafe fn round_half_away_adj(
+    x: std::arch::x86_64::__m512,
+) -> std::arch::x86_64::__m512 {
+    use std::arch::x86_64::{_mm512_and_ps, _mm512_or_ps, _mm512_set1_ps};
+    unsafe { _mm512_or_ps(_mm512_and_ps(x, _mm512_set1_ps(-0.0)), _mm512_set1_ps(0.5)) }
+}
+
+/// f32::round (half away from zero) to integers: trunc(x + copysign(0.5, x)).
+/// Exact for |x| < 2^31, so valid for i8 lattice indices.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx512f")]
+#[allow(unused_unsafe)]
+#[inline]
+pub(crate) unsafe fn round_half_away_epi32(
+    x: std::arch::x86_64::__m512,
+) -> std::arch::x86_64::__m512i {
+    use std::arch::x86_64::{_mm512_add_ps, _mm512_cvttps_epi32};
+    unsafe { _mm512_cvttps_epi32(_mm512_add_ps(x, round_half_away_adj(x))) }
+}
+
 /// Dequant + relu + store of 16 adjacent output pixels held in one zmm
 /// (dword lane j = pixel ox+j). Mirrors the f32/i8 store of `write_out_sl`.
 #[cfg(target_arch = "x86_64")]
@@ -2901,9 +2962,10 @@ unsafe fn store16_out(
     i8d: Option<I8Dest>,
 ) {
     use std::arch::x86_64::{
-        _mm_storeu_si128, _mm512_cvtepi32_ps, _mm512_cvtps_epi32, _mm512_cvtsepi32_epi8,
-        _mm512_fmadd_ps, _mm512_max_ps, _mm512_min_ps, _mm512_set1_ps, _mm512_setzero_ps,
-        _mm512_storeu_ps,
+        _mm_storeu_si128, _mm512_add_epi32, _mm512_cvtepi32_ps, _mm512_cvtsepi32_epi8,
+        _mm512_div_ps, _mm512_fmadd_ps, _mm512_max_epi32, _mm512_max_ps, _mm512_min_epi32,
+        _mm512_mul_ps, _mm512_set1_epi32, _mm512_set1_ps, _mm512_setzero_ps, _mm512_storeu_ps,
+        _mm512_sub_ps,
     };
     unsafe {
         let mut v = _mm512_fmadd_ps(
@@ -2916,13 +2978,32 @@ unsafe fn store16_out(
         }
         let idx = ybase + (oc * yh + oy) * yw + ox;
         if let Some(d) = i8d {
-            let q = _mm512_fmadd_ps(v, _mm512_set1_ps(d.inv_scale), _mm512_set1_ps(d.zp));
-            let qi = _mm512_cvtps_epi32(_mm512_max_ps(
-                _mm512_min_ps(q, _mm512_set1_ps(127.0)),
-                _mm512_set1_ps(-128.0),
-            ));
+            // Graph QuantizeLinear: divide, round half away, add zp, clamp.
+            let qi = _mm512_add_epi32(
+                round_half_away_epi32(_mm512_div_ps(v, _mm512_set1_ps(d.scale))),
+                _mm512_set1_epi32(i32::from(d.zp as i8)),
+            );
+            let qi = _mm512_max_epi32(
+                _mm512_min_epi32(qi, _mm512_set1_epi32(127)),
+                _mm512_set1_epi32(-128),
+            );
             _mm_storeu_si128((d.p as *mut i8).add(idx).cast(), _mm512_cvtsepi32_epi8(qi));
         } else {
+            if let Some((s, z)) = conv.out_q {
+                // Requant onto the pre-add QDQ lattice.
+                let qi = _mm512_add_epi32(
+                    round_half_away_epi32(_mm512_div_ps(v, _mm512_set1_ps(s))),
+                    _mm512_set1_epi32(i32::from(z)),
+                );
+                let qi = _mm512_max_epi32(
+                    _mm512_min_epi32(qi, _mm512_set1_epi32(127)),
+                    _mm512_set1_epi32(-128),
+                );
+                v = _mm512_mul_ps(
+                    _mm512_sub_ps(_mm512_cvtepi32_ps(qi), _mm512_set1_ps(f32::from(z))),
+                    _mm512_set1_ps(s),
+                );
+            }
             _mm512_storeu_ps(yd.as_mut_ptr().add(idx), v);
         }
     }
@@ -3190,8 +3271,11 @@ unsafe fn kernel_4x16_zip_store(
                     v = vmaxq_f32(v, zero);
                 }
                 if let Some(d) = i8d {
-                    store4_i8((d.p as *mut i8).add(dst0 + i * 4), v, d.inv_scale, d.zp);
+                    store4_i8((d.p as *mut i8).add(dst0 + i * 4), v, d.scale, d.zp);
                 } else {
+                    if let Some((s, z)) = conv.out_q {
+                        v = requant4_f32(v, s, f32::from(z));
+                    }
                     vst1q_f32(yd[dst0 + i * 4..].as_mut_ptr(), v);
                 }
             }
@@ -3318,8 +3402,11 @@ unsafe fn kernel_4x16_kn_store(
                     v = vmaxq_f32(v, zero);
                 }
                 if let Some(d) = i8d {
-                    store4_i8((d.p as *mut i8).add(dst0 + i * 4), v, d.inv_scale, d.zp);
+                    store4_i8((d.p as *mut i8).add(dst0 + i * 4), v, d.scale, d.zp);
                 } else {
+                    if let Some((s, z)) = conv.out_q {
+                        v = requant4_f32(v, s, f32::from(z));
+                    }
                     vst1q_f32(yd[dst0 + i * 4..].as_mut_ptr(), v);
                 }
             }

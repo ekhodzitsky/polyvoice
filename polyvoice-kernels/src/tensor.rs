@@ -114,6 +114,10 @@ pub fn relu_quantize_inplace(a: &mut Tensor, scale: f32, zp: i8, dst: &mut [i8])
     let z = f32::from(zp);
     #[cfg(target_arch = "aarch64")]
     neon_relu_quantize(&mut a.data[..n], s, z, &mut dst[..n]);
+    #[cfg(target_arch = "x86_64")]
+    if avx512_relu_quantize(&mut a.data[..n], None, s, z, &mut dst[..n]) {
+        return;
+    }
     #[cfg(not(target_arch = "aarch64"))]
     for i in 0..n {
         let v = a.data[i];
@@ -133,6 +137,10 @@ pub fn add_relu_quantize_inplace(a: &mut Tensor, b: &Tensor, scale: f32, zp: i8,
     let z = f32::from(zp);
     #[cfg(target_arch = "aarch64")]
     neon_add_relu_quantize(&mut a.data[..n], &b.data[..n], s, z, &mut dst[..n]);
+    #[cfg(target_arch = "x86_64")]
+    if avx512_relu_quantize(&mut a.data[..n], Some(&b.data[..n]), s, z, &mut dst[..n]) {
+        return;
+    }
     #[cfg(not(target_arch = "aarch64"))]
     for i in 0..n {
         let v = a.data[i] + b.data[i];
@@ -140,6 +148,81 @@ pub fn add_relu_quantize_inplace(a: &mut Tensor, b: &Tensor, scale: f32, zp: i8,
         a.data[i] = v;
         let q = (v / s).round() + z;
         dst[i] = q.clamp(-128.0, 127.0) as i8;
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+fn has_avx512() -> bool {
+    static HAS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *HAS.get_or_init(|| {
+        std::arch::is_x86_feature_detected!("avx512f")
+            && std::arch::is_x86_feature_detected!("avx512bw")
+            && std::arch::is_x86_feature_detected!("avx512vl")
+    })
+}
+
+/// AVX-512 `relu(a [+ b])` + QDQ quantize. Bit-matches the scalar loop
+/// (IEEE divide, round half away via trunc(x ± 0.5)).
+/// Returns false when AVX-512 is unavailable.
+#[cfg(target_arch = "x86_64")]
+fn avx512_relu_quantize(a: &mut [f32], b: Option<&[f32]>, s: f32, z: f32, qdst: &mut [i8]) -> bool {
+    if !has_avx512() {
+        return false;
+    }
+    unsafe { avx512_relu_quantize_inner(a, b, s, z, qdst) }
+    true
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx512f,avx512bw,avx512vl")]
+#[allow(unused_unsafe)]
+unsafe fn avx512_relu_quantize_inner(
+    a: &mut [f32],
+    b: Option<&[f32]>,
+    s: f32,
+    z: f32,
+    qdst: &mut [i8],
+) {
+    use std::arch::x86_64::{
+        _mm_storeu_si128, _mm512_add_epi32, _mm512_add_ps, _mm512_cvtsepi32_epi8, _mm512_div_ps,
+        _mm512_loadu_ps, _mm512_max_epi32, _mm512_max_ps, _mm512_min_epi32, _mm512_set1_epi32,
+        _mm512_set1_ps, _mm512_setzero_ps, _mm512_storeu_ps,
+    };
+    let n = a
+        .len()
+        .min(qdst.len())
+        .min(b.map_or(usize::MAX, <[f32]>::len));
+    let vs = _mm512_set1_ps(s);
+    let vz = _mm512_set1_epi32(z as i32);
+    let hi = _mm512_set1_epi32(127);
+    let lo = _mm512_set1_epi32(-128);
+    let zero = _mm512_setzero_ps();
+    let mut chunks = a[..n].chunks_exact_mut(16);
+    let mut bidx = 0usize;
+    for c in chunks.by_ref() {
+        unsafe {
+            let mut v = _mm512_loadu_ps(c.as_ptr());
+            if let Some(bb) = b {
+                v = _mm512_add_ps(v, _mm512_loadu_ps(bb[bidx..].as_ptr()));
+            }
+            bidx += 16;
+            v = _mm512_max_ps(v, zero);
+            let qi = crate::conv_i8::round_half_away_epi32(_mm512_div_ps(v, vs));
+            let qi = _mm512_max_epi32(_mm512_min_epi32(_mm512_add_epi32(qi, vz), hi), lo);
+            _mm512_storeu_ps(c.as_mut_ptr(), v);
+            _mm_storeu_si128(
+                qdst[bidx - 16..].as_mut_ptr().cast(),
+                _mm512_cvtsepi32_epi8(qi),
+            );
+        }
+    }
+    let rem = chunks.into_remainder();
+    for (i, v0) in (n - rem.len()..).zip(rem.iter_mut()) {
+        let v = if let Some(bb) = b { *v0 + bb[i] } else { *v0 };
+        let v = if v > 0.0 { v } else { 0.0 };
+        *v0 = v;
+        let q = (v / s).round() + z;
+        qdst[i] = q.clamp(-128.0, 127.0) as i8;
     }
 }
 
@@ -177,11 +260,12 @@ fn neon_relu_quantize(dst: &mut [f32], s: f32, z: f32, qdst: &mut [i8]) {
     while i + 4 <= n {
         unsafe {
             let r = vmaxq_f32(vld1q_f32(dst[i..].as_ptr()), z0);
-            vst1q_f32(dst[i..].as_mut_ptr(), r);
-            let q = vcvtq_s32_f32(vmaxq_f32(
+            let qc = vmaxq_f32(
                 vminq_f32(vaddq_f32(vrndaq_f32(vdivq_f32(r, vs)), vz), hi),
                 lo,
-            ));
+            );
+            vst1q_f32(dst[i..].as_mut_ptr(), r);
+            let q = vcvtq_s32_f32(qc);
             qdst[i] = vgetq_lane_s32::<0>(q) as i8;
             qdst[i + 1] = vgetq_lane_s32::<1>(q) as i8;
             qdst[i + 2] = vgetq_lane_s32::<2>(q) as i8;
@@ -220,8 +304,8 @@ fn neon_add_relu(dst: &mut [f32], src: &[f32]) {
 #[cfg(target_arch = "aarch64")]
 fn neon_add_relu_quantize(dst: &mut [f32], src: &[f32], s: f32, z: f32, qdst: &mut [i8]) {
     use std::arch::aarch64::{
-        vaddq_f32, vcvtq_s32_f32, vdivq_f32, vld1q_f32, vmaxq_f32, vminq_f32, vmovq_n_f32,
-        vrndaq_f32, vst1q_f32,
+        vaddq_f32, vcvtq_s32_f32, vdivq_f32, vgetq_lane_s32, vld1q_f32, vmaxq_f32, vminq_f32,
+        vmovq_n_f32, vrndaq_f32, vst1q_f32,
     };
     let n = dst.len().min(src.len()).min(qdst.len());
     let z0 = unsafe { vmovq_n_f32(0.0) };
@@ -235,27 +319,16 @@ fn neon_add_relu_quantize(dst: &mut [f32], src: &[f32], s: f32, z: f32, qdst: &m
             let a = vld1q_f32(dst[i..].as_ptr());
             let b = vld1q_f32(src[i..].as_ptr());
             let r = vmaxq_f32(vaddq_f32(a, b), z0);
-            vst1q_f32(dst[i..].as_mut_ptr(), r);
-            let q = vcvtq_s32_f32(vmaxq_f32(
+            let qc = vmaxq_f32(
                 vminq_f32(vaddq_f32(vrndaq_f32(vdivq_f32(r, vs)), vz), hi),
                 lo,
-            ));
-            qdst[i] = {
-                use std::arch::aarch64::vgetq_lane_s32;
-                vgetq_lane_s32::<0>(q) as i8
-            };
-            qdst[i + 1] = {
-                use std::arch::aarch64::vgetq_lane_s32;
-                vgetq_lane_s32::<1>(q) as i8
-            };
-            qdst[i + 2] = {
-                use std::arch::aarch64::vgetq_lane_s32;
-                vgetq_lane_s32::<2>(q) as i8
-            };
-            qdst[i + 3] = {
-                use std::arch::aarch64::vgetq_lane_s32;
-                vgetq_lane_s32::<3>(q) as i8
-            };
+            );
+            vst1q_f32(dst[i..].as_mut_ptr(), r);
+            let q = vcvtq_s32_f32(qc);
+            qdst[i] = vgetq_lane_s32::<0>(q) as i8;
+            qdst[i + 1] = vgetq_lane_s32::<1>(q) as i8;
+            qdst[i + 2] = vgetq_lane_s32::<2>(q) as i8;
+            qdst[i + 3] = vgetq_lane_s32::<3>(q) as i8;
         }
         i += 4;
     }

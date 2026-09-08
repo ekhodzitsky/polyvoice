@@ -1,0 +1,16 @@
+date: 2026-09-08T17:48:34Z
+uname: Linux x1pro 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026 x86_64 GNU/Linux
+os: Linux
+arch: x86_64
+distro: Ubuntu 26.04.1 LTS
+cpus: 24
+ep: cpu
+profile: balanced
+features: cli-native
+pipeline: v2 + vbx
+powerset_batch: 8
+assert_baseline: 1
+max_vox: 0
+max_ami: 0
+git: 5be61a356688480281db8025b5311f4af52a67f4
+polyvoice: polyvoice 0.20.0
