@@ -25,6 +25,11 @@ rm python/pyproject.toml.bak
 sed -i.bak "s/polyvoice [0-9]\+\.[0-9]\+\.[0-9]\+/polyvoice ${VERSION}/" tests/cli_smoke_test.rs
 rm tests/cli_smoke_test.rs.bak
 
+# 4b. tests/der_baseline.json — der_baseline_test asserts crate_version matches
+# the crate version.
+sed -i.bak "s/\"crate_version\": \"[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\"/\"crate_version\": \"${VERSION}\"/" tests/der_baseline.json
+rm tests/der_baseline.json.bak
+
 # 5. Lockfiles — every lockfile that pins the path dependency on the core crate
 # (the workspace root's own plus the standalone crates') goes stale on a version
 # bump; re-resolve just the polyvoice entry in each.

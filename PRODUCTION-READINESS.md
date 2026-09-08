@@ -1,8 +1,8 @@
 # Production Readiness Assessment
 
-> **Version:** 0.19.x | **Date:** 2026-09-03 | **Scope:** Rust library + Python bindings + FFI + CLI
+> **Version:** 0.20.x | **Date:** 2026-09-08 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
-> **Last updated:** 2026-09-03 — crate **0.19.0** WAVE ingest is `ryf` (not
+> **Last updated:** 2026-09-08 — crate **0.20.0** WAVE ingest is `ryf` (not
 > `hound`). Kernels default and INT8-only profiles shipped in **0.18.0**.
 > (`powerset_int8` + `resnet34_int8`). Pipeline v2+VBx default since 0.11.
 > **Product CLI / FFI / MCP** run hand-written kernels (`pipeline-native`),
@@ -60,7 +60,7 @@ multi-corpus proof.
 
 | Area | State |
 |------|--------|
-| Crate version | `0.19.0` |
+| Crate version | `0.20.0` |
 | WAVE ingest | **`ryf`** (WAVE family → mono f32); `audio-io` still `symphonia` + `rubato` for non-WAV |
 | Production models | **INT8 only** (`powerset_int8` + `resnet34_int8`, ~8.4 MB) |
 | CLI / FFI / MCP engine | **kernels** (`pipeline-native`); `--legacy` / `--clusterer ahc` opt out |
@@ -92,7 +92,7 @@ native full-split numbers that are measured rather than copied ceilings.
 
 | Item | Status | Risk |
 |------|--------|------|
-| Semantic version | `0.19.0` | Pre-1.0 — API may change between `0.x` minors |
+| Semantic version | `0.20.0` | Pre-1.0 — API may change between `0.x` minors |
 | `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
 | CHANGELOG | Maintained | Tracks 0.11→0.19; CLI default flip to v2+VBx was 0.11; kernels default was 0.18; WAVE `ryf` was 0.19 |
 
@@ -339,7 +339,7 @@ Until every box is checked, the honest status remains:
 
 | Metric | Value |
 |--------|-------|
-| Crate version | 0.19.0 |
+| Crate version | 0.20.0 |
 | Deployable footprint | **~8.4 MB** INT8 production pair (FP32 ids optional / not profile-default) |
 | Product CLI engine | kernels (`pipeline-native`); no `libonnxruntime` |
 | Speed (kernels, Darwin Vox-3 scoreboard) | ≥**117×** realtime; peak RSS ≤ **556 MiB** |
