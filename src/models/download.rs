@@ -91,6 +91,10 @@ pub fn download_with_checksum_and_signature(
 /// weights are ~250 MiB), so legitimate downloads are unaffected.
 pub(crate) const DEFAULT_MAX_MODEL_BYTES: u64 = 1024 * 1024 * 1024;
 
+/// Serializes fetches process-wide: the staging `.partial` path is shared
+/// per destination, so parallel downloads of the same model must not overlap.
+static DOWNLOAD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Streaming size cap for one model given an optional manifest-declared size.
 ///
 /// When `declared_size` is set and positive, the cap is `2 × size` (slack for
@@ -119,6 +123,12 @@ pub(crate) fn download_with_checksum_signature_and_cap(
     dest: &Path,
     max_bytes: u64,
 ) -> Result<bool, DownloadError> {
+    // Downloads stage through a shared per-dest `.partial` file: two threads
+    // ensuring the same model would otherwise race (one renames the staging
+    // file away under the other). Serializing is free — fetches happen once.
+    let _guard = DOWNLOAD_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     // Stage 1 — cache hit: verify SHA-256, then the signature if present. No
     // network here, so the URL scheme is irrelevant.
     if serve_cache_hit(dest, expected_sha256, signature)? {

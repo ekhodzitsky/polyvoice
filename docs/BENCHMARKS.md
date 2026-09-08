@@ -267,19 +267,23 @@ are operational (asserted by the native gate).
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | VoxConverse-test (232) | **~130×** | **15.47 %** |
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | AMI-test (16) | **~109×** | **25.19 %** |
 | **v2 + VBx INT8 Darwin kernels Vox-3 scoreboard** | euqef / fuzfh / msbyq | **≥117×** | **7.11 %** |
-| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~141×** | **15.33 %** |
-| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~162×** | **25.46 %** |
-| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~103×** (jobs=1), **~158×** wall (`--jobs 3`) | **7.03 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~162×** | **14.86 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~193×** | **24.73 %** |
+| **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~111×** (jobs=1), **~158×** wall (`--jobs 3`) | **7.03 %** |
 
 Linux x86_64 numbers: 2026-09-08,
-[`benchmarks/results/linux-cpu-native-der-2026-09-08/`](../benchmarks/results/linux-cpu-native-der-2026-09-08/).
+[`benchmarks/results/linux-cpu-native-der-2026-09-08-qdq/`](../benchmarks/results/linux-cpu-native-der-2026-09-08-qdq/).
 The INT8 conv path (default on aarch64 + dotprod) also defaults on x86_64 with
 AVX-512 VNNI — same exact-integer math as the aarch64 kernels; CPUs without it
 keep the FP32 conv default. LSTM gates are AVX-512 vectorized (same minimax
 approximation as the NEON path), the embedder worker pool scales with core
-count (3 on ≤10-core hosts, up to 8 on 24 threads), and SincNet im2col is
+count (3 on ≤10-core hosts, up to 8 on 24 threads), SincNet im2col is
 tiled, which bounds the per-window memory slab (Vox-3 peak RSS 539 →
-~310 MiB at jobs=1). With `polyvoice-bench --jobs N>1` the v2 pipeline is
+~300 MiB at jobs=1), and the ResNet34 forward is graph-faithful to the ONNX
+QDQ semantics (requant onto the pre-add lattice and the stats-pooling chain
+fused into store epilogues) — that closed most of the DER gap to ort
+(Vox-232 15.33 → 14.86 %, AMI-16 25.46 → 24.73 %). With
+`polyvoice-bench --jobs N>1` the v2 pipeline is
 shared across file workers (no per-worker model memory, internal fan-out
 divided by jobs) and the report carries `rt_factor_wall` next to the
 per-file `rt_factor_avg`; per-file DER is bit-identical to jobs=1
@@ -288,15 +292,18 @@ per-file `rt_factor_avg`; per-file DER is bit-identical to jobs=1
 `scripts/linux-cpu-native-der-gate.sh`.
 
 Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-08, same-source
-`cli-ort` build, EP=cpu, N=8, interleaved best-of-5): kernels are **ahead
-everywhere**. Full splits at jobs=1: VoxConverse-test ~141× vs ort ~137×,
-AMI-16 ~162× vs ort ~156×. Short Vox-3 smoke: at jobs=1 ort's intra-op
-threading still wins the per-file metric (~129× vs ~103×), but with
+`cli-ort` build, EP=cpu, N=8): kernels are **ahead on speed everywhere**.
+Full splits at jobs=1: VoxConverse-test ~162× vs ort ~150×,
+AMI-16 ~193× vs ort ~171×. Short Vox-3 smoke: at jobs=1 ort's intra-op
+threading still wins the per-file metric (~129× vs ~111×), but with
 `--jobs 3` kernels take the wall-clock lead (**~158× vs ort ~151×**) at
 much lower footprint — peak RSS **~470 MiB** vs ort **~740 MiB** (jobs=1:
-**~310 MiB** vs ~620 MiB), no `libonnxruntime` dylib. DER trade:
-Vox-3 7.03 % vs ort 7.51 % for kernels, Vox-232 15.33 % vs 14.74 % and
-AMI 25.46 % vs 24.23 % for ort.
+**~300 MiB** vs ~620 MiB), no `libonnxruntime` dylib. DER:
+Vox-3 7.03 % (kernels) vs 7.51 % (ort); Vox-232 14.86 % vs ort 14.74 %
+(+0.12 pp); AMI 24.73 % vs ort 24.23 % (+0.51 pp residual — structural:
+the two engines' segmentation/embedding stages are co-adapted, hybrid
+swaps score worse than either matched pipeline; closing it needs a
+VBx/PLDA recalibration under native embeddings).
 
 ### Historical — FP32, CPU EP (2026-07-30/31, v0.14.0)
 

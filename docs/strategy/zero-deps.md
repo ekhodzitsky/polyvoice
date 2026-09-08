@@ -42,7 +42,7 @@ Keep `ort` as an optional `onnx` feature so INT8 + EP + Sortformer + Python keep
 | `cli-tract` | **Yes** (tract-onnx; **no ort**) | Same `polyvoice` / `polyvoice-bench` / `polyvoice-measure` bins; `--legacy` rejected |
 | `embedder-native` (`ResNet34Native`) | **Yes** | Hand-written ResNet34; ort cosine 1.0 on 1 s fixture; no dylib |
 | `segmenter-native` (`PowersetNative`) | **Yes** | SincNet + 4× biLSTM; N>1; 1 s vs ort cosine 1.0 |
-| `pipeline-native` / `cli` / `ffi` | **Kernels** (Darwin: C shims + Accelerate/BNNS; Linux: `rten-gemm` + in-crate INT8 conv) | **Product default.** No `ort`. Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux x86_64 (AVX-512 VNNI conv + vectorized LSTM gates, core-scaled embedder pool): full-split VoxConverse DER₀ 15.33% / RTFx ~145×, AMI 25.46% / ~172× — ahead of same-host ort on AMI (~156×). BYO `default = []` stays pure Rust. |
+| `pipeline-native` / `cli` / `ffi` | **Kernels** (Darwin: C shims + Accelerate/BNNS; Linux: `rten-gemm` + in-crate INT8 conv) | **Product default.** No `ort`. Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux x86_64 (AVX-512 VNNI conv + vectorized LSTM gates, core-scaled embedder pool, graph-faithful QDQ): VoxConverse DER₀ 14.86% / RTFx ~162×, AMI 24.73% / ~193× — ahead of same-host ort on speed everywhere (ort ~150×/~171×), DER within +0.12pp on Vox-232; AMI residual +0.51pp is structural (stage co-adaptation; needs VBx/PLDA recalibration). BYO `default = []` stays pure Rust. |
 | `cli-ort` / `pipeline-full` | **No** (ort + INT8) | Opt-in previous product |
 
 CI freezes the pure-Rust **invariants** via:
@@ -55,9 +55,13 @@ bash scripts/check-zero-deps.sh   # includes check-ort-free.sh
 
 The product CLI (`cli` / `ffi` / `mcp`) already meets this bar via
 `polyvoice-kernels` (step 4): powerset + ResNet34 INT8 without `ort`, VAD
-folded into powerset, clustering already Rust-only. Linux native RTF reached
-the old ort band via in-crate AVX-512 VNNI conv kernels. Residual: Python
-still links `ort`; tract remains the slower ONNX-shaped opt-in.
+folded into powerset, clustering already Rust-only. Linux native is past
+the old ort band on both axes: faster than same-host ort on all three
+protocols (162×/193×/158×-wall vs 150×/171×/151×) and DER on Vox-232
+within +0.12 pp of ort (AMI residual +0.51 pp is structural — stage
+co-adaptation, needs VBx/PLDA recalibration under native embeddings).
+Residual: Python still links `ort`; tract remains the slower ONNX-shaped
+opt-in.
 
 A shipping *tract* profile would still need:
 

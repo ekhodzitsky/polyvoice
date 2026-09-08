@@ -7,28 +7,28 @@
   "rss_mib_max": 556.0,
   "linux_x86_64_measured": {
     "host": "Ryzen AI 9 HX 370, Ubuntu 26.04, 2026-09-08",
-    "vox3_rtfx_best_of_5": 102.6,
+    "vox3_rtfx_best_of_5": 111.1,
     "vox3_rtfx_wall_jobs3_best_of_5": 158.4,
     "vox3_der0_micro": 7.03,
     "vox3_der0_macro": 7.36,
-    "vox3_peak_rss_mib": 312,
+    "vox3_peak_rss_mib": 297,
     "vox3_peak_rss_mib_jobs3": 470,
-    "voxconverse_test_232_der0_micro": 15.33,
-    "voxconverse_test_232_rtfx": 141.5,
-    "ami_test_16_der0_micro": 25.46,
-    "ami_test_16_rtfx": 162.2,
+    "voxconverse_test_232_der0_micro": 14.86,
+    "voxconverse_test_232_rtfx": 162.0,
+    "ami_test_16_der0_micro": 24.73,
+    "ami_test_16_rtfx": 192.6,
     "ort_same_host": {
       "vox3_rtfx": 129.4,
       "vox3_rtfx_wall_jobs3": 151.0,
-      "voxconverse_test_232_rtfx": 136.5,
-      "ami_test_16_rtfx": 156.5,
+      "voxconverse_test_232_rtfx": 149.7,
+      "ami_test_16_rtfx": 171.5,
       "vox3_der0_micro": 7.51,
       "voxconverse_test_232_der0_micro": 14.74,
       "ami_test_16_der0_micro": 24.23,
       "vox3_peak_rss_mib": 619,
       "vox3_peak_rss_mib_jobs3": 740
     },
-    "note": "Informational (not CI-enforced): Linux x86_64 native via in-crate AVX-512 VNNI INT8 conv, AVX-512 LSTM gates, a core-scaled embedder pool and tiled SincNet im2col (per-window TLS slab bounded to a few MiB; Vox-3 peak RSS 539 -> 312 MiB at jobs=1). bench --jobs N>1 runs the v2 pipeline shared across file workers with jobs-divided fan-out and reports rt_factor_wall; per-file DER is bit-identical to jobs=1 (tests/bench_jobs_determinism.rs). Same-source interleaved best-of-5: kernels beat ort on both full splits (Vox-232 141.5 vs 136.5, AMI 162.2 vs 156.5) and on the Vox-3 smoke at jobs=3 (wall 158.4 vs 151.0, RSS 470 vs 740 MiB); at jobs=1 ort's intra-op threading still wins the short smoke (102.6 vs 129.4 per-file RTF). Full-split artifacts: benchmarks/results/linux-cpu-native-der-2026-09-08/."
+    "note": "Informational (not CI-enforced): Linux x86_64 native via in-crate AVX-512 VNNI INT8 conv, AVX-512 LSTM gates, a core-scaled embedder pool, tiled SincNet im2col and graph-faithful QDQ in ResNet34 (requant fused into store epilogues). bench --jobs N>1 runs the v2 pipeline shared across file workers with jobs-divided fan-out and reports rt_factor_wall; per-file DER is bit-identical to jobs=1 (tests/bench_jobs_determinism.rs). Kernels beat same-host ort on speed everywhere (Vox-232 162 vs 150, AMI 193 vs 171, Vox-3 wall 158 vs 151 at jobs=3) at half the RSS. DER: Vox-232 14.86 vs ort 14.74 (+0.12pp); AMI 24.73 vs ort 24.23 (+0.51pp residual, structural: stage co-adaptation — hybrid seg/emb swaps are worse than matched ones; needs VBx/PLDA recalibration to close, out of model-frozen scope). Vox-3 DER 7.03 better than ort 7.51. Artifacts: benchmarks/results/linux-cpu-native-der-2026-09-08-qdq/ (gate PASSED), ort refs benchmarks/results/linux-cpu-der-2026-09-08/."
   },
   "notes": "Floors are the best locked native numbers as of 2026-08-14. DER and model size must never get worse. RTF must stay at least 117. Peak RSS must stay at or below 556 MiB, which is below live ort INT8 CPU on the same Vox-3 protocol (~580-585 MiB)."
 }
