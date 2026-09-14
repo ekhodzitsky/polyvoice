@@ -1,61 +1,60 @@
 # Production Readiness Assessment
 
-> **Version:** 0.20.x | **Date:** 2026-09-08 | **Scope:** Rust library + Python bindings + FFI + CLI
+> **Version:** 0.20.x | **Date:** 2026-09-14 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
-> **Last updated:** 2026-09-08 — crate **0.20.0** WAVE ingest is `ryf` (not
-> `hound`). Kernels default and INT8-only profiles shipped in **0.18.0**.
-> (`powerset_int8` + `resnet34_int8`). Pipeline v2+VBx default since 0.11.
-> **Product CLI / FFI / MCP** run hand-written kernels (`pipeline-native`),
-> not `libonnxruntime`. ONNX Runtime is opt-in (`cli-ort` / `pipeline-full` /
-> Python). Linux/CPU full-split DER gate (ort protocol) remains the non-Apple
-> accuracy ceiling; Linux native full-split RTF is still below that band.
-> Pure-Rust tract is **opt-in smoke only**. Canonical accuracy protocol:
-> [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). Zero-deps strategy:
-> [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md).
+> **Last updated:** 2026-09-14 — Linux kernel full-split filled (VoxConverse-test
+> DER₀ **13.34 %** / AMI-test **24.19 %**, VBx AHC seed 0.6). Product CLI /
+> FFI / MCP / Python / `polyvoice-transcribe` diarization run hand-written
+> kernels (`pipeline-native`), not `libonnxruntime`. ONNX Runtime is opt-in
+> (`cli-ort` / `pipeline-full`). Pure-Rust tract is **opt-in smoke only**.
+> Canonical accuracy protocol: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+> Zero-deps strategy: [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md).
 
 ## Executive Summary
 
 **Status: NOT GO for public unattended production. OK for controlled internal use.**
 
-As of **0.19.x**, polyvoice is a hardened pre-1.0 engine: model signing is
+As of **0.20.x**, polyvoice is a hardened pre-1.0 engine: model signing is
 enforced on release builds for profile-resolved models, CI covers the main
 desktop targets, and **full VoxConverse-test + AMI-test DER** keeps
 **pipeline v2 + VBx** as the CLI / FFI / Python / MCP default. The **engine**
 split is:
 
-- **CLI / FFI / MCP / Python:** hand-written INT8 kernels (`cli` =
-  `pipeline-native`). No `libonnxruntime`. Darwin holds the native
-  scoreboard floors (`tests/native_scoreboard.json`).
-- **`cli-ort`:** ONNX Runtime INT8 (`ort` 2.0.0-rc.12). Historical Linux/CPU
-  ort protocol in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+- **CLI / FFI / MCP / Python / transcribe diarization:** hand-written INT8
+  kernels (`cli` = `pipeline-native`). No `libonnxruntime`. Darwin holds the
+  native scoreboard floors (`tests/native_scoreboard.json`). Linux kernels
+  hold the published non-Apple product numbers.
+- **`cli-ort`:** ONNX Runtime INT8 (`ort` 2.0.0-rc.12). Comparison protocol
+  in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). Parakeet TDT (ASR companion)
+  still uses `ort`.
 
 It is still **not** ready for multi-tenant public APIs or unattended production
 services, because:
 
 1. **Pre-1.0 API** — no backward-compatibility commitment until `1.0.0`.
-2. **`cli-ort` still links `ort` RC** (`2.0.0-rc.12`). The product CLI and
-   Python wheel no longer do.
+2. **`cli-ort` still links `ort` RC** (`2.0.0-rc.12`). Product diarization
+   surfaces no longer do.
 3. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
    NOTSOFAR-1 has a measured micro-gate (3-meeting subset) but CALLHOME /
    DIHARD (and similar) are not release-gated.
-4. **Linux native full-split RTF trails ort** — Vox-3 smoke is ~28× vs ~82×
-   Linux ort. Native full-split DER ceilings are copied from the ort protocol
-   until the first Linux native full split is filled.
+4. **Darwin full-split was not re-run** after the VBx AHC seed 0.6 retune
+   (still 15.47 % / 25.19 % from 0.18). Linux was: Vox **13.34 %** /
+   AMI **24.19 %**.
 5. **Pure-Rust (tract) path is not product-ready** — opt-in only
    (`backend-tract` + signed `powerset_fp32_tract` + FP32 ResNet); ~9× slower
    than ort; no full-split release gate.
 
 **Suitable for:** controlled internal services, desktop apps, and edge pilots
 where audio conditions are known and operators can pin versions and re-verify
-DER after upgrades. Desktop / CLI deploys can avoid `ort` entirely.
+DER after upgrades. Desktop / CLI / Python deploys can avoid `ort` entirely.
 
 **Not suitable for:** public multi-tenant APIs, unattended SLA-bound services,
-or security-critical deployments that require a stable Python runtime +
+or security-critical deployments that require a frozen public API and
 multi-corpus proof.
 
 ---
 
-## Current surface (0.19.x truth)
+## Current surface (0.20.x truth)
 
 | Area | State |
 |------|--------|
@@ -65,10 +64,11 @@ multi-corpus proof.
 | CLI / FFI / MCP engine | **kernels** (`pipeline-native`); `--legacy` / `--clusterer ahc` opt out |
 | Python engine | **kernels** (same v2 + VBx as the CLI; pass `clusterer="ahc"` to opt out) |
 | Opt-in ONNX CLI | `--features cli-ort` / `pipeline-full` |
-| Full-split DER (no-collar micro, INT8, **ort** Linux/CPU) | Vox **14.94%** / AMI **24.19%** — [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
-| Darwin native full-split (M1 Pro, kernels) | Vox **15.47%** / AMI **25.19%** / ~**130× / 109×** RTFx |
+| Full-split DER (no-collar micro, INT8, **Linux kernels**) | Vox **13.34%** / AMI **24.19%** — [`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
+| Full-split DER (no-collar micro, INT8, **ort** Linux/CPU, AHC seed 0.5 protocol) | Vox **14.94%** / AMI **24.19%** — [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
+| Darwin native full-split (M1 Pro, kernels) | Vox **15.47%** / AMI **25.19%** / ~**130× / 109×** RTFx (0.18; not re-run after AHC seed 0.6) |
 | Darwin native Vox-3 scoreboard | DER₀ **7.11 / 7.39**, ≥**117×**, pair ≤ 8 414 314 B, peak RSS ≤ **556 MiB** |
-| Linux native | AMI DER within ort ceiling; Vox-3 RTF ~**28×**; full-split native rows still pending fill |
+| Linux native RTF (Ryzen AI 9 HX 370) | Vox ~**162×**; AMI ~**193×**; Vox-3 ~**111×** jobs=1 / ~**158×** wall at `--jobs 3` |
 | Inference (product CLI) | **`polyvoice-kernels`** (Darwin Accelerate/BNNS; Linux `rten-gemm`) |
 | Inference (opt-in ONNX) | **`OrtSession` (`ort` 2.0.0-rc.12)** — `cli-ort` only |
 | Inference (opt-in tract) | `POLYVOICE_INFERENCE_BACKEND=tract` + `backend-tract`: signed `powerset_fp32_tract` + **FP32** ResNet; smoke DER only |
@@ -76,12 +76,12 @@ multi-corpus proof.
 | Native ORT binary | Hash-pinned via ort-sys `dist.txt` **when `onnx` is enabled**; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
 | Library features | `pipeline-native` + `vbx` (CLI parity) or `pipeline-full` + `vbx` (ONNX). Crate-root `Pipeline` needs that gate; `PipelineConfig::default()` is **VBx** when `vbx` is on |
 
-Honest reading: v2+VBx INT8 is the **measured product pipeline**. The **default
-binary** is kernels (no `ort`). Linux/CPU **ort** remains the published
-non-Apple full-split accuracy protocol. Legacy remains a supported escape
-hatch. Tract is an **opt-in research path**. Public production still needs
-multi-corpus gates, a Python engine story that is not an RC dylib, and Linux
-native full-split numbers that are measured rather than copied ceilings.
+Honest reading: v2+VBx INT8 kernels are the **measured product pipeline** on
+Linux (Vox 13.34 % / AMI 24.19 %) and Darwin Vox-3 (scoreboard floors).
+Linux/CPU **ort** is a comparison protocol, not the product CLI. Legacy remains
+a supported escape hatch. Tract is an **opt-in research path**. Public
+production still needs multi-corpus gates, an API freeze, and a Darwin
+full-split re-run after the AHC seed 0.6 retune.
 
 ---
 
@@ -93,7 +93,7 @@ native full-split numbers that are measured rather than copied ceilings.
 |------|--------|------|
 | Semantic version | `0.20.0` | Pre-1.0 — API may change between `0.x` minors |
 | `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
-| CHANGELOG | Maintained | Tracks 0.11→0.19; CLI default flip to v2+VBx was 0.11; kernels default was 0.18; WAVE `ryf` was 0.19 |
+| CHANGELOG | Maintained | Tracks 0.11→0.20; CLI default flip to v2+VBx was 0.11; kernels default was 0.18; WAVE `ryf` was 0.19 |
 
 **Gap:** No commitment to backward compatibility until `1.0.0`. Consumers should
 pin a `0.19.x` (or tighter) and read the CHANGELOG before upgrading.
@@ -158,10 +158,10 @@ on `cli-ort`.
 | Miri | Focused PR-gate set | `ffi_smoke`, `miri_resegmentation`, `test_ahc` — not a full-lib multi-hour run |
 | Loom | `loom_pool.rs` | Session / pool concurrency model |
 | Proptest | In CI | DER / k-means / AHC / types property suites |
-| DER regression gates | Legacy + v2 + Linux/CPU ort | Headline no-collar metric release-gated; Linux native full-split still pending fill |
+| DER regression gates | Legacy + v2 + Linux/CPU ort + Linux native | Headline no-collar metric release-gated; Linux native full-split filled 2026-09-13 |
 
-**Gap:** Full-lib Miri is intentionally not the PR gate (cost). Linux native
-full-split DER/RTF is not yet a filled artifact (ceilings copied from ort).
+**Gap:** Full-lib Miri is intentionally not the PR gate (cost). Darwin
+full-split has not been re-run since the VBx AHC seed 0.6 retune.
 
 ---
 
@@ -178,9 +178,9 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | AMI test Mix-Headset (legacy) | 16 | **32.87%** | 25.20% | Full split tracked; long-form floor via single-meeting gate |
 | AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
 | pipeline v2 + VBx **INT8** (Vox / AMI, **ort** host / CoreML) | 232 / 16 | **15.02%** / **24.50%** | 10.33% / 16.82% | INT8 since 0.17; full-split 2026-08-10 |
-| pipeline v2 + VBx **INT8** **Linux/CPU ort** (Vox / AMI) | 232 / 16 | **14.94%** / **24.19%** | 10.27% / 16.60% | Official non-Apple **ort** protocol; gate + CI smoke |
-| Darwin native kernels (Vox / AMI, M1 Pro) | 232 / 16 | **15.47%** / **25.19%** | — | 0.18 product CLI; RTFx ~130× / ~109× |
-| Linux native kernels | 232 / 16 | ceiling = ort (pending fill) | ceiling = ort | `*_linux_cpu_native` in `der_baseline.json`; Vox-3 RTF ~28× |
+| pipeline v2 + VBx **INT8** **Linux/CPU ort** (Vox / AMI) | 232 / 16 | **14.94%** / **24.19%** | 10.27% / 16.60% | Comparison protocol (`cli-ort`); gate + CI smoke |
+| Darwin native kernels (Vox / AMI, M1 Pro) | 232 / 16 | **15.47%** / **25.19%** | — | 0.18 product CLI; RTFx ~130× / ~109×; not re-run after AHC seed 0.6 |
+| Linux native kernels | 232 / 16 | **13.34%** / **24.19%** | — | 2026-09-13, AHC seed 0.6; RTFx ~162× / ~193× |
 | tract pure-Rust (3 short Vox, M1 Pro) | 3 | ~**7.22%** (vs ort ~7.41%) | — | Opt-in; not a release gate |
 | tract pure-Rust (10 shortest Vox, ≈560 s) | 10 | **8.86%** (vs ort **9.18%**) | — | RTFx ~11 vs ~99 |
 | tract pure-Rust (**AMI-test 16**, M1 Pro) | 16 | **23.42%** (vs ort **24.63%**) | — | RTFx ~19 vs ~154; `scripts/tract-der-gate.sh` |
@@ -188,29 +188,31 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | DIHARD | — | — | — | **Not measured / not gated** |
 
 **Gap:** The default v2+VBx INT8 path has full-split VoxConverse and AMI on
-desktop baselines and the **Linux/CPU ort** gate. Darwin native full-split is
-measured. **Linux native full-split is not yet filled.** **Multi-corpus DER
-beyond Vox/AMI remains absent**: no CALLHOME/DIHARD release gate. Accuracy
-still trails pyannote-class systems by roughly ~4 pp no-collar on VoxConverse
-(see benchmarks). Tract is **not** release-gated at full-split size.
+desktop baselines, the **Linux/CPU ort** comparison protocol, and **Linux
+native kernels** (13.34 % / 24.19 %). Darwin native full-split is measured
+but predates AHC seed 0.6. **Multi-corpus DER beyond Vox/AMI remains
+absent**: no CALLHOME/DIHARD release gate. Linux kernels trail pyannote 3.1
+published 11.3 % by about **2 pp** no-collar on VoxConverse. Tract is **not**
+release-gated at full-split size.
 
 **Remediation:**
-- Keep Linux/CPU **ort** as the non-Apple accuracy protocol until native
-  full-split rows are filled (do not substitute CoreML RTF for Linux).
-- Fill `voxconverse_test_linux_cpu_native` / `ami_test_linux_cpu_native`
-  from `scripts/linux-cpu-native-der-gate.sh`.
+- Cite Linux kernels as the non-Apple product protocol
+  ([`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/)).
+  Ort remains a comparison row (`cli-ort`).
+- Re-run Darwin full-split after AHC seed 0.6 before treating 15.47 % / 25.19 %
+  as current.
 - Add at least one additional corpus (CALLHOME and/or DIHARD subset) to the
   release DER matrix.
-- Do not pull `ort` back into `cli` to paper over Linux RTF.
+- Do not pull `ort` back into `cli`.
 
 ---
 
 ### 6. Pipeline story (honest dual path) ⚠️
 
-| Path | How to run | Role in 0.19.x |
+| Path | How to run | Role in 0.20.x |
 |------|------------|----------------|
-| **v2 + VBx kernels (CLI/FFI/MCP default)** | `cargo install polyvoice --features cli` | Product binary; Darwin scoreboard + Darwin full-split |
-| **v2 + VBx ONNX Runtime** | `--features cli-ort` | Historical Linux/CPU ort protocol |
+| **v2 + VBx kernels (CLI/FFI/MCP/Python/transcribe default)** | `cargo install polyvoice --features cli` / `pip install polyvoice` | Product; Darwin scoreboard + Linux full-split |
+| **v2 + VBx ONNX Runtime** | `--features cli-ort` | Comparison protocol; not the product CLI |
 | **Legacy** | CLI `--legacy` / `--clusterer ahc` | Supported escape hatch; former default (Silero + AHC) |
 
 **Gap:** The pipeline default flipped at 0.11 (v2+VBx) and the engine default
@@ -275,9 +277,10 @@ audit remain active.
 
 ## Go/No-Go Matrix
 
-_As of 0.20.x — product CLI and Python wheel are kernels, `cli-ort` still
-`ort` 2.0.0-rc.12, INT8 profiles + v2+VBx default, legacy as an escape hatch,
-and multi-corpus DER is incomplete. Public unattended stays NO-GO._
+_As of 0.20.x — product CLI, Python wheel, and transcribe diarization are
+kernels, `cli-ort` still `ort` 2.0.0-rc.12, INT8 profiles + v2+VBx default,
+legacy as an escape hatch, and multi-corpus DER is incomplete. Public
+unattended stays NO-GO._
 
 | Scenario | Verdict | Rationale |
 |----------|---------|-----------|
@@ -301,15 +304,18 @@ All items must be true before declaring production-ready / shipping `1.0.0` as
 - [ ] **Public API freeze + semver policy.** Documented stability rules; no
       silent breaking churn on the advertised surface for a freeze window; then
       `1.0.0`.
-- [ ] **Runtime story closed.** Product CLI and Python wheel are kernels.
-      Remaining: `cli-ort` still `ort` RC; tract remains opt-in smoke; `ort`
-      2.x stable should be re-verified for the opt-in path.
+- [ ] **Runtime story closed.** Product CLI, Python wheel, and transcribe
+      diarization are kernels. Remaining: `cli-ort` still `ort` RC; Parakeet
+      TDT still uses `ort`; tract remains opt-in smoke; `ort` 2.x stable
+      should be re-verified for the opt-in path.
 - [ ] **Multi-corpus DER gate.** Release-blocking DER on VoxConverse **and** AMI
       **and** at least one additional corpus (CALLHOME and/or DIHARD subset),
       with collar and overlap policy published next to the numbers.
 - [ ] **Accuracy target path.** VoxConverse-test no-collar success metric on the
       default path at **≤13–14%** (stretch ≤12%), with AMI not stagnating in the
       high-20s/30s without a documented plan — see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+      Linux kernels are **13.34 %** / AMI **24.19 %**. Darwin full-split is
+      still **15.47 %** / **25.19 %** (0.18, pre AHC seed 0.6).
 - [ ] **This document says GO.** `PRODUCTION-READINESS.md` re-reviewed and
       signed off for the intended deployment class (internal vs public).
 
@@ -325,14 +331,14 @@ Until every box is checked, the honest status remains:
 |---------|-------------------------------|
 | Dual pipeline families (BYO vs v2) | Intentional; still doubles docs/gates if not documented |
 | `cli-ort` still `ort` RC | Supply-chain risk on the opt-in ONNX CLI |
-| Linux native full-split unfilled | Product CLI on Linux is not the published full-split protocol yet |
+| Darwin full-split stale vs AHC seed 0.6 | Linux remeasured; Darwin 15.47 % / 25.19 % is 0.18 |
 | Thin multi-corpus DER | Outside Vox/AMI only NOTSOFAR micro-gate; no CALLHOME/DIHARD |
 | Pre-1.0 API | Breaking changes without major bump |
-| Accuracy gap vs leaders | ~4 pp no-collar on VoxConverse; speaker counting still dominant error |
+| Accuracy gap vs leaders | ~2 pp no-collar on VoxConverse vs pyannote 3.1 (11.3 %); speaker counting still dominant error |
 
 ---
 
-## Metrics (snapshot, 0.19.x)
+## Metrics (snapshot, 0.20.x)
 
 | Metric | Value |
 |--------|-------|
@@ -341,12 +347,15 @@ Until every box is checked, the honest status remains:
 | Product CLI engine | kernels (`pipeline-native`); no `libonnxruntime` |
 | Speed (kernels, Darwin Vox-3 scoreboard) | ≥**117×** realtime; peak RSS ≤ **556 MiB** |
 | Speed (kernels, Darwin full-split M1 Pro) | Vox ~**130×**; AMI ~**109×** |
-| Speed (kernels, Linux Vox-3) | ~**28×** RTFx |
-| Speed (INT8, Linux/CPU **ort** full-split) | Vox ~**82×** RTFx; AMI ~**95×** RTFx |
+| Speed (kernels, Linux Vox-3, Ryzen AI 9 HX 370) | ~**111×** jobs=1; ~**158×** wall at `--jobs 3` |
+| Speed (kernels, Linux full-split) | Vox ~**162×**; AMI ~**193×** |
+| Speed (INT8, Linux/CPU **ort** full-split, same host) | Vox ~**150×**; AMI ~**171×** |
+| VoxConverse-test DER (v2+VBx INT8 Linux **kernels**, 232, collar 0) | **13.34%** |
 | VoxConverse-test DER (v2+VBx INT8, 232, collar 0, **ort** host) | **15.02%** |
 | VoxConverse-test DER (v2+VBx INT8 Linux/CPU **ort**, 232, collar 0) | **14.94%** |
 | VoxConverse-test DER (v2+VBx INT8 Darwin **kernels**, 232, collar 0) | **15.47%** |
 | VoxConverse-test DER (legacy, 232, collar 0) | 18.54% |
+| AMI-test DER (v2+VBx INT8 Linux **kernels**, 16, collar 0) | **24.19%** |
 | AMI-test DER (v2+VBx INT8, 16, collar 0, **ort** host / Linux) | **24.50%** / **24.19%** |
 | AMI-test DER (v2+VBx INT8 Darwin **kernels**, 16, collar 0) | **25.19%** |
 | AMI-test DER (legacy, 16, collar 0) | 32.87% |

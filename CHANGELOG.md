@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `polyvoice-transcribe` diarizes with the same v2 + VBx kernel pipeline as
   the product CLI. `ort` remains only for Parakeet TDT, not for diarization.
 
+### Documentation
+
+- Align `PRODUCTION-READINESS.md`, zero-deps step 4, and COMPETITORS with
+  the Linux kernel full-split (Vox 13.34 % / AMI 24.19 %, ~162× / ~193×).
+  Status stays NOT GO for unattended production.
+
 ### Added
 
 - Opt-in `POLYVOICE_VBX_FROM_ENV=1` lets the pipeline overlay

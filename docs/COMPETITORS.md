@@ -81,7 +81,12 @@ hand-written INT8 kernels (no `libonnxruntime`), including the Python wheel;
 ecosystem, and bindings, but they are heavier, GPU-oriented, and often gated
 or commercially restricted.
 
-The main **peer threat** is **speakrs** (same Rust/ONNX niche): measured **11.08%** vs our **15.33%** on VoxConverse-test under one scorer (gap ~4 pp, confusion-dominated). VBx + PLDA already cut an earlier ~7 pp gap to pyannote (~11.2%); if the residual stalls, accuracy-sensitive users will pick speakrs or the heavier Python stacks. The roadmap already targets the rest with better segmentation, embeddings, and EEND/Sortformer spikes. The priority should be:
+The main **peer threat** is **speakrs** (same Rust/ONNX niche): a 2026-08-03
+same-scorer H2H was **11.08%** vs our then **15.33%** on VoxConverse-test
+(gap ~4 pp, confusion-dominated). Linux kernel CLI is now **13.34%** collar 0
+(2026-09-13, AHC seed 0.6) versus pyannote 3.1 published **11.3%** (~2 pp).
+If the residual stalls, accuracy-sensitive users will pick speakrs or the
+heavier Python stacks. The priority should be:
 
 1. **Close the DER gap** with optional ONNX accuracy profiles (EEND/Sortformer, WavLM/CAM++ embeddings) while keeping the CPU-first default.
 2. **Own the deployability story** — pre-built binaries, Docker, WASM, mobile, and clear "no Python, no GPU, no token" messaging.
