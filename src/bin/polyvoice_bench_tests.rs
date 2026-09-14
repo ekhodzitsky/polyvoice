@@ -178,7 +178,7 @@ fn check_model_sha256_missing_file_errors() {
     assert!(format!("{e:#}").contains("read model"));
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 #[test]
 fn verify_model_integrity_accepts_shipped_pair() {
     // Balanced profile embedder is resnet34_int8 (0.17+); VAD is still silero.
@@ -195,7 +195,7 @@ fn verify_model_integrity_accepts_shipped_pair() {
     .unwrap();
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 #[test]
 fn verify_model_integrity_rejects_swapped_vad() {
     if !has_model("int8/resnet34_int8.onnx") {

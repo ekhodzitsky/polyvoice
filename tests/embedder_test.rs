@@ -6,7 +6,7 @@
 //!
 //! Downloads ~55 MB of models. Requires network connectivity.
 
-#![cfg(all(feature = "onnx", feature = "embedder", feature = "download"))]
+#![cfg(all(any(), feature = "embedder", feature = "download"))]
 #![allow(clippy::expect_used)]
 
 use polyvoice::embedder::{CamPlusPlusExtractor, Embedder, ResNet34Adapter};

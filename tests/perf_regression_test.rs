@@ -8,7 +8,7 @@
 //! cargo test --test perf_regression_test --features "onnx download" -- --ignored
 //! ```
 
-#![cfg(all(feature = "onnx", feature = "download"))]
+#![cfg(all(any(), feature = "download"))]
 
 mod common;
 

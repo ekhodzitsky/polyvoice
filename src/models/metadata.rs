@@ -561,7 +561,7 @@ mod tests {
         assert_eq!(meta.source, Some(MetaSource::Manifest));
     }
 
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[test]
     fn load_reads_geometry_from_onnx_props() {
         let powerset = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32.onnx");
@@ -579,7 +579,7 @@ mod tests {
         assert_eq!(meta.num_speakers, Some(3));
     }
 
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[test]
     fn load_mixing_onnx_manifest_and_defaults_is_marked_mixed() {
         let m = Manifest::from_toml_str(ENTRY_TOML).unwrap();

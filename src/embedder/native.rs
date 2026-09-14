@@ -271,7 +271,7 @@ impl Embedder for ResNet34Native {
     }
 }
 
-#[cfg(all(test, feature = "onnx"))]
+#[cfg(all(test, any()))]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;

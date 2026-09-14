@@ -23,12 +23,12 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use polyvoice::cli_common;
 use polyvoice::format::{write_srt, write_txt, write_vtt};
 use polyvoice::models::ModelRegistry;
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::pipeline_v2::PipelineConfig;
 use polyvoice::rttm::write_rttm;
 use polyvoice::types::{DiarizationResult, Profile, SampleRate};
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::load_audio;
 use std::io::Write;
@@ -88,10 +88,10 @@ struct DiarizeArgs {
     /// human-readable output to stderr. Implies `--format json --quiet`.
     #[arg(long)]
     json: bool,
-    /// Use the pre-0.11 legacy pipeline (Silero VAD + sliding-window embeddings
-    /// + AHC) instead of the default v2 + VBx path. Requires an ONNX build
-    /// (`pipeline-full`).
-    #[arg(long, hide = !cfg!(feature = "onnx"))]
+    /// Hidden pre-0.11 path (Silero VAD, sliding-window embeddings, AHC).
+    /// Silero needed ONNX Runtime, which this crate no longer links.
+    /// Prefer `--clusterer ahc` on the v2 path.
+    #[arg(long, hide = true)]
     legacy: bool,
     /// Deprecated no-op: pipeline v2 is the default since 0.11. Kept so scripts
     /// that still pass `--v2` keep working.
@@ -277,7 +277,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
                 "--as-norm/--cohort/--domain-profile apply to the default v2 pipeline only"
             );
         }
-        #[cfg(feature = "onnx")]
+        #[cfg(any())]
         {
             run_legacy_pipeline(
                 &wav,
@@ -289,7 +289,7 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
                 quiet,
             )?
         }
-        #[cfg(not(feature = "onnx"))]
+        #[cfg(not(any()))]
         {
             unreachable!("require_onnx rejected --legacy");
         }
@@ -376,7 +376,7 @@ fn inference_backend_label() -> &'static str {
     #[cfg(feature = "infer")]
     {
         match polyvoice::onnx::InferenceBackend::resolve() {
-            #[cfg(feature = "onnx")]
+            #[cfg(any())]
             polyvoice::onnx::InferenceBackend::Ort => "ort",
             #[cfg(feature = "backend-tract")]
             polyvoice::onnx::InferenceBackend::Tract => "tract",
@@ -388,7 +388,7 @@ fn inference_backend_label() -> &'static str {
     }
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn run_legacy_pipeline(
     wav: &Path,
     profile: Profile,

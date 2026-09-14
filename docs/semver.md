@@ -29,7 +29,7 @@ meaning changes are breaking.
 
 ## Out of freeze
 
-- `pipeline-full` / `onnx` adapters, tract, `--legacy`
+- tract (`cli-tract`), `--legacy` (hidden), BYO ONNX-file adapters on tract
 - Sortformer, Silero, CAM++ / ECAPA / ERes2Net, EP-only knobs
 - `#[doc(hidden)]` items (`cli_common`)
 - Domain profile `callhome` (uncalibrated placeholder)

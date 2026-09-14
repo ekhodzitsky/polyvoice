@@ -70,7 +70,7 @@ fn feed_flush_round_trip_over_small_chunks() {
 }
 
 /// Same contract through the real ONNX embedder (higher fidelity, model-gated).
-#[cfg(all(feature = "onnx", feature = "download"))]
+#[cfg(all(any(), feature = "download"))]
 #[test]
 #[ignore = "requires downloaded models"]
 fn feed_flush_round_trip_with_real_embedder() {

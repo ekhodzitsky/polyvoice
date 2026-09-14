@@ -74,6 +74,8 @@ fail_if_ort "--no-default-features --features cli" \
 fail_if_ort "--no-default-features --features ffi" \
   --no-default-features --features ffi
 
+fail_if_ort "--all-features" --all-features
+
 # Python wheel is a standalone crate (workspace exclude). Same product
 # stack as `cli`: kernels, no libonnxruntime.
 fail_if_ort "python crate (pipeline-native,vbx)" \

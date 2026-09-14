@@ -157,16 +157,16 @@ impl VoiceActivityDetector for SileroVad {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     use crate::onnx::{ExecutionProvider, InferenceBackend};
     use std::path::Path;
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     use std::path::PathBuf;
 
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     const SILERO: &str = "models/silero_vad.onnx";
 
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     fn silero_path() -> Option<PathBuf> {
         let p = Path::new(SILERO);
         if p.is_file() {
@@ -177,7 +177,7 @@ mod tests {
     }
 
     /// `n` samples of a 300 Hz sine at 16 kHz, amplitude 0.3.
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     fn sine_samples(n: usize) -> Vec<f32> {
         (0..n)
             .map(|i| 0.3 * (2.0 * std::f32::consts::PI * 300.0 * i as f32 / 16_000.0).sin())
@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[cfg_attr(miri, ignore)]
     fn with_ep_sets_context_size_from_chunk() {
         let Some(path) = silero_path() else {
@@ -235,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[cfg_attr(miri, ignore)]
     fn with_ep_accepts_unwired_providers() {
         let Some(path) = silero_path() else {
@@ -250,7 +250,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[cfg_attr(miri, ignore)]
     fn process_rejects_partial_chunk() {
         let Some(path) = silero_path() else {
@@ -279,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[cfg_attr(miri, ignore)]
     fn process_returns_probs_in_unit_range() {
         let Some(path) = silero_path() else {
@@ -304,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[cfg_attr(miri, ignore)]
     fn silence_scores_low() {
         let Some(path) = silero_path() else {
@@ -323,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[cfg_attr(miri, ignore)]
     fn reset_restores_fresh_state() {
         let Some(path) = silero_path() else {

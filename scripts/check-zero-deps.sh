@@ -82,7 +82,7 @@ fail_if_pkg ort "--features cli" --no-default-features --features cli
 fail_if_pkg tract-onnx "--features cli" --no-default-features --features cli
 require_pkg polyvoice-kernels "--features cli" --no-default-features --features cli
 fail_if_pkg ort "--features ffi" --no-default-features --features ffi
-require_pkg ort "--features pipeline-full" --no-default-features --features pipeline-full
+fail_if_pkg ort "--all-features" --all-features
 
 echo ""
 echo "=== 3b. polyvoice-asr cli does not enable polyvoice/onnx ==="
@@ -113,10 +113,11 @@ cat <<'EOF'
 | backend-tract + shipping powerset    | n/a           | LOAD FAIL (If / InstanceNorm) |
 | backend-tract + powerset rewrite     | no            | export-powerset-tract.py; pipeline remaps; N=1; smoke DER ≈ ort |
 | pipeline-native / cli / ffi / python | no            | **product default** (kernels) |
-| features onnx / pipeline-full            | yes (ort)  | opt-in ONNX library / comparison benches |
+| polyvoice --all-features                 | no            | core crate has no ort |
+| polyvoice-asr                            | yes (ort)     | Parakeet TDT only |
 EOF
 
 echo ""
 echo "OK: zero-deps invariants hold."
-echo "Product default is cli (kernels, no ort). ONNX Runtime is --features pipeline-full / onnx."
+echo "Product default is cli (kernels, no ort). Core crate has no ONNX Runtime."
 echo "See docs/strategy/zero-deps.md"

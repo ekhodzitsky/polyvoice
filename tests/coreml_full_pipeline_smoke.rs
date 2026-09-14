@@ -5,7 +5,7 @@
 //! produces a result" is the correct assertion — not "runs 100% on ANE".
 
 #![cfg(all(
-    feature = "onnx",
+    any(),
     feature = "download",
     feature = "segmentation",
     feature = "embedder",

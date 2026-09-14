@@ -833,7 +833,7 @@ mod tests {
 
     /// Ort vs tract: segment counts / local speakers on a real short file.
     /// Explains whether the DER collapse is in segmentation vs later stages.
-    #[cfg(all(feature = "backend-tract", feature = "onnx"))]
+    #[cfg(all(feature = "backend-tract", any()))]
     #[test]
     #[cfg_attr(miri, ignore)]
     fn tract_vs_ort_segment_real_short_file() {
@@ -979,7 +979,7 @@ mod tests {
     /// `benchmarks/results/int8-batch8-default-2026-08-10/`). This unit test
     /// only guards wiring: same frame counts, same logit length, no NaN/Inf.
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     fn infer_batch_same_shape_as_sequential_on_cpu() {
         let path = local_model_path();
         if !path.exists() {

@@ -7,7 +7,7 @@
 //!   cargo test --test pipeline_v2_integration --features "onnx,segmentation,embedder,clusterer,resegmentation,download" -- --ignored --nocapture
 
 #![cfg(all(
-    feature = "onnx",
+    any(),
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",

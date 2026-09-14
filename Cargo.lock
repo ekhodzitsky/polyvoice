@@ -2265,7 +2265,6 @@ dependencies = [
  "loom",
  "minisign-verify",
  "ndarray",
- "ort",
  "polyvoice-kernels",
  "predicates",
  "proptest",

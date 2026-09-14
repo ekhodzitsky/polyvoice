@@ -12,11 +12,11 @@ use polyvoice::der::{
     compute_der_with_uem, parse_uem,
 };
 use polyvoice::models::ModelRegistry;
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::pipeline_v2::{Pipeline as V2Pipeline, PipelineConfig, StageTimings};
 use polyvoice::types::{DiarizationResult, Profile, SampleRate, TimeRange};
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use serde::Serialize;
@@ -252,7 +252,7 @@ fn model_hashes(registry: &ModelRegistry, profile: Profile, segmenter_id: &str) 
 
 /// Hard-fail unless the on-disk embedder + VAD match the manifest sha256, so a DER
 /// number can never be silently attributed to a swapped/corrupted/non-FP32 model.
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn verify_model_integrity(
     registry: &ModelRegistry,
     profile: Profile,
@@ -294,7 +294,7 @@ fn hex_lower(bytes: &[u8]) -> String {
 }
 
 /// Legacy pipeline + its ONNX sessions (Silero VAD + sliding-window embedder).
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 struct LegacyRunner {
     pipeline: LegacyPipeline,
     stack: cli_common::LegacyStack,
@@ -304,7 +304,7 @@ struct LegacyRunner {
 /// downstream DER / speaker-count reporting is shared. Both payloads are boxed
 /// so the variants are the same (pointer) size.
 enum Runner {
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     Legacy(Box<LegacyRunner>),
     V2(Box<V2Pipeline>),
 }
@@ -316,7 +316,7 @@ impl Runner {
         sr: SampleRate,
     ) -> Result<(DiarizationResult, Option<StageTimings>)> {
         match self {
-            #[cfg(feature = "onnx")]
+            #[cfg(any())]
             Runner::Legacy(l) => Ok((
                 l.pipeline
                     .run(samples, &l.stack.extractor, &mut l.stack.vad)?,
@@ -424,12 +424,12 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
             if args.as_norm || args.cohort.is_some() || args.domain_profile.is_some() {
                 anyhow::bail!("--as-norm/--cohort/--domain-profile apply to --pipeline v2 only");
             }
-            #[cfg(not(feature = "onnx"))]
+            #[cfg(not(any()))]
             {
                 let _ = (models, resolved_ep, registry, profile);
                 unreachable!("require_onnx rejected --pipeline legacy");
             }
-            #[cfg(feature = "onnx")]
+            #[cfg(any())]
             {
                 let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
                 let stack = cli_common::load_legacy_stack(
@@ -504,7 +504,7 @@ fn run_all_files(
 
     match &mut first.runner {
         Runner::V2(p) => run_v2_shared(p, args, wavs, rttm_dir, uem_map, jobs),
-        #[cfg(feature = "onnx")]
+        #[cfg(any())]
         Runner::Legacy(_) => run_legacy_parallel(first, args, wavs, rttm_dir, uem_map, jobs),
     }
 }
@@ -601,7 +601,7 @@ fn run_v2_shared(
 
 /// Legacy file fan-out: `LegacyPipeline::run` needs `&mut` (VAD state), so
 /// each worker builds its own runner — models are loaded `jobs` times.
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn run_legacy_parallel(
     first: &mut BenchRunner,
     args: &Args,

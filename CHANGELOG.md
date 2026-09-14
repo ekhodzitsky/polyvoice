@@ -29,9 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- `--features cli-ort`. Product CLI remains `--features cli` (kernels). An
-  ONNX comparison bench is `--features "cli-bin,pipeline-full,vbx"`.
-  `pipeline-full` / `ort` stay for the library and Parakeet.
+- `--features cli-ort`.
+- ONNX Runtime (`ort`) from the **core** crate: no `onnx` / `pipeline-full` /
+  CoreML / NNAPI / XNNPACK / `sortformer` features. Product CLI remains
+  `--features cli` (kernels). Tract remains `cli-tract`. Parakeet
+  (`polyvoice-asr`) still pins `ort`.
 
 ### Added
 

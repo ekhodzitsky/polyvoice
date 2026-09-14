@@ -268,7 +268,7 @@ impl Segmenter for PowersetNative {
     }
 }
 
-#[cfg(all(test, feature = "onnx"))]
+#[cfg(all(test, any()))]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;

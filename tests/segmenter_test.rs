@@ -5,7 +5,7 @@
 //!
 //! Downloads ~6 MB of model weights. Requires network connectivity.
 
-#![cfg(all(feature = "onnx", feature = "segmentation", feature = "download"))]
+#![cfg(all(any(), feature = "segmentation", feature = "download"))]
 #![allow(clippy::expect_used)]
 
 use polyvoice::models::ModelRegistry;

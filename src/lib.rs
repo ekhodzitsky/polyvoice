@@ -218,10 +218,7 @@ pub mod onnx;
 #[cfg(feature = "infer")]
 pub mod fbank_onnx;
 
-/// Optional NVIDIA Streaming Sortformer v2 E2E diarizer (≤4 speakers).
-/// Opt-in via `--features sortformer`. See `docs/sortformer.md`.
-#[cfg(feature = "sortformer")]
-pub mod sortformer;
+
 
 // Public re-exports for ergonomic use.
 pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};

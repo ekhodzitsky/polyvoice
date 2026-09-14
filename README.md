@@ -13,8 +13,8 @@ A speaker diarization crate. Powerset neural segmentation, WeSpeaker
 ResNet34 embeddings, VBx clustering with automatic speaker count. One
 `Pipeline` call from 16 kHz mono to timestamped turns. The default build
 pulls **no ONNX Runtime**: hand-written INT8 kernels, ~8.4 MB production
-model pair, MIT, ungated. ONNX Runtime is an opt-in library (`pipeline-full`), not a
-requirement. Python, C FFI and a CLI ship from the same crate.
+model pair, MIT, ungated. No ONNX Runtime in the core crate.
+Python, C FFI and a CLI ship from the same crate.
 
 ## Examples
 
@@ -70,7 +70,6 @@ A 1-hour meeting diarizes in about a minute on a laptop. Python:
 | C FFI, `--features ffi` | INT8 kernels | no |
 | BYO embedder, `--no-default-features` | yours | no |
 | Python wheel, `pip install polyvoice` | INT8 kernels | no |
-| Library / comparison bench, `pipeline-full` | ONNX Runtime | yes |
 
 ## Compared to pyannote
 
@@ -122,7 +121,6 @@ audio (f32 PCM)
 |---|---|
 | Linux x86_64 / ARM64, macOS, Windows | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) |
 | Rust library (kernels, no ort) | `cargo add polyvoice --features "pipeline-native,vbx"` |
-| Rust library (ONNX Runtime) | `cargo add polyvoice --features "pipeline-full,vbx"` |
 | From source | `cargo install polyvoice --features cli` · `"cli,audio-io"` · `cli-tract` · `ffi` |
 
 ```toml

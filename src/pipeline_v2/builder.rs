@@ -267,7 +267,7 @@ fn use_native_kernels() -> bool {
     cfg!(all(
         feature = "segmenter-native",
         feature = "embedder-native"
-    )) && !cfg!(feature = "onnx")
+    )) && !cfg!(any())
         && !cfg!(feature = "backend-tract")
 }
 

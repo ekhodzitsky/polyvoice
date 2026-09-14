@@ -9,7 +9,7 @@
 #![allow(clippy::unwrap_used)]
 #![cfg(all(
     any(feature = "cli", feature = "cli-native"),
-    not(feature = "onnx"),
+    not(any()),
     not(feature = "backend-tract")
 ))]
 

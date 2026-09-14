@@ -34,9 +34,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 DATE="${DATE:-$(date +%Y-%m-%d)}"
-FEATURES="${FEATURES:-cli-bin,pipeline-full,vbx}"
+FEATURES="${FEATURES:-cli}"
 # Cargo feature set that produces the bench/CLI. `cli` / `cli-native` =
-# kernels (no libonnxruntime). `pipeline-full` + `cli-bin` = ONNX Runtime INT8.
+# kernels (no libonnxruntime).
 if [[ "$FEATURES" == *native* ]]; then
   DEFAULT_OUT="benchmarks/results/linux-cpu-native-der-${DATE}"
   DEFAULT_VOX_KEY="voxconverse_test_linux_cpu_native"

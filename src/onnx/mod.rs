@@ -7,27 +7,21 @@
 //! Neural stages outside this module must depend only on [`InferenceRuntime`] /
 //! [`RuntimeSession`] and must **not** import `ort::` or `tract_onnx` directly.
 //!
-//! Default backend is ort when the `onnx` feature is on. Tract-only builds
-//! (`backend-tract` without `onnx`) always use tract. Select tract with env
+//! Inference here is tract (`backend-tract`). The product CLI does not
+//! enable this module. Select tract with env
 //! `POLYVOICE_INFERENCE_BACKEND=tract` or [`InferenceBackend::force`].
 
 use std::path::Path;
 
-#[cfg(not(any(feature = "onnx", feature = "backend-tract")))]
-compile_error!("feature `infer` requires `onnx` (ort) and/or `backend-tract`");
+#[cfg(not(feature = "backend-tract"))]
+compile_error!("feature `infer` requires `backend-tract`");
 
 mod factory;
-#[cfg(feature = "onnx")]
-mod ort_session;
-#[cfg(all(test, feature = "backend-tract", feature = "onnx"))]
-mod parity;
 mod runtime;
 #[cfg(feature = "backend-tract")]
 mod tract_session;
 
 pub use factory::{InferenceBackend, RuntimeSession};
-#[cfg(feature = "onnx")]
-pub use ort_session::OrtSession;
 pub use runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor, TensorData};
 #[cfg(feature = "backend-tract")]
 pub use tract_session::TractSession;
@@ -44,10 +38,8 @@ pub const ONNX_MIN_HEADER_BYTES: usize = 64;
 /// EP is **ort-specific config** — it is not part of [`InferenceRuntime`].
 /// Stages pass it only at session construction via [`build_session_with_ep`].
 ///
-/// **Wiring status (ort):** `Cpu` always works. `CoreMl` registers when built
-/// with the `coreml` feature on macOS aarch64. `XnnPack` registers with the
-/// `xnnpack` feature. `Nnapi` and `Cuda` are reserved — they warn and fall
-/// back to CPU until wired. Uncompiled / unwired choices never fail the build.
+/// EP values are accepted for API compatibility with `PipelineConfig` but
+/// tract always runs on CPU. Unwired names never fail the build.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ExecutionProvider {
     /// Always available. No EP registration; ort uses its built-in CPU path.
@@ -67,33 +59,12 @@ impl ExecutionProvider {
     /// aarch64 Linux, plain CPU elsewhere. Unwired / uncompiled providers fall
     /// back to CPU with a warning at session-build time.
     pub fn auto() -> Self {
-        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-        return Self::CoreMl;
-        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-        return Self::XnnPack;
-        #[cfg(not(any(
-            all(target_os = "macos", target_arch = "aarch64"),
-            all(target_os = "linux", target_arch = "aarch64"),
-        )))]
-        return Self::Cpu;
+        Self::Cpu
     }
 
-    /// Whether this variant can register under the **current** build + target.
-    /// `Nnapi` / `Cuda` always return `false` until wired. `CoreMl` / `XnnPack`
-    /// require their cargo features (and CoreML also needs macOS aarch64).
+    /// Tract always runs on CPU. Named EPs other than `Cpu` are not available.
     pub fn is_available(self) -> bool {
-        match self {
-            Self::Cpu => true,
-            Self::CoreMl => {
-                cfg!(all(
-                    feature = "coreml",
-                    target_os = "macos",
-                    target_arch = "aarch64"
-                ))
-            }
-            Self::XnnPack => cfg!(feature = "xnnpack"),
-            Self::Nnapi | Self::Cuda => false,
-        }
+        matches!(self, Self::Cpu)
     }
 }
 
@@ -160,33 +131,23 @@ pub fn resolve_intra_threads(pool_size: usize) -> usize {
 
 /// Read ONNX `metadata_props` (custom metadata key/value pairs) from `path`.
 ///
-/// With the `onnx` feature this opens a short-lived CPU session solely to
-/// query model metadata, then drops it. Tract-only builds validate the
-/// header and return an empty map — adapters then take geometry from the
-/// manifest / defaults (`models::metadata::load_model_config`). A protobuf
-/// walk just to read props is not worth a second ONNX parser.
+/// Tract-only builds validate the header and return an empty map — adapters
+/// then take geometry from the manifest / defaults
+/// (`models::metadata::load_model_config`).
 ///
 /// Returns an empty map when the model has no custom props (not an error).
 pub fn read_model_metadata_props(
     path: &Path,
 ) -> Result<std::collections::HashMap<String, String>, OnnxError> {
     validate_onnx_header(path)?;
-    #[cfg(feature = "onnx")]
-    {
-        let session = OrtSession::from_path(path, ExecutionProvider::Cpu, Some(1))?;
-        session.custom_metadata_props()
-    }
-    #[cfg(not(feature = "onnx"))]
-    {
-        Ok(std::collections::HashMap::new())
-    }
+    Ok(std::collections::HashMap::new())
 }
 
 /// Errors from ONNX session construction and model metadata reads.
 ///
 /// Replaces `anyhow::Error` in this module's public constructors so callers
 /// can classify load failures without substring matching. Backend error types
-/// (`ort::Error`) are not `Send + Sync`, so their details are carried as
+/// (tract errors) are not always `Send + Sync`, so their details are carried as
 /// strings.
 #[derive(Clone, thiserror::Error, Debug)]
 pub enum OnnxError {
@@ -360,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[cfg_attr(miri, ignore)]
     fn build_session_with_ep_cpu_and_unwired_ep_build_ok() {
         let path = std::path::Path::new("models/silero_vad.onnx");
@@ -386,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     #[cfg_attr(miri, ignore)]
     fn build_session_with_ep_optional_providers_build_ok() {
         let path = std::path::Path::new("models/silero_vad.onnx");

@@ -53,7 +53,7 @@ A change that is faster or more accurate but uses more than 556 MiB peak RSS
 is not acceptable: keep the win and cut memory.
 
 Product default is `cli` = kernels (`pipeline-native`), no `libonnxruntime`.
-ONNX Runtime is opt-in (`onnx` / `pipeline-full`). Darwin native holds the
+ONNX Runtime is not a core-crate dependency. Darwin native holds the
 scoreboard floors above. Linux x86_64 native, 2026-09-13
 (Ryzen AI 9 HX 370): VoxConverse-test DER₀ 13.34 % / RTFx ~162×,
 AMI DER₀ 24.19 % / RTFx ~193× (same-host ort 14.74 % / 24.23 %,

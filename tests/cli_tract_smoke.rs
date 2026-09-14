@@ -4,7 +4,7 @@
 //! front door. Product `cli` tests live in `cli_smoke_test.rs`.
 
 #![allow(clippy::unwrap_used)]
-#![cfg(all(feature = "cli-tract", not(feature = "onnx")))]
+#![cfg(all(feature = "cli-tract", not(any())))]
 
 use assert_cmd::Command;
 use predicates::prelude::*;

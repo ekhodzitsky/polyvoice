@@ -198,7 +198,7 @@ fn bench_v2_skip_overlap_mode_runs() {
     assert_eq!(json["files_processed"], 1);
 }
 
-#[cfg(all(feature = "cli", feature = "onnx"))]
+#[cfg(all(feature = "cli", any()))]
 #[test]
 fn bench_legacy_end_to_end_runs() {
     // Balanced profile embedder is the INT8 shipping pair (0.17+).

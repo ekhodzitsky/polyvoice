@@ -20,7 +20,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - rustdoc: https://docs.rs/polyvoice
 
 ### Rust library (ONNX Runtime)
-- Features: `pipeline-full` + `vbx` (opt-in library / comparison benches)
+- Features: `pipeline-tract` + `vbx` (opt-in; no ort)
 - Same crate-root `Pipeline` as kernels; engine is `ort` instead of `polyvoice-kernels`
 
 ### Rust library (BYO / no ONNX)
@@ -80,7 +80,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 |------|----------|
 | Ort-free BYO | `--no-default-features` (+ `clusterer`, `vbx` optional) |
 | Kernels library | `pipeline-native` + `vbx` (CLI parity) |
-| ONNX library | `pipeline-full` + `vbx` (Python wheel is kernels) |
+| Tract ONNX-file library | `pipeline-tract` + `vbx` |
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (= `pipeline-native` + `vbx`; no `ort`) |
 | CLI with tract | `cli-tract` |
 | WAVE ingest | always-on (`ryf`); 16 kHz WAV without extra features |

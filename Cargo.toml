@@ -14,7 +14,7 @@ version = "0.20.0"
 edition = "2024"
 # MSRV: rten-gemm / rten-simd (Linux INT8 GEMM) need 1.94.
 rust-version = "1.94.0"
-description = "Speaker diarization for Rust — who spoke when. Product CLI is hand-written INT8 kernels (no libonnxruntime). Default features are empty (ort-free BYO core); enable pipeline-native or onnx as needed."
+description = "Speaker diarization for Rust — who spoke when. Product CLI is hand-written INT8 kernels (no libonnxruntime). Default features are empty (ort-free BYO core); enable pipeline-native as needed."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "clustering", "onnx", "streaming"]
@@ -59,11 +59,9 @@ pre-release-replacements = [
 # default = [] is intentional: the published default graph is the ort-free
 # library core (BYO embedder + EnergyVad + pipeline::LegacyPipeline /
 # StreamingPipeline).
-# docs.rs still documents the full ONNX / pipeline_v2 surface explicitly so
-# API pages are not empty of the production path.
-# TODO: drop the ort RC pin once ort 2.0.0 stable lands.
+# docs.rs documents the production kernel path (crate-root Pipeline).
 [package.metadata.docs.rs]
-features = ["onnx", "segmentation", "embedder", "clusterer", "resegmentation", "download", "spectral", "vbx", "attribution", "sortformer"]
+features = ["pipeline-native", "vbx", "attribution", "spectral"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -71,19 +69,10 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 # InferenceRuntime surface (tensors, factory, session trait). No native dylib.
-# Enabled by `onnx` (ort) and/or `backend-tract`. Stages depend on this, not on
-# a concrete engine.
+# Enabled by `backend-tract`. Stages that load ONNX *files* via tract depend
+# on this, not on a concrete engine. The product CLI does not enable `infer`.
 infer = []
-# ONNX Runtime backend (pulls ort + native libonnxruntime).
-onnx = ["infer", "dep:ort"]
-# Full ONNX diarization stack (runtime, model downloads, segmentation,
-# embeddings, clustering, resegmentation). Exports crate-root `Pipeline`
-# (pipeline_v2). Opt-in ONNX path for library consumers and the Python
-# bindings; the cli/ffi/mcp front doors are `pipeline-native` (no ort).
-# Half-wired combos exclude pipeline_v2 (with a
-# compile_error! backstop if the module is forced).
-pipeline-full = ["onnx", "download", "segmentation", "embedder", "clusterer", "resegmentation"]
-# Same v2 stack as pipeline-full, but **no ort**: tract-only inference.
+# Same v2 stack as pipeline-native, but tract-only inference (ONNX files, no ort).
 pipeline-tract = [
     "backend-tract",
     "download",
@@ -121,13 +110,8 @@ cli-native = ["cli"]
 # Multi-format audio decode (symphonia) + resampling to 16 kHz (rubato) for the
 # CLI / loading layer. Opt-in only — keeps the default library surface free of
 # media-codec deps. Rebuild the CLI with `--features "cli,audio-io"` or
-# `"cli,audio-io"` / `"cli-tract,audio-io"` / `"cli-bin,pipeline-full,vbx,audio-io"`.
+# `"cli,audio-io"` / `"cli-tract,audio-io"`.
 audio-io = ["dep:rubato", "dep:symphonia"]
-
-# Execution providers (forward `ort` features). Used by the Pipeline implementations.
-coreml = ["onnx", "ort/coreml"]
-nnapi = ["onnx", "ort/nnapi"]
-xnnpack = ["onnx", "ort/xnnpack"]
 
 # Pure-Rust ONNX inference via tract. Does **not** pull ort.
 # Note: tract-onnx declares MSRV 1.91 — below this crate's rust-version
@@ -145,7 +129,7 @@ segmentation = []
 # ONNX-backed Embedder adapters (CAM++/ResNet34/ERes2NetV2) + docs.rs grouping.
 # The pure-Rust Embedder trait and overlap mask are always compiled
 # (feature-free library BYO path). Enabling this feature alone adds
-# nothing without `infer`; with `onnx` or `backend-tract` it exports CamPlusPlusExtractor etc.
+# nothing without `infer`; with `backend-tract` it exports CamPlusPlusExtractor etc.
 embedder = []
 
 # v1.0 Clusterer trait + NME-SC + AHC adapters.
@@ -164,11 +148,6 @@ vbx = ["clusterer"]
 # caller (the crate-root Pipeline wires the embedder pool into this).
 resegmentation = []
 
-# Optional NVIDIA Streaming Sortformer v2 E2E diarizer (≤4 speakers).
-# Opt-in only — never default. Requires onnx for InferenceRuntime. Model
-# weights are optional download via the model registry (never bundled).
-sortformer = ["onnx"]
-
 # Hand-written WeSpeaker ResNet34 (no ONNX runtime). Opt-in only.
 embedder-native = ["dep:polyvoice-kernels"]
 # Hand-written powerset-3.0 (SincNet + 4× biLSTM). Opt-in only.
@@ -186,9 +165,7 @@ attribution = []
 
 # MCP stdio server (agent front door). Opt-in only — NEVER in default. Pulls
 # rmcp + schemars + tokio and the full diarization pipeline stack so the `diarize`
-# tool can run. `ort` is the SAME crate dependency as the core (polyvoice-mcp is a
-# bin in this crate, not a separate crate), so the ONNX Runtime version matches
-# automatically — no dual-runtime risk.
+# tool can run.
 # Agent MCP server: same production stack as `cli` (kernels, v2 + VBx).
 mcp = [
     "pipeline-native",
@@ -199,8 +176,6 @@ mcp = [
 ]
 
 [dependencies]
-# ONNX Runtime — matches the ecosystem version.
-ort = { version = "2.0.0-rc.12", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs"] }
 # Pure-Rust ONNX loader/runtime (opt-in via `backend-tract`). Use tract-onnx
 # directly rather than the heavier facade crate (which pulls CUDA by default).
 tract-onnx = { version = "0.23.4", optional = true, default-features = false }
@@ -292,7 +267,7 @@ required-features = ["mcp"]
 # stack, so it is skipped in feature-free builds (CI clippy --all-targets).
 [[example]]
 name = "build_asnorm_cohort"
-required-features = ["pipeline-full", "vbx"]
+required-features = ["backend-tract", "embedder", "download"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(kani)'] }

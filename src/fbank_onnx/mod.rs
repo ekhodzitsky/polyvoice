@@ -253,7 +253,7 @@ mod tests {
             eprintln!("skip: {RESNET34} missing");
             return;
         };
-        #[cfg(feature = "onnx")]
+        #[cfg(any())]
         InferenceBackend::force(Some(InferenceBackend::Ort));
         let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 2, ExecutionProvider::Cpu).unwrap();
         assert_eq!(ext.pool_size(), 2);
@@ -268,7 +268,7 @@ mod tests {
             eprintln!("skip: {RESNET34} missing");
             return;
         };
-        #[cfg(feature = "onnx")]
+        #[cfg(any())]
         InferenceBackend::force(Some(InferenceBackend::Ort));
         let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 1, ExecutionProvider::Cpu).unwrap();
         let pcm = sine_pcm(1.0, 16_000);
@@ -290,7 +290,7 @@ mod tests {
             eprintln!("skip: {RESNET34} missing");
             return;
         };
-        #[cfg(feature = "onnx")]
+        #[cfg(any())]
         InferenceBackend::force(Some(InferenceBackend::Ort));
         let ext = FbankOnnxExtractor::new(&path, RESNET34_DIM, 1, ExecutionProvider::Cpu).unwrap();
         // Shorter than one fbank window (400 samples) → zero-padded internally.
@@ -309,7 +309,7 @@ mod tests {
             eprintln!("skip: {RESNET34} missing");
             return;
         };
-        #[cfg(feature = "onnx")]
+        #[cfg(any())]
         InferenceBackend::force(Some(InferenceBackend::Ort));
         // Declare the wrong dim: the model emits 256 values per utterance.
         let ext = FbankOnnxExtractor::new(&path, 192, 1, ExecutionProvider::Cpu).unwrap();
@@ -324,7 +324,7 @@ mod tests {
         InferenceBackend::force(None);
     }
 
-    #[cfg(all(feature = "backend-tract", feature = "onnx"))]
+    #[cfg(all(feature = "backend-tract", any()))]
     fn cosine(a: &[f32], b: &[f32]) -> f64 {
         let mut dot = 0.0f64;
         let mut na = 0.0f64;
@@ -338,7 +338,7 @@ mod tests {
     }
 
     /// Ort vs tract embeddings on real segment-length audio (variable fbank T).
-    #[cfg(all(feature = "backend-tract", feature = "onnx"))]
+    #[cfg(all(feature = "backend-tract", any()))]
     #[test]
     #[cfg_attr(miri, ignore)]
     fn embed_ort_vs_tract_real_segments() {

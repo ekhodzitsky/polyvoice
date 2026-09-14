@@ -16,12 +16,12 @@ fn repo_file(rel: &str) -> PathBuf {
 /// Product-profile builds assume the ort default (shipping ONNX). Tract-only
 /// graphs remap to `powerset_fp32_tract`, which these fixtures do not ship.
 fn pin_ort_or_skip() -> Option<OrtPin> {
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     {
         crate::onnx::InferenceBackend::force(Some(crate::onnx::InferenceBackend::Ort));
         Some(OrtPin)
     }
-    #[cfg(not(feature = "onnx"))]
+    #[cfg(not(any()))]
     {
         None
     }
@@ -29,7 +29,7 @@ fn pin_ort_or_skip() -> Option<OrtPin> {
 
 struct OrtPin;
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 impl Drop for OrtPin {
     fn drop(&mut self) {
         crate::onnx::InferenceBackend::force(None);
@@ -459,7 +459,7 @@ fn build_balanced_with_local_models_succeeds() {
 #[cfg(all(
     feature = "segmenter-native",
     feature = "embedder-native",
-    not(feature = "onnx"),
+    not(any()),
     not(feature = "backend-tract")
 ))]
 #[test]
@@ -486,7 +486,7 @@ fn build_native_with_local_models_succeeds() {
 #[cfg(all(
     feature = "segmenter-native",
     feature = "embedder-native",
-    not(feature = "onnx"),
+    not(any()),
     not(feature = "backend-tract")
 ))]
 #[test]
@@ -694,7 +694,7 @@ fn build_manifest_without_profile_reports_registry_error() {
         .err()
         .expect("build must fail");
     // ONNX/tract path resolves the profile before consulting any model file.
-    #[cfg(any(feature = "onnx", feature = "backend-tract"))]
+    #[cfg(any(any(), feature = "backend-tract"))]
     assert!(matches!(
         err,
         ConfigError::Registry(RegistryError::ProfileNotFound { .. })
@@ -702,7 +702,7 @@ fn build_manifest_without_profile_reports_registry_error() {
     // Kernel-only builds never resolve profiles (the INT8 pair is
     // profile-independent), so the missing `powerset_int8` entry is the error —
     // wrapped as a stage-load failure by the native stage builder.
-    #[cfg(not(any(feature = "onnx", feature = "backend-tract")))]
+    #[cfg(not(any(any(), feature = "backend-tract")))]
     {
         let ConfigError::Load { source, .. } = &err else {
             panic!("expected stage-load failure, got {err:?}");

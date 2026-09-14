@@ -209,7 +209,7 @@ pub fn vbx_plda_fixture_dir() -> PathBuf {
 
 /// Load the Balanced-profile ONNX embedder shared by the model-gated tests,
 /// downloading models into the registry cache on first use.
-#[cfg(all(feature = "onnx", feature = "download"))]
+#[cfg(all(any(), feature = "download"))]
 pub fn balanced_onnx_extractor() -> polyvoice::FbankOnnxExtractor {
     let registry = polyvoice::models::ModelRegistry::default().expect("registry");
     let models = registry

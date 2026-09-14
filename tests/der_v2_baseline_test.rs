@@ -5,7 +5,7 @@
 //!   cargo test --test der_v2_baseline_test --features "onnx,segmentation,embedder,clusterer,resegmentation,download" -- --ignored --nocapture
 
 #![cfg(all(
-    feature = "onnx",
+    any(),
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",

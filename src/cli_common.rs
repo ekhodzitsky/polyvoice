@@ -9,12 +9,12 @@
 #[cfg(all(
     feature = "cli-bin",
     not(any(
-        feature = "onnx",
+        any(),
         feature = "backend-tract",
         all(feature = "segmenter-native", feature = "embedder-native")
     ))
 ))]
-compile_error!("feature `cli-bin` needs an engine: `cli` / `cli-native` (kernels), `pipeline-full` (ONNX Runtime), or `cli-tract`");
+compile_error!("feature `cli-bin` needs an engine: `cli` / `cli-native` (kernels) or `cli-tract`");
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -43,7 +43,7 @@ use crate::models::ModelRegistry;
 use crate::pipeline_v2::{ClustererKind, ExecutionProvider, Pipeline, PipelineConfig};
 use crate::rttm::{RttmSegment, group_by_file, parse_rttm_file, to_speaker_turns};
 use crate::types::{ClusterConfig, DiarizationConfig, SpeakerTurn};
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 use crate::{FbankOnnxExtractor, SileroVad};
 
 /// Parse a `--clusterer`-style selector into the v2 clusterer kind. `threshold`
@@ -185,12 +185,12 @@ pub fn resolve_clusterer_flags(
 /// `LegacyStack` or a Silero VAD session so the user sees a feature hint
 /// instead of a session-build dump.
 pub fn require_onnx(what: &str) -> Result<()> {
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     {
         let _ = what;
         Ok(())
     }
-    #[cfg(not(feature = "onnx"))]
+    #[cfg(not(any()))]
     {
         anyhow::bail!(
             "{what} requires the `onnx` feature (Silero / shipping INT8). \
@@ -244,7 +244,7 @@ pub fn legacy_diarization_config(threshold: f32) -> DiarizationConfig {
 /// build one stack and reuse it — `LegacyPipeline::run` resets the VAD state
 /// at the start of every run, keeping reused sessions numerically identical
 /// to per-file construction.
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 pub struct LegacyStack {
     pub extractor: FbankOnnxExtractor,
     pub vad: SileroVad,
@@ -252,7 +252,7 @@ pub struct LegacyStack {
 
 /// Load the legacy-pipeline ONNX sessions: embedder (on `embedder_ep`) and
 /// Silero VAD (always CPU, its validated configuration).
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 pub fn load_legacy_stack(
     embedder_path: &Path,
     embedding_dim: usize,
@@ -612,7 +612,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     fn load_legacy_stack_rejects_missing_embedder() {
         let err = load_legacy_stack(
             Path::new("/nonexistent/embedder.onnx"),
@@ -628,7 +628,7 @@ mod tests {
 
     /// Registry rooted at the checked-in model files (SHA-256-verified cache
     /// hits, no network). `None` when the local models are absent.
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     fn local_models_registry() -> Option<ModelRegistry> {
         // Prefer models/int8 (checked-in quant outputs); fall back to models/.
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
@@ -651,7 +651,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     fn load_legacy_stack_loads_sessions_from_local_models() {
         let models = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
         let embedder = [
@@ -674,7 +674,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     fn load_legacy_stack_rejects_missing_vad() {
         let models = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
         let embedder = [
@@ -701,7 +701,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     fn build_v2_pipeline_ahc_builds_from_local_models() {
         let Some(registry) = local_models_registry() else {
             return;
@@ -714,7 +714,7 @@ mod tests {
         build_v2_pipeline(config, registry).unwrap();
     }
 
-    #[cfg(all(feature = "vbx", feature = "onnx"))]
+    #[cfg(all(feature = "vbx", any()))]
     #[test]
     fn build_v2_pipeline_vbx_error_names_remedies() {
         let Some(registry) = local_models_registry() else {

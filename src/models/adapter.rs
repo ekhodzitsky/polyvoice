@@ -168,7 +168,7 @@ impl AdapterRegistry {
 
         // Optional E2E Sortformer diarizer (feature-gated). Name marker only —
         // concrete construction lives in `crate::sortformer`.
-        #[cfg(feature = "sortformer")]
+        #[cfg(any())]
         {
             reg.register_builtin(AdapterStage::Diarizer, "sortformer-v2");
             let _ = reg.register_alias(AdapterStage::Diarizer, "latest", "sortformer-v2");
@@ -444,7 +444,7 @@ mod tests {
         ));
     }
 
-    #[cfg(feature = "sortformer")]
+    #[cfg(any())]
     #[test]
     fn sortformer_builtin_registered_when_feature_on() {
         let reg = AdapterRegistry::with_builtins();

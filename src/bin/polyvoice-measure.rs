@@ -5,15 +5,15 @@
 //!   --dataset data/voxconverse-test --max-files 30 --output benchmarks/results/streaming-latency-measured.json
 //! ```
 
-#![cfg_attr(not(feature = "onnx"), allow(dead_code, unused_imports))]
+#![cfg_attr(not(any()), allow(dead_code, unused_imports))]
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use polyvoice::cli_common;
 use polyvoice::der::compute_der;
-#[cfg(not(feature = "onnx"))]
+#[cfg(not(any()))]
 use polyvoice::embedder::Embedder;
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 use polyvoice::embedder::{ERes2NetV2Extractor, Embedder, ResNet34Adapter};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::LegacyPipeline;
@@ -21,7 +21,7 @@ use polyvoice::streaming::{LatencyPreset, StreamingPipeline};
 use polyvoice::types::SpeakerTurn;
 use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 use polyvoice::{FbankOnnxExtractor, SileroVad};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -202,7 +202,7 @@ fn der_pair(ref_t: &[SpeakerTurn], hyp: &[SpeakerTurn]) -> (f64, f64) {
     (d0.der * 100.0, d25.der * 100.0)
 }
 
-#[cfg(not(feature = "onnx"))]
+#[cfg(not(any()))]
 fn run_streaming(
     _dataset: PathBuf,
     _max_files: usize,
@@ -212,7 +212,7 @@ fn run_streaming(
     cli_common::require_onnx("polyvoice-measure streaming")
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn run_streaming(
     dataset: PathBuf,
     max_files: usize,
@@ -340,7 +340,7 @@ fn run_streaming(
 /// start of every run, so reuse is numerically identical to per-file
 /// construction.
 #[cfg(feature = "vad-earshot")]
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn run_legacy_arm<V: polyvoice::vad::VoiceActivityDetector>(
     name: &str,
     frame_size: usize,
@@ -400,12 +400,12 @@ fn run_legacy_arm<V: polyvoice::vad::VoiceActivityDetector>(
     })
 }
 
-#[cfg(not(feature = "onnx"))]
+#[cfg(not(any()))]
 fn run_vad_parity(_dataset: PathBuf, _max_files: usize, _output: Option<PathBuf>) -> Result<()> {
     cli_common::require_onnx("polyvoice-measure vad-parity")
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn run_vad_parity(dataset: PathBuf, max_files: usize, output: Option<PathBuf>) -> Result<()> {
     #[cfg(not(feature = "vad-earshot"))]
     {
@@ -695,7 +695,7 @@ fn load_verification_pairs(
 
 /// Both embedders under comparison plus their model paths (the DER comparison
 /// re-derives fbank extractors from the paths).
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 struct EmbedderModels {
     default_path: PathBuf,
     eres_path: PathBuf,
@@ -703,7 +703,7 @@ struct EmbedderModels {
     eres_emb: ERes2NetV2Extractor,
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn load_embedder_models(registry: &ModelRegistry) -> Result<EmbedderModels> {
     let default_path = registry.ensure("wespeaker_resnet34")?;
     let eres_path = registry
@@ -765,7 +765,7 @@ struct DerComparison {
 /// and reused across files: sessions are file-independent and
 /// `LegacyPipeline::run` resets the VAD state at the start of every run, so
 /// reuse is numerically identical to per-file construction.
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn run_der_comparison(
     registry: &ModelRegistry,
     dataset: &Path,
@@ -866,7 +866,7 @@ fn build_embedder_report(
     }
 }
 
-#[cfg(not(feature = "onnx"))]
+#[cfg(not(any()))]
 fn run_embedder_short(
     _veri_list: PathBuf,
     _wav_root: PathBuf,
@@ -879,7 +879,7 @@ fn run_embedder_short(
     cli_common::require_onnx("polyvoice-measure embedder-short")
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn run_embedder_short(
     veri_list: PathBuf,
     wav_root: PathBuf,

@@ -12,12 +12,12 @@ mod common;
 
 use assert_cmd::Command;
 use predicates::prelude::*;
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 use std::path::Path;
 
 const SILERO_VAD_FILE: &str = "silero_vad.onnx";
 const WESPEAKER_FILE: &str = "wespeaker_resnet34.onnx";
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 const ERES2NETV2_FILE: &str = "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx";
 
 fn measure_cmd() -> Command {
@@ -48,14 +48,14 @@ fn models_cached(files: &[&str]) -> bool {
     true
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn write_wav_16k(path: &Path, samples: &[f32]) {
     common::write_pcm16_mono(path, 16_000, samples);
 }
 
 /// Minimal diarization dataset: one 6 s file, two speakers, speaker A with two
 /// segments (so short-segment pair construction finds a positive).
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn make_rttm_dataset() -> tempfile::TempDir {
     let dir = tempfile::tempdir().expect("tempdir");
     std::fs::create_dir(dir.path().join("audio")).expect("audio dir");
@@ -74,7 +74,7 @@ fn make_rttm_dataset() -> tempfile::TempDir {
     dir
 }
 
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 fn read_json(path: &Path) -> serde_json::Value {
     let text = std::fs::read_to_string(path).expect("read report json");
     serde_json::from_str(&text).expect("parse report json")
@@ -118,7 +118,7 @@ fn streaming_rejects_missing_dataset_dir() {
 }
 
 // Drives real inference through the measure tool, which native/tract builds gate out.
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 #[test]
 fn streaming_empty_dataset_emits_zero_file_rows() {
     if !models_cached(&[WESPEAKER_FILE, SILERO_VAD_FILE]) {
@@ -156,7 +156,7 @@ fn streaming_empty_dataset_emits_zero_file_rows() {
 }
 
 // Drives real inference through the measure tool, which native/tract builds gate out.
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 #[test]
 fn streaming_scores_fixture_file() {
     if !models_cached(&[WESPEAKER_FILE, SILERO_VAD_FILE]) {
@@ -241,7 +241,7 @@ fn vad_parity_scores_fixture_file() {
 }
 
 // Drives real inference through the measure tool, which native/tract builds gate out.
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 #[test]
 fn embedder_short_from_rttm_dataset() {
     if !models_cached(&[WESPEAKER_FILE, SILERO_VAD_FILE, ERES2NETV2_FILE]) {
@@ -283,7 +283,7 @@ fn embedder_short_from_rttm_dataset() {
 }
 
 // Drives real inference through the measure tool, which native/tract builds gate out.
-#[cfg(feature = "onnx")]
+#[cfg(any())]
 #[test]
 fn embedder_short_with_der_comparison() {
     if !models_cached(&[WESPEAKER_FILE, SILERO_VAD_FILE, ERES2NETV2_FILE]) {
@@ -353,8 +353,8 @@ fn embedder_short_fails_without_any_pair_source() {
         .assert()
         .failure();
     // Native/tract builds gate the tool before pair resolution: no ONNX Runtime.
-    #[cfg(feature = "onnx")]
+    #[cfg(any())]
     assert.stderr(predicate::str::contains("no VoxCeleb pairs"));
-    #[cfg(not(feature = "onnx"))]
+    #[cfg(not(any()))]
     assert.stderr(predicate::str::contains("requires the `onnx` feature"));
 }
