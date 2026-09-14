@@ -83,10 +83,10 @@ Like-for-like, strict collar 0, VoxConverse-test (232 files). Full matrix
 | Runtime | Rust, CPU-only | PyTorch, GPU recommended |
 | Weights | MIT, ungated | HF token required |
 | Default deps | none | PyTorch stack |
-| DER₀ | 14.9 % | **11.3 %** |
+| DER₀ | 13.3 % | **11.3 %** |
 | Speed | **~162× realtime** (Ryzen AI 9 HX 370) | GPU-bound |
 
-The trade is explicit: ~4 DER points for a CPU-only, MIT, ungated deploy
+The trade is explicit: ~2 DER points for a CPU-only, MIT, ungated deploy
 with no Python. Not the accuracy leader — the deployability leader.
 
 ## Speed
@@ -97,8 +97,8 @@ DER₀ is strict collar 0. Protocol: [benchmarks](docs/BENCHMARKS.md).
 
 | Corpus | DER₀ | kernels Linux | ort Linux | kernels Darwin |
 |---|---:|---:|---:|---:|
-| VoxConverse-test (232) | 14.9 % | **~162×** | ~150× | ~130× |
-| AMI-test (16) | 24.7 % | **~193×** | ~171× | ~109× |
+| VoxConverse-test (232) | 13.3 % | **~162×** | ~150× | ~130× |
+| AMI-test (16) | 24.2 % | **~193×** | ~171× | ~109× |
 | Vox-3 smoke | 7.0 % | ~111×, **~158×** wall at `--jobs 3` | ~129×, ~151× at `--jobs 3` | ≥117× |
 
 Peak RSS on the Vox-3 smoke: **~300 MiB** kernels vs ~620 MiB ort at

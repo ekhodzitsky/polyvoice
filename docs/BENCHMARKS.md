@@ -19,24 +19,27 @@ collar.
 
 | Figure | Role | Artifact |
 |------|------|----------|
-| **14.94 %** | **Linux / CPU product truth** (server deploys) | `scripts/linux-cpu-der-gate.sh` → [`linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/) |
+| **13.34 %** | **Linux kernels product truth** (CLI / FFI / MCP) | [`linux-cpu-native-der-2026-09-13-vbx-ahc/`](../benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
+| **14.94 %** | Linux / CPU **ort** protocol (`cli-ort` / Python) | `scripts/linux-cpu-der-gate.sh` → [`linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/) |
 | **15.02 %** | Mac CoreML headline + historical CI gate | INT8 full-split 2026-08-10 — `benchmarks/results/int8-full-der-2026-08-10/` |
 | **15.24 %** | Historical FP32 hop-2.0 published (pre-0.17) | `benchmarks/results/powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json` |
 | **15.22 %** | Same-scorer H2H vs speakrs (FP32-era CLI, 2026-08-03) | `benchmarks/results/speakrs-h2h-2026-08-03/` |
 
 **Default since 0.17.0** is the INT8 pair (`powerset_int8` + `resnet34_int8`)
-on every profile. **Cite 14.94 % for Linux/CPU deploys** (powerset micro-batch
-N=8, EP=cpu). Cite **15.02 %** for Mac CoreML (N=1 clamp). Reproduce Linux:
+on every profile. **Cite 13.34 % for the Linux kernel CLI** (VBx AHC seed 0.6).
+Cite **14.94 %** for `cli-ort` / Python (powerset micro-batch N=8, EP=cpu).
+Cite **15.02 %** for Mac CoreML (N=1 clamp). Reproduce Linux kernels:
 
 ```bash
-DOCKER=1 bash scripts/linux-cpu-der-gate.sh   # or native Linux host
+DOCKER=1 bash scripts/linux-cpu-native-der-gate.sh
+# ort protocol: DOCKER=1 bash scripts/linux-cpu-der-gate.sh
 ```
 
 ## At a glance
 
 | | polyvoice (v2+VBx, INT8 default) | pyannote 3.1 | WhisperX | NeMo Sortformer |
 |--|--|--|--|--|
-| **VoxConverse-test DER** | **15.0 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
+| **VoxConverse-test DER** | **13.3 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
 | **Model size** | **~8.4 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
 | **Runtime** | **Kernels ~110–130× Darwin / ~110× Linux x86_64; ort ~80–95× Linux** | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
@@ -46,7 +49,7 @@ DOCKER=1 bash scripts/linux-cpu-der-gate.sh   # or native Linux host
 
 ¹ VoxConverse-test, **no forgiveness collar (collar 0), overlap scored** — the
 strict protocol pyannote 3.1 reports against, so these two are collar-matched.
-polyvoice trails the accuracy leader by ~4 DER points and trades that for
+polyvoice trails the accuracy leader by ~2 DER points and trades that for
 deployability: a Rust-native, CPU, MIT, **ungated** engine (hand-written INT8
 kernels on the product CLI; ONNX Runtime via `cli-ort` / Python) with four
 bindings and streaming. It is **not** the accuracy leader.
@@ -267,12 +270,12 @@ are operational (asserted by the native gate).
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | VoxConverse-test (232) | **~130×** | **15.47 %** |
 | **v2 + VBx INT8 Darwin kernels (M1 Pro)** | AMI-test (16) | **~109×** | **25.19 %** |
 | **v2 + VBx INT8 Darwin kernels Vox-3 scoreboard** | euqef / fuzfh / msbyq | **≥117×** | **7.11 %** |
-| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~162×** | **14.86 %** |
-| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~193×** | **24.73 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~162×** | **13.34 %** |
+| **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~193×** | **24.19 %** |
 | **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~111×** (jobs=1), **~158×** wall (`--jobs 3`) | **7.03 %** |
 
-Linux x86_64 numbers: 2026-09-08,
-[`benchmarks/results/linux-cpu-native-der-2026-09-08-qdq/`](../benchmarks/results/linux-cpu-native-der-2026-09-08-qdq/).
+Linux x86_64 numbers: 2026-09-13 (VBx AHC seed 0.6; RTFx still 2026-09-08),
+[`benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/`](../benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/).
 The INT8 conv path (default on aarch64 + dotprod) also defaults on x86_64 with
 AVX-512 VNNI — same exact-integer math as the aarch64 kernels; CPUs without it
 keep the FP32 conv default. LSTM gates are AVX-512 vectorized (same minimax
@@ -281,8 +284,11 @@ count (3 on ≤10-core hosts, up to 8 on 24 threads), SincNet im2col is
 tiled, which bounds the per-window memory slab (Vox-3 peak RSS 539 →
 ~300 MiB at jobs=1), and the ResNet34 forward is graph-faithful to the ONNX
 QDQ semantics (requant onto the pre-add lattice and the stats-pooling chain
-fused into store epilogues) — that closed most of the DER gap to ort
-(Vox-232 15.33 → 14.86 %, AMI-16 25.46 → 24.73 %). With
+fused into store epilogues) — that closed most of the previous DER gap to
+ort (Vox-232 15.33 → 14.86 %, AMI-16 25.46 → 24.73 %). The VBx AHC seed
+was then retuned on VoxConverse-dev (0.5 → 0.6, one global default):
+Vox-232 14.86 → 13.34 %, AMI-16 24.73 → 24.19 % (confusion; miss/FA
+unchanged). With
 `polyvoice-bench --jobs N>1` the v2 pipeline is
 shared across file workers (no per-worker model memory, internal fan-out
 divided by jobs) and the report carries `rt_factor_wall` next to the
@@ -298,12 +304,9 @@ AMI-16 ~193× vs ort ~171×. Short Vox-3 smoke: at jobs=1 ort's intra-op
 threading still wins the per-file metric (~129× vs ~111×), but with
 `--jobs 3` kernels take the wall-clock lead (**~158× vs ort ~151×**) at
 much lower footprint — peak RSS **~470 MiB** vs ort **~740 MiB** (jobs=1:
-**~300 MiB** vs ~620 MiB), no `libonnxruntime` dylib. DER:
-Vox-3 7.03 % (kernels) vs 7.51 % (ort); Vox-232 14.86 % vs ort 14.74 %
-(+0.12 pp); AMI 24.73 % vs ort 24.23 % (+0.51 pp residual — structural:
-the two engines' segmentation/embedding stages are co-adapted, hybrid
-swaps score worse than either matched pipeline; closing it needs a
-VBx/PLDA recalibration under native embeddings).
+**~300 MiB** vs ~620 MiB), no `libonnxruntime` dylib. DER (kernels, AHC
+seed 0.6): Vox-3 7.03 % vs ort 7.51 %; Vox-232 13.34 %; AMI 24.19 %.
+Same-host ort 14.74 % / 24.23 % is the previous AHC-seed-0.5 protocol.
 
 ### Historical — FP32, CPU EP (2026-07-30/31, v0.14.0)
 

@@ -54,9 +54,9 @@ is not acceptable: keep the win and cut memory.
 
 Product default is `cli` = kernels (`pipeline-native`), no `libonnxruntime`.
 ONNX Runtime is opt-in (`cli-ort` / `onnx`). Darwin native holds the
-scoreboard floors above. Linux x86_64 native, 2026-09-08
-(Ryzen AI 9 HX 370): VoxConverse-test DER₀ 14.86 % / RTFx ~162×,
-AMI DER₀ 24.73 % / RTFx ~193× (same-host ort 14.74 % / 24.23 %,
+scoreboard floors above. Linux x86_64 native, 2026-09-13
+(Ryzen AI 9 HX 370): VoxConverse-test DER₀ 13.34 % / RTFx ~162×,
+AMI DER₀ 24.19 % / RTFx ~193× (same-host ort 14.74 % / 24.23 %,
 ~137× / ~156× — kernels ahead on long files), Vox-3 smoke RTFx ~110×
 at jobs=1 (ort ~129×) but
 **~158× wall at `--jobs 3`** (ort ~151×; peak RSS ~470 vs ~740 MiB,

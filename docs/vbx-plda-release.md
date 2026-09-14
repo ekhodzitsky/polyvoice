@@ -81,11 +81,16 @@ Checked-in fixtures under `fixtures/vbx-plda/` keep the release gate and DER
 regression tests offline-capable without hitting the network.
 
 Hyperparameters default to the dev-calibrated optimum (fa=0.3, loop_prob=0.9,
-ahc_threshold=0.5, emb_scale=4.88). The library reads no environment variables
+ahc_threshold=0.6, emb_scale=4.88). The AHC seed was retuned on VoxConverse-dev
+for native INT8 embeddings (confusion drops; miss/FA stay put). The library reads no environment variables
 implicitly; tuning is opt-in via `VbxClustererConfig` — either constructed
 directly and passed to `VbxClusterer::from_dir_with_config`, or populated from
 `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,
 AHC_ASC_MEMBERS}` through `VbxClustererConfig::from_env()`.
+
+The pipeline factory applies that overlay only when `POLYVOICE_VBX_FROM_ENV=1`
+(or `true`). Stray `POLYVOICE_VBX_FA=…` in the environment does not move
+shipped DER. Offline 1-D grids: `scripts/calibrate-vbx.sh data/voxconverse-dev 30`.
 
 ## Remaining release steps (need the release signing key)
 

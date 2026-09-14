@@ -354,7 +354,9 @@ use crate::clusterer::{Clusterer, ClustererError};
 /// nested [`VbxConfig`] here deliberately differs from [`VbxConfig::default`]:
 /// `fa = 0.3` and `loop_prob = 0.9` are the polyvoice dev optimum, while the
 /// bare `VbxConfig` default keeps the upstream speakrs values (`fa = 0.07`,
-/// GMM mode) pinned by the parity fixtures.
+/// GMM mode) pinned by the parity fixtures. The AHC seed (`ahc_threshold = 0.6`)
+/// was retuned on VoxConverse-dev for native INT8 embeddings; it is still one
+/// global value, never branched on dataset name.
 #[derive(Debug, Clone, Copy)]
 pub struct VbxClustererConfig {
     /// VBx variational-inference hyperparameters.
@@ -382,7 +384,7 @@ impl Default for VbxClustererConfig {
                 loop_prob: 0.9,
                 ..VbxConfig::default()
             },
-            ahc_threshold: 0.5,
+            ahc_threshold: 0.6,
             emb_scale: 4.88,
             // cVBx short-segment recipe.
             min_embedding_secs: 1.6,
@@ -504,7 +506,7 @@ impl VbxClusterer {
     /// directory is resolved through the model registry / `--vbx-plda-dir`).
     ///
     /// Uses [`VbxClustererConfig::default`] verbatim (fa=0.3, loop_prob=0.9
-    /// i.e. the canonical forward-backward VBx, ahc_threshold=0.5,
+    /// i.e. the canonical forward-backward VBx, ahc_threshold=0.6,
     /// emb_scale=4.88, min_embedding_secs=1.6) — one global set, never branched
     /// on dataset name, and no env reads. For explicit overrides use
     /// [`Self::from_dir_with_config`] (e.g. with [`VbxClustererConfig::from_env`]
@@ -547,12 +549,23 @@ impl VbxClusterer {
         registry: &crate::models::ModelRegistry,
         max_speakers: usize,
     ) -> Result<Self, ClustererError> {
+        Self::from_registry_with_config(registry, max_speakers, VbxClustererConfig::default())
+    }
+
+    /// [`Self::from_registry`] with an explicit configuration in place of the
+    /// dev-calibrated defaults.
+    #[cfg(feature = "download")]
+    pub fn from_registry_with_config(
+        registry: &crate::models::ModelRegistry,
+        max_speakers: usize,
+        config: VbxClustererConfig,
+    ) -> Result<Self, ClustererError> {
         let dir = registry
             .ensure_vbx_plda_dir()
             .map_err(|e| ClustererError::AlgorithmFailed {
                 detail: format!("ensure VBx PLDA via model registry: {e}"),
             })?;
-        Self::from_dir(&dir, max_speakers)
+        Self::from_dir_with_config(&dir, max_speakers, config)
     }
 
     /// When embeddings come from dense non-contiguous windows, force GMM-VBx

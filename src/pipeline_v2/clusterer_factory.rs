@@ -106,14 +106,24 @@ pub(crate) fn build_profile_clusterer(
             // This is the library's single env-resolution point;
             // `pipeline_v2` always has `download`, so the registry
             // fallback is available.
+            //
+            // VBx knobs stay `VbxClustererConfig::default()` unless the
+            // caller opts in with `POLYVOICE_VBX_FROM_ENV=1` (offline
+            // calibration). Production construction is otherwise env-free.
+            let vbx_cfg = vbx_config_for_pipeline();
             let mut vbx = match &config.vbx_plda_dir {
-                Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(dir, max),
+                Some(dir) => {
+                    crate::clusterer::vbx::VbxClusterer::from_dir_with_config(dir, max, vbx_cfg)
+                }
                 None => match std::env::var_os("POLYVOICE_VBX_PLDA_DIR") {
-                    Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir(
+                    Some(dir) => crate::clusterer::vbx::VbxClusterer::from_dir_with_config(
                         std::path::Path::new(&dir),
                         max,
+                        vbx_cfg,
                     ),
-                    None => crate::clusterer::vbx::VbxClusterer::from_registry(registry, max),
+                    None => crate::clusterer::vbx::VbxClusterer::from_registry_with_config(
+                        registry, max, vbx_cfg,
+                    ),
                 },
             }
             .map_err(|e| ConfigError::Load {
@@ -132,6 +142,22 @@ pub(crate) fn build_profile_clusterer(
         ClustererKind::Vbx => Err(ConfigError::UnknownModel {
             model_id: "vbx (requires the `vbx` feature)".to_owned(),
         }),
+    }
+}
+
+/// Production VBx knobs are the compiled defaults. Set
+/// `POLYVOICE_VBX_FROM_ENV=1` (or `true`) to overlay
+/// `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,AHC_ASC_MEMBERS}`
+/// for offline calibration. Any other value, or an unset variable, keeps
+/// the defaults — stray `POLYVOICE_VBX_FA=…` in the environment must not
+/// move shipped DER.
+#[cfg(feature = "vbx")]
+fn vbx_config_for_pipeline() -> crate::clusterer::vbx::VbxClustererConfig {
+    match std::env::var("POLYVOICE_VBX_FROM_ENV") {
+        Ok(v) if v == "1" || v.eq_ignore_ascii_case("true") => {
+            crate::clusterer::vbx::VbxClustererConfig::from_env()
+        }
+        _ => crate::clusterer::vbx::VbxClustererConfig::default(),
     }
 }
 
@@ -162,5 +188,58 @@ mod tests {
             }
             other => panic!("expected UnknownModel, got {other:?}"),
         }
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(all(test, feature = "vbx"))]
+mod vbx_env_tests {
+    use super::vbx_config_for_pipeline;
+    use crate::clusterer::vbx::VbxClustererConfig;
+
+    fn clear_vbx_env() {
+        unsafe {
+            for k in [
+                "POLYVOICE_VBX_FROM_ENV",
+                "POLYVOICE_VBX_FA",
+                "POLYVOICE_VBX_FB",
+                "POLYVOICE_VBX_LOOP_PROB",
+                "POLYVOICE_VBX_AHC_THRESHOLD",
+                "POLYVOICE_VBX_EMB_SCALE",
+                "POLYVOICE_VBX_MIN_EMB_SECS",
+                "POLYVOICE_VBX_AHC_ASC_MEMBERS",
+            ] {
+                std::env::remove_var(k);
+            }
+        }
+    }
+
+    #[test]
+    fn from_env_gate_is_required_to_overlay_knobs() {
+        // Sequential: cargo test shares a process across this module's tests.
+        clear_vbx_env();
+        unsafe {
+            std::env::set_var("POLYVOICE_VBX_FA", "0.99");
+        }
+        let c = vbx_config_for_pipeline();
+        let d = VbxClustererConfig::default();
+        assert!(
+            (c.vbx.fa - d.vbx.fa).abs() < 1e-12,
+            "FA overlay must require POLYVOICE_VBX_FROM_ENV"
+        );
+        unsafe {
+            std::env::set_var("POLYVOICE_VBX_FROM_ENV", "1");
+            std::env::set_var("POLYVOICE_VBX_FA", "0.42");
+        }
+        let c = vbx_config_for_pipeline();
+        assert!((c.vbx.fa - 0.42).abs() < 1e-12);
+        clear_vbx_env();
+        unsafe {
+            std::env::set_var("POLYVOICE_VBX_FROM_ENV", "true");
+            std::env::set_var("POLYVOICE_VBX_EMB_SCALE", "3.5");
+        }
+        let c = vbx_config_for_pipeline();
+        assert!((c.emb_scale - 3.5).abs() < 1e-6);
+        clear_vbx_env();
     }
 }

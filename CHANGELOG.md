@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- VBx AHC seed threshold **0.5 → 0.6**, retuned on VoxConverse-dev for native
+  INT8 embeddings (one global default). Same-host Linux kernels, collar 0:
+  VoxConverse-test **14.86 % → 13.34 %**, AMI-test **24.73 % → 24.19 %**
+  (confusion; miss/FA unchanged). Vox-3 DER is unchanged (7.03 / 7.36).
+  Artifacts: `benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/`.
+
+### Added
+
+- Opt-in `POLYVOICE_VBX_FROM_ENV=1` lets the pipeline overlay
+  `POLYVOICE_VBX_{FA,FB,…}` for offline grids. Production construction stays
+  env-free. Helper: `scripts/calibrate-vbx.sh`.
+
 ## [0.20.0] - 2026-09-08
 
 ### Added

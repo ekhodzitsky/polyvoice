@@ -58,6 +58,11 @@ else
         mv "${AUDIO_DIR}/voxconverse_dev_wav/"*.wav "$AUDIO_DIR/" 2>/dev/null || true
         rmdir "${AUDIO_DIR}/voxconverse_dev_wav" 2>/dev/null || true
     fi
+    # Oxford VGG zip nests wavs under audio/; flatten so bench sees dataset/audio/*.wav.
+    if [ -d "${AUDIO_DIR}/audio" ]; then
+        mv "${AUDIO_DIR}/audio/"*.wav "$AUDIO_DIR/" 2>/dev/null || true
+        rmdir "${AUDIO_DIR}/audio" 2>/dev/null || true
+    fi
     rm -f "$ZIP_FILE"
     WAV_COUNT=$(find "$AUDIO_DIR" -name "*.wav" | wc -l | tr -d ' ')
     echo "[Audio] Done: ${WAV_COUNT} files"

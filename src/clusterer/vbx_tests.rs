@@ -1,5 +1,5 @@
 use super::*;
-use ndarray::{Array2, array};
+use ndarray::{array, Array2};
 
 #[test]
 fn from_dir_missing_returns_error() {
@@ -365,7 +365,7 @@ fn clusterer_config_defaults_are_the_dev_tuning() {
     let d = VbxClustererConfig::default();
     assert!((d.vbx.fa - 0.3).abs() < 1e-12);
     assert!((d.vbx.loop_prob - 0.9).abs() < 1e-12);
-    assert!((d.ahc_threshold - 0.5).abs() < 1e-6);
+    assert!((d.ahc_threshold - 0.6).abs() < 1e-6);
     assert!((d.emb_scale - 4.88).abs() < 1e-6);
     assert!((d.min_embedding_secs - 1.6).abs() < 1e-12);
     assert_eq!(d.ahc_established_min_members, 0);
@@ -373,8 +373,8 @@ fn clusterer_config_defaults_are_the_dev_tuning() {
 
 #[test]
 fn from_env_overlays_valid_values_and_ignores_malformed() {
-    // Edition 2024 marks env mutation unsafe; this test is the only one in
-    // the crate touching these variables, so there is nothing to race with.
+    // Edition 2024 marks env mutation unsafe. nextest isolates tests in
+    // their own processes, so this cannot leak into other env-sensitive tests.
     unsafe {
         std::env::set_var("POLYVOICE_VBX_FA", "0.42");
         std::env::set_var("POLYVOICE_VBX_FB", "not-a-float");
