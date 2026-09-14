@@ -63,7 +63,7 @@ multi-corpus proof.
 | Production models | **INT8 only** (`powerset_int8` + `resnet34_int8`, ~8.4 MB) |
 | CLI / FFI / MCP engine | **kernels** (`pipeline-native`); `--legacy` / `--clusterer ahc` opt out |
 | Python engine | **kernels** (same v2 + VBx as the CLI; pass `clusterer="ahc"` to opt out) |
-| Opt-in ONNX CLI | `--features cli-ort` / `pipeline-full` |
+| Opt-in ONNX CLI | `--features cli-ort` (**deprecated**) / `pipeline-full` |
 | Full-split DER (no-collar micro, INT8, **Linux kernels**) | Vox **13.34%** / AMI **24.19%** — [`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
 | Full-split DER (no-collar micro, INT8, **ort** Linux/CPU, AHC seed 0.5 protocol) | Vox **14.94%** / AMI **24.19%** — [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
 | Darwin native full-split (M1 Pro, kernels) | Vox **15.47%** / AMI **25.19%** / ~**130× / 109×** RTFx (0.18; not re-run after AHC seed 0.6) |
@@ -212,7 +212,7 @@ release-gated at full-split size.
 | Path | How to run | Role in 0.20.x |
 |------|------------|----------------|
 | **v2 + VBx kernels (CLI/FFI/MCP/Python/transcribe default)** | `cargo install polyvoice --features cli` / `pip install polyvoice` | Product; Darwin scoreboard + Linux full-split |
-| **v2 + VBx ONNX Runtime** | `--features cli-ort` | Comparison protocol; not the product CLI |
+| **v2 + VBx ONNX Runtime** | `--features cli-ort` (deprecated) | Comparison protocol; not the product CLI |
 | **Legacy** | CLI `--legacy` / `--clusterer ahc` | Supported escape hatch; former default (Silero + AHC) |
 
 **Gap:** The pipeline default flipped at 0.11 (v2+VBx) and the engine default

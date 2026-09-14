@@ -12,7 +12,7 @@ The crate exposes three intentional pipeline layers (see
 |-------|-------------|--------|----------|
 | **BYO / ort-free** (`polyvoice::pipeline::LegacyPipeline`) | `LegacyPipeline::new(DiarizationConfig, VadConfig)` + inject `Embedder` | Stable library surface; CLI `--legacy` | No ONNX; custom embedders; streaming sibling |
 | **Native kernels** (`polyvoice::Pipeline` via `pipeline-native`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/MCP/Python default** (v2 + VBx, hand-written INT8 kernels, no libonnxruntime). Darwin links Accelerate. | CPU deployment without ONNX Runtime |
-| **ONNX Runtime** (`polyvoice::Pipeline` via `pipeline-full`) | `Pipeline::builder()` + `ModelRegistry` | Opt-in since 0.18 (`cli-ort`) | Same v2 pipeline on `ort` |
+| **ONNX Runtime** (`polyvoice::Pipeline` via `pipeline-full`) | `Pipeline::builder()` + `ModelRegistry` | Opt-in since 0.18; `cli-ort` is deprecated | Same v2 pipeline on `ort` |
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐

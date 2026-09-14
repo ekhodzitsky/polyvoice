@@ -74,7 +74,7 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | `pipeline-full` | `onnx` + `download` + stage markers — ONNX library bundle |
 | `pipeline-tract` | same v2 stack, tract only — **no ort** |
 | `cli`, `ffi`, `mcp`, Python wheel | `pipeline-native` + `vbx` (+ extras). `PipelineConfig::default()` is VBx when `vbx` is on |
-| `cli-ort` | previous product: `pipeline-full` + `vbx` (ONNX Runtime INT8) |
+| `cli-ort` | **deprecated** previous product: `pipeline-full` + `vbx` (ONNX Runtime INT8) |
 | `cli-tract` | same CLI bins as `cli`, tract engine, no `ort`; `--legacy` rejected |
 | `pipeline-native` / `cli-native` | same v2 stack on hand-written kernels; **no ort, no tract**; `--legacy` rejected |
 

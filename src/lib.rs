@@ -18,8 +18,8 @@
 //!
 //! **Product path (CLI / FFI / MCP):** crate-root `Pipeline` via
 //! `pipeline-native` (`cli`) — hand-written INT8 kernels, no
-//! `libonnxruntime`. ONNX Runtime is `--features cli-ort` / `onnx` /
-//! `pipeline-full`. Tract is `cli-tract`. The v2 gate is `download` +
+//! `libonnxruntime`. ONNX Runtime is `--features cli-ort` (deprecated) /
+//! `onnx` / `pipeline-full`. Tract is `cli-tract`. The v2 gate is `download` +
 //! stage features plus an engine (`pipeline-native`, `onnx`, or
 //! `backend-tract`). With the gate off there is deliberately no crate-root
 //! `Pipeline` — inference-free builds use [`pipeline::LegacyPipeline`].
@@ -36,7 +36,7 @@
 //!
 //! - **Production (`pipeline_v2`, crate-root `Pipeline`):** trait-wired
 //!   Segmenter → Embedder → Clusterer → Resegmenter. CLI/FFI/MCP default
-//!   to hand-written kernels (`cli`). ONNX Runtime is `cli-ort`. See
+//!   to hand-written kernels (`cli`). ONNX Runtime is `cli-ort` (deprecated). See
 //!   `docs/PIPELINE-ARCHITECTURE.md`.
 //! - **BYO / ort-free ([`pipeline::LegacyPipeline`] + `StreamingPipeline`):**
 //!   inject [`Embedder`] + [`VoiceActivityDetector`]. CLI `--legacy` uses
@@ -189,7 +189,7 @@ pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
 /// `dead_code` when building the lib alone.
 ///
 /// `cli` is the product front door (kernels, no ort). `cli-ort` is the
-/// previous ONNX Runtime stack. `cli-tract` is the same binaries on tract.
+/// deprecated previous ONNX Runtime CLI. `cli-tract` is the same binaries on tract.
 #[doc(hidden)]
 #[cfg(any(feature = "cli-bin", feature = "mcp"))]
 pub mod cli_common;

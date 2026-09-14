@@ -20,7 +20,7 @@ Do **not** clone ONNX Runtime, tract, or a general ONNX executor.
 | **1** | Optional `cli-tract` (same CLI bins, tract engine, no dylib). `--legacy` rejected. | Rewriting the CLI |
 | **2** | `polyvoice-kernels`: **WeSpeaker ResNet34 only** (fused-BN Conv2d, ReLU, residual, stats-pool, GEMM). Initializers from shipping ONNX. Feature `embedder-native`. | Candle/Burn/tract clone |
 | **3** | Same crate: **powerset LSTM** (SincNet + 4× biLSTM). Feature `segmenter-native`. N>1 works. | Generic Scan / all ONNX ops |
-| **4 (now)** | `cli` / `ffi` / `mcp` / Python wheel / transcribe diarization = `pipeline-native` (no ort, no tract). Darwin Vox-3 holds the scoreboard floors. Linux kernels are ahead of same-host ort on speed (Vox ~162× / AMI ~193× / Vox-3 wall ~158×) and hold Vox DER₀ 13.34 % / AMI 24.19 %. `cli-ort` keeps ONNX Runtime opt-in. | Pulling `ort` back into `cli` |
+| **4 (now)** | `cli` / `ffi` / `mcp` / Python wheel / transcribe diarization = `pipeline-native` (no ort, no tract). Darwin Vox-3 holds the scoreboard floors. Linux kernels are ahead of same-host ort on speed (Vox ~162× / AMI ~193× / Vox-3 wall ~158×) and hold Vox DER₀ 13.34 % / AMI 24.19 %. `cli-ort` is the deprecated previous ONNX Runtime CLI (still builds). | Pulling `ort` back into `cli` |
 | **skip** | Silero (v2 powerset already does VAD). Full protobuf ONNX parser. Sortformer stays opt-in/`onnx` until someone needs it. | — |
 
 Cross-platform is the default of this path: no `libonnxruntime`, no glibc pin, no CoreML/XNNPACK. Linux / macOS / Windows; clustering is already wasm32-clean.
@@ -44,7 +44,7 @@ Keep `ort` as an optional `onnx` feature so INT8 + EP + Sortformer + `cli-ort` k
 | `segmenter-native` (`PowersetNative`) | **Yes** | SincNet + 4× biLSTM; N>1; 1 s vs ort cosine 1.0 |
 | `pipeline-native` / `cli` / `ffi` | **Kernels** (Darwin: C shims + Accelerate/BNNS; Linux: `rten-gemm` + in-crate INT8 conv) | **Product default.** No `ort`. Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux x86_64 (AVX-512 VNNI conv + vectorized LSTM gates, core-scaled embedder pool, graph-faithful QDQ, VBx AHC seed 0.6): VoxConverse DER₀ 13.34% / RTFx ~162×, AMI 24.19% / ~193× — ahead of same-host ort on speed everywhere (ort ~150×/~171×). BYO `default = []` stays pure Rust. |
 | Python wheel | **Kernels** (same as `cli`) | **Product.** No `ort`. |
-| `cli-ort` / `pipeline-full` | **No** (ort + INT8) | Opt-in previous product |
+| `cli-ort` / `pipeline-full` | **No** (ort + INT8) | `cli-ort` deprecated previous CLI; `pipeline-full` still the ONNX library bundle |
 
 CI freezes the pure-Rust **invariants** via:
 

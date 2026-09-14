@@ -112,7 +112,8 @@ cli-bin = ["dep:clap", "dep:clap_complete"]
 # Product CLI: hand-written kernels, no libonnxruntime. Includes VBx so the
 # v2 + VBx default is available without an extra flag.
 cli = ["cli-bin", "pipeline-native", "vbx"]
-# Same CLI binaries on ONNX Runtime INT8 (previous product). Opt-in.
+# Deprecated: previous ONNX Runtime INT8 CLI. The product is `cli` (kernels).
+# Still builds for comparison benches and `--legacy`. Do not enable on `cli`.
 cli-ort = ["cli-bin", "pipeline-full", "vbx"]
 # Same CLI binaries, tract-only inference — no `ort` / libonnxruntime.
 # `--legacy` is rejected (Silero does not load on tract).

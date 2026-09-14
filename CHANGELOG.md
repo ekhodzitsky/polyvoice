@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Linux kernel full-split (Vox 13.34 % / AMI 24.19 %, ~162× / ~193×).
   Status stays NOT GO for unattended production.
 
+### Deprecated
+
+- `--features cli-ort` is the previous ONNX Runtime CLI. The product is
+  `--features cli` (INT8 kernels). The feature still builds for comparison
+  benches and `--legacy`; `pipeline-full` / `ort` are unchanged.
+
 ### Added
 
 - Opt-in `POLYVOICE_VBX_FROM_ENV=1` lets the pipeline overlay
