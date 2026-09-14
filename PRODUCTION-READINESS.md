@@ -200,7 +200,7 @@ release-gated at full-split size.
   ([`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/)).
   Ort remains a comparison row (`cli-ort`).
 - Re-run Darwin full-split after AHC seed 0.6 before treating 15.47 % / 25.19 %
-  as current.
+  as current: `bash scripts/darwin-native-der-gate.sh` on macOS.
 - Add at least one additional corpus (CALLHOME and/or DIHARD subset) to the
   release DER matrix.
 - Do not pull `ort` back into `cli`.
