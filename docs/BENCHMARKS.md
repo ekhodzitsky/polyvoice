@@ -20,14 +20,14 @@ collar.
 | Figure | Role | Artifact |
 |------|------|----------|
 | **13.34 %** | **Linux kernels product truth** (CLI / FFI / MCP) | [`linux-cpu-native-der-2026-09-13-vbx-ahc/`](../benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
-| **14.94 %** | Linux / CPU **ort** protocol (`cli-ort` / Python) | `scripts/linux-cpu-der-gate.sh` → [`linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/) |
+| **14.94 %** | Linux / CPU **ort** protocol (`pipeline-full`) | `scripts/linux-cpu-der-gate.sh` → [`linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/) |
 | **15.02 %** | Mac CoreML headline + historical CI gate | INT8 full-split 2026-08-10 — `benchmarks/results/int8-full-der-2026-08-10/` |
 | **15.24 %** | Historical FP32 hop-2.0 published (pre-0.17) | `benchmarks/results/powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json` |
 | **15.22 %** | Same-scorer H2H vs speakrs (FP32-era CLI, 2026-08-03) | `benchmarks/results/speakrs-h2h-2026-08-03/` |
 
 **Default since 0.17.0** is the INT8 pair (`powerset_int8` + `resnet34_int8`)
 on every profile. **Cite 13.34 % for the Linux kernel CLI** (VBx AHC seed 0.6).
-Cite **14.94 %** for `cli-ort` (powerset micro-batch N=8, EP=cpu).
+Cite **14.94 %** for the `pipeline-full` comparison protocol (powerset micro-batch N=8, EP=cpu).
 The Python wheel matches the kernel CLI (cite **13.34 %**).
 Cite **15.02 %** for Mac CoreML (N=1 clamp). Reproduce Linux kernels:
 
@@ -52,7 +52,7 @@ DOCKER=1 bash scripts/linux-cpu-native-der-gate.sh
 strict protocol pyannote 3.1 reports against, so these two are collar-matched.
 polyvoice trails the accuracy leader by ~2 DER points and trades that for
 deployability: a Rust-native, CPU, MIT, **ungated** engine (hand-written INT8
-kernels on the product CLI; ONNX Runtime via `cli-ort` / Python) with four
+kernels on the product CLI; ONNX Runtime via `pipeline-full`) with four
 bindings and streaming. It is **not** the accuracy leader.
 
 ## The collar caveat (read this first)
@@ -299,7 +299,7 @@ per-file `rt_factor_avg`; per-file DER is bit-identical to jobs=1
 `scripts/linux-cpu-native-der-gate.sh`.
 
 Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-08, same-source
-`cli-ort` build, EP=cpu, N=8): kernels are **ahead on speed everywhere**.
+`pipeline-full` build, EP=cpu, N=8): kernels are **ahead on speed everywhere**.
 Full splits at jobs=1: VoxConverse-test ~162× vs ort ~150×,
 AMI-16 ~193× vs ort ~171×. Short Vox-3 smoke: at jobs=1 ort's intra-op
 threading still wins the per-file metric (~129× vs ~111×), but with

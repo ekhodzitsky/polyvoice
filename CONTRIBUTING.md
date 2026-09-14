@@ -14,7 +14,7 @@ cargo test
 # Product stack (kernels, crate-root Pipeline = pipeline v2)
 cargo test --features "pipeline-native,vbx"
 
-# ONNX Runtime stack (opt-in pipeline-full; cli-ort is deprecated)
+# ONNX Runtime stack (opt-in pipeline-full)
 cargo test --features "pipeline-full,vbx"
 
 # Product CLI binary (no libonnxruntime)
@@ -34,7 +34,7 @@ cargo run --features cli --bin polyvoice -- download-models --profile balanced
 | Production library (kernels) | `pipeline-native` + `vbx` (same as `cli`) |
 | ONNX Runtime library | `pipeline-full` + `vbx` |
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (kernels, no ort) |
-| CLI with ONNX Runtime (deprecated) | `cli-ort` |
+| ONNX Runtime library / comparison bench | `pipeline-full` + `vbx` (+ `cli-bin` for the binaries) |
 | CLI with tract | `cli-tract` |
 | Native ResNet34 embedder | `embedder-native` (`ResNet34Native`, no ONNX runtime) |
 | Native powerset segmenter | `segmenter-native` (`PowersetNative`, N>1 LSTM) |

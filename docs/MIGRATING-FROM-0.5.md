@@ -16,7 +16,7 @@ from 0.5.
 > the **kernels pipeline (`pipeline-native`) + VBx** with no ONNX Runtime;
 > Python defaults to **`pipeline_v2` (ort) + VBx**; the ort-free BYO library
 > surface is `pipeline::LegacyPipeline` (also the CLI `--legacy` escape hatch,
-> available only in `cli-ort` builds).
+> available only in `pipeline-full` builds).
 
 ## Rust API
 
@@ -93,7 +93,7 @@ print(result["num_speakers"], len(result["turns"]))
 | Before                                                     | After (0.11+)                                              |
 |------------------------------------------------------------|------------------------------------------------------------|
 | `polyvoice diarize meeting.wav --threshold 0.4`            | `polyvoice meeting.wav` (v2 + VBx default)                 |
-| legacy Silero + AHC                                        | `polyvoice meeting.wav --legacy` (`cli-ort` builds) or `--clusterer ahc` |
+| legacy Silero + AHC                                        | `polyvoice meeting.wav --legacy` (`pipeline-full` builds) or `--clusterer ahc` |
 | `polyvoice download-models --dir ./models`                 | `polyvoice download-models --profile balanced`             |
 
 > **Update (0.11):** CLI default is pipeline v2 + VBx after a full-split DER

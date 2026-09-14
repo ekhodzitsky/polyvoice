@@ -24,12 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Align `PRODUCTION-READINESS.md`, zero-deps step 4, and COMPETITORS with
   the Linux kernel full-split (Vox 13.34 % / AMI 24.19 %, ~162× / ~193×).
   Status stays NOT GO for unattended production.
+- API freeze window: [`docs/semver.md`](docs/semver.md) lists the advertised
+  surfaces and bump rules while 0.x. Not `1.0.0`.
 
-### Deprecated
+### Removed
 
-- `--features cli-ort` is the previous ONNX Runtime CLI. The product is
-  `--features cli` (INT8 kernels). The feature still builds for comparison
-  benches and `--legacy`; `pipeline-full` / `ort` are unchanged.
+- `--features cli-ort`. Product CLI remains `--features cli` (kernels). An
+  ONNX comparison bench is `--features "cli-bin,pipeline-full,vbx"`.
+  `pipeline-full` / `ort` stay for the library and Parakeet.
 
 ### Added
 

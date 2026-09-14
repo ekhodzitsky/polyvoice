@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Assert the whole workspace resolves to exactly ONE `ort` version.
 #
-# Core's `ort` is optional (`onnx` / `cli-ort`). polyvoice-asr pins the same
+# Core's `ort` is optional (`onnx` / `pipeline-full`). polyvoice-asr pins the same
 # version for Parakeet TDT. Two `ort` versions linked at once means two
 # runtimes (symbol clashes / crashes). This guard is a release/CI gate; run
 # it whenever a dependency that pulls `ort` (e.g. parakeet-rs) changes.

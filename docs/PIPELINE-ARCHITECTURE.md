@@ -18,7 +18,7 @@ For the **development process** checklist (spec → types → verify), see
   production v2     │  pipeline_v2::Pipeline (+ Builder)  │── Segmenter/Embedder/
   CLI/FFI/MCP       │  seg → embed → cluster → reseg      │   Clusterer/Resegmenter
   default since 0.11│  engine: kernels (CLI/FFI/MCP/     │
-                    │  Python); ort (`cli-ort`); tract    │
+                    │  Python); ort (`pipeline-full`); tract │
                     │  clusterer: VBx on front doors      │
                     │  re-exported at crate root as       │
                     │  `Pipeline` (v2 feature gate)       │

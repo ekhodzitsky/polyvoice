@@ -1,10 +1,11 @@
-# Documentation index (polyvoice 0.19)
+# Documentation index (polyvoice 0.20)
 
-Crate version: **0.19.x** ([CHANGELOG](../CHANGELOG.md)). Production profiles
+Crate version: **0.20.x** ([CHANGELOG](../CHANGELOG.md)). Production profiles
 use **INT8** models only. CLI / FFI / MCP default is **kernels**
 (`pipeline-native`), not ONNX Runtime. Canonical accuracy protocol:
 [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
-[PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md).
+[PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md). API freeze:
+[semver.md](semver.md).
 
 ## By audience
 
@@ -19,7 +20,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - rustdoc: https://docs.rs/polyvoice
 
 ### Rust library (ONNX Runtime)
-- Features: `pipeline-full` + `vbx` (opt-in library; `cli-ort` is deprecated)
+- Features: `pipeline-full` + `vbx` (opt-in library / comparison benches)
 - Same crate-root `Pipeline` as kernels; engine is `ort` instead of `polyvoice-kernels`
 
 ### Rust library (BYO / no ONNX)
@@ -79,9 +80,8 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 |------|----------|
 | Ort-free BYO | `--no-default-features` (+ `clusterer`, `vbx` optional) |
 | Kernels library | `pipeline-native` + `vbx` (CLI parity) |
-| ONNX library | `pipeline-full` + `vbx` (`cli-ort`; Python wheel is kernels) |
+| ONNX library | `pipeline-full` + `vbx` (Python wheel is kernels) |
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (= `pipeline-native` + `vbx`; no `ort`) |
-| CLI with ONNX Runtime | `cli-ort` (deprecated; product is `cli`) |
 | CLI with tract | `cli-tract` |
 | WAVE ingest | always-on (`ryf`); 16 kHz WAV without extra features |
 | Multi-format audio | `audio-io` (often with `cli` or `cli-tract`): other containers + resample |

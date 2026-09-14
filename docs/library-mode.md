@@ -74,7 +74,6 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | `pipeline-full` | `onnx` + `download` + stage markers — ONNX library bundle |
 | `pipeline-tract` | same v2 stack, tract only — **no ort** |
 | `cli`, `ffi`, `mcp`, Python wheel | `pipeline-native` + `vbx` (+ extras). `PipelineConfig::default()` is VBx when `vbx` is on |
-| `cli-ort` | **deprecated** previous product: `pipeline-full` + `vbx` (ONNX Runtime INT8) |
 | `cli-tract` | same CLI bins as `cli`, tract engine, no `ort`; `--legacy` rejected |
 | `pipeline-native` / `cli-native` | same v2 stack on hand-written kernels; **no ort, no tract**; `--legacy` rejected |
 
@@ -192,8 +191,10 @@ let mut pipeline = StreamingPipeline::with_latency_preset(
 
 ## Surface contract (freeze)
 
-Breaking changes to the following symbols require a deliberate semver bump and
-an update to this section. CI job `ort-free-core` must stay green.
+The crate-wide freeze, bump rules, and out-of-freeze list are in
+[semver.md](semver.md). Breaking changes to the following BYO symbols still
+require a deliberate semver bump and an update to this section. CI job
+`ort-free-core` must stay green.
 
 | Contract | Gate |
 |----------|------|

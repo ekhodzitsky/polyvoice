@@ -8,7 +8,7 @@
 #      `pipeline-tract` must not pull `ort`
 #
 # This freezes *invariants* so regressions reintroduce native deps into the
-# BYO / product kernel surfaces. Production CLI is kernels (`cli`); ort is `cli-ort`.
+# BYO / product kernel surfaces. Production CLI is kernels (`cli`); ort is `pipeline-full`.
 # An **opt-in** pure-Rust v2 path exists (backend-tract + powerset rewrite +
 # FP32 ResNet) — see docs/strategy/zero-deps.md — but is not product default.
 set -euo pipefail
@@ -82,7 +82,7 @@ fail_if_pkg ort "--features cli" --no-default-features --features cli
 fail_if_pkg tract-onnx "--features cli" --no-default-features --features cli
 require_pkg polyvoice-kernels "--features cli" --no-default-features --features cli
 fail_if_pkg ort "--features ffi" --no-default-features --features ffi
-require_pkg ort "--features cli-ort" --no-default-features --features cli-ort
+require_pkg ort "--features pipeline-full" --no-default-features --features pipeline-full
 
 echo ""
 echo "=== 3b. polyvoice-asr cli does not enable polyvoice/onnx ==="
@@ -113,10 +113,10 @@ cat <<'EOF'
 | backend-tract + shipping powerset    | n/a           | LOAD FAIL (If / InstanceNorm) |
 | backend-tract + powerset rewrite     | no            | export-powerset-tract.py; pipeline remaps; N=1; smoke DER ≈ ort |
 | pipeline-native / cli / ffi / python | no            | **product default** (kernels) |
-| features onnx / cli-ort / pipeline-full | yes (ort)  | `cli-ort` deprecated; `pipeline-full` still ONNX library |
+| features onnx / pipeline-full            | yes (ort)  | opt-in ONNX library / comparison benches |
 EOF
 
 echo ""
 echo "OK: zero-deps invariants hold."
-echo "Product default is cli (kernels, no ort). ONNX Runtime is --features cli-ort / onnx."
+echo "Product default is cli (kernels, no ort). ONNX Runtime is --features pipeline-full / onnx."
 echo "See docs/strategy/zero-deps.md"

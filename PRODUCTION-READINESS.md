@@ -6,7 +6,7 @@
 > DER₀ **13.34 %** / AMI-test **24.19 %**, VBx AHC seed 0.6). Product CLI /
 > FFI / MCP / Python / `polyvoice-transcribe` diarization run hand-written
 > kernels (`pipeline-native`), not `libonnxruntime`. ONNX Runtime is opt-in
-> (`cli-ort` / `pipeline-full`). Pure-Rust tract is **opt-in smoke only**.
+> (`pipeline-full`). Pure-Rust tract is **opt-in smoke only**.
 > Canonical accuracy protocol: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 > Zero-deps strategy: [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md).
 
@@ -24,16 +24,16 @@ split is:
   kernels (`cli` = `pipeline-native`). No `libonnxruntime`. Darwin holds the
   native scoreboard floors (`tests/native_scoreboard.json`). Linux kernels
   hold the published non-Apple product numbers.
-- **`cli-ort`:** ONNX Runtime INT8 (`ort` 2.0.0-rc.12). Comparison protocol
-  in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). Parakeet TDT (ASR companion)
-  still uses `ort`.
+- **`pipeline-full`:** ONNX Runtime INT8 (`ort` 2.0.0-rc.12). Comparison
+  protocol in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). Parakeet TDT (ASR
+  companion) still uses `ort`.
 
 It is still **not** ready for multi-tenant public APIs or unattended production
 services, because:
 
 1. **Pre-1.0 API** — no backward-compatibility commitment until `1.0.0`.
-2. **`cli-ort` still links `ort` RC** (`2.0.0-rc.12`). Product diarization
-   surfaces no longer do.
+2. **`pipeline-full` and Parakeet still link `ort` RC** (`2.0.0-rc.12`).
+   Product diarization surfaces no longer do.
 3. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
    NOTSOFAR-1 has a measured micro-gate (3-meeting subset) but CALLHOME /
    DIHARD (and similar) are not release-gated.
@@ -63,14 +63,14 @@ multi-corpus proof.
 | Production models | **INT8 only** (`powerset_int8` + `resnet34_int8`, ~8.4 MB) |
 | CLI / FFI / MCP engine | **kernels** (`pipeline-native`); `--legacy` / `--clusterer ahc` opt out |
 | Python engine | **kernels** (same v2 + VBx as the CLI; pass `clusterer="ahc"` to opt out) |
-| Opt-in ONNX CLI | `--features cli-ort` (**deprecated**) / `pipeline-full` |
+| Opt-in ONNX library / comparison bench | `--features pipeline-full` |
 | Full-split DER (no-collar micro, INT8, **Linux kernels**) | Vox **13.34%** / AMI **24.19%** — [`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
 | Full-split DER (no-collar micro, INT8, **ort** Linux/CPU, AHC seed 0.5 protocol) | Vox **14.94%** / AMI **24.19%** — [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
 | Darwin native full-split (M1 Pro, kernels) | Vox **15.47%** / AMI **25.19%** / ~**130× / 109×** RTFx (0.18; not re-run after AHC seed 0.6) |
 | Darwin native Vox-3 scoreboard | DER₀ **7.11 / 7.39**, ≥**117×**, pair ≤ 8 414 314 B, peak RSS ≤ **556 MiB** |
 | Linux native RTF (Ryzen AI 9 HX 370) | Vox ~**162×**; AMI ~**193×**; Vox-3 ~**111×** jobs=1 / ~**158×** wall at `--jobs 3` |
 | Inference (product CLI) | **`polyvoice-kernels`** (Darwin Accelerate/BNNS; Linux `rten-gemm`) |
-| Inference (opt-in ONNX) | **`OrtSession` (`ort` 2.0.0-rc.12)** — `cli-ort` only |
+| Inference (opt-in ONNX) | **`OrtSession` (`ort` 2.0.0-rc.12)** — `pipeline-full` |
 | Inference (opt-in tract) | `POLYVOICE_INFERENCE_BACKEND=tract` + `backend-tract`: signed `powerset_fp32_tract` + **FP32** ResNet; smoke DER only |
 | Models | Profile segmenter/embedder minisign-signed in release; VBx PLDA registry downloads are minisign-signed; opt-in `powerset_fp32_tract` is minisign-signed (release `models-tract-v1`) |
 | Native ORT binary | Hash-pinned via ort-sys `dist.txt` **when `onnx` is enabled**; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
@@ -95,11 +95,13 @@ full-split re-run after the AHC seed 0.6 retune.
 | `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
 | CHANGELOG | Maintained | Tracks 0.11→0.20; CLI default flip to v2+VBx was 0.11; kernels default was 0.18; WAVE `ryf` was 0.19 |
 
-**Gap:** No commitment to backward compatibility until `1.0.0`. Consumers should
-pin a `0.19.x` (or tighter) and read the CHANGELOG before upgrading.
+**Gap:** Still pre-`1.0.0`, so Cargo 0.x would allow a silent break. The
+advertised surface is in a freeze window: [`docs/semver.md`](docs/semver.md).
+Consumers should pin `0.20.x` (or tighter) and read the CHANGELOG before
+upgrading.
 
-**Remediation:** Freeze the public API, publish a semver policy, then ship
-`1.0.0`.
+**Remediation:** Keep the freeze window; ship `1.0.0` only when this document
+says GO.
 
 ---
 
@@ -108,19 +110,19 @@ pin a `0.19.x` (or tighter) and read the CHANGELOG before upgrading.
 | Dependency | Version | Risk |
 |------------|---------|------|
 | `polyvoice-kernels` | workspace | Product CLI. Darwin uses Accelerate/BNNS (C shims); Linux uses `rten-gemm` (pure Rust). MSRV 1.94. |
-| `ort` (ONNX Runtime) | `2.0.0-rc.12` | **RC, not stable.** Still linked by **`cli-ort`**. Not on the product CLI or Python wheel. |
+| `ort` (ONNX Runtime) | `2.0.0-rc.12` | **RC, not stable.** Still linked by **`pipeline-full`** and Parakeet. Not on the product CLI or Python wheel. |
 | Native ORT binary | pinned via ort-sys | Hash-verified download when `onnx` is on; residual trust in pyke builds + CDN cold-fetch |
 | `faer` (spectral clustering) | Optional | Not used in the default pipeline |
 | `paste` | Latest | Unmaintained (LOW; no CVE) |
 
 **Gap:** `ort` is no longer the product-CLI or Python-wheel backend. Residual
-risk is the opt-in `cli-ort` RC track. Tract is a spike/goal, not shipped
+risk is the opt-in `pipeline-full` RC track. Tract is a spike/goal, not shipped
 parity. Kernels replace ort for CLI/FFI/MCP/Python.
 
 **Remediation:**
 - Keep the product CLI and Python wheel on kernels; do not pull `ort` back
   into `cli` or the wheel.
-- Track `ort` 2.0 stable for `cli-ort`; re-verify pins and DER on every
+- Track `ort` 2.0 stable for `pipeline-full`; re-verify pins and DER on every
   RC → stable bump.
 - Keep the `InferenceRuntime` surface clean so ONNX backends stay swappable.
 - Retain provenance docs and CI cache of the verified native binary for the
@@ -145,7 +147,7 @@ Evidence: [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-na
 
 **Gap:** Residual LOW noise (e.g. unmaintained transitive crates). No independent
 third-party security audit. RC-track runtime remains a supply-chain residual
-on `cli-ort`.
+on `pipeline-full`.
 
 ---
 
@@ -178,7 +180,7 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | AMI test Mix-Headset (legacy) | 16 | **32.87%** | 25.20% | Full split tracked; long-form floor via single-meeting gate |
 | AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
 | pipeline v2 + VBx **INT8** (Vox / AMI, **ort** host / CoreML) | 232 / 16 | **15.02%** / **24.50%** | 10.33% / 16.82% | INT8 since 0.17; full-split 2026-08-10 |
-| pipeline v2 + VBx **INT8** **Linux/CPU ort** (Vox / AMI) | 232 / 16 | **14.94%** / **24.19%** | 10.27% / 16.60% | Comparison protocol (`cli-ort`); gate + CI smoke |
+| pipeline v2 + VBx **INT8** **Linux/CPU ort** (Vox / AMI) | 232 / 16 | **14.94%** / **24.19%** | 10.27% / 16.60% | Comparison protocol (`pipeline-full`); gate + CI smoke |
 | Darwin native kernels (Vox / AMI, M1 Pro) | 232 / 16 | **15.47%** / **25.19%** | — | 0.18 product CLI; RTFx ~130× / ~109×; not re-run after AHC seed 0.6 |
 | Linux native kernels | 232 / 16 | **13.34%** / **24.19%** | — | 2026-09-13, AHC seed 0.6; RTFx ~162× / ~193× |
 | tract pure-Rust (3 short Vox, M1 Pro) | 3 | ~**7.22%** (vs ort ~7.41%) | — | Opt-in; not a release gate |
@@ -198,7 +200,7 @@ release-gated at full-split size.
 **Remediation:**
 - Cite Linux kernels as the non-Apple product protocol
   ([`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/)).
-  Ort remains a comparison row (`cli-ort`).
+  Ort remains a comparison row (`pipeline-full`).
 - Re-run Darwin full-split after AHC seed 0.6 before treating 15.47 % / 25.19 %
   as current: `bash scripts/darwin-native-der-gate.sh` on macOS.
 - Add at least one additional corpus (CALLHOME and/or DIHARD subset) to the
@@ -212,7 +214,7 @@ release-gated at full-split size.
 | Path | How to run | Role in 0.20.x |
 |------|------------|----------------|
 | **v2 + VBx kernels (CLI/FFI/MCP/Python/transcribe default)** | `cargo install polyvoice --features cli` / `pip install polyvoice` | Product; Darwin scoreboard + Linux full-split |
-| **v2 + VBx ONNX Runtime** | `--features cli-ort` (deprecated) | Comparison protocol; not the product CLI |
+| **v2 + VBx ONNX Runtime** | `--features pipeline-full` (+ `cli-bin` for binaries) | Comparison protocol; not the product CLI |
 | **Legacy** | CLI `--legacy` / `--clusterer ahc` | Supported escape hatch; former default (Silero + AHC) |
 
 **Gap:** The pipeline default flipped at 0.11 (v2+VBx) and the engine default
@@ -230,7 +232,7 @@ clearly demote legacy once v2+VBx has broader multi-corpus proof.
 |------|--------|
 | Product CLI/FFI/MCP/Python | **`polyvoice-kernels`** (`pipeline-native`) — no `InferenceRuntime` dylib |
 | `InferenceRuntime` trait | **Exists** (`src/onnx/runtime.rs`) for ONNX-shaped backends |
-| ONNX implementation | **`OrtSession`** (`ort` 2.0.0-rc.12) — `cli-ort` |
+| ONNX implementation | **`OrtSession`** (`ort` 2.0.0-rc.12) — `pipeline-full` |
 | Pure-Rust ONNX backend | **`TractSession`** behind `backend-tract` + `POLYVOICE_INFERENCE_BACKEND=tract` |
 | Tract powerset | Shipping graphs fail load; **rewrite** via `scripts/export-powerset-tract.py`; pipeline remaps when present |
 | Tract embedder | Builder forces **FP32** `wespeaker_resnet34` (INT8 ResNet under tract collapses speakers) |
@@ -278,7 +280,7 @@ audit remain active.
 ## Go/No-Go Matrix
 
 _As of 0.20.x — product CLI, Python wheel, and transcribe diarization are
-kernels, `cli-ort` still `ort` 2.0.0-rc.12, INT8 profiles + v2+VBx default,
+kernels, `pipeline-full` still `ort` 2.0.0-rc.12, INT8 profiles + v2+VBx default,
 legacy as an escape hatch, and multi-corpus DER is incomplete. Public
 unattended stays NO-GO._
 
@@ -303,9 +305,10 @@ All items must be true before declaring production-ready / shipping `1.0.0` as
       `PipelineConfig::default()` matches front-door VBx when `vbx` is on.
 - [ ] **Public API freeze + semver policy.** Documented stability rules; no
       silent breaking churn on the advertised surface for a freeze window; then
-      `1.0.0`.
+      `1.0.0`. Policy: [`docs/semver.md`](docs/semver.md). Window is open;
+      crate is still `0.20.x`.
 - [ ] **Runtime story closed.** Product CLI, Python wheel, and transcribe
-      diarization are kernels. Remaining: `cli-ort` still `ort` RC; Parakeet
+      diarization are kernels. Remaining: `pipeline-full` still `ort` RC; Parakeet
       TDT still uses `ort`; tract remains opt-in smoke; `ort` 2.x stable
       should be re-verified for the opt-in path.
 - [ ] **Multi-corpus DER gate.** Release-blocking DER on VoxConverse **and** AMI
@@ -330,7 +333,7 @@ Until every box is checked, the honest status remains:
 | Blocker | Why it blocks 1.0 / public GO |
 |---------|-------------------------------|
 | Dual pipeline families (BYO vs v2) | Intentional; still doubles docs/gates if not documented |
-| `cli-ort` still `ort` RC | Supply-chain risk on the opt-in ONNX CLI |
+| `pipeline-full` still `ort` RC | Supply-chain risk on the opt-in ONNX library |
 | Darwin full-split stale vs AHC seed 0.6 | Linux remeasured; Darwin 15.47 % / 25.19 % is 0.18 |
 | Thin multi-corpus DER | Outside Vox/AMI only NOTSOFAR micro-gate; no CALLHOME/DIHARD |
 | Pre-1.0 API | Breaking changes without major bump |
@@ -361,8 +364,8 @@ Until every box is checked, the honest status remains:
 | AMI-test DER (legacy, 16, collar 0) | 32.87% |
 | Default pipeline | v2 + VBx |
 | Default CLI engine | kernels (0.18+) |
-| Escape hatch | legacy (`--legacy` / `--clusterer ahc`); ONNX CLI (`cli-ort`) |
-| Inference backends | **Product CLI / Python:** kernels. **Opt-in ONNX CLI:** `cli-ort`. **Opt-in:** tract |
+| Escape hatch | `--clusterer ahc`; `--legacy` on an ONNX (`pipeline-full`) build |
+| Inference backends | **Product CLI / Python:** kernels. **Opt-in ONNX library:** `pipeline-full`. **Opt-in:** tract |
 | Model authenticity | Minisign; required on release profile resolution |
 | Security audit (cargo audit on green main) | 0 HIGH, 0 MEDIUM expected |
 

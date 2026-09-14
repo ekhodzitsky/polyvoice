@@ -334,18 +334,3 @@ fn cmd_completions_generates_for_every_shell() {
 fn cmd_schema_prints_committed_schema() {
     cmd_schema().unwrap();
 }
-
-#[cfg(feature = "cli-ort")]
-#[test]
-fn cli_ort_deprecation_names_product_cli() {
-    assert!(
-        CLI_ORT_DEPRECATION.contains("--features cli"),
-        "deprecation must name the product CLI feature"
-    );
-    assert!(
-        CLI_ORT_DEPRECATION
-            .to_ascii_lowercase()
-            .contains("deprecated"),
-        "{CLI_ORT_DEPRECATION}"
-    );
-}

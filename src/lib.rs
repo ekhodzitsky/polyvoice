@@ -12,14 +12,15 @@
 //! without linking `ort`.
 //!
 //! Designed to be embedded into any Rust application that needs to answer
-//! the question **"who spoke when?"**.
+//! the question **"who spoke when?"**. Freeze window and bump rules:
+//! `docs/semver.md`.
 //!
 //! ## Quick start
 //!
 //! **Product path (CLI / FFI / MCP):** crate-root `Pipeline` via
 //! `pipeline-native` (`cli`) — hand-written INT8 kernels, no
-//! `libonnxruntime`. ONNX Runtime is `--features cli-ort` (deprecated) /
-//! `onnx` / `pipeline-full`. Tract is `cli-tract`. The v2 gate is `download` +
+//! `libonnxruntime`. ONNX Runtime is `--features onnx` / `pipeline-full`.
+//! Tract is `cli-tract`. The v2 gate is `download` +
 //! stage features plus an engine (`pipeline-native`, `onnx`, or
 //! `backend-tract`). With the gate off there is deliberately no crate-root
 //! `Pipeline` — inference-free builds use [`pipeline::LegacyPipeline`].
@@ -36,7 +37,7 @@
 //!
 //! - **Production (`pipeline_v2`, crate-root `Pipeline`):** trait-wired
 //!   Segmenter → Embedder → Clusterer → Resegmenter. CLI/FFI/MCP default
-//!   to hand-written kernels (`cli`). ONNX Runtime is `cli-ort` (deprecated). See
+//!   to hand-written kernels (`cli`). ONNX Runtime is `pipeline-full`. See
 //!   `docs/PIPELINE-ARCHITECTURE.md`.
 //! - **BYO / ort-free ([`pipeline::LegacyPipeline`] + `StreamingPipeline`):**
 //!   inject [`Embedder`] + [`VoiceActivityDetector`]. CLI `--legacy` uses
@@ -181,15 +182,15 @@ pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
 /// Shared wiring helpers for the CLI-family binaries (`polyvoice`,
 /// `polyvoice-bench`, `polyvoice-measure`, `polyvoice-mcp`): flag-to-config
 /// translation, pipeline construction, and bench-dataset walking, so each
-/// binary stays a thin wrapper. Compiled with `cli` / `cli-ort` / `cli-tract`
+/// binary stays a thin wrapper. Compiled with `cli` / `cli-tract`
 /// (`cli-bin`) or `mcp`.
 ///
 /// Hidden from docs: not a supported library API (bin wiring only). Kept
 /// `pub` (not `pub(crate)`) so field uses from bin targets do not trip
 /// `dead_code` when building the lib alone.
 ///
-/// `cli` is the product front door (kernels, no ort). `cli-ort` is the
-/// deprecated previous ONNX Runtime CLI. `cli-tract` is the same binaries on tract.
+/// `cli` is the product front door (kernels, no ort). `cli-tract` is the same
+/// binaries on tract. An ONNX CLI/bench is `cli-bin` + `pipeline-full`.
 #[doc(hidden)]
 #[cfg(any(feature = "cli-bin", feature = "mcp"))]
 pub mod cli_common;

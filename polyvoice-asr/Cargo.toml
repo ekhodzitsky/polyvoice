@@ -41,7 +41,7 @@ default = []
 # transcribe binary: product diarization (kernels, v2 + VBx) plus the
 # attribution cascade. Lives here, not in the core crate (package cycle).
 # Parakeet still needs `ort` (pinned above); polyvoice itself must not
-# enable `onnx` / `cli-ort`.
+# enable `onnx` / `pipeline-full`.
 cli = [
     "polyvoice/pipeline-native",
     "polyvoice/vbx",

@@ -14,7 +14,7 @@
         all(feature = "segmenter-native", feature = "embedder-native")
     ))
 ))]
-compile_error!("feature `cli-bin` needs `cli`, `cli-ort`, `cli-tract`, or `cli-native`");
+compile_error!("feature `cli-bin` needs an engine: `cli` / `cli-native` (kernels), `pipeline-full` (ONNX Runtime), or `cli-tract`");
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -195,7 +195,7 @@ pub fn require_onnx(what: &str) -> Result<()> {
         anyhow::bail!(
             "{what} requires the `onnx` feature (Silero / shipping INT8). \
              This build has no ONNX Runtime (`cli-tract` / `cli-native`). \
-             Drop --legacy / --pipeline legacy, or rebuild with `--features cli-ort`"
+             Drop --legacy / --pipeline legacy, or rebuild with `--features pipeline-full`"
         )
     }
 }

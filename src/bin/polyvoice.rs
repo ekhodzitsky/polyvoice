@@ -4,8 +4,8 @@
 //! `models` / `download-models` / `completions` are still available. Default
 //! pipeline (since 0.11): **v2 + VBx** (powerset segmentation, ResNet34
 //! embeddings, VB-HMM + PLDA clustering). Default engine (since 0.18):
-//! hand-written INT8 kernels (`--features cli`). ONNX Runtime:
-//! `--features cli-ort` (deprecated). Tract: `--features cli-tract`. PLDA weights come from
+//! hand-written INT8 kernels (`--features cli`). ONNX Runtime library/bench:
+//! `--features pipeline-full`. Tract: `--features cli-tract`. PLDA weights come from
 //! `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or are auto-downloaded via the
 //! model registry when neither is set (or pass `--clusterer ahc`).
 //! Use `--legacy` for the pre-0.11 Silero + AHC path.
@@ -39,21 +39,11 @@ const INPUT_HELP: &str = "Audio file to diarize (mp3/flac/ogg/m4a/aac/wav at any
 #[cfg(not(feature = "audio-io"))]
 const INPUT_HELP: &str = "WAV file to diarize (mono 16 kHz). Rebuild with --features audio-io for mp3/flac/ogg/m4a and any-rate resampling";
 
-/// Copy for `--features cli-ort` deprecation. `after_help` uses this only
-/// outside tests so kernel / all-features help snapshots stay stable.
-#[cfg(feature = "cli-ort")]
-const CLI_ORT_DEPRECATION: &str = "Deprecated: this binary was built with --features cli-ort (ONNX Runtime). The product CLI is --features cli (INT8 kernels, no libonnxruntime).";
-#[cfg(all(feature = "cli-ort", not(test)))]
-const AFTER_HELP: &str = CLI_ORT_DEPRECATION;
-#[cfg(not(all(feature = "cli-ort", not(test))))]
-const AFTER_HELP: &str = "";
-
 #[derive(Parser, Debug)]
 #[command(
     name = "polyvoice",
     version,
     about = "Speaker diarization toolkit",
-    after_help = AFTER_HELP,
     args_conflicts_with_subcommands = true
 )]
 struct Cli {
@@ -99,7 +89,8 @@ struct DiarizeArgs {
     #[arg(long)]
     json: bool,
     /// Use the pre-0.11 legacy pipeline (Silero VAD + sliding-window embeddings
-    /// + AHC) instead of the default v2 + VBx path. Requires `--features cli-ort`.
+    /// + AHC) instead of the default v2 + VBx path. Requires an ONNX build
+    /// (`pipeline-full`).
     #[arg(long, hide = !cfg!(feature = "onnx"))]
     legacy: bool,
     /// Deprecated no-op: pipeline v2 is the default since 0.11. Kept so scripts
