@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Assert the whole workspace resolves to exactly ONE `ort` version.
 #
-# The core crate and the opt-in polyvoice-asr companion share a single ONNX
-# runtime — two `ort` versions linked at once means two runtimes (symbol clashes
-# / crashes). This guard is a release/CI gate; run it whenever a dependency that
-# pulls `ort` (e.g. parakeet-rs) changes.
+# Core's `ort` is optional (`onnx` / `cli-ort`). polyvoice-asr pins the same
+# version for Parakeet TDT. Two `ort` versions linked at once means two
+# runtimes (symbol clashes / crashes). This guard is a release/CI gate; run
+# it whenever a dependency that pulls `ort` (e.g. parakeet-rs) changes.
 set -euo pipefail
 
 EXPECTED="2.0.0-rc.12"
@@ -25,7 +25,7 @@ fi
 
 if [ "$versions" != "$EXPECTED" ]; then
   echo "FAIL: ort resolved to '$versions', expected '$EXPECTED'."
-  echo "Core and polyvoice-asr must both pin $EXPECTED for a shared ONNX runtime."
+  echo "Core's optional ort and polyvoice-asr (Parakeet) must both pin $EXPECTED."
   exit 1
 fi
 

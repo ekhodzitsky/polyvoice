@@ -2,8 +2,9 @@
 //!
 //! Lives in polyvoice-asr (not the core `polyvoice` CLI) because the core crate
 //! cannot depend on this companion — that would be a package cycle. Diarizes with
-//! the validated legacy pipeline, runs a single Parakeet TDT pass, and joins words
-//! to speakers. stdout carries only the result; all progress goes to stderr.
+//! the same v2 + VBx kernel pipeline as the product CLI, runs a single Parakeet
+//! TDT pass, and joins words to speakers. stdout carries only the result; all
+//! progress goes to stderr.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -12,13 +13,10 @@ use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use polyvoice::format::{write_srt, write_txt, write_vtt};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::LegacyPipeline;
-use polyvoice::types::{
-    ClusterConfig, DiarizationConfig, Profile, SampleRate, SpeakerTurn, WordAlignment,
-};
-use polyvoice::vad::VadConfig;
+use polyvoice::pipeline_v2::ClustererKind;
+use polyvoice::types::{Profile, SampleRate, SpeakerTurn, WordAlignment};
 use polyvoice::wav::read_wav;
-use polyvoice::{FbankOnnxExtractor, SileroVad, who_said_what};
+use polyvoice::{who_said_what, Pipeline, PipelineConfig};
 use polyvoice_asr::ParakeetAsr;
 use serde::Serialize;
 
@@ -37,15 +35,29 @@ struct Args {
     /// Diarization profile (mobile | balanced).
     #[arg(long, default_value = "balanced")]
     profile: String,
+    /// v2 clusterer. `vbx` matches the product CLI; `ahc` uses `--threshold`.
+    #[arg(long, value_enum, default_value_t = ClustererArg::Vbx)]
+    clusterer: ClustererArg,
+    /// AHC cosine-similarity threshold (used only with `--clusterer ahc`).
+    #[arg(long, default_value_t = polyvoice::DEFAULT_AHC_THRESHOLD)]
+    threshold: f32,
+    /// Directory with VBx PLDA `.npy` files. Unset → `POLYVOICE_VBX_PLDA_DIR`,
+    /// then the model registry.
+    #[arg(long)]
+    vbx_plda_dir: Option<PathBuf>,
     /// Output format.
     #[arg(long, value_enum, default_value_t = OutFormat::Json)]
     format: OutFormat,
-    /// AHC cosine-similarity threshold.
-    #[arg(long, default_value = "0.45")]
-    threshold: f32,
     /// Suppress progress on stderr.
     #[arg(long)]
     quiet: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum ClustererArg {
+    #[default]
+    Vbx,
+    Ahc,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -71,27 +83,27 @@ fn main() -> Result<()> {
     let profile: Profile = args.profile.parse().context("invalid --profile")?;
     let registry = ModelRegistry::default().context("model registry")?;
 
-    // --- diarize with the validated legacy pipeline ---
-    let models = registry
-        .ensure_for_profile(profile)
-        .context("ensure diarization models")?;
-    let extractor = FbankOnnxExtractor::new(
-        &models.embedder_path,
-        profile.embedding_dim(),
-        1,
-        polyvoice::onnx::ExecutionProvider::Cpu,
-    )
-    .context("load embedder")?;
-    let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
-    let mut vad = SileroVad::new(&vad_path, 512).context("load VAD")?;
-    let config = DiarizationConfig {
-        cluster: ClusterConfig {
-            threshold: args.threshold,
-            ..Default::default()
-        },
-        ..DiarizationConfig::default()
+    let mut config = PipelineConfig {
+        profile,
+        ..PipelineConfig::default()
     };
-    let pipeline = LegacyPipeline::new(config, VadConfig::default());
+    match args.clusterer {
+        ClustererArg::Vbx => {
+            config.clusterer = ClustererKind::Vbx;
+            config.vbx_plda_dir = args.vbx_plda_dir;
+        }
+        ClustererArg::Ahc => {
+            config.clusterer = ClustererKind::Ahc {
+                threshold: args.threshold,
+            };
+        }
+    }
+
+    let pipeline = Pipeline::builder()
+        .config(config)
+        .with_models_from(registry)
+        .build()
+        .context("build diarization pipeline")?;
 
     if !args.quiet {
         eprintln!("Reading {}...", args.wav.display());
@@ -100,11 +112,12 @@ fn main() -> Result<()> {
         read_wav(&args.wav).with_context(|| format!("read WAV {}", args.wav.display()))?;
     let sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
     if !args.quiet {
-        eprintln!("Diarizing {} samples ({sr_hz} Hz)...", samples.len());
+        eprintln!(
+            "Diarizing {} samples ({sr_hz} Hz, kernels v2)...",
+            samples.len()
+        );
     }
-    let diar = pipeline
-        .run(&samples, &extractor, &mut vad)
-        .context("diarization failed")?;
+    let diar = pipeline.run(&samples, sr).context("diarization failed")?;
 
     // --- one ASR pass, then join words to speakers ---
     if !args.quiet {

@@ -3,7 +3,7 @@ name = "polyvoice-asr"
 version = "0.10.0"
 edition = "2024"
 rust-version = "1.94.0"
-description = "Opt-in ASR companion for polyvoice: Parakeet TDT word-level transcription via parakeet-rs, sharing the core ONNX runtime."
+description = "Opt-in ASR companion for polyvoice: Parakeet TDT word-level transcription via parakeet-rs. Diarization uses native kernels; ort is only for Parakeet."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["asr", "speech-recognition", "parakeet", "diarization", "onnx"]
@@ -18,9 +18,10 @@ publish = false
 polyvoice = { path = "..", default-features = false }
 # Parakeet TDT + native word-level timestamps. MIT OR Apache-2.0.
 parakeet-rs = "0.3.6"
-# MUST stay byte-equal to the core ort pin — ONE shared ONNX runtime, never two.
-# parakeet-rs pins the same 2.0.0-rc.12; the `=` makes a future divergence a hard
-# build error. scripts/check-ort-version.sh asserts a single version in CI.
+# Pin must stay byte-equal to parakeet-rs (and to core's optional `ort`).
+# Two `ort` versions in one process means two runtimes (symbol clashes).
+# Diarization no longer uses this crate — only Parakeet does.
+# scripts/check-ort-version.sh asserts a single version in CI.
 ort = { version = "=2.0.0-rc.12", default-features = false, features = [
     "std",
     "ndarray",
@@ -37,13 +38,13 @@ anyhow = { version = "1", optional = true }
 
 [features]
 default = []
-# transcribe binary: pulls the full diarization stack from the core crate (the
-# ONNX Runtime v2 pipeline + registry — who-said-what runs the ort path) plus the
-# attribution cascade, and CLI helpers. This resolves the package cycle — the
-# who-said-what CLI lives here, not in the core crate (which cannot depend on
-# this companion). Core `cli` is native-only (no ort), hence `cli-ort`.
+# transcribe binary: product diarization (kernels, v2 + VBx) plus the
+# attribution cascade. Lives here, not in the core crate (package cycle).
+# Parakeet still needs `ort` (pinned above); polyvoice itself must not
+# enable `onnx` / `cli-ort`.
 cli = [
-    "polyvoice/cli-ort",
+    "polyvoice/pipeline-native",
+    "polyvoice/vbx",
     "polyvoice/attribution",
     "dep:clap",
     "dep:serde",

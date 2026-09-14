@@ -9,11 +9,12 @@ for the who-said-what cascade.
 
 The Parakeet TDT 0.6B v3 model is ~600 MB — incompatible with polyvoice's core
 footprint (INT8 production pair ~8.4 MB, wasm-clean clustering). So ASR lives
-here, **never** as a core default feature. When this crate enables `onnx`, it
-**shares one ONNX runtime** with core: it pins the exact same
-`ort = 2.0.0-rc.12`, enforced by `scripts/check-ort-version.sh` in CI (two
-`ort` versions = two runtimes = crashes). The product polyvoice CLI itself no
-longer links `ort`.
+here, **never** as a core default feature. The `polyvoice-transcribe` CLI
+diarizes with the same INT8 kernels as the product `polyvoice` CLI (`pipeline-native`,
+no `libonnxruntime`). Parakeet still needs ONNX Runtime: this crate pins
+`ort = 2.0.0-rc.12` (same version as core's optional `onnx` feature), enforced
+by `scripts/check-ort-version.sh` in CI (two `ort` versions = two runtimes =
+crashes).
 
 ## Usage
 
@@ -35,9 +36,10 @@ no duplicated or dropped words at the seams. Tune with `.with_chunking(secs, ove
 ## CLI: who-said-what
 
 The `polyvoice-transcribe` binary (behind the `cli` feature) runs the full
-cascade — diarize (validated legacy pipeline) → one ASR pass → join — and emits
-who-said-what. It lives here rather than in the core `polyvoice` CLI because the
-core crate cannot depend on this companion (package cycle).
+cascade — diarize (v2 + VBx kernels, same as the product CLI) → one ASR pass →
+join — and emits who-said-what. It lives here rather than in the core
+`polyvoice` CLI because the core crate cannot depend on this companion
+(package cycle). Pass `--clusterer ahc` for the cosine-AHC backend.
 
 ```bash
 cargo run -p polyvoice-asr --features cli --bin polyvoice-transcribe -- \

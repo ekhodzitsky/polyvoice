@@ -180,8 +180,8 @@ jobs:
         run: cargo test --release --features cli --test native_scoreboard --locked -- --nocapture
 
   asr-companion:
-    # Opt-in ASR companion (polyvoice-asr). Enforces the shared-runtime invariant
-    # (one ort version across the workspace) and builds/tests the crate.
+    # Opt-in ASR companion (polyvoice-asr). One ort version in the lockfile
+    # (Parakeet). Transcribe diarizes with kernels (`--features cli`).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -195,6 +195,16 @@ jobs:
       # The transcribe binary sits behind required-features = ["cli"], so the
       # default-feature pass above never compiles it — check it explicitly.
       - run: cargo clippy -p polyvoice-asr --all-targets --features cli --locked -- -D warnings
+      - name: Transcribe CLI does not enable polyvoice/onnx
+        run: |
+          set -euo pipefail
+          if cargo tree -p polyvoice-asr --features cli -e normal -i ort --prefix none --locked \
+              | grep -q '^polyvoice v'; then
+            echo "FAIL: polyvoice depends on ort via polyvoice-asr --features cli"
+            cargo tree -p polyvoice-asr --features cli -e normal -i ort --locked
+            exit 1
+          fi
+          echo "OK: Parakeet may use ort; polyvoice does not"
       - run: cargo test -p polyvoice-asr --locked
 
   doc:

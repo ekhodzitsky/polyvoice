@@ -14,17 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   VoxConverse-test **14.86 % → 13.34 %**, AMI-test **24.73 % → 24.19 %**
   (confusion; miss/FA unchanged). Vox-3 DER is unchanged (7.03 / 7.36).
   Artifacts: `benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/`.
+- The Python wheel (`pip install polyvoice`) runs the same INT8 kernels as
+  the CLI. It no longer links `libonnxruntime`.
+- `polyvoice-transcribe` diarizes with the same v2 + VBx kernel pipeline as
+  the product CLI. `ort` remains only for Parakeet TDT, not for diarization.
 
 ### Added
 
 - Opt-in `POLYVOICE_VBX_FROM_ENV=1` lets the pipeline overlay
   `POLYVOICE_VBX_{FA,FB,…}` for offline grids. Production construction stays
   env-free. Helper: `scripts/calibrate-vbx.sh`.
-
-### Changed
-
-- The Python wheel (`pip install polyvoice`) runs the same INT8 kernels as
-  the CLI. It no longer links `libonnxruntime`.
 
 ## [0.20.0] - 2026-09-08
 

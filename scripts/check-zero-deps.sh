@@ -85,6 +85,17 @@ fail_if_pkg ort "--features ffi" --no-default-features --features ffi
 require_pkg ort "--features cli-ort" --no-default-features --features cli-ort
 
 echo ""
+echo "=== 3b. polyvoice-asr cli does not enable polyvoice/onnx ==="
+# Parakeet still depends on ort. The polyvoice package in that graph must not.
+if cargo tree -p polyvoice-asr --features cli -e normal -i ort --prefix none 2>/dev/null \
+    | grep -q '^polyvoice v'; then
+  echo "FAIL: polyvoice depends on ort via polyvoice-asr --features cli:"
+  cargo tree -p polyvoice-asr --features cli -e normal -i ort || true
+  exit 1
+fi
+echo "OK: polyvoice-asr --features cli does not enable polyvoice/onnx"
+
+echo ""
 echo "=== 4. status snapshot (informational) ==="
 cat <<'EOF'
 | Surface                              | Native dylib? | Notes |
