@@ -14,7 +14,7 @@ cargo test
 # Product stack (kernels, crate-root Pipeline = pipeline v2)
 cargo test --features "pipeline-native,vbx"
 
-# ONNX Runtime stack (Python / cli-ort)
+# ONNX Runtime stack (opt-in cli-ort / pipeline-full)
 cargo test --features "pipeline-full,vbx"
 
 # Product CLI binary (no libonnxruntime)

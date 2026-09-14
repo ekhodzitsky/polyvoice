@@ -1,4 +1,4 @@
-"""polyvoice — speaker diarization, powered by Rust + ONNX."""
+"""polyvoice — speaker diarization, powered by Rust INT8 kernels."""
 
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _version

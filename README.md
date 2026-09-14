@@ -69,7 +69,7 @@ A 1-hour meeting diarizes in about a minute on a laptop. Python:
 | Rust library, `pipeline-native,vbx` | INT8 kernels | no |
 | C FFI, `--features ffi` | INT8 kernels | no |
 | BYO embedder, `--no-default-features` | yours | no |
-| Python wheel, `pip install polyvoice` | ONNX Runtime | yes |
+| Python wheel, `pip install polyvoice` | INT8 kernels | no |
 | CLI / library, `cli-ort` / `pipeline-full` | ONNX Runtime | yes |
 
 ## Compared to pyannote

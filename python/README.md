@@ -7,8 +7,8 @@
 **Speaker diarization for Python — who spoke when.**
 
 Rust-powered speaker diarization that runs on CPU, fits in ~8.4 MB INT8, and
-requires zero Python runtime overhead. The wheel still uses ONNX Runtime (the
-Rust CLI default since 0.18 is hand-written kernels). Pipeline v2 with VBx
+requires zero Python runtime overhead. The wheel uses the same hand-written
+INT8 kernels as the Rust CLI — no ONNX Runtime. Pipeline v2 with VBx
 clustering and overlap detection.
 
 ## Install
@@ -50,7 +50,7 @@ for turn in result["turns"]:
 
 | Pipeline | VoxConverse-test DER (collar 0, overlap-scored) | Model size |
 |----------|-------------------------------------------------|------------|
-| default (v2+VBx, INT8) | **15.0%** | ~8.4 MB |
+| default (v2+VBx, INT8 kernels) | **13.3%** | ~8.4 MB |
 
 Full protocol, collar/averaging disclosure, and competitor numbers:
 [docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/master/docs/BENCHMARKS.md).

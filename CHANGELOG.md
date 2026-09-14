@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `POLYVOICE_VBX_{FA,FB,…}` for offline grids. Production construction stays
   env-free. Helper: `scripts/calibrate-vbx.sh`.
 
+### Changed
+
+- The Python wheel (`pip install polyvoice`) runs the same INT8 kernels as
+  the CLI. It no longer links `libonnxruntime`.
+
 ## [0.20.0] - 2026-09-08
 
 ### Added

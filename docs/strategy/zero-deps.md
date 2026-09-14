@@ -25,7 +25,7 @@ Do **not** clone ONNX Runtime, tract, or a general ONNX executor.
 
 Cross-platform is the default of this path: no `libonnxruntime`, no glibc pin, no CoreML/XNNPACK. Linux / macOS / Windows; clustering is already wasm32-clean.
 
-Keep `ort` as an optional `onnx` feature so INT8 + EP + Sortformer + Python keep working. Do not add another general ML framework. Do not pull `ort` back into `cli`.
+Keep `ort` as an optional `onnx` feature so INT8 + EP + Sortformer + `cli-ort` keep working. Do not add another general ML framework. Do not pull `ort` back into `cli` or the Python wheel.
 
 ## Current matrix
 
@@ -43,6 +43,7 @@ Keep `ort` as an optional `onnx` feature so INT8 + EP + Sortformer + Python keep
 | `embedder-native` (`ResNet34Native`) | **Yes** | Hand-written ResNet34; ort cosine 1.0 on 1 s fixture; no dylib |
 | `segmenter-native` (`PowersetNative`) | **Yes** | SincNet + 4× biLSTM; N>1; 1 s vs ort cosine 1.0 |
 | `pipeline-native` / `cli` / `ffi` | **Kernels** (Darwin: C shims + Accelerate/BNNS; Linux: `rten-gemm` + in-crate INT8 conv) | **Product default.** No `ort`. Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux x86_64 (AVX-512 VNNI conv + vectorized LSTM gates, core-scaled embedder pool, graph-faithful QDQ, VBx AHC seed 0.6): VoxConverse DER₀ 13.34% / RTFx ~162×, AMI 24.19% / ~193× — ahead of same-host ort on speed everywhere (ort ~150×/~171×). BYO `default = []` stays pure Rust. |
+| Python wheel | **Kernels** (same as `cli`) | **Product.** No `ort`. |
 | `cli-ort` / `pipeline-full` | **No** (ort + INT8) | Opt-in previous product |
 
 CI freezes the pure-Rust **invariants** via:
@@ -59,7 +60,7 @@ folded into powerset, clustering already Rust-only. Linux native is past
 the old ort band on both axes: faster than same-host ort on all three
 protocols (162×/193×/158×-wall vs 150×/171×/151×). Native VBx AHC seed
 0.6 (VoxConverse-dev): Vox-232 DER₀ 13.34 %, AMI 24.19 %. Residual:
-Python still links `ort`; tract remains the slower ONNX-shaped opt-in.
+tract remains the slower ONNX-shaped opt-in. The Python wheel is kernels.
 
 A shipping *tract* profile would still need:
 

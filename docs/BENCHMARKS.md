@@ -27,7 +27,8 @@ collar.
 
 **Default since 0.17.0** is the INT8 pair (`powerset_int8` + `resnet34_int8`)
 on every profile. **Cite 13.34 % for the Linux kernel CLI** (VBx AHC seed 0.6).
-Cite **14.94 %** for `cli-ort` / Python (powerset micro-batch N=8, EP=cpu).
+Cite **14.94 %** for `cli-ort` (powerset micro-batch N=8, EP=cpu).
+The Python wheel matches the kernel CLI (cite **13.34 %**).
 Cite **15.02 %** for Mac CoreML (N=1 clamp). Reproduce Linux kernels:
 
 ```bash

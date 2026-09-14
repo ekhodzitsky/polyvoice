@@ -19,7 +19,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - rustdoc: https://docs.rs/polyvoice
 
 ### Rust library (ONNX Runtime)
-- Features: `pipeline-full` + `vbx` (Python still ships this stack)
+- Features: `pipeline-full` + `vbx` (opt-in; `cli-ort`)
 - Same crate-root `Pipeline` as kernels; engine is `ort` instead of `polyvoice-kernels`
 
 ### Rust library (BYO / no ONNX)
@@ -27,7 +27,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - [../examples/byo_embedder.rs](../examples/byo_embedder.rs)
 
 ### Python
-- [../python/README.md](../python/README.md) — install, API, VBx default; engine is still ONNX Runtime
+- [../python/README.md](../python/README.md) — install, API, VBx default; same INT8 kernels as the CLI
 
 ### C FFI
 - [FFI.md](FFI.md) — build, lifecycle, status codes, audio caps
@@ -79,7 +79,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 |------|----------|
 | Ort-free BYO | `--no-default-features` (+ `clusterer`, `vbx` optional) |
 | Kernels library | `pipeline-native` + `vbx` (CLI parity) |
-| ONNX library | `pipeline-full` + `vbx` (Python still ships this) |
+| ONNX library | `pipeline-full` + `vbx` (`cli-ort`; Python wheel is kernels) |
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (= `pipeline-native` + `vbx`; no `ort`) |
 | CLI with ONNX Runtime | `cli-ort` |
 | CLI with tract | `cli-tract` |

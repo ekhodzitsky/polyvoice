@@ -74,4 +74,9 @@ fail_if_ort "--no-default-features --features cli" \
 fail_if_ort "--no-default-features --features ffi" \
   --no-default-features --features ffi
 
+# Python wheel is a standalone crate (workspace exclude). Same product
+# stack as `cli`: kernels, no libonnxruntime.
+fail_if_ort "python crate (pipeline-native,vbx)" \
+  --manifest-path python/Cargo.toml
+
 echo "OK: ort-free library graphs stay free of ort."

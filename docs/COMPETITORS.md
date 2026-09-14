@@ -76,8 +76,8 @@ compares the main open-source alternatives and what polyvoice can learn from the
 Polyvoice owns a defensible niche that the Python/C++ incumbents do not serve
 well: a **Rust-native, CPU-first, MIT-licensed, ungated, streaming diarization
 engine** that embeds into apps without a PyTorch stack. The product CLI is
-hand-written INT8 kernels (no `libonnxruntime`); Python and `cli-ort` still
-use the `ort` native runtime. Competitors are stronger on accuracy,
+hand-written INT8 kernels (no `libonnxruntime`), including the Python wheel;
+`cli-ort` still uses the `ort` native runtime. Competitors are stronger on accuracy,
 ecosystem, and bindings, but they are heavier, GPU-oriented, and often gated
 or commercially restricted.
 

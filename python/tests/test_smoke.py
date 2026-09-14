@@ -8,7 +8,7 @@ def test_pipeline_module_imports():
 
 
 def test_pipeline_mobile_constructor_signature():
-    # We can't actually build a Pipeline without cached ONNX, but we can
+    # We can't actually build a Pipeline without cached models, but we can
     # verify the class method exists and rejects invalid sample rate.
     assert hasattr(polyvoice.Pipeline, "mobile")
     assert hasattr(polyvoice.Pipeline, "balanced")

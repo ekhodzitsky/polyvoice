@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The wheel uses hand-written INT8 kernels (`pipeline-native`), matching the
+  Rust CLI. It no longer links ONNX Runtime. VoxConverse-test DER₀ **13.3 %**
+  (Linux kernels, collar 0).
+
 ## [0.19.0] - 2026-09-03
 
 ### Changed

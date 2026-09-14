@@ -17,8 +17,8 @@ For the **development process** checklist (spec → types → verify), see
                     ┌─────────────────────────────────────┐
   production v2     │  pipeline_v2::Pipeline (+ Builder)  │── Segmenter/Embedder/
   CLI/FFI/MCP       │  seg → embed → cluster → reseg      │   Clusterer/Resegmenter
-  default since 0.11│  engine: kernels (0.18+);           │
-                    │  ort (`cli-ort` / Python); tract    │
+  default since 0.11│  engine: kernels (CLI/FFI/MCP/     │
+                    │  Python); ort (`cli-ort`); tract    │
                     │  clusterer: VBx on front doors      │
                     │  re-exported at crate root as       │
                     │  `Pipeline` (v2 feature gate)       │
@@ -29,7 +29,7 @@ For the **development process** checklist (spec → types → verify), see
 |----------|------|
 | CLI `polyvoice` | **v2 + VBx kernels** (`--features cli`); `--legacy` → BYO offline stack |
 | FFI | v2 kernels only (`ffi` = `pipeline-native`) |
-| Python | **v2 + VBx** on **ONNX Runtime** (same pipeline, different engine); `clusterer="ahc"` opt-out |
+| Python | **v2 + VBx kernels** (same engine as CLI / FFI / MCP); `clusterer="ahc"` opt-out |
 | MCP `polyvoice-mcp` | v2 + VBx kernels (`clusterer=ahc` opt-out) |
 | `polyvoice-bench` | **v2 + VBx** default (kernels when built with `cli`); `--jobs N` runs files in parallel on one shared pipeline and adds `rt_factor_wall` to the report; `--pipeline legacy` for comparison |
 | Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |

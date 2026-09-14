@@ -44,6 +44,22 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install maturin pytest
       - run: maturin build --release --out dist
+      - name: Wheel has no ONNX Runtime dylib
+        run: |
+          python3 - <<'PY'
+          import glob, sys, zipfile
+          whls = glob.glob("dist/*.whl")
+          if not whls:
+              sys.exit("no wheel in dist/")
+          hits = []
+          for whl in whls:
+              with zipfile.ZipFile(whl) as z:
+                  hits.extend(n for n in z.namelist() if "onnxruntime" in n.lower())
+          if hits:
+              print("FAIL: wheel ships ONNX Runtime:", *hits, sep="\n  ")
+              sys.exit(1)
+          print("OK: no onnxruntime dylib in", *whls)
+          PY
       - name: Install wheel (unix)
         if: runner.os != 'Windows'
         run: pip install dist/*.whl

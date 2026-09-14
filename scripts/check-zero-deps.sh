@@ -101,7 +101,7 @@ cat <<'EOF'
 | backend-tract + ResNet INT8          | no            | load/run only — cosine ~0 vs ort; **unsafe** for DER |
 | backend-tract + shipping powerset    | n/a           | LOAD FAIL (If / InstanceNorm) |
 | backend-tract + powerset rewrite     | no            | export-powerset-tract.py; pipeline remaps; N=1; smoke DER ≈ ort |
-| pipeline-native / cli / ffi          | no            | **product default** (kernels) |
+| pipeline-native / cli / ffi / python | no            | **product default** (kernels) |
 | features onnx / cli-ort / pipeline-full | yes (ort)  | opt-in INT8 ONNX Runtime |
 EOF
 
