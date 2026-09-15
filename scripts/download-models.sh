@@ -14,6 +14,10 @@ POWERSET_INT8_SHA256="175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da
 RESNET34_INT8_URL="https://github.com/ekhodzitsky/polyvoice/releases/download/models-int8-v2/resnet34_int8.onnx"
 RESNET34_INT8_SHA256="24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3"
 # Commit-pinned (same blob as src/models/manifest.toml silero_vad entry).
+# tract-friendly powerset rewrite (see src/models/manifest.toml). The core
+# crate is tract-only, so the powerset segmenter tests need this graph.
+POWERSET_TRACT_URL="https://github.com/ekhodzitsky/polyvoice/releases/download/models-tract-v1/powerset_fp32_tract.onnx"
+POWERSET_TRACT_SHA256="d5335de334a24470b1f0326f72e513c59e156308a78ba3e1626851f570696ce4"
 SILERO_URL="https://github.com/snakers4/silero-vad/raw/bfdc0193023f121ea5b3cc7b176dbed570a68a59/src/silero_vad/data/silero_vad.onnx"
 SILERO_SHA256="1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
 
@@ -58,6 +62,8 @@ download "$MODEL_DIR/resnet34_int8.onnx" "$RESNET34_INT8_URL" "$RESNET34_INT8_SH
 # Also place under models/int8 for quant tooling that expects that layout.
 download "$MODEL_DIR/int8/powerset_int8.onnx" "$POWERSET_INT8_URL" "$POWERSET_INT8_SHA256"
 download "$MODEL_DIR/int8/resnet34_int8.onnx" "$RESNET34_INT8_URL" "$RESNET34_INT8_SHA256"
+
+download "$MODEL_DIR/powerset_fp32_tract.onnx" "$POWERSET_TRACT_URL" "$POWERSET_TRACT_SHA256"
 
 # Silero VAD (legacy / BYO path only — not part of pipeline v2).
 download "$MODEL_DIR/silero_vad.onnx" "$SILERO_URL" "$SILERO_SHA256"

@@ -638,14 +638,10 @@ mod tests {
         assert!((config.hop_secs - 0.5).abs() < 1e-6);
     }
 
-    /// Path to a local powerset model (INT8 preferred; FP32 fallback for quant trees).
+    /// Path to the local tract-friendly powerset rewrite (the only powerset
+    /// graph tract loads; `scripts/download-models.sh` fetches it).
     fn local_model_path() -> PathBuf {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
-        let int8 = root.join("int8/powerset_int8.onnx");
-        if int8.is_file() {
-            return int8;
-        }
-        root.join("powerset_fp32.onnx")
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32_tract.onnx")
     }
 
     fn sine_audio(secs: f32, sample_rate: u32) -> Vec<f32> {
@@ -740,7 +736,7 @@ mod tests {
     fn segment_rejects_invalid_geometry_before_inference() {
         // Geometry is only validated in `segment()`, not at load time.
         if !local_model_path().exists() {
-            eprintln!("skip: models/powerset_fp32.onnx missing");
+            eprintln!("skip: local powerset ONNX missing");
             return;
         }
         let config = PowersetConfig {
