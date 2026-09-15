@@ -16,7 +16,7 @@ use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline_v2::ClustererKind;
 use polyvoice::types::{Profile, SampleRate, SpeakerTurn, WordAlignment};
 use polyvoice::wav::read_wav;
-use polyvoice::{who_said_what, Pipeline, PipelineConfig};
+use polyvoice::{Pipeline, PipelineConfig, who_said_what};
 use polyvoice_asr::ParakeetAsr;
 use serde::Serialize;
 

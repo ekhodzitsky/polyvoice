@@ -371,7 +371,7 @@ jobs:
           tool: cargo-hack
       # cli-bin / infer are helper flags with deliberate compile_error backstops
       # when enabled standalone — exclude them from the powerset (they are still
-      # exercised transitively via cli / onnx / pipeline-* combos).
+      # exercised transitively via cli / cli-tract / pipeline-* combos).
       - run: cargo hack check --feature-powerset --depth 2 --lib --bins --exclude-features cli-bin,infer
 
   msrv:
@@ -383,8 +383,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.94.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --lib
-      # Real (ort-enabled) surface also builds on the declared MSRV.
-      - run: cargo check --lib --features "onnx,segmentation,embedder,clusterer,resegmentation"
+      # Product (kernels) surface also builds on the declared MSRV.
+      - run: cargo check --lib --features cli
 
   machete:
     runs-on: ubuntu-latest
@@ -424,9 +424,9 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - run: cargo check --target aarch64-unknown-linux-gnu
       - run: cargo check --target aarch64-unknown-linux-gnu --features download
-      # XNNPACK is the auto() default EP on aarch64 Linux — prove the wiring
+      # Product path on aarch64 Linux is the kernels CLI — prove it
       # type-checks on the real target.
-      - run: cargo check --target aarch64-unknown-linux-gnu --features xnnpack
+      - run: cargo check --target aarch64-unknown-linux-gnu --features cli
 
   # CJK ASR companion: builds OUTSIDE the workspace on purpose — sherpa-onnx
   # is a second C++ ONNX runtime and must never enter the core dependency
@@ -511,136 +511,6 @@ jobs:
             -e POLYVOICE_VBX_PLDA_DIR=/plda \
             polyvoice:ci diarize /audio/fuzfh.wav --quiet > out.rttm
           test -s out.rttm
-
-  e2e-der-regression:
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: legacy-e2e-smoke
-            test: der_regression_e2e_smoke
-            test_flags: "--test der_regression_test --features onnx,download"
-            data_key: e2e-smoke-bundled
-            data_path: tests/data/e2e-smoke
-          - name: legacy-ami-single
-            test: der_regression_ami_test_single
-            test_flags: "--test der_regression_test --features onnx,download"
-            data_script: scripts/download-ami-test-single.sh
-            data_key: ami-test-single
-            data_path: data/ami-test-single
-          - name: pipeline-v2
-            test_flags: "--test pipeline_v2_integration --features onnx,segmentation,embedder,clusterer,resegmentation,download"
-            data_key: e2e-smoke-bundled
-            data_path: tests/data/e2e-smoke
-          - name: pipeline-v2-ami
-            test: v2_der_ami_test_single
-            test_flags: "--test der_v2_baseline_test --features onnx,segmentation,embedder,clusterer,resegmentation,download"
-            data_script: scripts/download-ami-test-single.sh
-            data_key: ami-test-single
-            data_path: data/ami-test-single
-          - name: pipeline-v2-notsofar
-            test: v2_der_notsofar_3_file_subset
-            test_flags: "--test der_v2_baseline_test --features onnx,segmentation,embedder,clusterer,resegmentation,download,vbx"
-            data_script: scripts/download-notsofar.sh
-            data_key: notsofar-dev
-            data_path: data/notsofar-dev
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/polyvoice/models
-          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
-      - uses: actions/cache@v4
-        if: matrix.data_script
-        with:
-          path: ${{ matrix.data_path }}
-          key: ${{ matrix.data_key }}-${{ hashFiles(format('{0}.sh', matrix.data_script)) }}
-      - name: Download external test data
-        if: matrix.data_script
-        run: bash ${{ matrix.data_script }}
-      - name: Download ONNX models
-        run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-      - name: Run DER regression — ${{ matrix.name }}
-        shell: bash
-        run: cargo nextest run --profile ci --run-ignored only ${{ matrix.test_flags }} ${{ matrix.test }} --nocapture 2>&1 | tee der-regression.log
-      - if: failure() || cancelled()
-        uses: actions/upload-artifact@v4
-        with:
-          name: der-regression-log-${{ matrix.name }}
-          path: der-regression.log
-        continue-on-error: true
-
-  perf-regression:
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
-        with:
-          path: data/voxconverse-test
-          key: voxconverse-test-${{ hashFiles('scripts/download-voxconverse-test.sh') }}
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/polyvoice/models
-          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
-      - run: bash scripts/download-voxconverse-test.sh
-      - run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-      - name: Run perf regression test
-        shell: bash
-        run: cargo nextest run --profile ci --run-ignored only --test perf_regression_test --features "onnx download" --nocapture 2>&1 | tee perf-regression.log
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: perf-regression-log
-          path: perf-regression.log
-
-  e2e-der-regression-voxconverse:
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: github.event_name == 'schedule'
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/polyvoice/models
-          key: models-balanced-${{ hashFiles('src/models/manifest.rs') }}
-      - uses: actions/cache@v4
-        with:
-          path: data/voxconverse-test
-          key: voxconverse-test-${{ hashFiles('scripts/download-voxconverse-test.sh') }}
-      - run: bash scripts/download-voxconverse-test.sh
-      - run: cargo run --features cli --bin polyvoice -- download-models --profile balanced
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-      - name: Run DER regression — VoxConverse 10-file
-        shell: bash
-        run: cargo nextest run --profile ci --run-ignored only --test der_regression_test --features onnx,download der_regression_voxconverse_10_file_subset --nocapture 2>&1 | tee der-regression.log
-      - if: failure() || cancelled()
-        uses: actions/upload-artifact@v4
-        with:
-          name: der-regression-log-voxconverse-10
-          path: der-regression.log
-        continue-on-error: true
 
   sign-manifest-dry-run:
     runs-on: ubuntu-latest

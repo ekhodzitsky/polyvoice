@@ -4,7 +4,7 @@ name: Linux CPU DER gate
 #
 # Modes:
 #   smoke (schedule + default dispatch): Vox 10-file subset + full AMI-16.
-#     AMI is DER-asserted against ami_test_linux_cpu; Vox is EP/files smoke only.
+#     AMI is DER-asserted against ami_test_linux_cpu_native; Vox is EP/files smoke only.
 #   full (workflow_dispatch mode=full): requires 232 Vox + 16 AMI on disk.
 #     CI only has the 10-file Vox asset unless a cache provides the full split —
 #     full mode fails hard if files are short (intentional).
@@ -32,10 +32,9 @@ permissions:
 
 jobs:
   linux-cpu-der:
-    # GitHub-hosted ubuntu-latest is x86_64. Committed Linux/CPU *ort*
-    # numbers were measured on aarch64; native full-split rows are unmeasured
-    # ceilings (see tests/der_baseline.json `_status`). Do not treat this
-    # runner as the Darwin or aarch64 scoreboard host.
+    # GitHub-hosted ubuntu-latest is x86_64 (see tests/der_baseline.json
+    # `_status`). Do not treat this runner as the Darwin or aarch64
+    # scoreboard host.
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -44,11 +43,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/ort.pyke.io
-          key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - uses: actions/cache@v4
         with:
           path: ~/.cache/polyvoice/models
@@ -81,25 +75,6 @@ jobs:
       - name: Models (hard fail)
         run: cargo run --release --features cli --bin polyvoice -- download-models --profile balanced
 
-      - name: Linux CPU DER gate (ort)
-        env:
-          OUT: benchmarks/results/linux-cpu-der-ci
-          EP: cpu
-          FEATURES: cli-ort
-          POLYVOICE_POWERSET_BATCH_SIZE: "8"
-          POLYVOICE_VBX_PLDA_DIR: ${{ github.workspace }}/fixtures/vbx-plda
-          ASSERT_BASELINE: "1"
-          BASELINE_JSON: ${{ github.workspace }}/tests/der_baseline.json
-        run: |
-          set -euo pipefail
-          if [ "$MODE" = "full" ]; then
-            export MAX_VOX=0 MAX_AMI=0
-          else
-            # Smoke: AMI full (asserted); Vox 10-file subset (EP/files only).
-            export MAX_VOX=10 MAX_AMI=0
-          fi
-          bash scripts/linux-cpu-der-gate.sh
-
       - name: Linux CPU DER gate (native, no ort)
         env:
           OUT: benchmarks/results/linux-cpu-native-der-ci
@@ -125,7 +100,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-cpu-der-reports-${{ env.MODE }}
-          path: |
-            benchmarks/results/linux-cpu-der-ci/
-            benchmarks/results/linux-cpu-native-der-ci/
+          path: benchmarks/results/linux-cpu-native-der-ci/
           if-no-files-found: warn

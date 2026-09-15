@@ -397,19 +397,9 @@ mod tests {
         assert!(ExecutionProvider::Cpu.is_available());
         assert!(!ExecutionProvider::Nnapi.is_available());
         assert!(!ExecutionProvider::Cuda.is_available());
-        // CoreMl / XnnPack track their feature flags (and CoreML target).
-        assert_eq!(
-            ExecutionProvider::CoreMl.is_available(),
-            cfg!(all(
-                feature = "coreml",
-                target_os = "macos",
-                target_arch = "aarch64"
-            ))
-        );
-        assert_eq!(
-            ExecutionProvider::XnnPack.is_available(),
-            cfg!(feature = "xnnpack")
-        );
+        // CoreMl / XnnPack were ort-only EPs; the core crate has no ort.
+        assert!(!ExecutionProvider::CoreMl.is_available());
+        assert!(!ExecutionProvider::XnnPack.is_available());
     }
 
     #[test]

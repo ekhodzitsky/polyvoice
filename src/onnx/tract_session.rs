@@ -18,7 +18,7 @@ use tract_onnx::tract_hir::internal::DimLike;
 ///
 /// Loads ONNX via `tract_onnx`, optimizes to a typed runnable plan, and runs
 /// named or ordered tensors. Stateful models (Silero LSTM) pass state as
-/// ordinary named I/O tensors — same contract as [`super::OrtSession`].
+/// ordinary named I/O tensors — same contract the removed ort session used.
 ///
 /// EP / thread-pool knobs from ort are ignored: tract is pure-Rust CPU only
 /// in this spike (no Metal/CUDA wiring).

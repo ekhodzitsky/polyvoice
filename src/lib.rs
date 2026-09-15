@@ -218,8 +218,6 @@ pub mod onnx;
 #[cfg(feature = "infer")]
 pub mod fbank_onnx;
 
-
-
 // Public re-exports for ergonomic use.
 pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
 #[cfg(feature = "download")]

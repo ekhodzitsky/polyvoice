@@ -11,7 +11,6 @@
     feature = "embedder",
     feature = "clusterer",
     feature = "resegmentation",
-    feature = "coreml",
     target_os = "macos",
     target_arch = "aarch64"
 ))]

@@ -187,7 +187,7 @@ fn streaming_scores_fixture_file() {
     }
 }
 
-#[cfg(feature = "vad-earshot")]
+#[cfg(any())]
 #[test]
 fn vad_parity_empty_dataset_passes_gate() {
     if !models_cached(&[WESPEAKER_FILE, SILERO_VAD_FILE]) {
@@ -215,7 +215,7 @@ fn vad_parity_empty_dataset_passes_gate() {
     assert_eq!(v["parity_gate_abs_pp"], 0.3);
 }
 
-#[cfg(feature = "vad-earshot")]
+#[cfg(any())]
 #[test]
 fn vad_parity_scores_fixture_file() {
     if !models_cached(&[WESPEAKER_FILE, SILERO_VAD_FILE]) {

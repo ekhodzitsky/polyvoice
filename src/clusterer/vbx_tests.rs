@@ -1,5 +1,5 @@
 use super::*;
-use ndarray::{array, Array2};
+use ndarray::{Array2, array};
 
 #[test]
 fn from_dir_missing_returns_error() {
