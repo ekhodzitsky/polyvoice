@@ -1,6 +1,6 @@
 # Production Readiness Assessment
 
-> **Version:** 0.20.x | **Date:** 2026-09-14 | **Scope:** Rust library + Python bindings + FFI + CLI
+> **Version:** 0.21.x | **Date:** 2026-09-14 | **Scope:** Rust library + Python bindings + FFI + CLI
 >
 > **Last updated:** 2026-09-14 — Linux kernel full-split filled (VoxConverse-test
 > DER₀ **13.34 %** / AMI-test **24.19 %**, VBx AHC seed 0.6). Product CLI /
@@ -14,7 +14,7 @@
 
 **Status: NOT GO for public unattended production. OK for controlled internal use.**
 
-As of **0.20.x**, polyvoice is a hardened pre-1.0 engine: model signing is
+As of **0.21.x**, polyvoice is a hardened pre-1.0 engine: model signing is
 enforced on release builds for profile-resolved models, CI covers the main
 desktop targets, and **full VoxConverse-test + AMI-test DER** keeps
 **pipeline v2 + VBx** as the CLI / FFI / Python / MCP default. The **engine**
@@ -53,11 +53,11 @@ multi-corpus proof.
 
 ---
 
-## Current surface (0.20.x truth)
+## Current surface (0.21.x truth)
 
 | Area | State |
 |------|--------|
-| Crate version | `0.20.0` |
+| Crate version | `0.21.0` |
 | WAVE ingest | **`ryf`** (WAVE family → mono f32); `audio-io` still `symphonia` + `rubato` for non-WAV |
 | Production models | **INT8 only** (`powerset_int8` + `resnet34_int8`, ~8.4 MB) |
 | CLI / FFI / MCP engine | **kernels** (`pipeline-native`); `--legacy` / `--clusterer ahc` opt out |
@@ -90,13 +90,13 @@ full-split re-run after the AHC seed 0.6 retune.
 
 | Item | Status | Risk |
 |------|--------|------|
-| Semantic version | `0.20.0` | Pre-1.0 — API may change between `0.x` minors |
+| Semantic version | `0.21.0` | Pre-1.0 — API may change between `0.x` minors |
 | `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
-| CHANGELOG | Maintained | Tracks 0.11→0.20; CLI default flip to v2+VBx was 0.11; kernels default was 0.18; WAVE `ryf` was 0.19 |
+| CHANGELOG | Maintained | Tracks 0.11→0.21; CLI default flip to v2+VBx was 0.11; kernels default was 0.18; WAVE `ryf` was 0.19 |
 
 **Gap:** Still pre-`1.0.0`, so Cargo 0.x would allow a silent break. The
 advertised surface is in a freeze window: [`docs/semver.md`](docs/semver.md).
-Consumers should pin `0.20.x` (or tighter) and read the CHANGELOG before
+Consumers should pin `0.21.x` (or tighter) and read the CHANGELOG before
 upgrading.
 
 **Remediation:** Keep the freeze window; ship `1.0.0` only when this document
@@ -210,7 +210,7 @@ release-gated at full-split size.
 
 ### 6. Pipeline story (honest dual path) ⚠️
 
-| Path | How to run | Role in 0.20.x |
+| Path | How to run | Role in 0.21.x |
 |------|------------|----------------|
 | **v2 + VBx kernels (CLI/FFI/MCP/Python/transcribe default)** | `cargo install polyvoice --features cli` / `pip install polyvoice` | Product; Darwin scoreboard + Linux full-split |
 | **v2 + VBx tract** | `--features cli-tract` | Opt-in smoke; not the product CLI |
@@ -278,7 +278,7 @@ audit remain active.
 
 ## Go/No-Go Matrix
 
-_As of 0.20.x — product CLI, Python wheel, and transcribe diarization are
+_As of 0.21.x — product CLI, Python wheel, and transcribe diarization are
 kernels, Parakeet still `ort` 2.0.0-rc.12, INT8 profiles + v2+VBx default,
 legacy as an escape hatch, and multi-corpus DER is incomplete. Public
 unattended stays NO-GO._
@@ -305,7 +305,7 @@ All items must be true before declaring production-ready / shipping `1.0.0` as
 - [ ] **Public API freeze + semver policy.** Documented stability rules; no
       silent breaking churn on the advertised surface for a freeze window; then
       `1.0.0`. Policy: [`docs/semver.md`](docs/semver.md). Window is open;
-      crate is still `0.20.x`.
+      crate is still `0.21.x`.
 - [ ] **Runtime story closed.** Product CLI, Python wheel, and transcribe
       diarization are kernels. Remaining: Parakeet
       TDT still uses `ort`; tract remains opt-in smoke; `ort` 2.x stable
@@ -340,11 +340,11 @@ Until every box is checked, the honest status remains:
 
 ---
 
-## Metrics (snapshot, 0.20.x)
+## Metrics (snapshot, 0.21.x)
 
 | Metric | Value |
 |--------|-------|
-| Crate version | 0.20.0 |
+| Crate version | 0.21.0 |
 | Deployable footprint | **~8.4 MB** INT8 production pair (FP32 ids optional / not profile-default) |
 | Product CLI engine | kernels (`pipeline-native`); no `libonnxruntime` |
 | Speed (kernels, Darwin Vox-3 scoreboard) | ≥**117×** realtime; peak RSS ≤ **556 MiB** |

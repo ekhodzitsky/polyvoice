@@ -125,7 +125,7 @@ audio (f32 PCM)
 
 ```toml
 [dependencies]
-polyvoice = { version = "0.20", features = ["pipeline-native", "vbx"] }
+polyvoice = { version = "0.21", features = ["pipeline-native", "vbx"] }
 ```
 
 rustc **1.94**. Default features are empty: the published crate is the

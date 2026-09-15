@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Crate version **0.21.0**: the core ort removal drops public Rust API that
+  `0.20.0` shipped — module `sortformer` (`SortformerDiarizer`,
+  `SortformerConfig`, `PostProcessConfig`, `SortformerError`,
+  `register_with`, its consts), `onnx::OrtSession`, `RuntimeSession::Ort`,
+  `InferenceBackend::Ort`, and the features `onnx`, `pipeline-full`,
+  `cli-ort`, `coreml`, `nnapi`, `xnnpack`, `sortformer`. All are outside the
+  frozen surface in [`docs/semver.md`](docs/semver.md); `cargo semver-checks`
+  still requires the minor bump while 0.x.
+
 ### Changed
 
 - VBx AHC seed threshold **0.5 → 0.6**, retuned on VoxConverse-dev for native
