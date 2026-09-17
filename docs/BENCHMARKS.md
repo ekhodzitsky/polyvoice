@@ -336,6 +336,168 @@ The cross-engine harness measures polyvoice end-to-end through its CLI (which
 cold-loads the model per file), a conservative lower bound; the figures above
 are steady-state in-process numbers.
 
+## Speed — who-said-what cascade (diarization + Parakeet ASR)
+
+End-to-end `polyvoice-transcribe` (diarize → one Parakeet TDT pass → join)
+measured in **file mode**: one fresh CLI process per audio file, so every
+per-file wall includes pipeline init and the 2.55 GB ASR model load
+(~1.5–2 s warm from page cache). ASR model:
+[`istupakov/parakeet-tdt-0.6b-v3-onnx`](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
+(FP32 ONNX, 2 549 805 858 B) on ONNX Runtime CPU; diarization is the same
+INT8 kernel pipeline as the product CLI (v2 + VBx, balanced defaults).
+
+**Host / date:** Linux x86_64, AMD Ryzen AI 9 HX 370 (24 threads), ~76 GiB
+RAM, NVMe, release build (`cargo build --release -p polyvoice-asr --features
+cli`), 2026-09-15. Per-process wall and peak RSS from GNU `time -v`
+(`Maximum resident set size`); audio durations via ffprobe;
+RTFx = total audio / total wall. A warm-up file ran before every measured
+pass. Cold start was measured after evicting the page cache (write + sync +
+delete of a 78 GiB filler file; no root for `drop_caches`).
+
+| Corpus / mode | Files | Audio s | Wall s | RTFx | Max peak RSS |
+|---|---:|---:|---:|---:|---:|
+| VoxConverse-test, jobs=1 (full split) | 232 | 156 730.1 | 13 459 | **11.65×** | **7.23 GiB** |
+| AMI-test, jobs=1 (3-meeting subset ¹) | 3 | 5 195.7 | 432.9 / 487.9 ² | **12.0× / 10.7×** ² | **7.07 GiB** |
+| Repeat subset (5 files), pass A / B ³ | 5 | 5 472.5 | 458.5 / 530.0 | 11.94× / 10.32× | 7.07 GiB |
+| Mixed subset, `xargs -P 4` ⁴ | 24 | 22 842.2 | 1 703 | **13.41×** throughput | 6.96 GiB per process |
+| Cold start, single short file ⁵ | 1 | 38.3 | 6.25 | 6.12× | 2.73 GiB |
+| Same file, warm | 1 | 38.3 | 3.72 | 10.29× | 2.72 GiB |
+
+¹ AMI jobs=1 subset = IS1009a (838.8 s), EN2002b (1 786.8 s), TS3003c
+(2 570.0 s); the full 16-meeting AMI jobs=1 pass was not run (time-boxed);
+subset files are named so the run reproduces exactly.
+² Two back-to-back passes over the same files (first / second).
+³ fuzfh (26.0 s), qadia (308.6 s), dgvwu (781.0 s), EN2002b (1 786.8 s),
+TS3003c (2 570.0 s) — the who-said-what repeatability probe, run twice.
+⁴ Every 12th sorted VoxConverse-test file (20) + first 4 sorted AMI-test
+files, 4 concurrent CLI processes, per-process peak RSS.
+⁵ msbyq.wav, first process after page-cache eviction.
+
+**Methodology notes.**
+
+- *File mode = cold process per file.* Short files carry the fixed
+  model-load overhead: a 26 s file runs at ~8.6× while the corpus
+  steady state is ~12×.
+- *Peak RSS is multi-giB and grows with input length*: ~2.8 GiB on
+  26–40 s files, ~6.1 GiB at 839 s, ~6.4–6.6 GiB at ~1 800 s, ~7.1 GiB at
+  2 570 s; the full-split Vox maximum is 7.23 GiB (a 698 s file). The ASR
+  stage alone therefore needs a ~8 GiB per-instance memory budget — it
+  cannot share the diarization worker pool's ~0.5 GiB envelope.
+- *Process parallelism barely helps throughput.* With 4 concurrent
+  processes (ONNX Runtime defaults to all 24 threads per process, so the
+  instances oversubscribe), per-file wall degrades 2.92× on the same 20
+  Vox files (jobs=1 sum 1 173.0 s vs `-P 4` sum 3 421.0 s) while total
+  throughput improves only 11.65× → 13.41× — and costs 4× the memory
+  (4 × ~7 GiB ≈ 28 GiB concurrently).
+- *Repeatability.* Two identical back-to-back passes over the 5-file
+  subset differ by +7.6…+23.4 % per-file wall (pass B uniformly slower;
+  total 458.5 vs 530.0 s); peak RSS repeats within ~1.5 %.
+- The cascade's diarization half is measured separately on this host at
+  ~162× (Vox) / ~193× (AMI) RTFx, so >90 % of the cascade wall is the
+  Parakeet FP32 pass.
+
+Reproduce (exact protocol):
+
+```bash
+# model → any gitignored dir (here .cache/, which .gitignore covers)
+mkdir -p .cache/models/parakeet-tdt && cd .cache/models/parakeet-tdt
+for f in encoder-model.onnx encoder-model.onnx.data decoder_joint-model.onnx vocab.txt; do
+  curl -fSLO "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/$f"
+done && cd -
+
+cargo build --release -p polyvoice-asr --features cli
+
+# jobs=1, one process per file, per-file wall + peak RSS:
+for w in data/voxconverse-test/audio/*.wav; do
+  /usr/bin/time -v -o "$(basename "$w" .wav).time" \
+    target/release/polyvoice-transcribe "$w" \
+    --asr-model .cache/models/parakeet-tdt --format json --quiet > /dev/null
+done
+# RTFx = Σ(ffprobe durations) / Σ(Elapsed wall clock); RSS = max(Maximum resident set size)
+
+# parallel: same per-file command under  ls … | xargs -P 4 -I{}
+# cold start: dd if=/dev/zero of=filler bs=1M count=80000 conv=fdatasync; rm filler; sync; then first run
+```
+
+### INT8 Parakeet export — measured, NOT adopted (2026-09-15)
+
+The same model repo ships a drop-in INT8 QDQ export
+(`encoder-model.int8.onnx` 652 183 999 B + `decoder_joint-model.int8.onnx`
+18 202 004 B; with `vocab.txt` **670 479 942 B** total, −73.7 % of the FP32
+weight). It loads with zero code or runtime change (the loader picks
+`*.int8.onnx` when the FP32 files are absent — point `--asr-model` at a
+directory containing only the INT8 files). Measured on the same host and
+protocol as the table above, against the FP32 numbers there:
+
+| Metric (same fixtures) | FP32 | INT8 |
+|---|---:|---:|
+| Weight on disk | 2 549 805 858 B | **670 479 942 B** |
+| 5-file subset, jobs=1 RTFx | 11.94× / 10.32× (two passes) | **13.06×** |
+| 5-file subset, max peak RSS | 7.07 GiB | **5.91 GiB** |
+| Short file (26 s) peak RSS | 2.80–2.94 GiB | **1.66 GiB** |
+| Mixed 24-file subset, `xargs -P 4` throughput | 13.41× | **21.84×** |
+| Mixed 24-file subset, max per-process RSS | 6.96 GiB | **5.72 GiB** |
+
+**Not adopted — word parity vs FP32 fails on overlap-heavy audio.** On the
+3 Vox files the transcripts match (0 FP32-only words; aligned-word
+timestamps within 0.08 s p95). On the 2 AMI meetings INT8 emits **14 %
+fewer words overall (−27 % on EN2002b)** and loses or garbles multi-second
+spans where FP32 stays fluent — e.g. a 61 s span on TS3003c (148 FP32
+words) and a 30 s span on EN2002b (74 words). INT8-only words: none — it
+adds nothing FP32 missed. Third-party micro-WER (5.13 INT8 vs 5.53 FP32 on
+a different benchmark set) does not capture this span-loss failure mode,
+which matches the signature reported for another INT8 build of this model
+family. The FP32 export remains the reference ASR model until a re-export
+passes the same word-parity fixture.
+
+**K-quant / GPTQ (int4, ~300–400 MB target): no-go on accuracy.** A
+blockwise int4 RTN export (MatMul-only, 679 MB) loses 24 / 13 312 words on
+the parity fixture (encoder-output cosine 0.956 vs FP32) — int4 needs
+calibration-aware weight compensation (GPTQ/AWQ) to close that gap. The
+often-reported CPU slowness of int4 `MatMulNBits` did **not** reproduce on
+this encoder (12.11× ≈ FP32 speed), so if accuracy is ever closed, int4 is
+also a speed-viable format.
+
+### Weights-only INT8 export (MatMulNBits) — adopted (2026-09-17)
+
+The span loss above turns out to come from **activation** quantization, not
+weight quantization. A calibrated static QDQ re-export (per-channel weights
++ per-tensor activation ranges) cut the loss from 589 to 31 FP32-only words
+on the parity fixture but still failed the gate; dropping activation
+quantization entirely — weights-only INT8 — lands at **2 / 13 312 words
+(0.015 %)**.
+
+The adopted export keeps activations FP32 end-to-end: MatMul weights via
+blockwise `MatMulNBits` (int8, 128-wide blocks, symmetric; fused CPU kernels
+since ONNX Runtime 1.22, present in the pinned `ort` build) and Conv weights
+via per-output-channel int8 `DequantizeLinear`. Decoder/joiner stay FP32.
+Build it from the FP32 download with `scripts/quantize-parakeet-encoder.py`
+(~1 min, ~3.2 GiB peak); the output directory is a drop-in `--asr-model`
+replacement.
+
+Same host and 5-file parity fixture (fuzfh, qadia, dgvwu, EN2002b,
+TS3003c; 5 472.5 s audio, jobs=1); FP32 row repeated from the table above:
+
+| Export | Encoder on disk | RTFx | Max peak RSS | FP32-only words |
+|---|---:|---:|---:|---:|
+| FP32 (reference) | 2 477 191 026 B | 11.94× | 7.07 GiB | 0 (ref) |
+| Dynamic INT8 (not adopted) | 652 183 999 B | 13.06× | 5.91 GiB | 589 |
+| Static INT8, calibrated (activations quint8) | ~655 MB | **16.63×** | 6.98 GiB | 31 |
+| **Weights-only INT8 (adopted)** | **668 822 698 B** | **11.66×** | **5.50 GiB** | **2** |
+| int4 RTN (block 32, MatMul only) | ~679 MB | 12.11× | 5.11 GiB | 24 |
+
+Residual: the 2 FP32-only words are one marginal pair at the tail seam of
+TS3003c ("Okay" spanning 2 280.2–2 284.8 s, plus the sentence dot) that
+weights-only variants place slightly differently; two independently built
+weights-only variants agree with each other on 100 % of words, and
+aligned-word timestamps match FP32 within 0.00 s p95. Total word count is
+13 310 vs 13 312 FP32 (B/A = 0.9998). Finer-grained conv quantization and
+GPTQ int4 remain open research for closing the last 2 words. Pairing the
+weights-only encoder with the repo-shipped INT8 decoder regresses to 21
+FP32-only words (decoder quantization perturbs the TDT duration predictor),
+so the decoder stays FP32 — the full model directory is 741 437 530 B
+(encoder pair 668 822 698 B + FP32 decoder + vocab).
+
 ## Footprint, license & gating
 
 | Engine | Deployable size | License | Gated weights? | Runtime |

@@ -3,7 +3,8 @@
 //! Wraps [`parakeet_rs`] (Parakeet TDT) behind the core [`polyvoice::Asr`] trait,
 //! emitting native word-level timestamps for the who-said-what cascade. This crate
 //! is a SEPARATE workspace member and is **never** a default feature of the core —
-//! the ~600 MB Parakeet model never touches the core footprint. The transcribe
+//! the Parakeet model (2.55 GB FP32, or 669 MB as weights-only INT8) never
+//! touches the core footprint. The transcribe
 //! CLI diarizes with native kernels; `ort` is pinned only so Parakeet shares one
 //! ONNX Runtime version with the rest of the workspace (enforced in CI).
 //!
