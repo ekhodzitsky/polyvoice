@@ -500,6 +500,13 @@ FP32-only words (decoder quantization perturbs the TDT duration predictor),
 so the decoder stays FP32 — the full model directory is 741 437 530 B
 (encoder pair 668 822 698 B + FP32 decoder + vocab).
 
+Full-protocol confidence run (2026-09-17, same host, jobs=1, zero
+failures): **VoxConverse-test, all 232 files: 10.42× RTFx, 5.78 GiB** max
+peak RSS (FP32: 11.65× / 7.23 GiB); **AMI-test, all 16 meetings: 12.83×,
+5.51 GiB**. The ~10 % full-split Vox delta vs FP32 is per-file process +
+model-load overhead dominating short files; the 5-file subset figure
+(11.66× vs 11.94×) is the long-file steady state.
+
 ## Footprint, license & gating
 
 | Engine | Deployable size | License | Gated weights? | Runtime |
