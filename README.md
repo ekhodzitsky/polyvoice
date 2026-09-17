@@ -3,6 +3,7 @@
 WAV in, speaker turns out.
 
 [![Crates.io](https://img.shields.io/crates/v/polyvoice)](https://crates.io/crates/polyvoice)
+[![Downloads](https://img.shields.io/crates/d/polyvoice)](https://crates.io/crates/polyvoice)
 [![Docs.rs](https://docs.rs/polyvoice/badge.svg)](https://docs.rs/polyvoice)
 [![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ekhodzitsky/polyvoice)](https://github.com/ekhodzitsky/polyvoice/releases)

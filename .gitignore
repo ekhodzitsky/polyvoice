@@ -47,6 +47,9 @@ data/voxceleb1-subset/wav/
 data/voxceleb1-subset/lists/
 models/int8/*.onnx
 models/int8/*.onnx.data
+# VBx PLDA .npy files are downloaded via the model manifest (or rebuilt by
+# scripts/build-vbx-plda.py from fixtures/vbx-plda) — artifacts, not sources.
+models/int8/plda_*.npy
 
 # Benchmark data and results
 /data/
