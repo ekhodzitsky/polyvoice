@@ -471,9 +471,11 @@ The adopted export keeps activations FP32 end-to-end: MatMul weights via
 blockwise `MatMulNBits` (int8, 128-wide blocks, symmetric; fused CPU kernels
 since ONNX Runtime 1.22, present in the pinned `ort` build) and Conv weights
 via per-output-channel int8 `DequantizeLinear`. Decoder/joiner stay FP32.
-Build it from the FP32 download with `scripts/quantize-parakeet-encoder.py`
-(~1 min, ~3.2 GiB peak); the output directory is a drop-in `--asr-model`
-replacement.
+Prebuilt files (drop-in `--asr-model` directory):
+[`ekhodzitsky/parakeet-tdt-0.6b-v3-onnx-weights-only-int8`](https://huggingface.co/ekhodzitsky/parakeet-tdt-0.6b-v3-onnx-weights-only-int8);
+or rebuild deterministically from the FP32 download with
+`scripts/quantize-parakeet-encoder.py` (~1 min, ~3.2 GiB peak — verified
+byte-identical to the hosted files).
 
 Same host and 5-file parity fixture (fuzfh, qadia, dgvwu, EN2002b,
 TS3003c; 5 472.5 s audio, jobs=1); FP32 row repeated from the table above:

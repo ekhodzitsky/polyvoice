@@ -55,37 +55,51 @@ cargo run -p polyvoice-asr --features cli --bin polyvoice-transcribe -- \
 
 ## Model files
 
-Download the TDT ONNX export into one directory and point `from_dir` at it.
+### Recommended: weights-only INT8 (≈741 MB download)
+
+Prebuilt export — MatMul weights int8 `MatMulNBits` (128-wide blocks), Conv
+weights per-output-channel int8, activations and decoder FP32. Word-loss
+neutral vs the FP32 export (2 / 13 312 boundary words; protocol and numbers
+in [docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/main/docs/BENCHMARKS.md)):
+
+```bash
+mkdir -p models/parakeet-tdt-w8 && cd models/parakeet-tdt-w8
+for f in encoder-model.int8.onnx encoder-model.int8.onnx.data \
+         decoder_joint-model.onnx vocab.txt SHA256SUMS; do
+  curl -fSLO "https://huggingface.co/ekhodzitsky/parakeet-tdt-0.6b-v3-onnx-weights-only-int8/resolve/main/$f"
+done
+sha256sum -c SHA256SUMS && cd -
+```
+
+Point `from_dir` / `--asr-model` at that directory — the loader picks the
+`*.int8.onnx` encoder automatically (do not put the FP32 `encoder-model.onnx`
+in the same directory: it silently wins). Requires ONNX Runtime ≥ 1.22 CPU
+(`MatMulNBits` int8 kernels) — the `ort` version pinned by this crate already
+includes them. Measured against FP32 on the same fixtures: 11.66× vs 11.94×
+RTFx, 5.50 vs 7.07 GiB peak RSS.
+
+### FP32 reference (≈2.55 GB)
+
 Source: [`istupakov/parakeet-tdt-0.6b-v3-onnx`](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
 
 - `encoder-model.onnx` (41 770 866 B) + `encoder-model.onnx.data` (2 435 420 160 B)
 - `decoder_joint-model.onnx` (72 520 893 B)
 - `vocab.txt` (93 939 B)
 
-Total download: 2 549 805 858 B (≈2.55 GB). Install footprint: model dir
-≈2.55 GB plus the `polyvoice-transcribe` binary (~23 MiB, statically linked —
-no shared `libonnxruntime`).
+Total download: 2 549 805 858 B (≈2.55 GB).
 
-### Recommended: weights-only INT8 encoder (≈669 MB)
+### Build the INT8 encoder yourself
 
-Activation quantization was measured to drop words on far-field audio;
-weight-only quantization does not (2 / 13 312 boundary words on the parity
-fixture — protocol and numbers in
-[docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/main/docs/BENCHMARKS.md)).
-Build the recommended export from the FP32 download:
+Deterministic rebuild of the hosted export from the FP32 download
+(~1 min, ~3.2 GiB peak RAM; the rebuild is byte-identical):
 
 ```bash
 pip install "onnxruntime>=1.30" onnx onnx-ir numpy
 python3 scripts/quantize-parakeet-encoder.py ./models/parakeet-tdt ./models/parakeet-tdt-w8
 ```
 
-Point `from_dir` / `--asr-model` at the output directory (encoder pair
-668 822 698 B + copied FP32 decoder + vocab = 741 437 530 B total; the
-loader picks the `*.int8.onnx` encoder automatically). Measured against
-FP32 on the same fixtures: 11.66× RTFx vs 11.94×, peak RSS 5.50 GiB vs
-7.07 GiB. Requires ONNX Runtime ≥ 1.22 CPU (`MatMulNBits` int8 kernels) —
-the `ort` version pinned by this crate already includes them. Keep the
-decoder FP32: the INT8 decoder regresses word parity (21 / 13 312).
+Keep the decoder FP32 in any custom build: the INT8 decoder regresses word
+parity (21 / 13 312 FP32-only words).
 
 ## Execution providers
 
