@@ -87,6 +87,19 @@ fn jobs_flag_parses() {
 }
 
 #[test]
+fn embedder_flag_parses_cam_pp() {
+    let args = Args::try_parse_from([
+        "polyvoice-bench",
+        "/tmp/dataset",
+        "--embedder",
+        "cam_pp_int8",
+    ])
+    .unwrap();
+    assert_eq!(args.embedder.as_deref(), Some("cam_pp_int8"));
+    assert!(default_args().embedder.is_none());
+}
+
+#[test]
 fn hex_lower_formats_bytes_as_two_digit_hex() {
     assert_eq!(hex_lower(&[0x00, 0x0f, 0xa5, 0xff]), "000fa5ff");
     assert_eq!(hex_lower(&[]), "");
@@ -114,20 +127,32 @@ fn micro_der_zero_reference_frames_is_zero() {
 #[test]
 fn model_hashes_reports_segmenter_and_profile_embedder() {
     let registry = ModelRegistry::default().unwrap();
-    let hashes = model_hashes(&registry, Profile::Balanced, "powerset_int8");
+    let hashes = model_hashes(
+        &registry,
+        Profile::Balanced,
+        "powerset_int8",
+        "resnet34_int8",
+    );
     assert_eq!(hashes.len(), 2);
     assert_eq!(hashes[0].model_id, "powerset_int8");
     assert_eq!(hashes[1].model_id, "resnet34_int8");
     for h in &hashes {
         assert_eq!(h.sha256.len(), 64, "{} sha256 must be hex", h.model_id);
     }
+    let cam = model_hashes(&registry, Profile::Balanced, "powerset_int8", "cam_pp_int8");
+    assert_eq!(cam[1].model_id, "cam_pp_int8");
 }
 
 #[test]
 fn model_hashes_skips_models_absent_from_manifest() {
     let registry = ModelRegistry::default().unwrap();
     // Unknown segmenter id: only the embedder entry survives the lookup.
-    let hashes = model_hashes(&registry, Profile::Balanced, "no_such_model");
+    let hashes = model_hashes(
+        &registry,
+        Profile::Balanced,
+        "no_such_model",
+        "resnet34_int8",
+    );
     assert_eq!(hashes.len(), 1);
     assert_eq!(hashes[0].model_id, "resnet34_int8");
 }
@@ -135,7 +160,7 @@ fn model_hashes_skips_models_absent_from_manifest() {
 #[test]
 fn model_hashes_empty_for_profile_absent_from_manifest() {
     let registry = ModelRegistry::default().unwrap();
-    assert!(model_hashes(&registry, Profile::Custom, "powerset_fp32").is_empty());
+    assert!(model_hashes(&registry, Profile::Custom, "powerset_fp32", "resnet34_int8").is_empty());
 }
 
 #[test]

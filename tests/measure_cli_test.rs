@@ -352,9 +352,17 @@ fn embedder_short_fails_without_any_pair_source() {
         ])
         .assert()
         .failure();
-    // Native/tract builds gate the tool before pair resolution: no ONNX Runtime.
-    #[cfg(any())]
+    // Product `cli` builds stub the subcommand; the live path needs tract CAM++.
+    #[cfg(all(
+        feature = "embedder-native",
+        feature = "backend-tract",
+        feature = "embedder"
+    ))]
     assert.stderr(predicate::str::contains("no VoxCeleb pairs"));
-    #[cfg(not(any()))]
-    assert.stderr(predicate::str::contains("requires the `onnx` feature"));
+    #[cfg(not(all(
+        feature = "embedder-native",
+        feature = "backend-tract",
+        feature = "embedder"
+    )))]
+    assert.stderr(predicate::str::contains("backend-tract"));
 }

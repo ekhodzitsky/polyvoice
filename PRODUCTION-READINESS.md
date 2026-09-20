@@ -72,13 +72,13 @@ multi-corpus proof.
 | Inference (opt-in ONNX files) | tract (`cli-tract`); no `OrtSession` in core |
 | Inference (opt-in tract) | `POLYVOICE_INFERENCE_BACKEND=tract` + `backend-tract`: signed `powerset_fp32_tract` + **FP32** ResNet; smoke DER only |
 | Models | Profile segmenter/embedder minisign-signed in release; VBx PLDA registry downloads are minisign-signed; opt-in `powerset_fp32_tract` is minisign-signed (release `models-tract-v1`) |
-| Native ORT binary | Hash-pinned via ort-sys `dist.txt` **when `onnx` is enabled**; trust model in [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
+| Native ORT binary | Not in the core crate. Parakeet (`polyvoice-asr`) still hash-pins via ort-sys; see [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
 | Library features | `pipeline-native` + `vbx` (CLI parity). Crate-root `Pipeline` needs that gate; `PipelineConfig::default()` is **VBx** when `vbx` is on |
 
 Honest reading: v2+VBx INT8 kernels are the **measured product pipeline** on
 Linux (Vox 13.34 % / AMI 24.19 %) and Darwin Vox-3 (scoreboard floors).
-Linux/CPU **ort** is a comparison protocol, not the product CLI. Legacy remains
-a supported escape hatch. Tract is an **opt-in research path**. Public
+Linux/CPU **ort** is a historical comparison protocol, not the product CLI.
+Product CLI has no `--legacy` path. Tract is an **opt-in research path**. Public
 production still needs multi-corpus gates, an API freeze, and a Darwin
 full-split re-run after the AHC seed 0.6 retune.
 
@@ -110,7 +110,7 @@ says GO.
 |------------|---------|------|
 | `polyvoice-kernels` | workspace | Product CLI. Darwin uses Accelerate/BNNS (C shims); Linux uses `rten-gemm` (pure Rust). MSRV 1.94. |
 | `ort` (ONNX Runtime) | `2.0.0-rc.12` | **RC, not stable.** Linked only by **Parakeet** (`polyvoice-asr`). Not in the core crate. |
-| Native ORT binary | pinned via ort-sys | Hash-verified download when `onnx` is on; residual trust in pyke builds + CDN cold-fetch |
+| Native ORT binary | pinned via ort-sys | Hash-verified download for **Parakeet only** (`polyvoice-asr`); residual trust in pyke builds + CDN cold-fetch |
 | `faer` (spectral clustering) | Optional | Not used in the default pipeline |
 | `paste` | Latest | Unmaintained (LOW; no CVE) |
 

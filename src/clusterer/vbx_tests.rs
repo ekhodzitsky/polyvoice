@@ -241,6 +241,25 @@ fn clusterer_handles_empty_single_and_dim_mismatch() {
 }
 
 #[test]
+fn clusterer_rejects_embeddings_that_do_not_match_plda_input_dim() {
+    let c = fixture_clusterer(4);
+    let wrong = vec![vec![0.1_f32; 512], vec![0.2_f32; 512]];
+    let err = c.cluster(&wrong).unwrap_err();
+    match err {
+        ClustererError::DimMismatch {
+            expected,
+            actual,
+            index,
+        } => {
+            assert_eq!(expected, 256);
+            assert_eq!(actual, 512);
+            assert_eq!(index, 0);
+        }
+        other => panic!("expected DimMismatch, got {other:?}"),
+    }
+}
+
+#[test]
 fn clusterer_trait_surface() {
     let c = fixture_clusterer(8);
     assert_eq!(c.max_clusters(), 8);

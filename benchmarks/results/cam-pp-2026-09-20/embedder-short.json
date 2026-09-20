@@ -1,0 +1,69 @@
+{
+  "schema": "polyvoice-embedder-short-v2",
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370 w/ Radeon 890M",
+    "arch": "x86_64",
+    "cores": 24
+  },
+  "max_pairs": 400,
+  "resnet34": {
+    "name": "wespeaker-resnet34-native",
+    "model_id": "resnet34_int8",
+    "dim": 256,
+    "short_seg_eer": [
+      {
+        "duration_secs": 0.5,
+        "pairs": 400,
+        "eer": 17.789330922242314
+      },
+      {
+        "duration_secs": 1.0,
+        "pairs": 400,
+        "eer": 7.210669077757685
+      },
+      {
+        "duration_secs": 2.0,
+        "pairs": 400,
+        "eer": 4.754370102471368
+      },
+      {
+        "duration_secs": 3.0,
+        "pairs": 400,
+        "eer": 4.596142254370102
+      }
+    ],
+    "der_macro_collar_0": null,
+    "der_macro_collar_025": null,
+    "der_files": null
+  },
+  "cam_pp": {
+    "name": "cam++",
+    "model_id": "cam_pp_fp32",
+    "dim": 512,
+    "short_seg_eer": [
+      {
+        "duration_secs": 0.5,
+        "pairs": 400,
+        "eer": 16.877637130801688
+      },
+      {
+        "duration_secs": 1.0,
+        "pairs": 400,
+        "eer": 10.736889692585896
+      },
+      {
+        "duration_secs": 2.0,
+        "pairs": 400,
+        "eer": 7.05244122965642
+      },
+      {
+        "duration_secs": 3.0,
+        "pairs": 400,
+        "eer": 6.894213381555153
+      }
+    ],
+    "der_macro_collar_0": null,
+    "der_macro_collar_025": null,
+    "der_files": null
+  }
+}

@@ -11,9 +11,9 @@ The crate exposes three intentional pipeline layers (see
 
 | Layer | Entry point | Status | Best for |
 |-------|-------------|--------|----------|
-| **BYO / ort-free** (`polyvoice::pipeline::LegacyPipeline`) | `LegacyPipeline::new(DiarizationConfig, VadConfig)` + inject `Embedder` | Stable library surface; CLI `--legacy` | No ONNX; custom embedders; streaming sibling |
+| **BYO / ort-free** (`polyvoice::pipeline::LegacyPipeline`) | `LegacyPipeline::new(DiarizationConfig, VadConfig)` + inject `Embedder` | Stable library surface | Custom embedders; streaming sibling |
 | **Native kernels** (`polyvoice::Pipeline` via `pipeline-native`) | `Pipeline::builder()` + `ModelRegistry` | **CLI/FFI/MCP/Python default** (v2 + VBx, hand-written INT8 kernels, no libonnxruntime). Darwin links Accelerate. | CPU deployment without ONNX Runtime |
-| **ONNX Runtime** (`polyvoice::Pipeline` via `pipeline-full`) | `Pipeline::builder()` + `ModelRegistry` | Opt-in library / comparison benches | Same v2 pipeline on `ort` |
+| **Tract** (`polyvoice::Pipeline` via `pipeline-tract` / `cli-tract`) | `Pipeline::builder()` + `ModelRegistry` | Opt-in ONNX-file runtime (no `libonnxruntime`) | Same v2 pipeline on tract |
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -96,7 +96,7 @@ pub struct DiarizationResult {
 ### Bring-your-own embedder (`Embedder`)
 
 `LegacyPipeline` and `StreamingPipeline` accept **`E: Embedder`** — the supported,
-non-deprecated library injection surface. No `onnx` feature is required; an
+non-deprecated library injection surface. No inference feature is required; an
 external Candle/tract/custom encoder implements `Embedder` and pairs with
 `EnergyVad` (or another `VoiceActivityDetector`).
 
@@ -127,7 +127,7 @@ Shared encoders behind `Arc` are fine as long as `Embedder` is `Send + Sync`
 
 ### `LegacyPipeline::new(config, vad_config)`
 Stable offline entry point. The CLI/FFI/MCP front doors default to the
-native-kernels `pipeline_v2` since 0.18 (ONNX remains opt-in via `pipeline-full`);
+native-kernels `pipeline_v2` since 0.18 (ONNX Runtime is not in this crate);
 library consumers keep this generic surface for BYO embedders.
 
 ```rust
@@ -140,9 +140,9 @@ let result = LegacyPipeline::new(DiarizationConfig::default(), VadConfig::defaul
     .run(&samples, &extractor, &mut vad)?;
 ```
 
-With feature `onnx`, ONNX extractors such as `FbankOnnxExtractor` (or the
-architecture adapters) implement `Embedder` directly and plug into the same
-`LegacyPipeline::run`.
+With `backend-tract` + `embedder`, tract adapters (`ResNet34Adapter`,
+`CamPlusPlusExtractor`, …) implement `Embedder` and plug into the same
+`LegacyPipeline::run`. Native ResNet34 is `embedder-native`.
 
 ### Embedders and test doubles
 
@@ -155,10 +155,10 @@ let extractor = DummyExtractor::new(256);
 assert_eq!(polyvoice::Embedder::dim(&extractor), 256);
 ```
 
-#### `FbankOnnxExtractor` (feature `onnx`)
-WeSpeaker-style fbank → ONNX embedder (`Embedder`; e.g. ResNet34 256-d). Prefer
-architecture adapters (`ResNet34Adapter`, `CamPlusPlusExtractor`) when the
-model family is fixed.
+#### `FbankOnnxExtractor` (feature `backend-tract`)
+WeSpeaker-style fbank → ONNX-file embedder on tract (`Embedder`; e.g. ResNet34
+256-d). Prefer architecture adapters (`ResNet34Adapter`, `CamPlusPlusExtractor`)
+when the model family is fixed. Product CLI uses `ResNet34Native` instead.
 
 ### Voice Activity Detection
 
@@ -170,9 +170,10 @@ let mut vad = EnergyVad::new(-40.0, 16000, 512);
 let segments = segment_speech(&mut vad, &samples, &config, &vad_config)?;
 ```
 
-#### `SileroVad` (feature `onnx`)
-ONNX-based VAD used by the CLI `--legacy` path and BYO pipelines when ONNX is
-enabled. Production v2 path segments with powerset (no separate Silero stage).
+#### `SileroVad` (feature `infer`)
+ONNX-file Silero VAD for BYO/`LegacyPipeline` callers. Product CLI does not
+enable `--legacy` (no Silero runtime). Production v2 path segments with
+powerset (no separate Silero stage).
 
 `VadConfig::frame_geometry(sample_rate, min_speech_secs)` derives the frame
 geometry (ms per frame, silence/speech duration limits in whole frames) from
@@ -182,17 +183,17 @@ the conversion.
 ## Pipeline v2 (production)
 
 > **Since 0.11:** CLI, FFI, Python, and MCP default to `pipeline_v2` with the
-> **VBx** clusterer. Escape hatches: CLI `--legacy` (needs `pipeline-full`) /
-> `--clusterer ahc`.
+> **VBx** clusterer. Escape hatch: `--clusterer ahc`. Product CLI has no
+> `--legacy` path (0.21 dropped ONNX Runtime from this crate).
 >
 > **Since 0.18:** `PipelineConfig::default().clusterer` is **VBx** when the
 > `vbx` feature is on (same as the front doors). Without `vbx` it falls back
 > to AHC (`DEFAULT_AHC_THRESHOLD` = 0.45). Pass `ClustererKind::Ahc { .. }` to
 > opt out.
 
-Features: `pipeline-native` / `pipeline-full` / `pipeline-tract` export
-crate-root `Pipeline` / `PipelineConfig` / `PipelineError`. Add `vbx` for the
-VBx type and the CLI-parity default.
+Features: `pipeline-native` / `pipeline-tract` export crate-root `Pipeline` /
+`PipelineConfig` / `PipelineError`. Add `vbx` for the VBx type and the
+CLI-parity default. `cli` is `pipeline-native` + `vbx`.
 
 ### `PipelineConfig` (selected fields)
 
@@ -316,7 +317,7 @@ Full C guide: **[FFI.md](FFI.md)**. Header and example:
 you bring your own embedder and want Energy VAD + `LegacyPipeline` /
 `StreamingPipeline` without a native ONNX Runtime dylib.
 
-Inventory of always-on vs feature-gated pure-Rust vs `onnx`-gated APIs:
+Inventory of always-on vs feature-gated pure-Rust vs tract-gated APIs:
 **[docs/library-mode.md](library-mode.md)**. CI job `ort-free-core` enforces the
 ort-free graph on every PR.
 

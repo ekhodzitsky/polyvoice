@@ -20,14 +20,14 @@ collar.
 | Figure | Role | Artifact |
 |------|------|----------|
 | **13.34 %** | **Linux kernels product truth** (CLI / FFI / MCP) | [`linux-cpu-native-der-2026-09-13-vbx-ahc/`](../benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
-| **14.94 %** | Linux / CPU **ort** protocol (`pipeline-full`) | `scripts/linux-cpu-der-gate.sh` → [`linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/) |
+| **14.94 %** | Historical Linux / CPU **ort** protocol (removed from the core crate in 0.21) | `scripts/linux-cpu-der-gate.sh` → [`linux-cpu-der-2026-08-11/`](../benchmarks/results/linux-cpu-der-2026-08-11/) |
 | **15.02 %** | Mac CoreML headline + historical CI gate | INT8 full-split 2026-08-10 — `benchmarks/results/int8-full-der-2026-08-10/` |
 | **15.24 %** | Historical FP32 hop-2.0 published (pre-0.17) | `benchmarks/results/powerset-hop2-2026-07-30/`, `voxconverse-test-232-2026-07-31.json` |
 | **15.22 %** | Same-scorer H2H vs speakrs (FP32-era CLI, 2026-08-03) | `benchmarks/results/speakrs-h2h-2026-08-03/` |
 
 **Default since 0.17.0** is the INT8 pair (`powerset_int8` + `resnet34_int8`)
 on every profile. **Cite 13.34 % for the Linux kernel CLI** (VBx AHC seed 0.6).
-Cite **14.94 %** for the `pipeline-full` comparison protocol (powerset micro-batch N=8, EP=cpu).
+Cite **14.94 %** only as the historical Linux ort comparison (powerset micro-batch N=8, EP=cpu; core crate no longer links `ort`).
 The Python wheel matches the kernel CLI (cite **13.34 %**).
 Cite **15.02 %** for Mac CoreML (N=1 clamp). Reproduce Linux kernels:
 
@@ -52,7 +52,7 @@ DOCKER=1 bash scripts/linux-cpu-native-der-gate.sh
 strict protocol pyannote 3.1 reports against, so these two are collar-matched.
 polyvoice trails the accuracy leader by ~2 DER points and trades that for
 deployability: a Rust-native, CPU, MIT, **ungated** engine (hand-written INT8
-kernels on the product CLI; ONNX Runtime via `pipeline-full`) with four
+kernels on the product CLI; no ONNX Runtime in the core crate) with four
 bindings and streaming. It is **not** the accuracy leader.
 
 ## The collar caveat (read this first)
@@ -298,8 +298,8 @@ per-file `rt_factor_avg`; per-file DER is bit-identical to jobs=1
 `tests/native_scoreboard.json`. Linux native gate:
 `scripts/linux-cpu-native-der-gate.sh`.
 
-Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-08, same-source
-`pipeline-full` build, EP=cpu, N=8): kernels are **ahead on speed everywhere**.
+Same-host ort reference (Ryzen AI 9 HX 370, 2026-09-08, historical
+ort-in-core build, EP=cpu, N=8): kernels are **ahead on speed everywhere**.
 Full splits at jobs=1: VoxConverse-test ~162× vs ort ~150×,
 AMI-16 ~193× vs ort ~171×. Short Vox-3 smoke: at jobs=1 ort's intra-op
 threading still wins the per-file metric (~129× vs ~111×), but with
@@ -676,6 +676,39 @@ drop-in upgrade on English VoxConverse under our fbank front-end: both short-seg
 EER and full-file DER regress hard. Keep the adapter for CJK / experiment
 paths; do **not** make it default. A VoxCeleb-English ERes2Net export (if
 ungated Apache) would need a separate measurement before any accuracy claim.
+
+## Embedder short-segment: ResNet34 vs CAM++ (measured)
+
+**EER protocol:** same VoxConverse-test RTTM pairs as above (400 pairs, 0.5 / 1 /
+2 / 3 s, cosine). ResNet34 is native INT8 kernels; CAM++ is tract FP32 because
+the signed `cam_pp_int8` release URL 404s. Artifact:
+[`benchmarks/results/cam-pp-2026-09-20/embedder-short.json`](../benchmarks/results/cam-pp-2026-09-20/embedder-short.json).
+Notes: [`docs/cam-pp-measured.md`](cam-pp-measured.md).
+
+| Duration | ResNet34 INT8 EER % | CAM++ FP32 EER % |
+|----------|---------------------|------------------|
+| 0.5 s | 17.79 | **16.88** |
+| 1.0 s | **7.21** | 10.74 |
+| 2.0 s | **4.75** | 7.05 |
+| 3.0 s | **4.60** | 6.89 |
+
+**DER (collar 0, jobs=3, native powerset):** CAM++ cannot use product VBx
+(512-d vs 256-d PLDA). Same-clusterer AHC 0.45: CAM++ FP32 Vox **22.69%** /
+AMI **34.97%** vs ResNet34 INT8 AHC 21.24% / 32.84% (product VBx is 13.34 /
+24.19). Tract CAM++ wall RTFx ~64× / ~72× vs native ResNet34 ~207× / ~222×.
+The INT8 pair would also miss the 8 414 314 B scoreboard floor (8.8 MB CAM++
+INT8 + 1.6 MB powerset). **Do not default.**
+
+```bash
+cargo run --release --features "cli,backend-tract" --bin polyvoice-measure -- embedder-short \
+  --wav-root data/voxconverse-test \
+  --der-dataset data/voxconverse-test --der-max-files 30 --max-pairs 400 \
+  --output benchmarks/results/cam-pp-2026-09-20/embedder-short.json
+
+cargo run --release --features "cli,backend-tract" --bin polyvoice-bench -- \
+  data/voxconverse-test --collar 0 --jobs 3 --clusterer ahc \
+  --embedder cam_pp_fp32 --output benchmarks/results/cam-pp-2026-09-20/vox-test-cam-pp-fp32-ahc.json
+```
 
 ```bash
 cargo run --release --features cli --bin polyvoice-measure -- embedder-short \

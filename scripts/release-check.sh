@@ -32,8 +32,8 @@ bash scripts/check-zero-deps.sh
 
 echo "=== 2. Clippy (all-features + product front-door features) ==="
 cargo clippy --all-targets --all-features -- -D warnings
-# CI also gates onnx,ffi,cli without every optional EP; catch that shape too.
-cargo clippy --all-targets --features onnx,ffi,cli -- -D warnings
+# CI also gates ffi+cli without every optional extra; catch that shape too.
+cargo clippy --all-targets --features ffi,cli -- -D warnings
 
 echo "=== 2b. Supply-chain audit (advisories, licenses, bans, sources) ==="
 # Block publish on any advisory/license/source/ban violation — run early so it
@@ -67,23 +67,14 @@ fi
 # exceeded both the 60- and 90-minute GHA job caps; VoxConverse 10-file
 # itself finished in ~8 minutes. Product RTF is measured on the release
 # binary, so the gate should too.
-echo "=== 5. DER regression — legacy e2e_smoke ==="
-cargo nextest run --release --profile ci --run-ignored only --test der_regression_test --features "onnx,download" der_regression_e2e_smoke --nocapture
+echo "=== 5. Native INT8 scoreboard (Vox-3 floors) ==="
+cargo nextest run --release --profile ci --test native_scoreboard --features cli --nocapture
 
-echo "=== 6. DER regression — legacy VoxConverse 10-file ==="
-cargo nextest run --release --profile ci --run-ignored only --test der_regression_test --features "onnx,download" der_regression_voxconverse_10_file_subset --nocapture
+echo "=== 6. DER regression — CLI pipeline v2 e2e_smoke ==="
+cargo nextest run --release --profile ci --run-ignored only --test cli_der_regression_test --features cli cli_der_regression_v2_e2e_smoke --nocapture
 
-echo "=== 7. DER regression — legacy AMI single ==="
-cargo nextest run --release --profile ci --run-ignored only --test der_regression_test --features "onnx,download" der_regression_ami_test_single --nocapture
-
-echo "=== 8. DER regression — pipeline v2 e2e_smoke (library API) ==="
-cargo nextest run --release --profile ci --run-ignored only --test pipeline_v2_integration --features "onnx,segmentation,embedder,clusterer,resegmentation,download" --nocapture
-
-echo "=== 9. DER regression — CLI pipeline v2 e2e_smoke ==="
-cargo nextest run --release --profile ci --run-ignored only --test cli_der_regression_test --features "cli,download" cli_der_regression_v2_e2e_smoke --nocapture
-
-echo "=== 10. DER regression — CLI pipeline v2 AMI single ==="
-cargo nextest run --release --profile ci --run-ignored only --test cli_der_regression_test --features "cli,download" cli_der_regression_v2_ami_single --nocapture
+echo "=== 7. DER regression — CLI pipeline v2 AMI single ==="
+cargo nextest run --release --profile ci --run-ignored only --test cli_der_regression_test --features cli cli_der_regression_v2_ami_single --nocapture
 
 echo ""
 echo "=== ALL CHECKS PASSED ==="

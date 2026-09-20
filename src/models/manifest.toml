@@ -125,9 +125,11 @@ url      = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus/resolve
 sha256   = "b50810498b5bcf5773d086f6993d344476bd0c88b566a41e8d801aaf8461efad"
 size     = 29292449
 filename = "cam_pp_fp32.onnx"
-license  = "Apache-2.0"
-license_url = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus"
-provenance = "Wespeaker/wespeaker-voxceleb-campplus Hugging Face"
+# WeSpeaker toolkit is Apache-2.0; VoxCeleb-trained weights follow the dataset
+# license (CC-BY-4.0). See wespeaker docs/pretrained.md "Model License".
+license  = "CC-BY-4.0"
+license_url = "https://github.com/wenet-e2e/wespeaker/blob/master/docs/pretrained.md"
+provenance = "Wespeaker/wespeaker-voxceleb-campplus Hugging Face (VoxCeleb-trained weights)"
 adapter_type = "cam++"
 version  = "1.0"
 sample_rate = 16000
@@ -177,9 +179,10 @@ sha256   = "cca48a4b36c1b46e48432b1eb1461dd69f9cf113cf506f3f660de808c93b9a85"
 size     = 8803007
 filename = "cam_pp_int8.onnx"
 calibration = "voxconverse_dev_500_samples_seed_42"
-license  = "Apache-2.0"
-license_url = "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus"
-provenance = "INT8 quant of Wespeaker CAM++"
+# Same VoxCeleb-trained CAM++ weights as cam_pp_fp32 (CC-BY-4.0), quantized.
+license  = "CC-BY-4.0"
+license_url = "https://github.com/wenet-e2e/wespeaker/blob/master/docs/pretrained.md"
+provenance = "INT8 quant of Wespeaker VoxCeleb CAM++"
 adapter_type = "cam++"
 version  = "1.0-int8"
 sample_rate = 16000

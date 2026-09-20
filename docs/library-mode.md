@@ -17,7 +17,7 @@ CI enforces that `ort` never appears in the normal dependency graph for
 `--no-default-features` (and for pure-Rust feature combos such as
 `clusterer,vbx`). See `scripts/check-ort-free.sh` and the `ort-free-core` CI job.
 
-## Guaranteed public surface without `onnx`
+## Guaranteed public surface without an inference runtime
 
 ### Always-on (no features)
 
@@ -39,8 +39,8 @@ CI enforces that `ort` never appears in the normal dependency graph for
 ### Feature-gated pure-Rust (no `ort`)
 
 These features compile algorithmic cores without pulling `ort`. Some also have
-ONNX-backed adapters that additionally need the `onnx` feature (listed under
-“Requires `onnx`” below).
+ONNX-file adapters that additionally need `backend-tract` (listed under
+“Requires `backend-tract`” below).
 
 | Feature | Surface | Notes |
 |---------|---------|-------|
@@ -48,30 +48,27 @@ ONNX-backed adapters that additionally need the `onnx` feature (listed under
 | `vbx` | `VbxClusterer`, `LegacyPipeline::run_with_vbx_from_dir` (requires `clusterer`) | Pure-Rust ndarray; PLDA from local dir (no download) |
 | `spectral` | `spectral` + `NmeScClusterer` (with `clusterer`) | Pulls `faer`, not `ort` |
 | `segmentation` | `PowersetDecoder`, `Aggregator`, `Segmenter` trait, … | Decoder / aggregator without ONNX segmenter |
-| `embedder` | (mostly empty flag) | ONNX adapters (`CamPlusPlus`, ResNet34, …) still need `onnx` + `embedder`; the `Embedder` **trait** itself is always-on |
+| `embedder` | (mostly empty flag) | Tract adapters (`CamPlusPlus`, ResNet34, …) still need `backend-tract` + `embedder`; the `Embedder` **trait** itself is always-on |
 | `resegmentation` | `OverlapResegmenter`, `compute_centroids`, … | Post-clustering resegmentation |
 | `attribution` | `who_said_what`, `attribute_words`, … | Word → speaker join (no models) |
 | `vad-earshot` | `EarshotVad` | Optional pure-Rust VAD (`earshot` crate) |
 | `audio-io` | multi-format decode + resample via `wav::load_audio` | `symphonia` + `rubato` for mp3/flac/ogg/m4a/…; WAV still `ryf`; no `ort` |
 
-### Requires `onnx` (native ORT / tract)
+### Requires `backend-tract` / `infer` (ONNX files, no `libonnxruntime`)
 
 | Surface | Notes |
 |---------|-------|
-| `SileroVad` | ONNX Silero VAD |
-| `FbankOnnxExtractor` | ONNX fbank embedder (`Embedder`; feature `onnx`) |
-| `CamPlusPlusExtractor`, `ResNet34Adapter`, `ERes2NetV2Extractor` | Need `onnx` + `embedder` |
-| `PowersetSegmenter` | Need `onnx` + `segmentation` |
-| `sortformer` | Optional E2E diarizer (`onnx`-gated, never default) |
-| EP features (`coreml`, `nnapi`, `xnnpack`), `backend-tract` | Inference backends |
+| `SileroVad` | ONNX-file Silero VAD (not on the product CLI) |
+| `FbankOnnxExtractor` | fbank embedder on tract (`Embedder`) |
+| `CamPlusPlusExtractor`, `ResNet34Adapter`, `ERes2NetV2Extractor` | Need `backend-tract` + `embedder` |
+| `PowersetSegmenter` | Need `infer` + `segmentation` |
 
-### Download / front doors (may pull `ort` only when `onnx` is also enabled)
+### Download / front doors (no `ort` in this crate)
 
 | Feature / surface | Notes |
 |-------------------|--------|
-| `download` / `ModelRegistry` | HTTP registry + SHA-256 / minisign; **no ort by itself** |
-| crate-root `Pipeline` (`pipeline_v2`) | `pipeline-native` (kernels: CLI / FFI / MCP / Python), `pipeline-full` (ort), or `pipeline-tract` |
-| `pipeline-full` | `onnx` + `download` + stage markers — ONNX library bundle |
+| `download` / `ModelRegistry` | HTTP registry + SHA-256 / minisign; **no ort** |
+| crate-root `Pipeline` (`pipeline_v2`) | `pipeline-native` (kernels: CLI / FFI / MCP / Python) or `pipeline-tract` |
 | `pipeline-tract` | same v2 stack, tract only — **no ort** |
 | `cli`, `ffi`, `mcp`, Python wheel | `pipeline-native` + `vbx` (+ extras). `PipelineConfig::default()` is VBx when `vbx` is on |
 | `cli-tract` | same CLI bins as `cli`, tract engine, no `ort`; `--legacy` rejected |
@@ -84,9 +81,9 @@ A production BYO-embedder consumer typically:
 1. Depends on `polyvoice` with `default-features = false` (optionally `clusterer` / `vbx`).
 2. Implements **`Embedder`** with an in-tree / other-runtime model (e.g. Candle WeSpeaker).
 3. Uses `EnergyVad` (or its own VAD) with `LegacyPipeline` offline and `StreamingPipeline` online.
-4. Does **not** enable `onnx`, so no `ort` native library is linked.
+4. Does **not** enable `backend-tract`, so no tract graph is linked.
 5. After ASR, maps words onto diarization turns (midpoint coverage — see below).
-6. Optionally inject VBx with local PLDA (`features = ["clusterer", "vbx"]`) — still no `onnx`.
+6. Optionally inject VBx with local PLDA (`features = ["clusterer", "vbx"]`) — still no inference runtime.
 
 ```rust,ignore
 use polyvoice::pipeline::LegacyPipeline;

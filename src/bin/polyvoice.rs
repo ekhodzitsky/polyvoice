@@ -4,11 +4,10 @@
 //! `models` / `download-models` / `completions` are still available. Default
 //! pipeline (since 0.11): **v2 + VBx** (powerset segmentation, ResNet34
 //! embeddings, VB-HMM + PLDA clustering). Default engine (since 0.18):
-//! hand-written INT8 kernels (`--features cli`). ONNX Runtime library/bench:
-//! `--features pipeline-full`. Tract: `--features cli-tract`. PLDA weights come from
-//! `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or are auto-downloaded via the
-//! model registry when neither is set (or pass `--clusterer ahc`).
-//! Use `--legacy` for the pre-0.11 Silero + AHC path.
+//! hand-written INT8 kernels (`--features cli`). Tract: `--features cli-tract`.
+//! PLDA weights come from `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or are
+//! auto-downloaded via the model registry when neither is set (or pass
+//! `--clusterer ahc`). `--legacy` is not available in this crate (no ONNX Runtime).
 //!
 //! Audio input: without the `audio-io` build feature, only mono 16 kHz WAV is
 //! accepted. Rebuild with `--features "cli,audio-io"` to decode mp3/flac/ogg/

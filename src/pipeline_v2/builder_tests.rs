@@ -456,12 +456,39 @@ fn build_balanced_with_local_models_succeeds() {
     assert_eq!(p.config().profile, Profile::Balanced);
 }
 
-#[cfg(all(
-    feature = "segmenter-native",
-    feature = "embedder-native",
-    not(any()),
-    not(feature = "backend-tract")
-))]
+#[cfg(all(feature = "segmenter-native", feature = "embedder-native", not(any())))]
+#[test]
+fn build_native_unknown_embedder_model_errors() {
+    let models = repo_file("models");
+    let cache = if models.join("int8/powerset_int8.onnx").is_file() {
+        models.join("int8")
+    } else {
+        models.clone()
+    };
+    if !cache.join("powerset_int8.onnx").is_file() || !cache.join("resnet34_int8.onnx").is_file() {
+        eprintln!("skip: INT8 powerset/resnet missing under models/int8");
+        return;
+    }
+    let registry = ModelRegistry::with_cache_dir(&cache).expect("registry");
+    let cfg = crate::pipeline_v2::PipelineConfig {
+        embedder_model: Some("not_a_real_embedder".into()),
+        ..crate::pipeline_v2::PipelineConfig::default()
+    };
+    let err = fresh()
+        .config(cfg)
+        .with_models_from(registry)
+        .build()
+        .err()
+        .expect("unknown embedder id must fail");
+    match err {
+        ConfigError::UnknownModel { model_id } => {
+            assert_eq!(model_id, "not_a_real_embedder");
+        }
+        other => panic!("expected UnknownModel, got {other:?}"),
+    }
+}
+
+#[cfg(all(feature = "segmenter-native", feature = "embedder-native", not(any())))]
 #[test]
 fn build_native_with_local_models_succeeds() {
     let models = repo_file("models");
@@ -483,12 +510,7 @@ fn build_native_with_local_models_succeeds() {
     assert_eq!(p.config().profile, Profile::Balanced);
 }
 
-#[cfg(all(
-    feature = "segmenter-native",
-    feature = "embedder-native",
-    not(any()),
-    not(feature = "backend-tract")
-))]
+#[cfg(all(feature = "segmenter-native", feature = "embedder-native", not(any())))]
 #[test]
 fn native_pipeline_runs_short_sine() {
     let models = repo_file("models");

@@ -64,6 +64,11 @@ impl PldaModel {
         self.phi.mapv(|v| v as f32)
     }
 
+    /// Input embedding dimension this PLDA was fit on (shipping WeSpeaker ResNet34 = 256).
+    pub fn input_dim(&self) -> usize {
+        self.mean1.len()
+    }
+
     /// Transform a batch of `(N, 256)` embeddings into `(N, lda_dim)` PLDA features.
     pub fn transform(&self, embeddings: &ArrayView2<f32>, lda_dim: usize) -> Array2<f32> {
         let emb = embeddings.mapv(|v| v as f64);

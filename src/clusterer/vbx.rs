@@ -600,6 +600,14 @@ impl VbxClusterer {
                 });
             }
         }
+        let plda_dim = self.plda.input_dim();
+        if dim != plda_dim {
+            return Err(ClustererError::DimMismatch {
+                expected: plda_dim,
+                actual: dim,
+                index: 0,
+            });
+        }
 
         // Optional short-segment filter: cluster only long enough embeddings.
         // Durations are used only when they align 1:1 with embeddings.

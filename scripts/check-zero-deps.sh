@@ -8,7 +8,8 @@
 #      `pipeline-tract` must not pull `ort`
 #
 # This freezes *invariants* so regressions reintroduce native deps into the
-# BYO / product kernel surfaces. Production CLI is kernels (`cli`); ort is `pipeline-full`.
+# BYO / product kernel surfaces. Production CLI is kernels (`cli`); this
+# crate has no `ort`. Tract is opt-in (`backend-tract` / `cli-tract`).
 # An **opt-in** pure-Rust v2 path exists (backend-tract + powerset rewrite +
 # FP32 ResNet) — see docs/strategy/zero-deps.md — but is not product default.
 set -euo pipefail

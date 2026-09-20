@@ -6,10 +6,12 @@
 //! # polyvoice
 //!
 //! Speaker diarization library for Rust — online (streaming) and offline
-//! (file-based), ecosystem-agnostic. The ONNX path is opt-in (`features =
-//! ["onnx", …]`); default features are empty so BYO-embedder consumers can
-//! use [`pipeline::LegacyPipeline`] / `StreamingPipeline` / `EnergyVad`
-//! without linking `ort`.
+//! (file-based), ecosystem-agnostic. Default features are empty so
+//! BYO-embedder consumers can use [`pipeline::LegacyPipeline`] /
+//! `StreamingPipeline` / `EnergyVad` without linking an inference runtime.
+//! The product path is hand-written INT8 kernels (`pipeline-native` / `cli`);
+//! there is no ONNX Runtime in this crate. Tract is opt-in (`cli-tract` /
+//! `backend-tract`).
 //!
 //! Designed to be embedded into any Rust application that needs to answer
 //! the question **"who spoke when?"**. Freeze window and bump rules:
@@ -19,11 +21,10 @@
 //!
 //! **Product path (CLI / FFI / MCP):** crate-root `Pipeline` via
 //! `pipeline-native` (`cli`) — hand-written INT8 kernels, no
-//! `libonnxruntime`. ONNX Runtime is `--features onnx` / `pipeline-full`.
-//! Tract is `cli-tract`. The v2 gate is `download` +
-//! stage features plus an engine (`pipeline-native`, `onnx`, or
-//! `backend-tract`). With the gate off there is deliberately no crate-root
-//! `Pipeline` — inference-free builds use [`pipeline::LegacyPipeline`].
+//! `libonnxruntime`. Tract is `cli-tract`. The v2 gate is `download` +
+//! stage features plus an engine (`pipeline-native` or `backend-tract`).
+//! With the gate off there is deliberately no crate-root `Pipeline` —
+//! inference-free builds use [`pipeline::LegacyPipeline`].
 //!
 //! **Library mode (no ONNX):** `default-features = false`, implement
 //! [`Embedder`], pair with [`EnergyVad`] and [`pipeline::LegacyPipeline`] /
@@ -37,11 +38,11 @@
 //!
 //! - **Production (`pipeline_v2`, crate-root `Pipeline`):** trait-wired
 //!   Segmenter → Embedder → Clusterer → Resegmenter. CLI/FFI/MCP default
-//!   to hand-written kernels (`cli`). ONNX Runtime is `pipeline-full`. See
+//!   to hand-written kernels (`cli`). Tract is `cli-tract`. See
 //!   `docs/PIPELINE-ARCHITECTURE.md`.
-//! - **BYO / ort-free ([`pipeline::LegacyPipeline`] + `StreamingPipeline`):**
-//!   inject [`Embedder`] + [`VoiceActivityDetector`]. CLI `--legacy` uses
-//!   this offline path with Silero + AHC.
+//! - **BYO ([`pipeline::LegacyPipeline`] + `StreamingPipeline`):**
+//!   inject [`Embedder`] + [`VoiceActivityDetector`]. Product CLI does not
+//!   run `--legacy` (no Silero runtime in this crate).
 //! - **Shared math:** `ahc`, `kmeans`, `spectral`, `features`, `der`, `utils`.
 //! - **Online centroids:** production streaming uses
 //!   [`streaming::ArrivalOrderSpeakerCache`].
@@ -91,7 +92,9 @@ pub use segmentation::{PowersetConfig, PowersetSegmenter};
 pub use segmentation::PowersetNative;
 
 /// Bring-your-own speaker embedder trait (always available; pure Rust core).
-/// ONNX-backed adapters still require `features = ["onnx", "embedder"]`.
+/// Tract-backed adapters (`CamPlusPlusExtractor`, `ResNet34Adapter`, …)
+/// require `features = ["backend-tract", "embedder"]`. Native ResNet34 is
+/// `embedder-native`.
 pub mod embedder;
 
 pub use embedder::{DummyExtractor, Embedder, EmbedderError, apply_overlap_mask};
@@ -190,7 +193,7 @@ pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
 /// `dead_code` when building the lib alone.
 ///
 /// `cli` is the product front door (kernels, no ort). `cli-tract` is the same
-/// binaries on tract. An ONNX CLI/bench is `cli-bin` + `pipeline-full`.
+/// binaries on tract.
 #[doc(hidden)]
 #[cfg(any(feature = "cli-bin", feature = "mcp"))]
 pub mod cli_common;

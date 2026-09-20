@@ -121,6 +121,11 @@ struct Args {
     /// --clusterer ahc. v2 only.
     #[arg(long)]
     domain_profile: Option<String>,
+    /// Measurement-only embedder override on the native powerset path:
+    /// `cam_pp_int8` or `cam_pp_fp32`. Product profiles stay ResNet34.
+    /// Requires `--features cli,backend-tract`.
+    #[arg(long)]
+    embedder: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -227,19 +232,22 @@ fn git_sha() -> String {
         .unwrap_or_else(|| "unknown".to_owned())
 }
 
-fn model_hashes(registry: &ModelRegistry, profile: Profile, segmenter_id: &str) -> Vec<ModelHash> {
+fn model_hashes(
+    registry: &ModelRegistry,
+    profile: Profile,
+    segmenter_id: &str,
+    embedder_id: &str,
+) -> Vec<ModelHash> {
     let mut out = Vec::new();
     let manifest = registry.manifest();
-    let prof = match manifest.profile(profile.manifest_id()) {
-        Some(p) => p,
-        None => return out,
-    };
+    if manifest.profile(profile.manifest_id()).is_none() {
+        return out;
+    }
     // Report exactly the models the chosen pipeline actually loads: the legacy
     // path segments with Silero VAD, the v2 path with the profile's powerset
-    // segmenter — `segmenter_id` carries the right one. Both embed with the
-    // profile embedder. This keeps the integrity record honest about what
-    // produced the DER number.
-    for model_id in [segmenter_id, prof.embedder.as_str()] {
+    // segmenter — `segmenter_id` carries the right one. The embedder is the
+    // profile default unless `--embedder` overrode it.
+    for model_id in [segmenter_id, embedder_id] {
         if let Some(entry) = manifest.model(model_id) {
             out.push(ModelHash {
                 model_id: model_id.to_string(),
@@ -344,6 +352,9 @@ struct BenchRunner {
 fn build_runner(args: &Args) -> Result<BenchRunner> {
     if args.pipeline == "legacy" {
         cli_common::require_onnx("--pipeline legacy")?;
+        if args.embedder.is_some() {
+            anyhow::bail!("--embedder applies to --pipeline v2 only");
+        }
     }
     let profile: Profile = args.profile.parse()?;
     let registry = ModelRegistry::default().context("registry")?;
@@ -366,6 +377,18 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
 
     let (runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
         "v2" => {
+            if let Some(id) = args.embedder.as_deref() {
+                if !matches!(id, "cam_pp_int8" | "cam_pp_fp32") {
+                    anyhow::bail!(
+                        "unknown --embedder '{id}' (expected cam_pp_int8 or cam_pp_fp32)"
+                    );
+                }
+                if !cfg!(feature = "backend-tract") {
+                    anyhow::bail!(
+                        "--embedder requires `--features cli,backend-tract` (native powerset + tract CAM++)"
+                    );
+                }
+            }
             let (clusterer, as_norm, domain) = cli_common::resolve_clusterer_flags(
                 &args.clusterer,
                 args.threshold,
@@ -396,6 +419,7 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
                 binarization,
                 as_norm,
                 domain,
+                embedder_model: args.embedder.clone(),
                 ..PipelineConfig::default()
             };
             if let Some(mcs) = args.min_cluster_size {
@@ -407,13 +431,25 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
                 .profile(profile.manifest_id())
                 .map(|p| p.segmenter.clone())
                 .unwrap_or_else(|| "powerset_fp32".to_owned());
-            let emb_id = registry
-                .manifest()
-                .profile(profile.manifest_id())
-                .map(|p| p.embedder.clone())
+            let emb_id = args
+                .embedder
+                .clone()
+                .or_else(|| {
+                    registry
+                        .manifest()
+                        .profile(profile.manifest_id())
+                        .map(|p| p.embedder.clone())
+                })
                 .unwrap_or_default();
+            let emb_path = if args.embedder.is_some() {
+                registry
+                    .ensure(&emb_id)
+                    .with_context(|| format!("ensure embedder {emb_id}"))?
+            } else {
+                models.embedder_path.clone()
+            };
             check_model_sha256(&registry, &seg_id, &models.segmenter_path)?;
-            check_model_sha256(&registry, &emb_id, &models.embedder_path)?;
+            check_model_sha256(&registry, &emb_id, &emb_path)?;
             let pipeline = cli_common::build_v2_pipeline(cfg, registry.clone())?;
             (Runner::V2(Box::new(pipeline)), seg_id)
         }
@@ -920,7 +956,20 @@ fn build_report(
             plus_minus_1: acc.speaker_pm1,
             off_by_2_or_more: acc.speaker_off,
         },
-        model_hashes: model_hashes(registry, profile, segmenter_id),
+        model_hashes: {
+            let emb_id = args.embedder.clone().or_else(|| {
+                registry
+                    .manifest()
+                    .profile(profile.manifest_id())
+                    .map(|p| p.embedder.clone())
+            });
+            model_hashes(
+                registry,
+                profile,
+                segmenter_id,
+                emb_id.as_deref().unwrap_or(""),
+            )
+        },
         per_file: acc.per_file,
     }
 }

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-20
+
 ### Breaking
 
 - Crate version **0.21.0**: the core ort removal drops public Rust API that
@@ -20,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Manifest `cam_pp_fp32` / `cam_pp_int8` license **Apache-2.0 → CC-BY-4.0**.
+  WeSpeaker toolkit code is Apache-2.0; VoxCeleb-trained weights follow the
+  dataset license (`docs/pretrained.md`). The zh-cn CAM++ export stays Apache-2.0.
+- `polyvoice-measure embedder-short` compares ResNet34Native vs CAM++ (needs
+  `--features cli,backend-tract`). Schema `polyvoice-embedder-short-v2`.
+- Native kernels still win when `backend-tract` is also compiled, so a
+  measurement build can keep the product powerset and swap only the embedder.
 - VBx AHC seed threshold **0.5 → 0.6**, retuned on VoxConverse-dev for native
   INT8 embeddings (one global default). Same-host Linux kernels, collar 0:
   VoxConverse-test **14.86 % → 13.34 %**, AMI-test **24.73 % → 24.19 %**
@@ -32,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- CAM++ vs ResNet34 short-seg EER + DER: [`docs/cam-pp-measured.md`](docs/cam-pp-measured.md).
+  Do not switch the default embedder (512-d vs 256-d PLDA; INT8 pair size floor).
+- Current-state docs (`src/lib.rs`, API, library-mode, CONTRIBUTING) no longer
+  present `pipeline-full` / `onnx` as live product paths. Historical mentions
+  stay in the changelog and `docs/MIGRATING-FROM-0.5.md`.
 - Align `PRODUCTION-READINESS.md`, zero-deps step 4, and COMPETITORS with
   the Linux kernel full-split (Vox 13.34 % / AMI 24.19 %, ~162× / ~193×).
   Status stays NOT GO for unattended production.
@@ -48,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `polyvoice-bench --embedder cam_pp_int8|cam_pp_fp32`: native powerset + tract
+  CAM++. Measurement only; shipping profiles stay `resnet34_int8`.
+- VBx rejects embeddings whose dimension does not match the fitted PLDA
+  (shipping PLDA is 256-d ResNet34) instead of panicking in ndarray.
 - Opt-in `POLYVOICE_VBX_FROM_ENV=1` lets the pipeline overlay
   `POLYVOICE_VBX_{FA,FB,…}` for offline grids. Production construction stays
   env-free. Helper: `scripts/calibrate-vbx.sh`.

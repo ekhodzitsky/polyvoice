@@ -32,7 +32,7 @@ cargo run --features cli --bin polyvoice -- download-models --profile balanced
 |------|----------|
 | BYO embedder / library mode | `--no-default-features` (+ optional `clusterer`, `vbx`) — see [docs/library-mode.md](docs/library-mode.md) |
 | Production library (kernels) | `pipeline-native` + `vbx` (same as `cli`) |
-| ONNX Runtime library | `pipeline-full` + `vbx` |
+| Tract ONNX-file library | `pipeline-tract` + `vbx` |
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (kernels, no ort) |
 | Tract ONNX-file CLI | `cli-tract` |
 | CLI with tract | `cli-tract` |
@@ -58,7 +58,7 @@ pytest tests/ -v
 
 1. Fork and create a feature branch from `master`
 2. Prefer tests first for behavior changes
-3. `cargo fmt` and `cargo clippy --features "pipeline-full,vbx" -- -D warnings`
+3. `cargo fmt` and `cargo clippy --features cli -- -D warnings`
 4. If you touch markdown links: `bash scripts/check-docs-links.sh`
 5. Keep PRs focused — one feature or fix per PR
 6. Update docs if you change public API
@@ -68,7 +68,7 @@ pytest tests/ -v
 
 - Comment only when the *why* is non-obvious
 - Match existing patterns
-- ONNX-dependent code stays behind `onnx` / stage feature gates
+- ONNX-file / tract code stays behind `backend-tract` / `infer` / stage feature gates; product path is kernels (`cli`)
 - Lib code: domain `thiserror` errors; no `unwrap`/`expect` outside tests (crate deny)
 
 ## Testing
@@ -79,7 +79,7 @@ pytest tests/ -v
 | `cargo test -p polyvoice-kernels` | Hand-written ResNet / powerset kernels |
 | `cargo test --no-default-features --features cli-native --test cli_native_smoke` | Kernel-only CLI (no ort/tract) |
 | `cargo test --features "pipeline-native,vbx"` | Product stack lib tests (kernels) |
-| `cargo test --features "pipeline-full,vbx"` | ONNX Runtime stack lib tests |
+| `cargo test --features "pipeline-tract,vbx"` | Tract ONNX-file stack lib tests |
 | `cargo test --features cli --bin polyvoice` | CLI-related (when applicable) |
 | `cargo test --features ffi` | C FFI bindings |
 | Full DER gates | CI / `polyvoice-bench` with datasets — not default unit tests |

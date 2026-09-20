@@ -11,10 +11,13 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use polyvoice::cli_common;
 use polyvoice::der::compute_der;
-#[cfg(not(any()))]
 use polyvoice::embedder::Embedder;
-#[cfg(any())]
-use polyvoice::embedder::{ERes2NetV2Extractor, Embedder, ResNet34Adapter};
+#[cfg(all(
+    feature = "embedder-native",
+    feature = "backend-tract",
+    feature = "embedder"
+))]
+use polyvoice::embedder::{CamPlusPlusExtractor, ResNet34Native};
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::streaming::{LatencyPreset, StreamingPipeline};
@@ -59,18 +62,22 @@ enum Cmd {
         #[arg(long)]
         output: Option<PathBuf>,
     },
-    /// Short-segment speaker verification EER + optional DER with ERes2NetV2 vs default embedder.
+    /// Short-segment speaker verification EER: ResNet34Native vs CAM++.
     EmbedderShort {
-        /// VoxCeleb1-style verification list (label enroll test).
+        /// VoxCeleb1-style verification list (label enroll test). Omit to
+        /// build pairs from RTTM under `--wav-root` / `--der-dataset`.
         #[arg(long)]
-        veri_list: PathBuf,
-        /// Root containing `wav/` (or flat id paths from the list).
+        veri_list: Option<PathBuf>,
+        /// Root containing `wav/` (or a diarization `{audio,rttm}` dataset).
         #[arg(long)]
         wav_root: PathBuf,
         #[arg(long, default_value = "0.5,1.0,2.0,3.0")]
         durations: String,
         #[arg(long, default_value = "500")]
         max_pairs: usize,
+        /// Diarization `{audio,rttm}` dataset used as the RTTM pair source
+        /// when VoxCeleb audio is absent. Full-file DER is
+        /// `polyvoice-bench --embedder`, not this subcommand.
         #[arg(long)]
         der_dataset: Option<PathBuf>,
         #[arg(long, default_value = "30")]
@@ -163,24 +170,47 @@ struct EmbedderReport {
     schema: String,
     hardware: Hardware,
     max_pairs: usize,
-    default_embedder: EmbedderArm,
-    eres2netv2: EmbedderArm,
+    resnet34: EmbedderArm,
+    cam_pp: EmbedderArm,
+}
+
+fn cpu_brand() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("sysctl")
+            .args(["-n", "machdep.cpu.brand_string"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "unknown".into())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_to_string("/proc/cpuinfo")
+            .ok()
+            .and_then(|text| {
+                text.lines().find_map(|line| {
+                    line.strip_prefix("model name")
+                        .map(|v| v.trim().trim_start_matches(':').trim().to_owned())
+                        .filter(|s| !s.is_empty())
+                })
+            })
+            .unwrap_or_else(|| "unknown".into())
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        "unknown".into()
+    }
 }
 
 fn hardware() -> Hardware {
-    let cpu = std::process::Command::new("sysctl")
-        .args(["-n", "machdep.cpu.brand_string"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_owned())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "unknown".into());
     let cores = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
     Hardware {
-        cpu,
+        cpu: cpu_brand(),
         arch: std::env::consts::ARCH.into(),
         cores,
     }
@@ -640,14 +670,14 @@ fn parse_durations(s: &str) -> Result<Vec<f32>> {
 /// audio is present, otherwise RTTM-derived pairs from `der_dataset` (or
 /// `wav_root` when it itself is a dataset directory).
 fn load_verification_pairs(
-    veri_list: &Path,
+    veri_list: Option<&Path>,
     wav_root: &Path,
     max_pairs: usize,
     der_dataset: Option<&Path>,
     der_max_files: usize,
 ) -> Result<Vec<MemPair>> {
     let mut mem_pairs: Vec<MemPair> = Vec::new();
-    if veri_list.is_file() {
+    if let Some(veri_list) = veri_list.filter(|p| p.is_file()) {
         let list_text = std::fs::read_to_string(veri_list)?;
         for line in list_text.lines() {
             let mut parts = line.split_whitespace();
@@ -693,32 +723,70 @@ fn load_verification_pairs(
     Ok(mem_pairs)
 }
 
-/// Both embedders under comparison plus their model paths (the DER comparison
-/// re-derives fbank extractors from the paths).
-#[cfg(any())]
+/// Product ResNet34 kernels plus the CAM++ ONNX (INT8 preferred, FP32 fallback).
+#[cfg(all(
+    feature = "embedder-native",
+    feature = "backend-tract",
+    feature = "embedder"
+))]
 struct EmbedderModels {
-    default_path: PathBuf,
-    eres_path: PathBuf,
-    default_emb: ResNet34Adapter,
-    eres_emb: ERes2NetV2Extractor,
+    resnet: ResNet34Native,
+    cam: CamPlusPlusExtractor,
+    resnet_id: String,
+    cam_id: String,
 }
 
-#[cfg(any())]
-fn load_embedder_models(registry: &ModelRegistry) -> Result<EmbedderModels> {
-    let default_path = registry.ensure("wespeaker_resnet34")?;
-    let eres_path = registry
-        .ensure("eres2netv2")
-        .context("download eres2netv2 (optional model; needs network once)")?;
+#[cfg(all(
+    feature = "embedder-native",
+    feature = "backend-tract",
+    feature = "embedder"
+))]
+fn load_cam_pp(registry: &ModelRegistry) -> Result<(String, CamPlusPlusExtractor)> {
+    let mut last_err: Option<anyhow::Error> = None;
+    for id in ["cam_pp_int8", "cam_pp_fp32"] {
+        match try_cam_pp(registry, id) {
+            Ok(emb) => return Ok((id.to_string(), emb)),
+            Err(e) => {
+                eprintln!("CAM++ {id} unavailable: {e:#}");
+                last_err = Some(e);
+            }
+        }
+    }
+    match last_err {
+        Some(e) => Err(e),
+        None => anyhow::bail!("CAM++ INT8 and FP32 both failed to load"),
+    }
+}
 
-    let default_emb =
-        ResNet34Adapter::new(&default_path, 2, polyvoice::onnx::ExecutionProvider::Cpu)?;
-    let eres_emb =
-        ERes2NetV2Extractor::new(&eres_path, 2, polyvoice::onnx::ExecutionProvider::Cpu)?;
+#[cfg(all(
+    feature = "embedder-native",
+    feature = "backend-tract",
+    feature = "embedder"
+))]
+fn try_cam_pp(registry: &ModelRegistry, id: &str) -> Result<CamPlusPlusExtractor> {
+    let path = registry.ensure(id)?;
+    let emb = CamPlusPlusExtractor::new(&path, 512, 2, polyvoice::onnx::ExecutionProvider::Cpu)?;
+    // Session build can succeed on unsupported INT8 ops that then fail at run.
+    let smoke = vec![0.0_f32; 8_000];
+    emb.embed(&smoke)
+        .with_context(|| format!("{id} session built but embed failed"))?;
+    Ok(emb)
+}
+
+#[cfg(all(
+    feature = "embedder-native",
+    feature = "backend-tract",
+    feature = "embedder"
+))]
+fn load_embedder_models(registry: &ModelRegistry) -> Result<EmbedderModels> {
+    let resnet_path = registry.ensure("resnet34_int8")?;
+    let resnet = ResNet34Native::from_onnx_path(&resnet_path)?;
+    let (cam_id, cam) = load_cam_pp(registry)?;
     Ok(EmbedderModels {
-        default_path,
-        eres_path,
-        default_emb,
-        eres_emb,
+        resnet,
+        cam,
+        resnet_id: "resnet34_int8".into(),
+        cam_id,
     })
 }
 
@@ -827,48 +895,55 @@ fn run_der_comparison(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_embedder_report(
     max_pairs: usize,
-    default_dim: usize,
-    eres_dim: usize,
-    def_eer: Vec<EerBucket>,
-    eres_eer: Vec<EerBucket>,
+    resnet_id: &str,
+    resnet_dim: usize,
+    cam_id: &str,
+    cam_dim: usize,
+    resnet_eer: Vec<EerBucket>,
+    cam_eer: Vec<EerBucket>,
     der: Option<DerComparison>,
 ) -> EmbedderReport {
-    let (def_der, eres_der, der_files) = match &der {
+    let (resnet_der, cam_der, der_files) = match &der {
         Some(d) => (Some(d.default_der), Some(d.eres_der), Some(d.files)),
         None => (None, None, None),
     };
-    let (def_der0, def_der25) = def_der.unzip();
-    let (eres_der0, eres_der25) = eres_der.unzip();
+    let (resnet_der0, resnet_der25) = resnet_der.unzip();
+    let (cam_der0, cam_der25) = cam_der.unzip();
     EmbedderReport {
-        schema: "polyvoice-embedder-short-v1".into(),
+        schema: "polyvoice-embedder-short-v2".into(),
         hardware: hardware(),
         max_pairs,
-        default_embedder: EmbedderArm {
-            name: "wespeaker-resnet34".into(),
-            model_id: "wespeaker_resnet34".into(),
-            dim: default_dim,
-            short_seg_eer: def_eer,
-            der_macro_collar_0: def_der0,
-            der_macro_collar_025: def_der25,
+        resnet34: EmbedderArm {
+            name: "wespeaker-resnet34-native".into(),
+            model_id: resnet_id.into(),
+            dim: resnet_dim,
+            short_seg_eer: resnet_eer,
+            der_macro_collar_0: resnet_der0,
+            der_macro_collar_025: resnet_der25,
             der_files,
         },
-        eres2netv2: EmbedderArm {
-            name: "eres2netv2".into(),
-            model_id: "eres2netv2".into(),
-            dim: eres_dim,
-            short_seg_eer: eres_eer,
-            der_macro_collar_0: eres_der0,
-            der_macro_collar_025: eres_der25,
+        cam_pp: EmbedderArm {
+            name: "cam++".into(),
+            model_id: cam_id.into(),
+            dim: cam_dim,
+            short_seg_eer: cam_eer,
+            der_macro_collar_0: cam_der0,
+            der_macro_collar_025: cam_der25,
             der_files,
         },
     }
 }
 
-#[cfg(not(any()))]
+#[cfg(not(all(
+    feature = "embedder-native",
+    feature = "backend-tract",
+    feature = "embedder"
+)))]
 fn run_embedder_short(
-    _veri_list: PathBuf,
+    _veri_list: Option<PathBuf>,
     _wav_root: PathBuf,
     _durations: String,
     _max_pairs: usize,
@@ -876,12 +951,19 @@ fn run_embedder_short(
     _der_max_files: usize,
     _output: Option<PathBuf>,
 ) -> Result<()> {
-    cli_common::require_onnx("polyvoice-measure embedder-short")
+    anyhow::bail!(
+        "polyvoice-measure embedder-short requires `--features cli,backend-tract` \
+         (native ResNet34 + tract CAM++)"
+    )
 }
 
-#[cfg(any())]
+#[cfg(all(
+    feature = "embedder-native",
+    feature = "backend-tract",
+    feature = "embedder"
+))]
 fn run_embedder_short(
-    veri_list: PathBuf,
+    veri_list: Option<PathBuf>,
     wav_root: PathBuf,
     durations: String,
     max_pairs: usize,
@@ -892,7 +974,7 @@ fn run_embedder_short(
     let registry = ModelRegistry::default()?;
     let durs = parse_durations(&durations)?;
     let mem_pairs = load_verification_pairs(
-        &veri_list,
+        veri_list.as_deref(),
         &wav_root,
         max_pairs,
         der_dataset.as_deref(),
@@ -900,33 +982,20 @@ fn run_embedder_short(
     )?;
     let models = load_embedder_models(&registry)?;
 
-    eprintln!("default ResNet34 short-seg EER…");
-    let def_eer = score_arm(&models.default_emb, &mem_pairs, &durs)?;
-    eprintln!("ERes2NetV2 short-seg EER…");
-    let eres_eer = score_arm(&models.eres_emb, &mem_pairs, &durs)?;
-
-    // Optional DER on diarization dataset with each embedder via legacy pipeline.
-    let der = match der_dataset {
-        Some(ds) => {
-            cli_common::require_onnx("embedder-short --der-dataset")?;
-            Some(run_der_comparison(
-                &registry,
-                &ds,
-                der_max_files,
-                &models.default_path,
-                &models.eres_path,
-            )?)
-        }
-        None => None,
-    };
+    eprintln!("ResNet34Native ({}) short-seg EER…", models.resnet_id);
+    let resnet_eer = score_arm(&models.resnet, &mem_pairs, &durs)?;
+    eprintln!("CAM++ ({}) short-seg EER…", models.cam_id);
+    let cam_eer = score_arm(&models.cam, &mem_pairs, &durs)?;
 
     let report = build_embedder_report(
         max_pairs,
-        models.default_emb.dim(),
-        models.eres_emb.dim(),
-        def_eer,
-        eres_eer,
-        der,
+        &models.resnet_id,
+        models.resnet.dim(),
+        &models.cam_id,
+        models.cam.dim(),
+        resnet_eer,
+        cam_eer,
+        None,
     );
     let json = serde_json::to_string_pretty(&report)?;
     if let Some(path) = output {

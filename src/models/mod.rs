@@ -638,6 +638,22 @@ mod tests {
     }
 
     #[test]
+    fn cam_pp_voxceleb_weights_are_cc_by_4() {
+        let m = default_manifest();
+        for id in ["cam_pp_fp32", "cam_pp_int8"] {
+            let entry = m.model(id).unwrap_or_else(|| panic!("{id} in manifest"));
+            assert_eq!(
+                entry.license.as_deref(),
+                Some("CC-BY-4.0"),
+                "{id} VoxCeleb-trained WeSpeaker weights follow the dataset license"
+            );
+        }
+        // 3D-Speaker zh-cn export is a different weight dump.
+        let zh = m.model("cam_pp_zh").expect("cam_pp_zh in manifest");
+        assert_eq!(zh.license.as_deref(), Some("Apache-2.0"));
+    }
+
+    #[test]
     fn optional_sortformer_entry_present_but_not_in_profiles() {
         let m = default_manifest();
         let entry = m.model("sortformer_v2").expect("sortformer_v2 in manifest");

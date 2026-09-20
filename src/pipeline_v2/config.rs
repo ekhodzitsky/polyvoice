@@ -53,6 +53,11 @@ pub struct PipelineConfig {
     /// time; `None` keeps the configured threshold. Profiles are data (see
     /// [`crate::clusterer::domain`]) — never code branching.
     pub domain: Option<crate::clusterer::DomainProfile>,
+    /// Measurement-only embedder override on the native powerset path.
+    /// `None` keeps the profile embedder (`resnet34_int8` kernels).
+    /// `Some("cam_pp_int8")` / `Some("cam_pp_fp32")` keeps native powerset and
+    /// loads CAM++ via tract. Not a shipping profile; product CLI never sets it.
+    pub embedder_model: Option<String>,
 }
 
 impl Default for PipelineConfig {
@@ -81,6 +86,7 @@ impl Default for PipelineConfig {
             binarization: None,
             as_norm: None,
             domain: None,
+            embedder_model: None,
         }
     }
 }
@@ -173,6 +179,7 @@ mod tests {
         assert!(cfg.embedder_pool_size <= 4);
         assert!(cfg.as_norm.is_none());
         assert!(cfg.domain.is_none());
+        assert!(cfg.embedder_model.is_none());
     }
 
     #[test]

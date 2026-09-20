@@ -129,7 +129,7 @@ pub struct DatasetBaseline {
     pub profile: String,
     pub pipeline: Option<String>,
     pub clusterer: Option<String>,
-    /// `cli-native` / `pipeline-full` when recorded.
+    /// `cli` / historical `pipeline-full` when recorded.
     pub engine: Option<String>,
     /// Recorded EP when the baseline was measured (`cpu`, `CoreMl`, …).
     pub execution_provider: Option<String>,

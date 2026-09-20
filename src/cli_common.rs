@@ -193,9 +193,9 @@ pub fn require_onnx(what: &str) -> Result<()> {
     #[cfg(not(any()))]
     {
         anyhow::bail!(
-            "{what} requires the `onnx` feature (Silero / shipping INT8). \
-             This build has no ONNX Runtime (`cli-tract` / `cli-native`). \
-             Drop --legacy / --pipeline legacy, or rebuild with `--features pipeline-full`"
+            "{what} is not available in this build (no ONNX Runtime in the core crate). \
+             Product CLI is `--features cli` (kernels). Tract is `--features cli-tract`. \
+             Drop --legacy / --pipeline legacy."
         )
     }
 }

@@ -33,7 +33,7 @@ use hysteresis::{RegionEvent, RegionTracker, TailPolicy};
 /// Native frame size `F` per implementation shipped in this crate:
 ///
 /// - [`EnergyVad`] — the `frame_size` passed to [`EnergyVad::new`].
-/// - `SileroVad` (feature `onnx`) — the `chunk_size` passed to
+/// - `SileroVad` (feature `infer`) — the `chunk_size` passed to
 ///   `SileroVad::new`.
 /// - `EarshotVad` (feature `vad-earshot`) — 256 samples
 ///   (`earshot_vad::FRAME_SIZE`).

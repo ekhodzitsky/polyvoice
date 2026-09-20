@@ -14,7 +14,7 @@ footprint (INT8 production pair ~8.4 MB, wasm-clean clustering). So ASR lives
 here, **never** as a core default feature. The `polyvoice-transcribe` CLI
 diarizes with the same INT8 kernels as the product `polyvoice` CLI (`pipeline-native`,
 no `libonnxruntime`). Parakeet still needs ONNX Runtime: this crate pins
-`ort = 2.0.0-rc.12` (same version as core's optional `onnx` feature), enforced
+`ort = 2.0.0-rc.12` (core crate has no `ort`; only this crate pins it), enforced
 by `scripts/check-ort-version.sh` in CI (two `ort` versions = two runtimes =
 crashes).
 

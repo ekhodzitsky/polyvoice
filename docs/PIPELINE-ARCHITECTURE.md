@@ -18,7 +18,7 @@ For the **development process** checklist (spec → types → verify), see
   production v2     │  pipeline_v2::Pipeline (+ Builder)  │── Segmenter/Embedder/
   CLI/FFI/MCP       │  seg → embed → cluster → reseg      │   Clusterer/Resegmenter
   default since 0.11│  engine: kernels (CLI/FFI/MCP/     │
-                    │  Python); ort (`pipeline-full`); tract │
+                    │  Python); tract (`cli-tract`)           │
                     │  clusterer: VBx on front doors      │
                     │  re-exported at crate root as       │
                     │  `Pipeline` (v2 feature gate)       │
@@ -34,7 +34,7 @@ For the **development process** checklist (spec → types → verify), see
 | `polyvoice-bench` | **v2 + VBx** default (kernels when built with `cli`); `--jobs N` runs files in parallel on one shared pipeline and adds `rt_factor_wall` to the report; `--pipeline legacy` for comparison |
 | Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |
 | Library kernels | `features = ["pipeline-native", "vbx"]` → crate-root `Pipeline` |
-| Library ONNX | `features = ["pipeline-full", "vbx"]` → crate-root `Pipeline` |
+| Library tract | `features = ["pipeline-tract", "vbx"]` → crate-root `Pipeline` |
 
 **Library vs front doors:** `PipelineConfig::default()` is **VBx** when the
 `vbx` feature is on (same as CLI / Python / FFI / MCP). Without `vbx` it
@@ -61,7 +61,7 @@ samples → segment_speech(VAD) → WindowIter → Embedder::embed
        → ahc::agglomerative_cluster → merge_segments → DiarizationResult
 ```
 
-### Production v2 (`src/pipeline_v2`) — kernels, ort, or tract
+### Production v2 (`src/pipeline_v2`) — kernels or tract
 
 ```
 samples → Segmenter::segment
@@ -75,7 +75,7 @@ samples → Segmenter::segment
 ## Name collision note
 
 Crate root re-exports the **production v2** types under the v2 feature gate
-(`pipeline-native`, `pipeline-full`, or `pipeline-tract`):
+(`pipeline-native` or `pipeline-tract`):
 
 ```rust
 pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};

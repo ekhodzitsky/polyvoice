@@ -170,8 +170,8 @@ fn pairs_from_rttm_dataset_skips_files_without_rttm() {
 #[test]
 fn load_verification_pairs_no_source_errors() {
     let tmp = tempfile::tempdir().unwrap();
-    let err = load_verification_pairs(&tmp.path().join("veri.txt"), tmp.path(), 10, None, 10)
-        .unwrap_err();
+    let veri = tmp.path().join("veri.txt");
+    let err = load_verification_pairs(Some(&veri), tmp.path(), 10, None, 10).unwrap_err();
     assert!(err.to_string().contains("no VoxCeleb pairs"));
 }
 
@@ -189,7 +189,7 @@ fn load_verification_pairs_from_voxceleb_list() {
         "1 a.wav b.wav\n0 a.wav missing.wav\n0 b.wav c.wav\nmalformed\n",
     )
     .unwrap();
-    let pairs = load_verification_pairs(&veri, tmp.path(), 10, None, 10).unwrap();
+    let pairs = load_verification_pairs(Some(&veri), tmp.path(), 10, None, 10).unwrap();
     assert_eq!(pairs.len(), 2);
     assert!(pairs[0].0);
     assert!(!pairs[1].0);
@@ -205,7 +205,7 @@ fn load_verification_pairs_voxceleb_list_respects_max_pairs() {
     }
     let veri = tmp.path().join("veri.txt");
     std::fs::write(&veri, "1 a.wav b.wav\n0 b.wav a.wav\n").unwrap();
-    let pairs = load_verification_pairs(&veri, tmp.path(), 1, None, 10).unwrap();
+    let pairs = load_verification_pairs(Some(&veri), tmp.path(), 1, None, 10).unwrap();
     assert_eq!(pairs.len(), 1);
 }
 
@@ -214,14 +214,8 @@ fn load_verification_pairs_falls_back_to_rttm_dataset() {
     let ds = make_rttm_dataset();
     let tmp = tempfile::tempdir().unwrap();
     // No veri list file at all → RTTM fallback via der_dataset.
-    let pairs = load_verification_pairs(
-        &tmp.path().join("veri.txt"),
-        tmp.path(),
-        100,
-        Some(ds.path()),
-        10,
-    )
-    .unwrap();
+    let veri = tmp.path().join("veri.txt");
+    let pairs = load_verification_pairs(Some(&veri), tmp.path(), 100, Some(ds.path()), 10).unwrap();
     assert_eq!(pairs.len(), 2);
 }
 
@@ -230,8 +224,8 @@ fn load_verification_pairs_falls_back_to_wav_root_dataset() {
     let ds = make_rttm_dataset();
     let tmp = tempfile::tempdir().unwrap();
     // wav_root itself is a dataset directory (has audio/) → used directly.
-    let pairs =
-        load_verification_pairs(&tmp.path().join("veri.txt"), ds.path(), 100, None, 10).unwrap();
+    let veri = tmp.path().join("veri.txt");
+    let pairs = load_verification_pairs(Some(&veri), ds.path(), 100, None, 10).unwrap();
     assert_eq!(pairs.len(), 2);
 }
 
@@ -300,38 +294,65 @@ fn build_embedder_report_with_der() {
         eres_der: (3.0, 4.0),
         files: 5,
     };
-    let report = build_embedder_report(500, 256, 192, def_eer, vec![], Some(der));
-    assert_eq!(report.schema, "polyvoice-embedder-short-v1");
+    let report = build_embedder_report(
+        500,
+        "resnet34_int8",
+        256,
+        "cam_pp_int8",
+        512,
+        def_eer,
+        vec![],
+        Some(der),
+    );
+    assert_eq!(report.schema, "polyvoice-embedder-short-v2");
     assert_eq!(report.max_pairs, 500);
-    assert_eq!(report.default_embedder.dim, 256);
-    assert_eq!(report.eres2netv2.dim, 192);
-    assert_eq!(report.default_embedder.der_macro_collar_0, Some(1.0));
-    assert_eq!(report.default_embedder.der_macro_collar_025, Some(2.0));
-    assert_eq!(report.eres2netv2.der_macro_collar_0, Some(3.0));
-    assert_eq!(report.eres2netv2.der_macro_collar_025, Some(4.0));
-    assert_eq!(report.default_embedder.der_files, Some(5));
-    assert_eq!(report.eres2netv2.der_files, Some(5));
-    assert_eq!(report.default_embedder.short_seg_eer.len(), 1);
-    assert!(report.eres2netv2.short_seg_eer.is_empty());
+    assert_eq!(report.resnet34.dim, 256);
+    assert_eq!(report.cam_pp.dim, 512);
+    assert_eq!(report.resnet34.der_macro_collar_0, Some(1.0));
+    assert_eq!(report.resnet34.der_macro_collar_025, Some(2.0));
+    assert_eq!(report.cam_pp.der_macro_collar_0, Some(3.0));
+    assert_eq!(report.cam_pp.der_macro_collar_025, Some(4.0));
+    assert_eq!(report.resnet34.der_files, Some(5));
+    assert_eq!(report.cam_pp.der_files, Some(5));
+    assert_eq!(report.resnet34.short_seg_eer.len(), 1);
+    assert!(report.cam_pp.short_seg_eer.is_empty());
 }
 
 #[test]
 fn build_embedder_report_without_der() {
-    let report = build_embedder_report(10, 256, 192, vec![], vec![], None);
-    assert_eq!(report.default_embedder.der_macro_collar_0, None);
-    assert_eq!(report.default_embedder.der_macro_collar_025, None);
-    assert_eq!(report.default_embedder.der_files, None);
-    assert_eq!(report.eres2netv2.der_files, None);
+    let report = build_embedder_report(
+        10,
+        "resnet34_int8",
+        256,
+        "cam_pp_int8",
+        512,
+        vec![],
+        vec![],
+        None,
+    );
+    assert_eq!(report.resnet34.der_macro_collar_0, None);
+    assert_eq!(report.resnet34.der_macro_collar_025, None);
+    assert_eq!(report.resnet34.der_files, None);
+    assert_eq!(report.cam_pp.der_files, None);
 }
 
 #[test]
 fn embedder_report_serializes_expected_schema() {
-    let report = build_embedder_report(10, 256, 192, vec![], vec![], None);
+    let report = build_embedder_report(
+        10,
+        "resnet34_int8",
+        256,
+        "cam_pp_int8",
+        512,
+        vec![],
+        vec![],
+        None,
+    );
     let v: serde_json::Value =
         serde_json::from_str(&serde_json::to_string(&report).unwrap()).unwrap();
-    assert_eq!(v["schema"], "polyvoice-embedder-short-v1");
-    assert_eq!(v["default_embedder"]["model_id"], "wespeaker_resnet34");
-    assert_eq!(v["eres2netv2"]["model_id"], "eres2netv2");
+    assert_eq!(v["schema"], "polyvoice-embedder-short-v2");
+    assert_eq!(v["resnet34"]["model_id"], "resnet34_int8");
+    assert_eq!(v["cam_pp"]["model_id"], "cam_pp_int8");
     assert!(v["hardware"]["cores"].as_u64().unwrap() >= 1);
 }
 
@@ -399,9 +420,24 @@ fn vad_parity_report_serializes_expected_schema() {
 }
 
 #[test]
+fn cpu_brand_is_nonempty() {
+    assert!(!cpu_brand().is_empty());
+    #[cfg(target_os = "linux")]
+    {
+        let brand = cpu_brand();
+        assert!(
+            !brand.starts_with(':'),
+            "stripped model-name colon, got {brand:?}"
+        );
+    }
+}
+
+#[test]
 fn hardware_reports_host_arch_and_cores() {
     let hw = hardware();
     assert_eq!(hw.arch, std::env::consts::ARCH);
     assert!(hw.cores >= 1);
     assert!(!hw.cpu.is_empty());
+    #[cfg(target_os = "linux")]
+    assert!(!hw.cpu.starts_with(':'));
 }

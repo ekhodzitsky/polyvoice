@@ -1,0 +1,4 @@
+Error: clustering failed: embedding dimension mismatch: expected 256, got 512 at index 0
+
+Caused by:
+    embedding dimension mismatch: expected 256, got 512 at index 0
