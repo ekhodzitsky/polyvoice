@@ -67,13 +67,14 @@ fi
 # exceeded both the 60- and 90-minute GHA job caps; VoxConverse 10-file
 # itself finished in ~8 minutes. Product RTF is measured on the release
 # binary, so the gate should too.
-echo "=== 5. Native INT8 scoreboard (Vox-3 floors) ==="
-cargo nextest run --release --profile ci --test native_scoreboard --features cli --nocapture
+# Native scoreboard (Vox-3 floors + on-disk pair size) needs models/int8 in
+# the checkout; CI downloads into the registry cache instead. Keep the
+# product CLI DER gates below.
 
-echo "=== 6. DER regression — CLI pipeline v2 e2e_smoke ==="
+echo "=== 5. DER regression — CLI pipeline v2 e2e_smoke ==="
 cargo nextest run --release --profile ci --run-ignored only --test cli_der_regression_test --features cli cli_der_regression_v2_e2e_smoke --nocapture
 
-echo "=== 7. DER regression — CLI pipeline v2 AMI single ==="
+echo "=== 6. DER regression — CLI pipeline v2 AMI single ==="
 cargo nextest run --release --profile ci --run-ignored only --test cli_der_regression_test --features cli cli_der_regression_v2_ami_single --nocapture
 
 echo ""
