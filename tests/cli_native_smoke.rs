@@ -50,5 +50,5 @@ fn legacy_is_rejected() {
         .args(["--legacy", "/nonexistent.wav"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("onnx"));
+        .stderr(predicate::str::contains("ONNX Runtime"));
 }

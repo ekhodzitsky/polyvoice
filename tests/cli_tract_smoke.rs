@@ -43,7 +43,7 @@ fn legacy_is_rejected_without_onnx() {
         .args(["--legacy", "/nonexistent.wav"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("onnx"))
+        .stderr(predicate::str::contains("ONNX Runtime"))
         .stderr(predicate::str::contains("cli-tract"));
 }
 
