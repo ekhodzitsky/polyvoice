@@ -715,16 +715,10 @@ fn build_manifest_without_profile_reports_registry_error() {
         .build()
         .err()
         .expect("build must fail");
-    // ONNX/tract path resolves the profile before consulting any model file.
-    #[cfg(any(any(), feature = "backend-tract"))]
-    assert!(matches!(
-        err,
-        ConfigError::Registry(RegistryError::ProfileNotFound { .. })
-    ));
-    // Kernel-only builds never resolve profiles (the INT8 pair is
-    // profile-independent), so the missing `powerset_int8` entry is the error —
-    // wrapped as a stage-load failure by the native stage builder.
-    #[cfg(not(any(any(), feature = "backend-tract")))]
+    // Native kernels (including `cli` + `backend-tract` measurement builds)
+    // never resolve profiles: the INT8 pair is profile-independent, so the
+    // missing `powerset_int8` entry is the error.
+    #[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
     {
         let ConfigError::Load { source, .. } = &err else {
             panic!("expected stage-load failure, got {err:?}");
@@ -734,6 +728,12 @@ fn build_manifest_without_profile_reports_registry_error() {
             Some(RegistryError::ModelNotFound { .. })
         ));
     }
+    // Tract-only builds resolve the profile before consulting any model file.
+    #[cfg(not(all(feature = "segmenter-native", feature = "embedder-native")))]
+    assert!(matches!(
+        err,
+        ConfigError::Registry(RegistryError::ProfileNotFound { .. })
+    ));
 }
 
 #[cfg(feature = "vbx")]
