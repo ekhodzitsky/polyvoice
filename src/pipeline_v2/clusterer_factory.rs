@@ -136,6 +136,11 @@ pub(crate) fn build_profile_clusterer(
             // mode always forces GMM.
             let windowed = config.embed_window_secs.is_some_and(|w| w > 0.0);
             vbx = vbx.auto_gmm_for_windowed(windowed);
+            if config.reconstruct && !vbx_from_env_enabled() {
+                // Window-local units over-cluster at the shipped 1.6 s
+                // filter; 5 s was the Vox-dev minimum for this path.
+                vbx = vbx.with_min_embedding_secs(5.0);
+            }
             Ok(Box::new(vbx))
         }
         #[cfg(not(feature = "vbx"))]
@@ -152,12 +157,19 @@ pub(crate) fn build_profile_clusterer(
 /// the defaults — stray `POLYVOICE_VBX_FA=…` in the environment must not
 /// move shipped DER.
 #[cfg(feature = "vbx")]
+fn vbx_from_env_enabled() -> bool {
+    matches!(
+        std::env::var("POLYVOICE_VBX_FROM_ENV"),
+        Ok(v) if v == "1" || v.eq_ignore_ascii_case("true")
+    )
+}
+
+#[cfg(feature = "vbx")]
 fn vbx_config_for_pipeline() -> crate::clusterer::vbx::VbxClustererConfig {
-    match std::env::var("POLYVOICE_VBX_FROM_ENV") {
-        Ok(v) if v == "1" || v.eq_ignore_ascii_case("true") => {
-            crate::clusterer::vbx::VbxClustererConfig::from_env()
-        }
-        _ => crate::clusterer::vbx::VbxClustererConfig::default(),
+    if vbx_from_env_enabled() {
+        crate::clusterer::vbx::VbxClustererConfig::from_env()
+    } else {
+        crate::clusterer::vbx::VbxClustererConfig::default()
     }
 }
 

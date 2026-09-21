@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `PipelineConfig.reconstruct` / `polyvoice-bench --reconstruct`: cluster
+  per-(window, local-speaker) masked embeddings and rebuild turns from
+  mapped masks instead of Hungarian-stitching windows. Default remains
+  off; held-out DER did not beat the product path on both Vox and AMI.
+
 ### Documentation
 
 - Parakeet TDT on tract: shipping ONNX graphs can run (LSTM state ports);

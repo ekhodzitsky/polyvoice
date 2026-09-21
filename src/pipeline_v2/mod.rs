@@ -20,6 +20,7 @@ compile_error!(
 pub mod builder;
 mod clusterer_factory;
 pub mod config;
+mod reconstruct;
 
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
@@ -32,7 +33,7 @@ use crate::resegmentation::{
     OverlapRegionInput, ResegmentError, ResegmentInputs, Resegmenter, SpeakerCentroid,
     compute_centroids, extract_overlap_time_ranges,
 };
-use crate::segmentation::{SegmentationError, Segmenter};
+use crate::segmentation::{SegmentationError, Segmenter, WindowOutput};
 use crate::types::{DiarizationResult, SampleRate, Segment, SpeakerId, SpeakerTurn, TimeRange};
 use crate::utils::{l2_normalize, merge_segments};
 
@@ -240,6 +241,15 @@ impl Pipeline {
         let mut timings = StageTimings::default();
 
         let t = std::time::Instant::now();
+        if self.config.reconstruct {
+            match self.segmenter.windows(samples)? {
+                Some(windows) if !windows.is_empty() => {
+                    timings.segmentation_secs = t.elapsed().as_secs_f64();
+                    return self.run_reconstruct(samples, sr, windows, timings);
+                }
+                _ => {}
+            }
+        }
         let raw_segments = self.segmenter.segment(samples)?;
         timings.segmentation_secs = t.elapsed().as_secs_f64();
         if raw_segments.is_empty() {
@@ -305,6 +315,71 @@ impl Pipeline {
 
         let result = DiarizationResult::new(merged_segments, merged_turns, num_speakers)
             .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
+            .with_provenance(crate::types::Provenance {
+                profile: self.config.profile.manifest_id().to_owned(),
+                ..Default::default()
+            });
+        Ok((result, timings))
+    }
+
+    /// Per-(window, speaker) masked embeddings + reconstruct. Overlap is
+    /// recovered from the count-track top-k, so the overlap resegmenter is
+    /// not used on this path.
+    fn run_reconstruct(
+        &self,
+        samples: &[f32],
+        sr: SampleRate,
+        windows: Vec<WindowOutput>,
+        mut timings: StageTimings,
+    ) -> Result<(DiarizationResult, StageTimings), PipelineError> {
+        let masks = reconstruct::window_masks(&windows)?;
+        let t = std::time::Instant::now();
+        let (units, chunks) = reconstruct::collect_units(&masks, samples, sr.get());
+        let embeddings = reconstruct::embed_units(
+            self.embedder.as_ref(),
+            &chunks,
+            self.clusterer.wants_raw_embeddings(),
+        )?;
+        timings.embedding_secs = t.elapsed().as_secs_f64();
+        if embeddings.is_empty() {
+            return Ok((DiarizationResult::new(Vec::new(), Vec::new(), 0), timings));
+        }
+
+        let t = std::time::Instant::now();
+        let durations: Vec<f64> = units.iter().map(|u| u.duration).collect();
+        let mut labels = self
+            .clusterer
+            .cluster_with_durations(&embeddings, &durations)?;
+        reconstruct::repair_window_conflicts(&units, &embeddings, &mut labels);
+        timings.clustering_secs = t.elapsed().as_secs_f64();
+
+        let t = std::time::Instant::now();
+        let audio_secs = samples.len() as f64 / sr.get() as f64;
+        let turns = reconstruct::reconstruct_turns(
+            &masks,
+            &units,
+            &labels,
+            audio_secs,
+            self.config.min_speech_secs as f64,
+            self.config.max_gap_secs as f64,
+        );
+        timings.resegmentation_secs = t.elapsed().as_secs_f64();
+
+        let segments: Vec<Segment> = turns
+            .iter()
+            .map(|t| Segment {
+                speaker: Some(t.speaker),
+                time: t.time,
+                confidence: None,
+            })
+            .collect();
+        let num_speakers = turns
+            .iter()
+            .map(|t| t.speaker.0)
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        let result = DiarizationResult::new(segments, turns, num_speakers)
+            .with_audio(audio_secs, sr.get())
             .with_provenance(crate::types::Provenance {
                 profile: self.config.profile.manifest_id().to_owned(),
                 ..Default::default()

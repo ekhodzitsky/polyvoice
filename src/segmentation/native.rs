@@ -223,8 +223,8 @@ impl PowersetNative {
     }
 }
 
-impl Segmenter for PowersetNative {
-    fn segment(&self, audio: &[f32]) -> Result<Vec<RawSegment>, SegmentationError> {
+impl PowersetNative {
+    fn infer_as_windows(&self, audio: &[f32]) -> Result<Vec<WindowOutput>, SegmentationError> {
         if audio.len() < MIN_AUDIO_SAMPLES {
             return Err(SegmentationError::AudioTooShort {
                 actual_secs: audio.len() as f32 / self.sample_rate as f32,
@@ -256,7 +256,18 @@ impl Segmenter for PowersetNative {
                 frames,
             )?);
         }
+        Ok(windows)
+    }
+}
+
+impl Segmenter for PowersetNative {
+    fn segment(&self, audio: &[f32]) -> Result<Vec<RawSegment>, SegmentationError> {
+        let windows = self.infer_as_windows(audio)?;
         Aggregator::new(self.aggregation.clone()).stitch(&windows)
+    }
+
+    fn windows(&self, audio: &[f32]) -> Result<Option<Vec<WindowOutput>>, SegmentationError> {
+        Ok(Some(self.infer_as_windows(audio)?))
     }
 
     fn max_local_speakers(&self) -> usize {

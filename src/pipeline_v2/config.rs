@@ -58,6 +58,10 @@ pub struct PipelineConfig {
     /// `Some("cam_pp_int8")` / `Some("cam_pp_fp32")` keeps native powerset and
     /// loads CAM++ via tract. Not a shipping profile; product CLI never sets it.
     pub embedder_model: Option<String>,
+    /// Cluster per-(window, local-speaker) masked embeddings and reconstruct
+    /// turns from mapped masks (no Hungarian window stitch). Ships `false`
+    /// until the held-out DER / RTFx gate passes.
+    pub reconstruct: bool,
 }
 
 impl Default for PipelineConfig {
@@ -87,6 +91,7 @@ impl Default for PipelineConfig {
             as_norm: None,
             domain: None,
             embedder_model: None,
+            reconstruct: false,
         }
     }
 }
@@ -180,6 +185,7 @@ mod tests {
         assert!(cfg.as_norm.is_none());
         assert!(cfg.domain.is_none());
         assert!(cfg.embedder_model.is_none());
+        assert!(!cfg.reconstruct);
     }
 
     #[test]
