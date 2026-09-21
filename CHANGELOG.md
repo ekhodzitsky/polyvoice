@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Unreachable Sortformer adapter: `src/sortformer/`, the always-off
+  `sortformer-v2` registry marker, and the `sortformer_v2` manifest entry.
+  The Cargo feature was already gone in 0.21.0.
+
 ### Added
 
 - `PipelineConfig.reconstruct` / `polyvoice-bench --reconstruct`: cluster

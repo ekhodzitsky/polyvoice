@@ -30,7 +30,7 @@ meaning changes are breaking.
 ## Out of freeze
 
 - tract (`cli-tract`), `--legacy` (hidden), BYO ONNX-file adapters on tract
-- Sortformer, Silero, CAM++ / ECAPA / ERes2Net, EP-only knobs
+- Silero, CAM++ / ECAPA / ERes2Net, EP-only knobs
 - `#[doc(hidden)]` items (`cli_common`)
 - Domain profile `callhome` (uncalibrated placeholder)
 - Internal modules (`pipeline_v2` internals, kernels, bench binaries)

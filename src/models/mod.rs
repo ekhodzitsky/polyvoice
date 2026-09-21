@@ -620,8 +620,8 @@ mod tests {
     #[test]
     fn every_profile_model_is_signed() {
         // Profile resolution in release builds requires signatures. Optional
-        // models (e.g. sortformer_v2) are not profile-resolved and may ship
-        // with SHA-256-only integrity until a signed release artifact exists.
+        // models that are not profile-resolved may ship with SHA-256-only
+        // integrity until a signed release artifact exists.
         let m = default_manifest();
         for (profile_id, prof) in &m.profiles {
             for model_id in [&prof.segmenter, &prof.embedder] {
@@ -651,26 +651,6 @@ mod tests {
         // 3D-Speaker zh-cn export is a different weight dump.
         let zh = m.model("cam_pp_zh").expect("cam_pp_zh in manifest");
         assert_eq!(zh.license.as_deref(), Some("Apache-2.0"));
-    }
-
-    #[test]
-    fn optional_sortformer_entry_present_but_not_in_profiles() {
-        let m = default_manifest();
-        let entry = m.model("sortformer_v2").expect("sortformer_v2 in manifest");
-        assert_eq!(entry.adapter_type.as_deref(), Some("sortformer-v2"));
-        assert_eq!(entry.license.as_deref(), Some("CC-BY-4.0"));
-        assert_eq!(entry.num_speakers, Some(4));
-        // Must never be a default profile target (opt-in download only).
-        for (pid, prof) in &m.profiles {
-            assert_ne!(
-                prof.segmenter, "sortformer_v2",
-                "profile {pid} must not pull sortformer as segmenter"
-            );
-            assert_ne!(
-                prof.embedder, "sortformer_v2",
-                "profile {pid} must not pull sortformer as embedder"
-            );
-        }
     }
 
     #[test]
