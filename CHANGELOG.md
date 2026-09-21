@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- Parakeet TDT on tract: shipping ONNX graphs can run (LSTM state ports);
+  INT8 encoder does not; no RTFx/RSS win. Do not drop `ort` from
+  `polyvoice-asr`. [`docs/parakeet-tract-measured.md`](docs/parakeet-tract-measured.md).
+
 ## [0.21.0] - 2026-09-20
 
 ### Breaking
