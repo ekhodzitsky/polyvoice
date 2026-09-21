@@ -71,6 +71,10 @@ struct Args {
     /// (fixed-threshold AHC). Ignored with `--pipeline legacy`.
     #[arg(long, default_value = "vbx")]
     clusterer: String,
+    /// v2: cluster per-(window, speaker) masked embeddings and reconstruct
+    /// turns instead of Hungarian-stitching windows into file-global tracks.
+    #[arg(long, default_value_t = false)]
+    reconstruct: bool,
     /// Min cluster duration in seconds (length-invariant pruning). When > 0 it
     /// takes precedence over --min-cluster-size on the legacy pipeline.
     #[arg(long)]
@@ -420,6 +424,7 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
                 as_norm,
                 domain,
                 embedder_model: args.embedder.clone(),
+                reconstruct: args.reconstruct,
                 ..PipelineConfig::default()
             };
             if let Some(mcs) = args.min_cluster_size {

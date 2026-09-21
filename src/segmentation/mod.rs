@@ -11,7 +11,7 @@ mod powerset;
 
 pub use aggregator::{AggregationConfig, Aggregator, WindowOutput};
 pub use binarize::{BinarizationConfig, binarize_frames};
-pub use decoder::{FrameLabel, PowersetClass, PowersetDecoder};
+pub use decoder::{FrameLabel, MAX_LOCAL_SPEAKERS, PowersetClass, PowersetDecoder};
 
 #[cfg(all(feature = "infer", feature = "segmentation"))]
 pub use powerset::{PowersetConfig, PowersetSegmenter};
@@ -52,6 +52,14 @@ pub trait Segmenter: Send + Sync {
     /// `local_speaker_idx < self.max_local_speakers()`; timestamps lie within
     /// `[0, audio.len() / 16000]`.
     fn segment(&self, audio: &[f32]) -> Result<Vec<RawSegment>, SegmentationError>;
+
+    /// Sliding-window powerset outputs *before* file-global speaker stitching.
+    /// `None` means this implementation has no window stream (the pipeline
+    /// keeps the stitched-segment path). Native powerset returns `Some`.
+    fn windows(&self, audio: &[f32]) -> Result<Option<Vec<WindowOutput>>, SegmentationError> {
+        let _ = audio;
+        Ok(None)
+    }
 
     /// Max number of distinct local speakers this implementation can output.
     /// `powerset-3.0` ⇒ 3.
