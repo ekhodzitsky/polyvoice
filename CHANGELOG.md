@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-(window, local-speaker) masked embeddings and rebuild turns from
   mapped masks instead of Hungarian-stitching windows. Default remains
   off; held-out DER did not beat the product path on both Vox and AMI.
+- `POLYVOICE_VBX_FROM_ENV=1` also overlays `AHC_RAW_L2`, `SOFT_REASSIGN`,
+  `CLEAN_MASK`, and `FILTER_CLEAN` for scoring-chain ablations
+  (`scripts/measure-scoring-chain.sh`). None of those change the shipped
+  VBx default. Measured DER:
+  [`benchmarks/results/scoring-chain-2026-09-18/`](benchmarks/results/scoring-chain-2026-09-18/).
 
 ### Documentation
 

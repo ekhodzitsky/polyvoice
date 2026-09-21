@@ -152,15 +152,43 @@ pub(crate) fn build_profile_clusterer(
 
 /// Production VBx knobs are the compiled defaults. Set
 /// `POLYVOICE_VBX_FROM_ENV=1` (or `true`) to overlay
-/// `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,AHC_ASC_MEMBERS}`
+/// `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,AHC_ASC_MEMBERS,AHC_RAW_L2,SOFT_REASSIGN,CLEAN_MASK,FILTER_CLEAN}`
 /// for offline calibration. Any other value, or an unset variable, keeps
 /// the defaults — stray `POLYVOICE_VBX_FA=…` in the environment must not
 /// move shipped DER.
 #[cfg(feature = "vbx")]
-fn vbx_from_env_enabled() -> bool {
+pub(crate) fn vbx_from_env_enabled() -> bool {
     matches!(
         std::env::var("POLYVOICE_VBX_FROM_ENV"),
         Ok(v) if v == "1" || v.eq_ignore_ascii_case("true")
+    )
+}
+
+#[cfg(not(feature = "vbx"))]
+pub(crate) fn vbx_from_env_enabled() -> bool {
+    false
+}
+
+fn env_flag(name: &str) -> bool {
+    matches!(
+        std::env::var(name),
+        Ok(s) if s == "1" || s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("yes")
+    )
+}
+
+/// Overlay for the embedding-mask / duration-filter steps. Production is
+/// `(None, false)`: always overlap-mask, filter VBx by raw segment length.
+pub(crate) fn scoring_chain_mask_env() -> (Option<f64>, bool) {
+    if !vbx_from_env_enabled() {
+        return (None, false);
+    }
+    let fallback = std::env::var("POLYVOICE_VBX_CLEAN_FALLBACK_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2.0);
+    (
+        env_flag("POLYVOICE_VBX_CLEAN_MASK").then_some(fallback),
+        env_flag("POLYVOICE_VBX_FILTER_CLEAN"),
     )
 }
 
@@ -208,6 +236,13 @@ mod tests {
 mod vbx_env_tests {
     use super::vbx_config_for_pipeline;
     use crate::clusterer::vbx::VbxClustererConfig;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     fn clear_vbx_env() {
         unsafe {
@@ -220,6 +255,11 @@ mod vbx_env_tests {
                 "POLYVOICE_VBX_EMB_SCALE",
                 "POLYVOICE_VBX_MIN_EMB_SECS",
                 "POLYVOICE_VBX_AHC_ASC_MEMBERS",
+                "POLYVOICE_VBX_AHC_RAW_L2",
+                "POLYVOICE_VBX_SOFT_REASSIGN",
+                "POLYVOICE_VBX_CLEAN_MASK",
+                "POLYVOICE_VBX_FILTER_CLEAN",
+                "POLYVOICE_VBX_CLEAN_FALLBACK_SECS",
             ] {
                 std::env::remove_var(k);
             }
@@ -228,7 +268,7 @@ mod vbx_env_tests {
 
     #[test]
     fn from_env_gate_is_required_to_overlay_knobs() {
-        // Sequential: cargo test shares a process across this module's tests.
+        let _lock = env_lock();
         clear_vbx_env();
         unsafe {
             std::env::set_var("POLYVOICE_VBX_FA", "0.99");
@@ -252,6 +292,26 @@ mod vbx_env_tests {
         }
         let c = vbx_config_for_pipeline();
         assert!((c.emb_scale - 3.5).abs() < 1e-6);
+        clear_vbx_env();
+    }
+
+    #[test]
+    fn scoring_chain_mask_env_requires_from_env_gate() {
+        let _lock = env_lock();
+        clear_vbx_env();
+        unsafe {
+            std::env::set_var("POLYVOICE_VBX_CLEAN_MASK", "1");
+            std::env::set_var("POLYVOICE_VBX_FILTER_CLEAN", "1");
+        }
+        let (mask, filter) = super::scoring_chain_mask_env();
+        assert!(mask.is_none(), "mask overlay must require FROM_ENV");
+        assert!(!filter, "filter overlay must require FROM_ENV");
+        unsafe {
+            std::env::set_var("POLYVOICE_VBX_FROM_ENV", "1");
+        }
+        let (mask, filter) = super::scoring_chain_mask_env();
+        assert_eq!(mask, Some(2.0));
+        assert!(filter);
         clear_vbx_env();
     }
 }

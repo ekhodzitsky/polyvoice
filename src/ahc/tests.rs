@@ -527,3 +527,44 @@ fn scored_ahc_with_cosine_scorer_matches_classic() {
     let scored = agglomerative_cluster_scored(&embeddings, 0.5, 0, &CosineScorer);
     assert_eq!(classic, scored);
 }
+
+#[test]
+fn centroid_euclidean_splits_opposite_unit_vectors() {
+    // Opposite unit vectors: Euclidean distance √2 ≈ 1.41. A distance
+    // threshold of 0.5 must not merge them.
+    let embeddings = vec![vec![1.0, 0.0], vec![-1.0, 0.0]];
+    let labels = agglomerative_cluster_centroid_euclidean(&embeddings, 0.5, 0);
+    assert_eq!(labels.len(), 2);
+    assert_ne!(labels[0], labels[1]);
+}
+
+#[test]
+fn centroid_euclidean_merges_close_unit_vectors() {
+    let embeddings = vec![vec![1.0, 0.0], vec![0.999, 0.001]];
+    let labels = agglomerative_cluster_centroid_euclidean(&embeddings, 0.5, 0);
+    assert_eq!(labels, vec![0, 0]);
+}
+
+#[test]
+fn centroid_euclidean_empty_and_mixed_dim() {
+    assert!(agglomerative_cluster_centroid_euclidean(&[], 0.6, 0).is_empty());
+    let mixed = vec![vec![1.0, 0.0], vec![0.9]];
+    assert_eq!(
+        agglomerative_cluster_centroid_euclidean(&mixed, 0.6, 0),
+        vec![0, 0]
+    );
+}
+
+#[test]
+fn centroid_euclidean_threshold_is_distance_not_cosine() {
+    // Unit pair with cosine 0.7 → Euclidean √(2·0.3) ≈ 0.775.
+    // Cosine AHC at 0.6 merges; UPGMC at distance 0.6 does not.
+    let embeddings = vec![vec![1.0, 0.0], vec![0.7, 0.7141428]];
+    let cosine = agglomerative_cluster(&embeddings, 0.6);
+    let euc = agglomerative_cluster_centroid_euclidean(&embeddings, 0.6, 0);
+    assert_eq!(cosine, vec![0, 0], "cosine 0.7 clears a 0.6 similarity cut");
+    assert_ne!(
+        euc[0], euc[1],
+        "distance 0.775 must not clear a 0.6 Euclidean cut: {euc:?}"
+    );
+}

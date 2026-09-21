@@ -15,6 +15,9 @@
 //! x-vector sequences (VBx) in speaker diarization" (Computer Speech & Language,
 //! 2022). Attribution retained per Apache-2.0.
 
+use crate::clusterer::plda::PldaModel;
+use crate::clusterer::{Clusterer, ClustererError};
+use crate::utils::{cosine_similarity, l2_normalize};
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 
 /// Tunable VBx hyperparameters.
@@ -341,8 +344,83 @@ pub fn hard_labels(gamma: &Array2<f32>) -> Vec<usize> {
     raw.into_iter().map(|r| remap[&r]).collect()
 }
 
-use crate::clusterer::plda::PldaModel;
-use crate::clusterer::{Clusterer, ClustererError};
+/// Speakers with `pi > 1e-7` keep a soft centroid; every embedding (kept and
+/// short) is assigned to the nearest centroid by cosine. Empty prior falls
+/// back to [`hard_labels`].
+fn reassign_all_from_prior(
+    gamma: &Array2<f32>,
+    pi: &Array1<f32>,
+    kept_embs: &[Vec<f32>],
+    all_embs: &[Vec<f32>],
+) -> Vec<usize> {
+    let centroids = soft_centroids(gamma, pi, kept_embs);
+    if centroids.is_empty() {
+        return vec![0; all_embs.len()];
+    }
+    assign_nearest(all_embs, &centroids)
+}
+
+fn soft_centroids(gamma: &Array2<f32>, pi: &Array1<f32>, kept_embs: &[Vec<f32>]) -> Vec<Vec<f32>> {
+    let n_speakers = pi.len().min(gamma.ncols());
+    let cols: Vec<usize> = (0..n_speakers)
+        .filter(|&k| pi.get(k).copied().unwrap_or(0.0) > 1e-7)
+        .collect();
+    let cols = if cols.is_empty() {
+        (0..n_speakers).collect()
+    } else {
+        cols
+    };
+    let t = gamma.nrows().min(kept_embs.len());
+    let dim = kept_embs.first().map(Vec::len).unwrap_or(0);
+    if dim == 0 || t == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(cols.len());
+    for &k in &cols {
+        let mut c = vec![0.0f32; dim];
+        let mut wsum = 0.0f32;
+        for i in 0..t {
+            let w = gamma[[i, k]];
+            if !w.is_finite() || w <= 0.0 {
+                continue;
+            }
+            let e = &kept_embs[i];
+            if e.len() != dim {
+                continue;
+            }
+            wsum += w;
+            for (slot, &v) in c.iter_mut().zip(e.iter()) {
+                *slot += w * v;
+            }
+        }
+        if wsum <= 0.0 {
+            continue;
+        }
+        for v in &mut c {
+            *v /= wsum;
+        }
+        l2_normalize(&mut c);
+        out.push(c);
+    }
+    out
+}
+
+fn assign_nearest(embs: &[Vec<f32>], centroids: &[Vec<f32>]) -> Vec<usize> {
+    embs.iter()
+        .map(|e| {
+            let mut best = 0usize;
+            let mut best_sim = f32::NEG_INFINITY;
+            for (i, c) in centroids.iter().enumerate() {
+                let s = cosine_similarity(e, c);
+                if s > best_sim {
+                    best_sim = s;
+                    best = i;
+                }
+            }
+            best
+        })
+        .collect()
+}
 
 /// Full configuration for [`VbxClusterer`]: the VBx inference hyperparameters
 /// plus the clusterer-level knobs (AHC seed threshold, embedding rescale,
@@ -361,8 +439,9 @@ use crate::clusterer::{Clusterer, ClustererError};
 pub struct VbxClustererConfig {
     /// VBx variational-inference hyperparameters.
     pub vbx: VbxConfig,
-    /// Cosine-similarity threshold for the over-segmenting AHC seed. A higher
-    /// cutoff yields more seed clusters that the VBx prior then prunes.
+    /// AHC seed cut. Cosine similarity when `ahc_on_raw_l2` is false (higher
+    /// → more seed clusters); Euclidean distance when true (lower → more
+    /// seed clusters).
     pub ahc_threshold: f32,
     /// Scale applied to the (L2-normalized) input embeddings before the PLDA
     /// transform, restoring the raw WeSpeaker magnitude the PLDA
@@ -374,6 +453,12 @@ pub struct VbxClustererConfig {
     /// cAHC-ASC stop for the AHC seed: refuse to merge two clusters that both
     /// already have at least this many members. `0` disables.
     pub ahc_established_min_members: usize,
+    /// Seed AHC on L2-normalized embeddings with Euclidean centroid linkage
+    /// (distance cut = `ahc_threshold`) instead of cosine AHC in PLDA space.
+    pub ahc_on_raw_l2: bool,
+    /// Speaker count from the VBx prior (`pi > 1e-7`) plus soft-centroid
+    /// reassignment of every embedding, instead of per-frame `argmax(gamma)`.
+    pub soft_reassign: bool,
 }
 
 impl Default for VbxClustererConfig {
@@ -389,13 +474,15 @@ impl Default for VbxClustererConfig {
             // cVBx short-segment recipe.
             min_embedding_secs: 1.6,
             ahc_established_min_members: 0,
+            ahc_on_raw_l2: false,
+            soft_reassign: false,
         }
     }
 }
 
 impl VbxClustererConfig {
     /// Explicit opt-in for offline tuning: overlay the
-    /// `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,AHC_ASC_MEMBERS}`
+    /// `POLYVOICE_VBX_{FA,FB,LOOP_PROB,AHC_THRESHOLD,EMB_SCALE,MIN_EMB_SECS,AHC_ASC_MEMBERS,AHC_RAW_L2,SOFT_REASSIGN}`
     /// env vars onto [`Self::default`]. Missing or malformed values keep the
     /// default. Nothing in the library calls this implicitly — production
     /// construction (`from_dir`, the pipeline builder) is env-free.
@@ -405,6 +492,25 @@ impl VbxClustererConfig {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(fallback)
+        }
+        fn parse_flag(name: &str, fallback: bool) -> bool {
+            match std::env::var(name) {
+                Ok(s)
+                    if s == "1"
+                        || s.eq_ignore_ascii_case("true")
+                        || s.eq_ignore_ascii_case("yes") =>
+                {
+                    true
+                }
+                Ok(s)
+                    if s == "0"
+                        || s.eq_ignore_ascii_case("false")
+                        || s.eq_ignore_ascii_case("no") =>
+                {
+                    false
+                }
+                _ => fallback,
+            }
         }
         let d = Self::default();
         Self {
@@ -421,6 +527,8 @@ impl VbxClustererConfig {
                 "POLYVOICE_VBX_AHC_ASC_MEMBERS",
                 d.ahc_established_min_members,
             ),
+            ahc_on_raw_l2: parse_flag("POLYVOICE_VBX_AHC_RAW_L2", d.ahc_on_raw_l2),
+            soft_reassign: parse_flag("POLYVOICE_VBX_SOFT_REASSIGN", d.soft_reassign),
         }
     }
 }
@@ -448,6 +556,8 @@ pub struct VbxClusterer {
     /// cAHC-ASC stop for the AHC seed: refuse to merge two clusters that both
     /// already have at least this many members. `0` disables.
     ahc_established_min_members: usize,
+    ahc_on_raw_l2: bool,
+    soft_reassign: bool,
 }
 
 impl VbxClusterer {
@@ -469,6 +579,8 @@ impl VbxClusterer {
             emb_scale,
             min_embedding_secs: 0.0,
             ahc_established_min_members: 0,
+            ahc_on_raw_l2: false,
+            soft_reassign: false,
         }
     }
 
@@ -483,6 +595,19 @@ impl VbxClusterer {
     /// both already have ≥ `min_members` members. `0` disables.
     pub fn with_ahc_established_min_members(mut self, min_members: usize) -> Self {
         self.ahc_established_min_members = min_members;
+        self
+    }
+
+    /// Seed AHC on L2-normalized embeddings with Euclidean centroid linkage.
+    pub fn with_ahc_on_raw_l2(mut self, on: bool) -> Self {
+        self.ahc_on_raw_l2 = on;
+        self
+    }
+
+    /// Count speakers from the VBx prior and reassign every embedding to a
+    /// soft centroid instead of taking `argmax(gamma)`.
+    pub fn with_soft_reassign(mut self, on: bool) -> Self {
+        self.soft_reassign = on;
         self
     }
 
@@ -535,7 +660,9 @@ impl VbxClusterer {
             config.emb_scale,
         )
         .with_min_embedding_secs(config.min_embedding_secs)
-        .with_ahc_established_min_members(config.ahc_established_min_members))
+        .with_ahc_established_min_members(config.ahc_established_min_members)
+        .with_ahc_on_raw_l2(config.ahc_on_raw_l2)
+        .with_soft_reassign(config.soft_reassign))
     }
 
     /// Ensure the six PLDA `.npy` files via the model registry (SHA-256 verified
@@ -619,6 +746,9 @@ impl VbxClusterer {
             };
 
         let kept_embs: Vec<&[f32]> = kept.iter().map(|&i| embeddings[i].as_slice()).collect();
+        if self.soft_reassign {
+            return self.cluster_soft(embeddings, &kept_embs);
+        }
         let labels_kept = self.cluster_kept(&kept_embs)?;
 
         if short.is_empty() {
@@ -653,13 +783,33 @@ impl VbxClusterer {
         ))
     }
 
+    fn cluster_soft(
+        &self,
+        all_embs: &[Vec<f32>],
+        kept_embs: &[&[f32]],
+    ) -> Result<Vec<usize>, ClustererError> {
+        let (gamma, pi) = self.vbx_gamma_on_kept(kept_embs)?;
+        let owned: Vec<Vec<f32>> = kept_embs.iter().map(|e| e.to_vec()).collect();
+        Ok(reassign_all_from_prior(&gamma, &pi, &owned, all_embs))
+    }
+
     fn cluster_kept(&self, kept_embs: &[&[f32]]) -> Result<Vec<usize>, ClustererError> {
+        let (gamma, _pi) = self.vbx_gamma_on_kept(kept_embs)?;
+        Ok(hard_labels(&gamma))
+    }
+
+    fn vbx_gamma_on_kept(
+        &self,
+        kept_embs: &[&[f32]],
+    ) -> Result<(Array2<f32>, Array1<f32>), ClustererError> {
         let n = kept_embs.len();
         if n == 0 {
-            return Ok(Vec::new());
+            return Ok((Array2::zeros((0, 0)), Array1::zeros(0)));
         }
         if n == 1 {
-            return Ok(vec![0]);
+            let mut gamma = Array2::<f32>::zeros((1, 1));
+            gamma[[0, 0]] = 1.0;
+            return Ok((gamma, Array1::from_elem(1, 1.0)));
         }
         let dim = kept_embs[0].len();
         let mut flat = Vec::with_capacity(n * dim);
@@ -675,22 +825,39 @@ impl VbxClusterer {
         let features = self.plda.transform(&emb.view(), self.lda_dim);
         let phi = self.plda.phi();
 
-        let feat_vecs: Vec<Vec<f32>> = features.rows().into_iter().map(|r| r.to_vec()).collect();
-        let stop = if self.ahc_established_min_members > 0 {
-            crate::ahc::AscStop::MinMembers(self.ahc_established_min_members)
+        let ahc_labels = if self.ahc_on_raw_l2 {
+            let mut unit: Vec<Vec<f32>> = kept_embs.iter().map(|e| e.to_vec()).collect();
+            for e in &mut unit {
+                l2_normalize(e);
+            }
+            crate::ahc::agglomerative_cluster_centroid_euclidean(
+                &unit,
+                self.ahc_threshold,
+                self.max_speakers,
+            )
         } else {
-            crate::ahc::AscStop::Off
+            let feat_vecs: Vec<Vec<f32>> =
+                features.rows().into_iter().map(|r| r.to_vec()).collect();
+            let stop = if self.ahc_established_min_members > 0 {
+                crate::ahc::AscStop::MinMembers(self.ahc_established_min_members)
+            } else {
+                crate::ahc::AscStop::Off
+            };
+            crate::ahc::agglomerative_cluster_asc(
+                &feat_vecs,
+                self.ahc_threshold,
+                self.max_speakers,
+                stop,
+                None,
+            )
         };
-        let ahc_labels = crate::ahc::agglomerative_cluster_asc(
-            &feat_vecs,
-            self.ahc_threshold,
-            self.max_speakers,
-            stop,
-            None,
-        );
 
-        let (gamma, _pi) = cluster_vbx(&ahc_labels, &features.view(), &phi.view(), &self.config);
-        Ok(hard_labels(&gamma))
+        Ok(cluster_vbx(
+            &ahc_labels,
+            &features.view(),
+            &phi.view(),
+            &self.config,
+        ))
     }
 }
 

@@ -5,6 +5,47 @@ use crate::types::Profile;
 use proptest::prelude::*;
 
 #[test]
+fn clean_speech_secs_no_overlap_is_full_duration() {
+    let seg = TimeRange {
+        start: 1.0,
+        end: 3.0,
+    };
+    assert!((clean_speech_secs(seg, &[]) - 2.0).abs() < 1e-9);
+}
+
+#[test]
+fn clean_speech_secs_subtracts_merged_overlap() {
+    // Two overlapping overlap-regions covering [1,4] inside a 10s segment.
+    let seg = TimeRange {
+        start: 0.0,
+        end: 10.0,
+    };
+    let ov = [
+        (
+            TimeRange {
+                start: 1.0,
+                end: 3.0,
+            },
+            0u8,
+            1u8,
+        ),
+        (
+            TimeRange {
+                start: 2.0,
+                end: 4.0,
+            },
+            0u8,
+            1u8,
+        ),
+    ];
+    let clean = clean_speech_secs(seg, &ov);
+    assert!(
+        (clean - 7.0).abs() < 1e-9,
+        "merged overlap is 3s so clean=7, got {clean}"
+    );
+}
+
+#[test]
 fn expand_embed_units_none_is_identity() {
     let segs = vec![
         raw_segment(0.0, 5.0, 0, false),

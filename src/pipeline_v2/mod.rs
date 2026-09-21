@@ -59,6 +59,35 @@ pub struct StageTimings {
 /// clusterer every segment below the 0.25s min_speech output filter.
 const MIN_EMBED_SECS: f64 = 0.20;
 
+/// Unmasked speech inside `seg` after subtracting merged overlap intervals.
+fn clean_speech_secs(seg: TimeRange, overlap_ranges: &[(TimeRange, u8, u8)]) -> f64 {
+    let dur = seg.duration();
+    if dur <= 0.0 {
+        return 0.0;
+    }
+    let mut iv: Vec<(f64, f64)> = overlap_ranges
+        .iter()
+        .filter_map(|(ot, _, _)| {
+            let lo = ot.start.max(seg.start);
+            let hi = ot.end.min(seg.end);
+            (hi > lo).then_some((lo, hi))
+        })
+        .collect();
+    if iv.is_empty() {
+        return dur;
+    }
+    iv.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut merged: Vec<(f64, f64)> = Vec::with_capacity(iv.len());
+    for (s, e) in iv {
+        match merged.last_mut() {
+            Some((_, me)) if s <= *me => *me = (*me).max(e),
+            _ => merged.push((s, e)),
+        }
+    }
+    let overlapped: f64 = merged.iter().map(|(s, e)| e - s).sum();
+    (dur - overlapped).max(0.0)
+}
+
 /// Expand primary segments into embedding units. With `window = None` each
 /// segment is one unit (sparse, one embedding per segment). With `Some(w)` each
 /// segment longer than `w` is split into `w`-second sub-windows hopped by `w/2`
@@ -190,6 +219,14 @@ pub struct Pipeline {
     embedder: Box<dyn Embedder>,
     clusterer: Box<dyn Clusterer>,
     resegmenter: Box<dyn Resegmenter>,
+    /// When `Some(secs)`, overlap-mask the embedding chunk only if it has at
+    /// least that much unmasked speech; otherwise embed the raw chunk.
+    /// `None` always masks (production default).
+    clean_mask_fallback_secs: Option<f64>,
+    /// When true, VBx's short-segment filter sees unmasked (clean) duration
+    /// instead of the raw segment length, so overlap zeros do not inflate
+    /// the 1.6 s keep-threshold.
+    filter_clean_duration: bool,
 }
 
 impl Pipeline {
@@ -204,12 +241,16 @@ impl Pipeline {
         clusterer: Box<dyn Clusterer>,
         resegmenter: Box<dyn Resegmenter>,
     ) -> Self {
+        let (clean_mask_fallback_secs, filter_clean_duration) =
+            clusterer_factory::scoring_chain_mask_env();
         Self {
             config,
             segmenter,
             embedder,
             clusterer,
             resegmenter,
+            clean_mask_fallback_secs,
+            filter_clean_duration,
         }
     }
 
@@ -272,7 +313,7 @@ impl Pipeline {
         }
 
         let t = std::time::Instant::now();
-        let labels = self.cluster_embeddings(&embeddings, &sources)?;
+        let labels = self.cluster_embeddings(&embeddings, &sources, &overlap_ranges)?;
         timings.clustering_secs = t.elapsed().as_secs_f64();
 
         let primary_turns = primary_turns_from_labels(&sources, &labels);
@@ -426,6 +467,8 @@ impl Pipeline {
             let chunk = &samples[start_idx..end_idx];
             // Zero-fill any overlap regions inside this primary chunk before
             // embedding, so two-speaker audio cannot bias the embedding.
+            // Optional fallback: if unmasked speech is shorter than the
+            // threshold, embed the raw chunk instead of a near-silent mask.
             let seg_start = seg.time.start;
             let seg_end = seg.time.end;
             let local_overlaps: Vec<(f32, f32)> = overlap_ranges
@@ -440,7 +483,15 @@ impl Pipeline {
                     }
                 })
                 .collect();
-            let masked = apply_overlap_mask(chunk, &local_overlaps, self.config.sample_rate.get());
+            let use_mask = match self.clean_mask_fallback_secs {
+                Some(min_clean) => clean_speech_secs(seg.time, overlap_ranges) >= min_clean,
+                None => true,
+            };
+            let masked = if use_mask {
+                apply_overlap_mask(chunk, &local_overlaps, self.config.sample_rate.get())
+            } else {
+                chunk.to_vec()
+            };
             masked_chunks.push(masked);
             kept.push(seg);
         }
@@ -478,8 +529,16 @@ impl Pipeline {
         &self,
         embeddings: &[Vec<f32>],
         sources: &[crate::segmentation::RawSegment],
+        overlap_ranges: &[(TimeRange, u8, u8)],
     ) -> Result<Vec<usize>, PipelineError> {
-        let durations: Vec<f64> = sources.iter().map(|s| s.time.duration()).collect();
+        let durations: Vec<f64> = if self.filter_clean_duration {
+            sources
+                .iter()
+                .map(|s| clean_speech_secs(s.time, overlap_ranges))
+                .collect()
+        } else {
+            sources.iter().map(|s| s.time.duration()).collect()
+        };
         Ok(self
             .clusterer
             .cluster_with_durations(embeddings, &durations)?)

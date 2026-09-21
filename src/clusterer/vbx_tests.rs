@@ -388,6 +388,8 @@ fn clusterer_config_defaults_are_the_dev_tuning() {
     assert!((d.emb_scale - 4.88).abs() < 1e-6);
     assert!((d.min_embedding_secs - 1.6).abs() < 1e-12);
     assert_eq!(d.ahc_established_min_members, 0);
+    assert!(!d.ahc_on_raw_l2);
+    assert!(!d.soft_reassign);
 }
 
 #[test]
@@ -402,6 +404,8 @@ fn from_env_overlays_valid_values_and_ignores_malformed() {
         std::env::set_var("POLYVOICE_VBX_EMB_SCALE", "2.5");
         std::env::set_var("POLYVOICE_VBX_MIN_EMB_SECS", "2.0");
         std::env::set_var("POLYVOICE_VBX_AHC_ASC_MEMBERS", "3");
+        std::env::set_var("POLYVOICE_VBX_AHC_RAW_L2", "1");
+        std::env::set_var("POLYVOICE_VBX_SOFT_REASSIGN", "true");
     }
     let c = VbxClustererConfig::from_env();
     unsafe {
@@ -413,6 +417,8 @@ fn from_env_overlays_valid_values_and_ignores_malformed() {
             "POLYVOICE_VBX_EMB_SCALE",
             "POLYVOICE_VBX_MIN_EMB_SECS",
             "POLYVOICE_VBX_AHC_ASC_MEMBERS",
+            "POLYVOICE_VBX_AHC_RAW_L2",
+            "POLYVOICE_VBX_SOFT_REASSIGN",
         ] {
             std::env::remove_var(k);
         }
@@ -428,6 +434,8 @@ fn from_env_overlays_valid_values_and_ignores_malformed() {
     assert!((c.emb_scale - 2.5).abs() < 1e-6);
     assert!((c.min_embedding_secs - 2.0).abs() < 1e-12);
     assert_eq!(c.ahc_established_min_members, 3);
+    assert!(c.ahc_on_raw_l2);
+    assert!(c.soft_reassign);
 
     // With nothing set, from_env reproduces the defaults.
     let c2 = VbxClustererConfig::from_env();
@@ -543,4 +551,34 @@ fn from_registry_loads_fixture_cache() {
     let clusterer = VbxClusterer::from_registry(&registry, 8)
         .expect("from_registry must load fixture-seeded cache");
     assert_eq!(clusterer.max_clusters(), 8);
+}
+
+#[test]
+fn reassign_all_from_prior_drops_near_zero_speaker() {
+    let gamma = array![[0.99, 0.01], [0.98, 0.02], [0.97, 0.03]];
+    let pi = array![0.99, 1e-9];
+    let kept = vec![vec![1.0f32, 0.0], vec![0.99, 0.01], vec![0.98, 0.02]];
+    let mut all = kept.clone();
+    all.push(vec![0.95, 0.05]);
+    let labels = reassign_all_from_prior(&gamma, &pi, &kept, &all);
+    assert!(
+        labels.iter().all(|&l| l == 0),
+        "near-zero prior speaker must be dropped: {labels:?}"
+    );
+}
+
+#[test]
+fn reassign_all_from_prior_keeps_two_speakers() {
+    let gamma = array![[0.99, 0.01], [0.98, 0.02], [0.02, 0.98], [0.01, 0.99],];
+    let pi = array![0.5, 0.5];
+    let kept = vec![
+        vec![1.0f32, 0.0],
+        vec![0.99, 0.0],
+        vec![0.0, 1.0],
+        vec![0.0, 0.99],
+    ];
+    let labels = reassign_all_from_prior(&gamma, &pi, &kept, &kept);
+    assert_eq!(labels[0], labels[1]);
+    assert_eq!(labels[2], labels[3]);
+    assert_ne!(labels[0], labels[2]);
 }
