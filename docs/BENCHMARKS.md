@@ -507,6 +507,17 @@ peak RSS (FP32: 11.65× / 7.23 GiB); **AMI-test, all 16 meetings: 12.83×,
 model-load overhead dominating short files; the 5-file subset figure
 (11.66× vs 11.94×) is the long-file steady state.
 
+## Parakeet on tract (measured, not adopted)
+
+Shipping ONNX encoder + fused `decoder_joint` **do run** on tract-onnx 0.23
+when batch/time are bound (LSTM is explicit `[2,1,640]` state ports, not an
+unfold). The weights-only INT8 encoder does **not** optimize. On the 7.435 s
+LibriSpeech clip used by the sonos example, tract FP32 infer is **7.8×** at
+~4 GiB RSS vs ort FP32 CLI ~2.3 s wall / 2.6 GiB (correct transcript). Word
+starts that both stacks emit match the parakeet-rs frame clock. **Do not
+replace `polyvoice-asr`'s ONNX Runtime.** Notes:
+[`docs/parakeet-tract-measured.md`](parakeet-tract-measured.md).
+
 ## Footprint, license & gating
 
 | Engine | Deployable size | License | Gated weights? | Runtime |
