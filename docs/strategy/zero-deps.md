@@ -21,7 +21,7 @@ Do **not** clone ONNX Runtime, tract, or a general ONNX executor.
 | **2** | `polyvoice-kernels`: **WeSpeaker ResNet34 only** (fused-BN Conv2d, ReLU, residual, stats-pool, GEMM). Initializers from shipping ONNX. Feature `embedder-native`. | Candle/Burn/tract clone |
 | **3** | Same crate: **powerset LSTM** (SincNet + 4× biLSTM). Feature `segmenter-native`. N>1 works. | Generic Scan / all ONNX ops |
 | **4 (now)** | `cli` / `ffi` / `mcp` / Python wheel / transcribe diarization = `pipeline-native` (no ort, no tract). Darwin Vox-3 holds the scoreboard floors. Linux kernels are ahead of same-host ort on speed (Vox ~162× / AMI ~193× / Vox-3 wall ~158×) and hold Vox DER₀ 13.34 % / AMI 24.19 %. ONNX Runtime is gone from the core crate. Parakeet (`polyvoice-asr`) still uses `ort`. | Pulling `ort` back into `cli` |
-| **skip** | Silero (v2 powerset already does VAD). Full protobuf ONNX parser. Sortformer stays opt-in/`onnx` until someone needs it. | — |
+| **skip** | Silero (v2 powerset already does VAD). Full protobuf ONNX parser. | — |
 
 Cross-platform is the default of this path: no `libonnxruntime`, no glibc pin, no CoreML/XNNPACK. Linux / macOS / Windows; clustering is already wasm32-clean.
 

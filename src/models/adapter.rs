@@ -20,8 +20,8 @@ pub enum AdapterStage {
     Clusterer,
     Scoring,
     Vad,
-    /// End-to-end diarizer (e.g. Sortformer) that replaces segmenter +
-    /// embedder + clusterer with a single model.
+    /// End-to-end diarizer that replaces segmenter + embedder + clusterer
+    /// with a single model. No built-in of this stage ships.
     Diarizer,
 }
 
@@ -165,15 +165,6 @@ impl AdapterRegistry {
         let _ = reg.register_alias(AdapterStage::Scoring, "latest", "cosine");
         let _ = reg.register_alias(AdapterStage::Vad, "latest", "silero");
         let _ = reg.register_alias(AdapterStage::Vad, "v1", "silero");
-
-        // Optional E2E Sortformer diarizer (feature-gated). Name marker only —
-        // concrete construction lives in `crate::sortformer`.
-        #[cfg(any())]
-        {
-            reg.register_builtin(AdapterStage::Diarizer, "sortformer-v2");
-            let _ = reg.register_alias(AdapterStage::Diarizer, "latest", "sortformer-v2");
-            let _ = reg.register_alias(AdapterStage::Diarizer, "v2", "sortformer-v2");
-        }
         reg
     }
 
@@ -340,7 +331,7 @@ mod tests {
     fn unknown_adapter_type_returns_error() {
         let reg = AdapterRegistry::with_builtins();
         let err = reg
-            .create(AdapterStage::Embedder, "sortformer-v99")
+            .create(AdapterStage::Embedder, "no-such-adapter-v99")
             .expect_err("must reject unknown type");
         let msg = format!("{err}");
         match err {
@@ -349,12 +340,12 @@ mod tests {
                 adapter_type,
             } => {
                 assert_eq!(stage, AdapterStage::Embedder);
-                assert_eq!(adapter_type, "sortformer-v99");
+                assert_eq!(adapter_type, "no-such-adapter-v99");
             }
             other => panic!("unexpected error: {other}"),
         }
         // Display is human-readable (acceptance: descriptive error, not panic).
-        assert!(msg.contains("sortformer-v99"));
+        assert!(msg.contains("no-such-adapter-v99"));
         assert!(msg.contains("embedder"));
     }
 
@@ -442,21 +433,6 @@ mod tests {
             "nope".parse::<AdapterStage>(),
             Err(AdapterError::InvalidStage(_))
         ));
-    }
-
-    #[cfg(any())]
-    #[test]
-    fn sortformer_builtin_registered_when_feature_on() {
-        let reg = AdapterRegistry::with_builtins();
-        assert!(reg.contains(AdapterStage::Diarizer, "sortformer-v2"));
-        assert_eq!(
-            reg.resolve(AdapterStage::Diarizer, "latest").unwrap(),
-            "sortformer-v2"
-        );
-        let handle = reg.create(AdapterStage::Diarizer, "sortformer-v2").unwrap();
-        let builtin = handle.downcast_ref::<BuiltinAdapter>().expect("marker");
-        assert_eq!(builtin.id, "sortformer-v2");
-        assert_eq!(builtin.stage, AdapterStage::Diarizer);
     }
 
     #[cfg(feature = "vad-earshot")]

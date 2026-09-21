@@ -123,8 +123,8 @@ impl VoiceActivityDetector for EarshotVad {
 
 /// Register the earshot adapter type with an [`crate::models::AdapterRegistry`].
 ///
-/// Name-marker only (same pattern as Sortformer): concrete construction is
-/// [`EarshotVad::new`]. Safe to call once; returns
+/// Name-marker only: concrete construction is [`EarshotVad::new`]. Safe to
+/// call once; returns
 /// [`crate::models::AdapterError::AlreadyRegistered`] if the id is already present.
 #[cfg(feature = "download")]
 pub fn register_with(

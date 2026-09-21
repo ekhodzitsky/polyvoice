@@ -46,7 +46,6 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - [vbx-plda-release.md](vbx-plda-release.md) — shipping PLDA weights
 
 ### Optional adapters
-- [sortformer.md](sortformer.md)
 - [eres2netv2.md](eres2netv2.md) · [eres2netv2-measured.md](eres2netv2-measured.md)
 
 ### Contributors
