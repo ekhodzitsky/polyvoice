@@ -119,6 +119,143 @@ pub fn agglomerative_cluster_asc(
     ahc_impl_with_times(embeddings, threshold, max_clusters, stop, time_ranges).0
 }
 
+/// UPGMC (centroid-linkage) AHC on L2-normalized embeddings.
+///
+/// `threshold` is a Euclidean **distance**: clusters merge while the centroid
+/// distance is ≤ `threshold`. Merged centroids are size-weighted means and are
+/// **not** re-normalized — the same linkage as scipy
+/// `linkage(..., method="centroid", metric="euclidean")` +
+/// `fcluster(..., criterion="distance")`. Cosine AHC on PLDA features is a
+/// different space and a different merge rule; do not reuse its threshold.
+pub fn agglomerative_cluster_centroid_euclidean(
+    embeddings: &[Vec<f32>],
+    threshold: f32,
+    max_clusters: usize,
+) -> Vec<usize> {
+    let n = embeddings.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let dim = embeddings[0].len();
+    if !embeddings.iter().all(|e| e.len() == dim) {
+        return vec![0; n];
+    }
+    if n == 1 {
+        return vec![0];
+    }
+
+    let mut centroids: Vec<Vec<f32>> = embeddings.to_vec();
+    for c in &mut centroids {
+        l2_normalize(c);
+    }
+    let mut labels: Vec<usize> = (0..n).collect();
+    let mut cluster_sizes: Vec<usize> = vec![1; n];
+    let mut active: Vec<bool> = vec![true; n];
+    let inf = f32::INFINITY;
+    let mut dist = vec![vec![inf; n]; n];
+    for i in 0..n {
+        dist[i][i] = 0.0;
+        for j in (i + 1)..n {
+            let d = euclidean_distance(&centroids[i], &centroids[j]);
+            dist[i][j] = d;
+            dist[j][i] = d;
+        }
+    }
+
+    loop {
+        let mut best = inf;
+        let mut best_i = 0;
+        let mut best_j = 0;
+        for i in 0..n {
+            if !active[i] {
+                continue;
+            }
+            for j in (i + 1)..n {
+                if !active[j] {
+                    continue;
+                }
+                let d = dist[i][j];
+                if d < best {
+                    best = d;
+                    best_i = i;
+                    best_j = j;
+                }
+            }
+        }
+        let active_count = active.iter().filter(|&&a| a).count();
+        let above_ceiling = max_clusters > 0 && max_clusters < n && active_count > max_clusters;
+        if !above_ceiling && best > threshold {
+            break;
+        }
+        if !best.is_finite() {
+            break;
+        }
+
+        let total = cluster_sizes[best_i] + cluster_sizes[best_j];
+        let w_i = cluster_sizes[best_i] as f32 / total as f32;
+        let w_j = cluster_sizes[best_j] as f32 / total as f32;
+        let src = centroids[best_j].clone();
+        for (dst, s) in centroids[best_i].iter_mut().zip(src.iter()) {
+            *dst = *dst * w_i + *s * w_j;
+        }
+        cluster_sizes[best_i] = total;
+        active[best_j] = false;
+        dist[best_j].fill(inf);
+        for row in dist.iter_mut() {
+            row[best_j] = inf;
+        }
+        for k in 0..n {
+            if k == best_i || !active[k] {
+                continue;
+            }
+            let d = euclidean_distance(&centroids[best_i], &centroids[k]);
+            dist[best_i][k] = d;
+            dist[k][best_i] = d;
+        }
+        for label in &mut labels {
+            if *label == best_j {
+                *label = best_i;
+            }
+        }
+    }
+
+    compact_cluster_ids(labels)
+}
+
+fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() {
+        return f32::INFINITY;
+    }
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| {
+            let d = x - y;
+            d * d
+        })
+        .sum::<f32>()
+        .sqrt()
+}
+
+fn compact_cluster_ids(mut labels: Vec<usize>) -> Vec<usize> {
+    let mut group: HashMap<usize, (usize, usize)> = HashMap::new();
+    for (idx, &label) in labels.iter().enumerate() {
+        group.entry(label).or_insert((0, idx)).0 += 1;
+    }
+    let mut order: Vec<(usize, usize, usize)> = group
+        .iter()
+        .map(|(&label, &(size, min_idx))| (size, min_idx, label))
+        .collect();
+    order.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    let mut canonical: HashMap<usize, usize> = HashMap::new();
+    for (new_id, &(_, _, label)) in order.iter().enumerate() {
+        canonical.insert(label, new_id);
+    }
+    for label in &mut labels {
+        *label = canonical[label];
+    }
+    labels
+}
+
 /// Dissolve clusters smaller than `min_size` members by reassigning each of their
 /// members to the nearest surviving (>= `min_size`) cluster centroid by cosine
 /// similarity, returning compact `0..K` labels. If no cluster reaches `min_size`

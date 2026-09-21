@@ -13,6 +13,8 @@
 #   KNOB=emb_scale GRID="4.0 4.88 6.0" scripts/calibrate-vbx.sh data/voxconverse-dev 30
 #
 # Knobs: fa | emb_scale | ahc_threshold | min_emb_secs | loop_prob | fb
+# Scoring-chain flags (AHC_RAW_L2, SOFT_REASSIGN, CLEAN_MASK, FILTER_CLEAN)
+# live in scripts/measure-scoring-chain.sh — they are not 1-D numeric knobs.
 set -euo pipefail
 
 DATASET="${1:?usage: calibrate-vbx.sh <dataset-dir> [max_files]}"
