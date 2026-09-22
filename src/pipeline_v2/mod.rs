@@ -229,6 +229,18 @@ pub struct Pipeline {
     filter_clean_duration: bool,
 }
 
+/// Drops kernel activation scratch after each file so TLS-style high-water
+/// buffers are not pinned for the process lifetime. No-op without native
+/// kernels. Never madvise(DONTNEED) on weight maps.
+struct KernelScratchReclaim;
+
+impl Drop for KernelScratchReclaim {
+    fn drop(&mut self) {
+        #[cfg(any(feature = "embedder-native", feature = "segmenter-native"))]
+        polyvoice_kernels::reclaim_scratch();
+    }
+}
+
 impl Pipeline {
     pub fn builder() -> PipelineBuilder {
         PipelineBuilder::new()
@@ -270,6 +282,7 @@ impl Pipeline {
         samples: &[f32],
         sr: SampleRate,
     ) -> Result<(DiarizationResult, StageTimings), PipelineError> {
+        let _reclaim = KernelScratchReclaim;
         if sr.get() != self.config.sample_rate.get() {
             return Err(PipelineError::UnsupportedSampleRate { actual: sr.get() });
         }

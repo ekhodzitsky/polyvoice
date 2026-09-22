@@ -28,6 +28,7 @@ mod powerset;
 mod qlinear;
 mod resnet34;
 mod rten_matmul;
+mod scratch;
 mod seq1d;
 mod tensor;
 
@@ -38,3 +39,4 @@ pub use error::KernelError;
 pub use gemm::gemm_bias_row;
 pub use powerset::{N_CLASSES, Powerset};
 pub use resnet34::{EMBED_DIM, N_MELS, ResNet34};
+pub use scratch::reclaim as reclaim_scratch;

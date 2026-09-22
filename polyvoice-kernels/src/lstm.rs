@@ -6,27 +6,11 @@
 //! Sequence layout is `[seq, batch, feat]`.
 
 use crate::gemm::{gemm_add, gemm_bias, transpose};
-use std::cell::RefCell;
+use crate::scratch;
 
 #[inline]
 fn sigmoid(x: f32) -> f32 {
     1.0 / (1.0 + (-x.clamp(-40.0, 40.0)).exp())
-}
-
-struct LstmScratch {
-    xw: Vec<f32>,
-    ht: Vec<f32>,
-    ct: Vec<f32>,
-}
-
-thread_local! {
-    static LSTM_SCRATCH: RefCell<LstmScratch> = const {
-        RefCell::new(LstmScratch {
-            xw: Vec::new(),
-            ht: Vec::new(),
-            ct: Vec::new(),
-        })
-    };
 }
 
 /// ONNX gates `i,o,f,c` then `h = o * tanh(f*c + i*tanh(c̃))`.
@@ -444,16 +428,10 @@ impl BiLstm {
         let rt = &self.r_t[dir * h * four_h..(dir + 1) * h * four_h];
         let bias = &self.bias[dir * four_h..(dir + 1) * four_h];
 
-        LSTM_SCRATCH.with(|cell| {
-            let mut scratch = cell.borrow_mut();
-            let mut xw = std::mem::take(&mut scratch.xw);
-            let mut ht = std::mem::take(&mut scratch.ht);
-            let mut ct = std::mem::take(&mut scratch.ct);
-            xw.resize(seq * batch * four_h, 0.0);
-            ht.clear();
-            ht.resize(batch * h, 0.0);
-            ct.clear();
-            ct.resize(batch * h, 0.0);
+        {
+            let mut xw = scratch::take_f32(seq * batch * four_h);
+            let mut ht = scratch::take_f32(batch * h);
+            let mut ct = scratch::take_f32(batch * h);
             let used_i8_w = try_i8_w(self, x, wt, bias, &mut xw, seq, batch, four_h, i_sz, dir);
             if !used_i8_w {
                 gemm_bias(x, wt, bias, &mut xw, seq * batch, four_h, i_sz);
@@ -488,10 +466,10 @@ impl BiLstm {
                 }
                 remaining -= 1;
             }
-            scratch.xw = xw;
-            scratch.ht = ht;
-            scratch.ct = ct;
-        });
+            scratch::put_f32(xw);
+            scratch::put_f32(ht);
+            scratch::put_f32(ct);
+        }
     }
 }
 

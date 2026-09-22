@@ -14,6 +14,11 @@ repository = "https://github.com/ekhodzitsky/polyvoice"
 rten-gemm = "0.25"
 rten-tensor = "0.25"
 thiserror = "2"
+# Pure-Rust mmap so ONNX weight bytes stay file-backed (shared across
+# file workers, reclaimable under pressure). Heap `fs::read` made the
+# same 8.4 MB pair private anonymous pages. Do not madvise(DONTNEED)
+# the mapping — that re-faults the whole file on the next forward.
+memmap2 = "0.9"
 
 [build-dependencies]
 cc = "1"

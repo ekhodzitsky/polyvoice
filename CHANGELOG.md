@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Kernel ONNX weights load through `memmap2` (file-backed pages, shared
+  across file workers). Activation scratch is a 1-slot pool with a soft
+  cap and is dropped after each file. Do not `madvise(DONTNEED)` the
+  weight mapping — that re-faults the whole file on the next forward.
+
 ### Removed
 
 - Unreachable Sortformer adapter: `src/sortformer/`, the always-off
