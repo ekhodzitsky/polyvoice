@@ -25,6 +25,14 @@ pub struct PipelineConfig {
     /// seconds (cVBx Δ=0.5 s default). One global value — never per-dataset.
     pub max_gap_secs: f32,
     pub embedder_pool_size: usize,
+    /// Maximum PCM length `Pipeline::run` accepts, in samples.
+    ///
+    /// Defaults to [`MAX_AUDIO_SAMPLES`](crate::pipeline_v2::MAX_AUDIO_SAMPLES),
+    /// one hour at 16 kHz. That default guards callers who hand the pipeline a
+    /// buffer they did not produce; a caller that controls the audio's
+    /// provenance, such as one diarizing a file it recorded itself, can raise
+    /// it.
+    pub max_audio_samples: usize,
     pub execution_provider: ExecutionProvider,
     /// Directory with the precomputed VBx PLDA params, used only when
     /// `clusterer == ClustererKind::Vbx`. `None` resolves through the
@@ -84,6 +92,7 @@ impl Default for PipelineConfig {
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
             embedder_pool_size: default_pool_size(),
+            max_audio_samples: crate::pipeline_v2::MAX_AUDIO_SAMPLES,
             execution_provider: ExecutionProvider::auto(),
             vbx_plda_dir: None,
             embed_window_secs: None,

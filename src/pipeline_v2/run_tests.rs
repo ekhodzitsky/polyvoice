@@ -131,6 +131,49 @@ fn max_audio_samples_matches_one_hour_at_16khz() {
 }
 
 #[test]
+fn default_config_keeps_the_one_hour_cap() {
+    assert_eq!(
+        PipelineConfig::default().max_audio_samples,
+        MAX_AUDIO_SAMPLES
+    );
+}
+
+#[test]
+fn configured_cap_replaces_the_default() {
+    // A lowered cap proves `run` consults the config rather than the constant,
+    // without allocating an hour of audio to prove the same thing upward.
+    let cfg = PipelineConfig {
+        profile: Profile::Custom,
+        max_audio_samples: 100,
+        ..PipelineConfig::default()
+    };
+    let p = Pipeline::from_components(
+        cfg,
+        Box::new(MockSegmenter {
+            segments: Vec::new(),
+        }),
+        Box::new(MockEmbedder::default()),
+        Box::new(MockClusterer::default()),
+        Box::new(OverlapResegmenter::default()),
+    );
+
+    let err = p
+        .run(&vec![0.0_f32; 101], SampleRate::new(16000).unwrap())
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            err,
+            PipelineError::AudioTooLong {
+                actual_samples: 101,
+                max_samples: 100,
+            }
+        ),
+        "expected the configured cap to be reported, got {err:?}"
+    );
+}
+
+#[test]
 fn pipeline_run_silence_returns_empty() {
     let p = pipeline_with_segments(Vec::new());
     let result = p

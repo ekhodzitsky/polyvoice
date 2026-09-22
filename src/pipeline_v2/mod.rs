@@ -183,9 +183,13 @@ fn window_confidence_sum(
     (sum, n)
 }
 
-/// Hard cap on PCM length accepted by [`Pipeline::run`] / [`Pipeline::run_with_timings`].
+/// Default cap on PCM length accepted by [`Pipeline::run`] / [`Pipeline::run_with_timings`].
 /// Matches the C FFI (`MAX_SAMPLES`) and the WAV loader's ~1-hour policy so library
 /// and Python callers cannot unbounded-allocate on untrusted buffers.
+///
+/// This is the default of [`PipelineConfig::max_audio_samples`], which a Rust
+/// caller can raise when it controls the audio's provenance. The C FFI and the
+/// WAV loader keep enforcing this constant directly.
 pub const MAX_AUDIO_SAMPLES: usize = 16_000 * 3_600;
 
 #[derive(Debug, thiserror::Error)]
@@ -273,10 +277,10 @@ impl Pipeline {
         if sr.get() != self.config.sample_rate.get() {
             return Err(PipelineError::UnsupportedSampleRate { actual: sr.get() });
         }
-        if samples.len() > MAX_AUDIO_SAMPLES {
+        if samples.len() > self.config.max_audio_samples {
             return Err(PipelineError::AudioTooLong {
                 actual_samples: samples.len(),
-                max_samples: MAX_AUDIO_SAMPLES,
+                max_samples: self.config.max_audio_samples,
             });
         }
         let mut timings = StageTimings::default();
