@@ -42,7 +42,7 @@ DOCKER=1 bash scripts/linux-cpu-native-der-gate.sh
 |--|--|--|--|--|
 | **VoxConverse-test DER** | **13.3 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
 | **Model size** | **~8.4 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
-| **Runtime** | **Kernels ~110–130× Darwin / ~110× Linux x86_64; ort ~80–95× Linux** | CPU/GPU (PyTorch) | GPU recommended | GPU |
+| **Runtime** | **Kernels ~125–200× Darwin / ~110× Linux x86_64; ort ~80–95× Linux** | CPU/GPU (PyTorch) | GPU recommended | GPU |
 | **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
 | **Dependencies** | **Rust kernels by default; ONNX Runtime opt-in; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
@@ -268,13 +268,15 @@ are operational (asserted by the native gate).
 
 | Configuration | Corpus | RTFx (× realtime) | DER₀ micro |
 |---|---|---:|---:|
-| **v2 + VBx INT8 Darwin kernels (M1 Pro)** | VoxConverse-test (232) | **~130×** | **15.47 %** |
-| **v2 + VBx INT8 Darwin kernels (M1 Pro)** | AMI-test (16) | **~109×** | **25.19 %** |
+| **v2 + VBx INT8 Darwin kernels (M1 Pro)** | VoxConverse-test (232) | **~169×** | **13.33 %** |
+| **v2 + VBx INT8 Darwin kernels (M1 Pro)** | AMI-test (16) | **~200×** | **23.61 %** |
 | **v2 + VBx INT8 Darwin kernels Vox-3 scoreboard** | euqef / fuzfh / msbyq | **≥117×** | **7.11 %** |
 | **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | VoxConverse-test (232) | **~162×** | **13.34 %** |
 | **v2 + VBx INT8 Linux kernels (Ryzen AI 9 HX 370)** | AMI-test (16) | **~193×** | **24.19 %** |
 | **v2 + VBx INT8 Linux kernels Vox-3** | euqef / fuzfh / msbyq | **~111×** (jobs=1), **~158×** wall (`--jobs 3`) | **7.03 %** |
 
+Darwin numbers: 2026-09-22 (VBx AHC seed 0.6),
+[`benchmarks/results/darwin-native-der-2026-09-22/`](../benchmarks/results/darwin-native-der-2026-09-22/).
 Linux x86_64 numbers: 2026-09-13 (VBx AHC seed 0.6; RTFx still 2026-09-08),
 [`benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/`](../benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/).
 The INT8 conv path (default on aarch64 + dotprod) also defaults on x86_64 with

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Darwin full-split benchmark rows re-measured on the product CLI (M1 Pro,
+  v2+VBx INT8 kernels, collar 0): VoxConverse-test DER₀ 15.47 % → **13.33 %**,
+  RTFx ~130× → ~**169×**; AMI-test DER₀ 25.19 % → **23.61 %**, RTFx
+  ~109× → ~**200×**. Artifacts: `benchmarks/results/darwin-native-der-2026-09-22/`.
 - Kernel ONNX weights load through `memmap2` (file-backed pages, shared
   across file workers). Activation scratch is a 1-slot pool with a soft
   cap and is dropped after each file. Do not `madvise(DONTNEED)` the

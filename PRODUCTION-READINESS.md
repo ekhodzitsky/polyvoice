@@ -36,10 +36,7 @@ services, because:
 3. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
    NOTSOFAR-1 has a measured micro-gate (3-meeting subset) but CALLHOME /
    DIHARD (and similar) are not release-gated.
-4. **Darwin full-split was not re-run** after the VBx AHC seed 0.6 retune
-   (still 15.47 % / 25.19 % from 0.18). Linux was: Vox **13.34 %** /
-   AMI **24.19 %**.
-5. **Pure-Rust (tract) path is not product-ready** — opt-in only
+4. **Pure-Rust (tract) path is not product-ready** — opt-in only
    (`backend-tract` + signed `powerset_fp32_tract` + FP32 ResNet); ~9× slower
    than ort; no full-split release gate.
 
@@ -65,7 +62,7 @@ multi-corpus proof.
 | Opt-in ONNX-file inference | `--features cli-tract` (tract, no ort) |
 | Full-split DER (no-collar micro, INT8, **Linux kernels**) | Vox **13.34%** / AMI **24.19%** — [`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
 | Full-split DER (no-collar micro, INT8, **ort** Linux/CPU, AHC seed 0.5 protocol) | Vox **14.94%** / AMI **24.19%** — [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
-| Darwin native full-split (M1 Pro, kernels) | Vox **15.47%** / AMI **25.19%** / ~**130× / 109×** RTFx (0.18; not re-run after AHC seed 0.6) |
+| Darwin native full-split (M1 Pro, kernels) | Vox **13.33%** / AMI **23.61%** / ~**169× / 200×** RTFx (2026-09-22, AHC seed 0.6) — [`darwin-native-der-2026-09-22/`](benchmarks/results/darwin-native-der-2026-09-22/) |
 | Darwin native Vox-3 scoreboard | DER₀ **7.11 / 7.39**, ≥**117×**, pair ≤ 8 414 314 B, peak RSS ≤ **556 MiB** |
 | Linux native RTF (Ryzen AI 9 HX 370) | Vox ~**162×**; AMI ~**193×**; Vox-3 ~**111×** jobs=1 / ~**158×** wall at `--jobs 3` |
 | Inference (product CLI) | **`polyvoice-kernels`** (Darwin Accelerate/BNNS; Linux `rten-gemm`) |
@@ -76,11 +73,11 @@ multi-corpus proof.
 | Library features | `pipeline-native` + `vbx` (CLI parity). Crate-root `Pipeline` needs that gate; `PipelineConfig::default()` is **VBx** when `vbx` is on |
 
 Honest reading: v2+VBx INT8 kernels are the **measured product pipeline** on
-Linux (Vox 13.34 % / AMI 24.19 %) and Darwin Vox-3 (scoreboard floors).
-Linux/CPU **ort** is a historical comparison protocol, not the product CLI.
-Product CLI has no `--legacy` path. Tract is an **opt-in research path**. Public
-production still needs multi-corpus gates, an API freeze, and a Darwin
-full-split re-run after the AHC seed 0.6 retune.
+Linux (Vox 13.34 % / AMI 24.19 %) and Darwin (Vox 13.33 % / AMI 23.61 %;
+Vox-3 scoreboard floors hold). Linux/CPU **ort** is a historical comparison
+protocol, not the product CLI. Product CLI has no `--legacy` path. Tract is
+an **opt-in research path**. Public production still needs multi-corpus gates
+and an API freeze.
 
 ---
 
@@ -180,7 +177,7 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
 | pipeline v2 + VBx **INT8** (Vox / AMI, **ort** host / CoreML) | 232 / 16 | **15.02%** / **24.50%** | 10.33% / 16.82% | INT8 since 0.17; full-split 2026-08-10 |
 | pipeline v2 + VBx **INT8** **Linux/CPU ort** (Vox / AMI) | 232 / 16 | **14.94%** / **24.19%** | 10.27% / 16.60% | Historical comparison row; not a live engine |
-| Darwin native kernels (Vox / AMI, M1 Pro) | 232 / 16 | **15.47%** / **25.19%** | — | 0.18 product CLI; RTFx ~130× / ~109×; not re-run after AHC seed 0.6 |
+| Darwin native kernels (Vox / AMI, M1 Pro) | 232 / 16 | **13.33%** / **23.61%** | — | 2026-09-22, AHC seed 0.6; RTFx ~169× / ~200× |
 | Linux native kernels | 232 / 16 | **13.34%** / **24.19%** | — | 2026-09-13, AHC seed 0.6; RTFx ~162× / ~193× |
 | tract pure-Rust (3 short Vox, M1 Pro) | 3 | ~**7.22%** (vs ort ~7.41%) | — | Opt-in; not a release gate |
 | tract pure-Rust (10 shortest Vox, ≈560 s) | 10 | **8.86%** (vs ort **9.18%**) | — | RTFx ~11 vs ~99 |
@@ -189,9 +186,9 @@ Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
 | DIHARD | — | — | — | **Not measured / not gated** |
 
 **Gap:** The default v2+VBx INT8 path has full-split VoxConverse and AMI on
-desktop baselines, the **Linux/CPU ort** comparison protocol, and **Linux
-native kernels** (13.34 % / 24.19 %). Darwin native full-split is measured
-but predates AHC seed 0.6. **Multi-corpus DER beyond Vox/AMI remains
+desktop baselines, the **Linux/CPU ort** comparison protocol, **Linux
+native kernels** (13.34 % / 24.19 %), and **Darwin native kernels**
+(13.33 % / 23.61 %, 2026-09-22). **Multi-corpus DER beyond Vox/AMI remains
 absent**: no CALLHOME/DIHARD release gate. Linux kernels trail pyannote 3.1
 published 11.3 % by about **2 pp** no-collar on VoxConverse. Tract is **not**
 release-gated at full-split size.
@@ -200,8 +197,6 @@ release-gated at full-split size.
 - Cite Linux kernels as the non-Apple product protocol
   ([`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/)).
   Historical ort numbers remain as comparison rows, not a live engine.
-- Re-run Darwin full-split after AHC seed 0.6 before treating 15.47 % / 25.19 %
-  as current: `bash scripts/darwin-native-der-gate.sh` on macOS.
 - Add at least one additional corpus (CALLHOME and/or DIHARD subset) to the
   release DER matrix.
 - Do not pull `ort` back into `cli`.
@@ -317,7 +312,7 @@ All items must be true before declaring production-ready / shipping `1.0.0` as
       default path at **≤13–14%** (stretch ≤12%), with AMI not stagnating in the
       high-20s/30s without a documented plan — see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
       Linux kernels are **13.34 %** / AMI **24.19 %**. Darwin full-split is
-      still **15.47 %** / **25.19 %** (0.18, pre AHC seed 0.6).
+      **13.33 %** / **23.61 %** (2026-09-22, AHC seed 0.6).
 - [ ] **This document says GO.** `PRODUCTION-READINESS.md` re-reviewed and
       signed off for the intended deployment class (internal vs public).
 
@@ -333,7 +328,6 @@ Until every box is checked, the honest status remains:
 |---------|-------------------------------|
 | Dual pipeline families (BYO vs v2) | Intentional; still doubles docs/gates if not documented |
 | Parakeet still `ort` RC | Supply-chain risk on the ASR companion |
-| Darwin full-split stale vs AHC seed 0.6 | Linux remeasured; Darwin 15.47 % / 25.19 % is 0.18 |
 | Thin multi-corpus DER | Outside Vox/AMI only NOTSOFAR micro-gate; no CALLHOME/DIHARD |
 | Pre-1.0 API | Breaking changes without major bump |
 | Accuracy gap vs leaders | ~2 pp no-collar on VoxConverse vs pyannote 3.1 (11.3 %); speaker counting still dominant error |
@@ -348,18 +342,18 @@ Until every box is checked, the honest status remains:
 | Deployable footprint | **~8.4 MB** INT8 production pair (FP32 ids optional / not profile-default) |
 | Product CLI engine | kernels (`pipeline-native`); no `libonnxruntime` |
 | Speed (kernels, Darwin Vox-3 scoreboard) | ≥**117×** realtime; peak RSS ≤ **556 MiB** |
-| Speed (kernels, Darwin full-split M1 Pro) | Vox ~**130×**; AMI ~**109×** |
+| Speed (kernels, Darwin full-split M1 Pro) | Vox ~**169×**; AMI ~**200×** |
 | Speed (kernels, Linux Vox-3, Ryzen AI 9 HX 370) | ~**111×** jobs=1; ~**158×** wall at `--jobs 3` |
 | Speed (kernels, Linux full-split) | Vox ~**162×**; AMI ~**193×** |
 | Speed (INT8, Linux/CPU **ort** full-split, same host) | Vox ~**150×**; AMI ~**171×** |
 | VoxConverse-test DER (v2+VBx INT8 Linux **kernels**, 232, collar 0) | **13.34%** |
 | VoxConverse-test DER (v2+VBx INT8, 232, collar 0, **ort** host) | **15.02%** |
 | VoxConverse-test DER (v2+VBx INT8 Linux/CPU **ort**, 232, collar 0) | **14.94%** |
-| VoxConverse-test DER (v2+VBx INT8 Darwin **kernels**, 232, collar 0) | **15.47%** |
+| VoxConverse-test DER (v2+VBx INT8 Darwin **kernels**, 232, collar 0) | **13.33%** |
 | VoxConverse-test DER (legacy, 232, collar 0) | 18.54% |
 | AMI-test DER (v2+VBx INT8 Linux **kernels**, 16, collar 0) | **24.19%** |
 | AMI-test DER (v2+VBx INT8, 16, collar 0, **ort** host / Linux) | **24.50%** / **24.19%** |
-| AMI-test DER (v2+VBx INT8 Darwin **kernels**, 16, collar 0) | **25.19%** |
+| AMI-test DER (v2+VBx INT8 Darwin **kernels**, 16, collar 0) | **23.61%** |
 | AMI-test DER (legacy, 16, collar 0) | 32.87% |
 | Default pipeline | v2 + VBx |
 | Default CLI engine | kernels (0.18+) |
