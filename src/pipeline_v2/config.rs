@@ -8,9 +8,17 @@ use std::path::PathBuf;
 #[derive(Clone, Debug)]
 pub struct PipelineConfig {
     pub profile: Profile,
+    /// Sample rate of `run` audio. Shipping profiles (`Mobile`, `Balanced`,
+    /// `Fast`) accept only 16 kHz — that is the rate of the bundled models.
+    /// `Custom` may use any [`SampleRate`] (8–192 kHz); the caller owns the
+    /// components. A mismatched `run` rate still fails at execution.
     pub sample_rate: SampleRate,
     pub clusterer: ClustererKind,
+    /// Hard cap on global speakers. Range `1..=255`.
     pub max_speakers: u8,
+    /// Dissolve AHC clusters smaller than this into the nearest large
+    /// speaker. `1` disables pruning (the shipped default). Range `>= 1`.
+    /// Ignored for VBx, which chooses its own speaker count.
     pub min_cluster_size: usize,
     pub resegment_overlap: bool,
     /// Ablation: empty the local→global speaker map so every overlap region
@@ -20,11 +28,22 @@ pub struct PipelineConfig {
     /// Ablation: majority vote instead of Hungarian assignment for the
     /// local→global speaker map. Ships `false`.
     pub majority_local_map: bool,
+    /// Drop speech regions shorter than this. Finite and `>= 0` (`0` keeps
+    /// every region). NaN and infinity are rejected.
     pub min_speech_secs: f32,
     /// Gap-filling: merge same-speaker segments separated by at most this many
-    /// seconds (cVBx Δ=0.5 s default). One global value — never per-dataset.
+    /// seconds (cVBx Δ=0.5 s default). Finite and `>= 0` (`0` disables the
+    /// merge). One global value — never per-dataset.
     pub max_gap_secs: f32,
+    /// Parallel embedder sessions. Range `>= 1`. The builder setter clamps
+    /// `0` up to `1`; a raw [`.config()`](crate::pipeline_v2::PipelineBuilder::config)
+    /// value of `0` is rejected.
     pub embedder_pool_size: usize,
+    /// Where the ONNX/tract session would run. Product kernels ignore this
+    /// and always execute on CPU. Only [`ExecutionProvider::Cpu`] (including
+    /// [`ExecutionProvider::auto`], which resolves to CPU) is accepted.
+    /// `CoreMl`, `Nnapi`, `Cuda`, and `XnnPack` fail at `validate` — they are
+    /// not a silent CPU fallback.
     pub execution_provider: ExecutionProvider,
     /// Directory with the precomputed VBx PLDA params, used only when
     /// `clusterer == ClustererKind::Vbx`. `None` resolves through the
@@ -37,6 +56,7 @@ pub struct PipelineConfig {
     /// segment, yielding several embeddings per speaker run — like the legacy
     /// pipeline's dense windows — for more robust centroids / lower confusion at
     /// the cost of more embedder calls. Sub-`w` segments still embed once.
+    /// `Some` must be finite and `> 0`.
     pub embed_window_secs: Option<f32>,
     /// Optional calibrated binarization of segmentation posteriors (onset/offset
     /// hysteresis + min-duration smoothing) instead of per-frame argmax.
@@ -47,6 +67,7 @@ pub struct PipelineConfig {
     /// cohort before merging, so one threshold generalizes across recording
     /// domains. `None` keeps raw cosine scoring. Only applies to
     /// `ClustererKind::Ahc`; other clusterers ignore it.
+    /// `top_n` must be `>= 2` (`0` and `1` would silently skip normalization).
     pub as_norm: Option<crate::clusterer::AsNormConfig>,
     /// Optional per-domain scoring profile. With `ClustererKind::Ahc` the
     /// profile's calibrated threshold replaces the configured one at build
@@ -99,6 +120,8 @@ impl Default for PipelineConfig {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ClustererKind {
     NmeSc,
+    /// Fixed-threshold agglomerative clustering. `threshold` is cosine
+    /// similarity in `[-1.0, 1.0]` (finite).
     Ahc {
         threshold: f32,
     },
@@ -151,6 +174,116 @@ fn default_pool_size() -> usize {
         .map(|n| n.get())
         .unwrap_or(1)
         .clamp(1, 4)
+}
+
+impl PipelineConfig {
+    /// Reject public settings that would otherwise download models and then
+    /// mis-index audio, silently disable a feature, or pretend a backend ran.
+    /// Called from [`crate::pipeline_v2::PipelineBuilder::validate`] before
+    /// any registry fetch.
+    pub(crate) fn validate_settings(&self) -> Result<(), crate::pipeline_v2::ConfigError> {
+        use crate::pipeline_v2::ConfigError;
+
+        let bad =
+            |field: &'static str, detail: String| ConfigError::InvalidSetting { field, detail };
+
+        if !matches!(self.profile, Profile::Custom) && self.sample_rate.get() != 16_000 {
+            return Err(bad(
+                "sample_rate",
+                format!(
+                    "shipping profiles require 16000 Hz (bundled models); got {} Hz. Use Profile::Custom with your own components for another rate",
+                    self.sample_rate.get()
+                ),
+            ));
+        }
+        if self.max_speakers == 0 {
+            return Err(bad("max_speakers", "must be in 1..=255, got 0".into()));
+        }
+        if self.min_cluster_size == 0 {
+            return Err(bad(
+                "min_cluster_size",
+                "must be >= 1 (1 disables pruning), got 0".into(),
+            ));
+        }
+        if !(self.min_speech_secs.is_finite() && self.min_speech_secs >= 0.0) {
+            return Err(bad(
+                "min_speech_secs",
+                format!("must be finite and >= 0, got {}", self.min_speech_secs),
+            ));
+        }
+        if !(self.max_gap_secs.is_finite() && self.max_gap_secs >= 0.0) {
+            return Err(bad(
+                "max_gap_secs",
+                format!("must be finite and >= 0, got {}", self.max_gap_secs),
+            ));
+        }
+        if self.embedder_pool_size == 0 {
+            return Err(bad("embedder_pool_size", "must be >= 1, got 0".into()));
+        }
+        if let Some(w) = self.embed_window_secs
+            && !(w.is_finite() && w > 0.0)
+        {
+            return Err(bad(
+                "embed_window_secs",
+                format!("must be finite and > 0 when set, got {w}"),
+            ));
+        }
+        if let ClustererKind::Ahc { threshold } = self.clusterer
+            && !(-1.0..=1.0).contains(&threshold)
+        {
+            return Err(bad(
+                "clusterer.threshold",
+                format!("cosine similarity must be in [-1.0, 1.0], got {threshold}"),
+            ));
+        }
+        if !self.execution_provider.is_available() {
+            return Err(bad(
+                "execution_provider",
+                format!(
+                    "{:?} is not available; only Cpu is executed (auto resolves to Cpu)",
+                    self.execution_provider
+                ),
+            ));
+        }
+        if let Some(bin) = self.binarization {
+            if !(bin.onset.is_finite() && (0.0..=1.0).contains(&bin.onset)) {
+                return Err(bad(
+                    "binarization.onset",
+                    format!("must be finite and in [0.0, 1.0], got {}", bin.onset),
+                ));
+            }
+            if !(bin.offset.is_finite() && (0.0..=1.0).contains(&bin.offset)) {
+                return Err(bad(
+                    "binarization.offset",
+                    format!("must be finite and in [0.0, 1.0], got {}", bin.offset),
+                ));
+            }
+            if !(bin.min_duration_on.is_finite() && bin.min_duration_on >= 0.0) {
+                return Err(bad(
+                    "binarization.min_duration_on",
+                    format!("must be finite and >= 0, got {}", bin.min_duration_on),
+                ));
+            }
+            if !(bin.min_duration_off.is_finite() && bin.min_duration_off >= 0.0) {
+                return Err(bad(
+                    "binarization.min_duration_off",
+                    format!("must be finite and >= 0, got {}", bin.min_duration_off),
+                ));
+            }
+        }
+        if let Some(norm) = &self.as_norm
+            && norm.top_n < 2
+        {
+            return Err(bad(
+                "as_norm.top_n",
+                format!(
+                    "must be >= 2 (1 silently disables normalization), got {}",
+                    norm.top_n
+                ),
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[allow(clippy::unwrap_used)]

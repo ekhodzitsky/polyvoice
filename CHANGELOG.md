@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `PipelineBuilder::validate` rejects out-of-range public settings (NaN,
+  infinity, `max_speakers == 0`, `min_cluster_size == 0`, non-positive
+  embed windows, AHC thresholds outside [-1, 1], AS-norm `top_n < 2`,
+  non-16 kHz on shipping profiles, and execution providers other than CPU)
+  before any model download. Zero durations remain valid.
 - Darwin full-split benchmark rows re-measured on the product CLI (M1 Pro,
   v2+VBx INT8 kernels, collar 0): VoxConverse-test DER₀ 15.47 % → **13.33 %**,
   RTFx ~130× → ~**169×**; AMI-test DER₀ 25.19 % → **23.61 %**, RTFx

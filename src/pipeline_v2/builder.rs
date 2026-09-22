@@ -39,6 +39,11 @@ pub enum ConfigError {
 
     #[error("registry resolution failed: {0}")]
     Registry(#[from] RegistryError),
+
+    /// A public numeric or backend setting is outside its documented range.
+    /// Raised by [`PipelineBuilder::validate`] before any model download.
+    #[error("invalid pipeline setting {field}: {detail}")]
+    InvalidSetting { field: &'static str, detail: String },
 }
 
 pub struct PipelineBuilder {
@@ -120,6 +125,7 @@ impl PipelineBuilder {
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
+        self.config.validate_settings()?;
         match self.config.profile {
             Profile::Mobile | Profile::Balanced | Profile::Fast => {
                 if self.custom_segmenter.is_some() {

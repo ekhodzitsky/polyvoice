@@ -190,6 +190,104 @@ fn builder_profile_setter() {
     assert_eq!(b.config.profile, Profile::Mobile);
 }
 
+fn with_config(mutate: impl FnOnce(&mut PipelineConfig)) -> PipelineBuilder {
+    let mut cfg = PipelineConfig::default();
+    mutate(&mut cfg);
+    fresh().config(cfg)
+}
+
+fn assert_invalid(mutate: impl FnOnce(&mut PipelineConfig), field: &str) {
+    let err = with_config(mutate).validate().unwrap_err();
+    match err {
+        ConfigError::InvalidSetting { field: got, detail } => {
+            assert_eq!(got, field, "{detail}");
+            assert!(!detail.is_empty());
+        }
+        other => panic!("expected InvalidSetting for {field}, got {other:?}"),
+    }
+}
+
+#[test]
+fn validate_rejects_non_finite_and_out_of_range_before_registry() {
+    assert_invalid(|c| c.min_speech_secs = f32::NAN, "min_speech_secs");
+    assert_invalid(|c| c.max_gap_secs = f32::INFINITY, "max_gap_secs");
+    assert_invalid(|c| c.min_speech_secs = -0.1, "min_speech_secs");
+    assert_invalid(|c| c.max_speakers = 0, "max_speakers");
+    assert_invalid(|c| c.min_cluster_size = 0, "min_cluster_size");
+    assert_invalid(|c| c.embedder_pool_size = 0, "embedder_pool_size");
+    assert_invalid(|c| c.embed_window_secs = Some(0.0), "embed_window_secs");
+    assert_invalid(
+        |c| c.embed_window_secs = Some(f32::NAN),
+        "embed_window_secs",
+    );
+    assert_invalid(
+        |c| {
+            c.clusterer = ClustererKind::Ahc {
+                threshold: f32::NAN,
+            }
+        },
+        "clusterer.threshold",
+    );
+    assert_invalid(
+        |c| c.clusterer = ClustererKind::Ahc { threshold: 1.5 },
+        "clusterer.threshold",
+    );
+    assert_invalid(
+        |c| c.sample_rate = crate::SampleRate::new(8_000).expect("8 kHz is a valid SampleRate"),
+        "sample_rate",
+    );
+    assert_invalid(
+        |c| c.execution_provider = crate::pipeline_v2::ExecutionProvider::Cuda,
+        "execution_provider",
+    );
+    assert_invalid(
+        |c| {
+            c.binarization = Some(crate::segmentation::BinarizationConfig {
+                onset: f32::NAN,
+                ..crate::segmentation::BinarizationConfig::default()
+            })
+        },
+        "binarization.onset",
+    );
+    assert_invalid(
+        |c| {
+            c.as_norm = Some(crate::clusterer::AsNormConfig {
+                top_n: 1,
+                cohort: crate::clusterer::CohortSource::ModelId("unused".into()),
+            })
+        },
+        "as_norm.top_n",
+    );
+}
+
+#[test]
+fn validate_accepts_documented_boundaries_without_loading_models() {
+    // No registry: a numeric pass still stops at MissingRegistry, never Load.
+    let err = with_config(|c| {
+        c.min_speech_secs = 0.0;
+        c.max_gap_secs = 0.0;
+        c.max_speakers = 1;
+        c.min_cluster_size = 1;
+        c.embed_window_secs = Some(0.5);
+        c.clusterer = ClustererKind::Ahc { threshold: -1.0 };
+        c.execution_provider = crate::pipeline_v2::ExecutionProvider::Cpu;
+    })
+    .validate()
+    .unwrap_err();
+    assert!(matches!(err, ConfigError::MissingRegistry { .. }));
+
+    let err = with_config(|c| {
+        c.profile = Profile::Custom;
+        c.sample_rate = crate::SampleRate::new(8_000).expect("8 kHz");
+    })
+    .validate()
+    .unwrap_err();
+    assert!(
+        matches!(err, ConfigError::MissingCustomComponent { .. }),
+        "custom may use a non-16 kHz rate; got {err:?}"
+    );
+}
+
 #[test]
 fn validate_mobile_without_registry_errors() {
     let err = fresh().profile(Profile::Mobile).validate().unwrap_err();
