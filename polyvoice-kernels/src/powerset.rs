@@ -8,11 +8,11 @@ use crate::error::KernelError;
 use crate::lstm::{BiLstm, log_softmax_last};
 use crate::onnx_init::{OnnxTensor, load_initializers, take_f32, take_i8_quant};
 use crate::qlinear;
+use crate::scratch;
 use crate::seq1d::{
     Seq1d, abs_inplace, conv1d, instance_norm_inplace, leaky_relu_inplace, leaky_relu_slice,
     max_pool1d,
 };
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -20,24 +20,6 @@ pub const N_CLASSES: usize = 7;
 pub const LEAKY_ALPHA: f32 = 0.01;
 const IN_EPS: f32 = 1.0e-5;
 const HIDDEN: usize = 128;
-
-struct PsScratch {
-    seq: Vec<f32>,
-    lstm_a: Vec<f32>,
-    lstm_b: Vec<f32>,
-    ntf: Vec<f32>,
-}
-
-thread_local! {
-    static PS_SCRATCH: RefCell<PsScratch> = const {
-        RefCell::new(PsScratch {
-            seq: Vec::new(),
-            lstm_a: Vec::new(),
-            lstm_b: Vec::new(),
-            ntf: Vec::new(),
-        })
-    };
-}
 
 /// Minimum T so SincNet still emits one frame (valid conv/pool stack).
 pub const MIN_SAMPLES: usize = 1251;
@@ -73,13 +55,18 @@ pub struct Powerset {
     lin0: Linear,
     lin1: Linear,
     clf: Linear,
+    /// Read-only ONNX mapping. File pages stay shared across workers.
+    #[allow(dead_code)]
+    onnx_map: Option<crate::onnx_init::MappedOnnx>,
 }
 
 impl Powerset {
     pub fn from_onnx_path(path: &Path) -> Result<Self, KernelError> {
         crate::rten_matmul::pin_parallelism();
-        let init = load_initializers(path)?;
-        Self::from_initializers(&init)
+        let (onnx_map, init) = load_initializers(path)?;
+        let mut net = Self::from_initializers(&init)?;
+        net.onnx_map = Some(onnx_map);
+        Ok(net)
     }
 
     fn from_initializers(init: &HashMap<String, OnnxTensor>) -> Result<Self, KernelError> {
@@ -137,6 +124,7 @@ impl Powerset {
                 128,
                 N_CLASSES,
             )?,
+            onnx_map: None,
         })
     }
 
@@ -180,54 +168,50 @@ impl Powerset {
 
         // [N, 60, F] → [F, N, 60]
         let frames = x.l;
-        PS_SCRATCH.with(|cell| {
-            let mut s = cell.borrow_mut();
-            let mut seq = std::mem::take(&mut s.seq);
-            let mut lstm_a = std::mem::take(&mut s.lstm_a);
-            let mut lstm_b = std::mem::take(&mut s.lstm_b);
-            let mut ntf = std::mem::take(&mut s.ntf);
-            seq.resize(frames * n * 60, 0.0);
+        let mut seq = scratch::take_f32(frames * n * 60);
+        let mut lstm_a = scratch::take_f32(0);
+        let mut lstm_b = scratch::take_f32(0);
+        let mut ntf = scratch::take_f32(n * frames * 256);
+        for ni in 0..n {
+            for c in 0..60 {
+                let src = &x.data[(ni * 60 + c) * frames..(ni * 60 + c) * frames + frames];
+                for f in 0..frames {
+                    seq[(f * n + ni) * 60 + c] = src[f];
+                }
+            }
+        }
+        debug_assert_eq!(self.lstm[0].input, 60);
+        self.lstm[0].forward_into(&seq, frames, n, &mut lstm_a);
+        let mut use_a = true;
+        for layer in &self.lstm[1..] {
+            debug_assert_eq!(layer.input, 256);
+            if use_a {
+                layer.forward_into(&lstm_a, frames, n, &mut lstm_b);
+            } else {
+                layer.forward_into(&lstm_b, frames, n, &mut lstm_a);
+            }
+            use_a = !use_a;
+        }
+        ntf.resize(n * frames * 256, 0.0);
+        let cur = if use_a { &lstm_a } else { &lstm_b };
+        for f in 0..frames {
             for ni in 0..n {
-                for c in 0..60 {
-                    let src = &x.data[(ni * 60 + c) * frames..(ni * 60 + c) * frames + frames];
-                    for f in 0..frames {
-                        seq[(f * n + ni) * 60 + c] = src[f];
-                    }
-                }
+                let src_i = (f * n + ni) * 256;
+                let dst = (ni * frames + f) * 256;
+                ntf[dst..dst + 256].copy_from_slice(&cur[src_i..src_i + 256]);
             }
-            debug_assert_eq!(self.lstm[0].input, 60);
-            self.lstm[0].forward_into(&seq, frames, n, &mut lstm_a);
-            let mut use_a = true;
-            for layer in &self.lstm[1..] {
-                debug_assert_eq!(layer.input, 256);
-                if use_a {
-                    layer.forward_into(&lstm_a, frames, n, &mut lstm_b);
-                } else {
-                    layer.forward_into(&lstm_b, frames, n, &mut lstm_a);
-                }
-                use_a = !use_a;
-            }
-            ntf.resize(n * frames * 256, 0.0);
-            let cur = if use_a { &lstm_a } else { &lstm_b };
-            for f in 0..frames {
-                for ni in 0..n {
-                    let src_i = (f * n + ni) * 256;
-                    let dst = (ni * frames + f) * 256;
-                    ntf[dst..dst + 256].copy_from_slice(&cur[src_i..src_i + 256]);
-                }
-            }
-            let mut h = apply_linear(&ntf, n, frames, &self.lin0);
-            leaky_relu_slice(&mut h, LEAKY_ALPHA);
-            h = apply_linear(&h, n, frames, &self.lin1);
-            leaky_relu_slice(&mut h, LEAKY_ALPHA);
-            let mut logits = apply_linear(&h, n, frames, &self.clf);
-            log_softmax_last(&mut logits, n, frames, N_CLASSES);
-            s.seq = seq;
-            s.lstm_a = lstm_a;
-            s.lstm_b = lstm_b;
-            s.ntf = ntf;
-            Ok((logits, frames))
-        })
+        }
+        let mut h = apply_linear(&ntf, n, frames, &self.lin0);
+        leaky_relu_slice(&mut h, LEAKY_ALPHA);
+        h = apply_linear(&h, n, frames, &self.lin1);
+        leaky_relu_slice(&mut h, LEAKY_ALPHA);
+        let mut logits = apply_linear(&h, n, frames, &self.clf);
+        log_softmax_last(&mut logits, n, frames, N_CLASSES);
+        scratch::put_f32(seq);
+        scratch::put_f32(lstm_a);
+        scratch::put_f32(lstm_b);
+        scratch::put_f32(ntf);
+        Ok((logits, frames))
     }
 }
 

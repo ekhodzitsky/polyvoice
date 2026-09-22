@@ -4,8 +4,10 @@
 //! the computation graph.
 
 use crate::error::KernelError;
+use memmap2::Mmap;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 
 const WIRE_VARINT: u64 = 0;
 const WIRE_64: u64 = 1;
@@ -17,10 +19,65 @@ const DT_FLOAT: i32 = 1;
 const DT_INT8: i32 = 3;
 const DT_INT32: i32 = 6;
 
+/// INT8 payload: file-backed slice of the ONNX mmap, or a heap copy when the
+/// protobuf stored packed `int32_data` instead of `raw_data`.
+#[derive(Clone, Debug)]
+pub struct I8Buf {
+    inner: I8Inner,
+}
+
+#[derive(Clone, Debug)]
+enum I8Inner {
+    Mapped {
+        map: Arc<Mmap>,
+        offset: usize,
+        len: usize,
+    },
+    Heap(Vec<i8>),
+}
+
+impl I8Buf {
+    fn mapped(map: Arc<Mmap>, offset: usize, len: usize) -> Self {
+        Self {
+            inner: I8Inner::Mapped { map, offset, len },
+        }
+    }
+
+    fn heap(v: Vec<i8>) -> Self {
+        Self {
+            inner: I8Inner::Heap(v),
+        }
+    }
+
+    pub fn as_slice(&self) -> &[i8] {
+        match &self.inner {
+            I8Inner::Mapped { map, offset, len } => {
+                let bytes = &map[*offset..*offset + *len];
+                // SAFETY: i8 and u8 have the same size and alignment.
+                unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<i8>(), *len) }
+            }
+            I8Inner::Heap(v) => v,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn is_mapped(&self) -> bool {
+        matches!(self.inner, I8Inner::Mapped { .. })
+    }
+
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    pub fn to_vec(&self) -> Vec<i8> {
+        self.as_slice().to_vec()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum OnnxPayload {
     F32(Vec<f32>),
-    I8(Vec<i8>),
+    I8(I8Buf),
     I32(Vec<i32>),
 }
 
@@ -31,15 +88,30 @@ pub struct OnnxTensor {
     pub payload: OnnxPayload,
 }
 
-pub fn load_initializers(path: &Path) -> Result<HashMap<String, OnnxTensor>, KernelError> {
-    let bytes = std::fs::read(path).map_err(|e| KernelError::Io {
+/// Read-only mapping of an ONNX file. Held by the model so INT8 `raw_data`
+/// slices stay valid. Never `madvise(DONTNEED)` this mapping.
+pub type MappedOnnx = Arc<Mmap>;
+
+pub fn load_initializers(
+    path: &Path,
+) -> Result<(MappedOnnx, HashMap<String, OnnxTensor>), KernelError> {
+    let file = std::fs::File::open(path).map_err(|e| KernelError::Io {
         path: path.to_path_buf(),
         detail: e.to_string(),
     })?;
-    parse_initializers(&bytes)
+    // SAFETY: the file is opened read-only and is not truncated while mapped.
+    // We never write through the mapping.
+    let mmap = unsafe { Mmap::map(&file) }.map_err(|e| KernelError::Io {
+        path: path.to_path_buf(),
+        detail: e.to_string(),
+    })?;
+    let map = Arc::new(mmap);
+    let tensors = parse_initializers(&map)?;
+    Ok((map, tensors))
 }
 
-fn parse_initializers(bytes: &[u8]) -> Result<HashMap<String, OnnxTensor>, KernelError> {
+fn parse_initializers(map: &MappedOnnx) -> Result<HashMap<String, OnnxTensor>, KernelError> {
+    let bytes: &[u8] = map.as_ref();
     let mut pos = 0;
     let mut graph = None;
     while pos < bytes.len() {
@@ -68,7 +140,7 @@ fn parse_initializers(bytes: &[u8]) -> Result<HashMap<String, OnnxTensor>, Kerne
         if field == 5 && wire == WIRE_LEN {
             let (blob, p) = read_len_blob(graph, pos)?;
             pos = p;
-            if let Some(t) = parse_tensor_proto(blob)? {
+            if let Some(t) = parse_tensor_proto(blob, map)? {
                 out.insert(t.name.clone(), t);
             }
         } else {
@@ -83,7 +155,7 @@ fn parse_initializers(bytes: &[u8]) -> Result<HashMap<String, OnnxTensor>, Kerne
     Ok(out)
 }
 
-fn parse_tensor_proto(bytes: &[u8]) -> Result<Option<OnnxTensor>, KernelError> {
+fn parse_tensor_proto(bytes: &[u8], map: &MappedOnnx) -> Result<Option<OnnxTensor>, KernelError> {
     let mut pos = 0;
     let mut dims: Vec<i64> = Vec::new();
     let mut data_type: i32 = 0;
@@ -187,9 +259,15 @@ fn parse_tensor_proto(bytes: &[u8]) -> Result<Option<OnnxTensor>, KernelError> {
         }
         DT_INT8 => {
             let data = if let Some(raw) = raw {
-                raw.iter().map(|&b| b as i8).collect()
+                let base = map.as_ptr() as usize;
+                let ptr = raw.as_ptr() as usize;
+                if ptr >= base && ptr + raw.len() <= base + map.len() {
+                    I8Buf::mapped(Arc::clone(map), ptr - base, raw.len())
+                } else {
+                    I8Buf::heap(raw.iter().map(|&b| b as i8).collect())
+                }
             } else {
-                int32_data.into_iter().map(|v| v as i8).collect()
+                I8Buf::heap(int32_data.into_iter().map(|v| v as i8).collect())
             };
             OnnxPayload::I8(data)
         }
@@ -264,7 +342,7 @@ pub fn take_f32(
     let data = match &qt.payload {
         OnnxPayload::I8(q) => {
             let zp = take_zp_i8(init, name, scale.len())?;
-            dequant_i8(q, &qt.dims, &scale, &s_dims, &zp)
+            dequant_i8(q.as_slice(), &qt.dims, &scale, &s_dims, &zp)
         }
         OnnxPayload::I32(q) => {
             let zp = take_zp_i32(init, name, scale.len())?;
@@ -306,7 +384,7 @@ pub fn take_i8_quant(
     };
     let (scale, _) = take_scale(init, name)?;
     let zp = take_zp_i8(init, name, scale.len())?;
-    Ok((q.clone(), scale, zp))
+    Ok((q.to_vec(), scale, zp))
 }
 
 fn coerce_shape(
@@ -362,7 +440,7 @@ fn take_zp_i8(
     ] {
         if let Some(t) = init.get(&key) {
             match &t.payload {
-                OnnxPayload::I8(v) => return Ok(v.clone()),
+                OnnxPayload::I8(v) => return Ok(v.to_vec()),
                 OnnxPayload::I32(v) => return Ok(v.iter().map(|&x| x as i8).collect()),
                 OnnxPayload::F32(_) => {}
             }
@@ -383,7 +461,9 @@ fn take_zp_i32(
         if let Some(t) = init.get(&key) {
             match &t.payload {
                 OnnxPayload::I32(v) => return Ok(v.clone()),
-                OnnxPayload::I8(v) => return Ok(v.iter().map(|&x| i32::from(x)).collect()),
+                OnnxPayload::I8(v) => {
+                    return Ok(v.as_slice().iter().map(|&x| i32::from(x)).collect());
+                }
                 OnnxPayload::F32(_) => {}
             }
         }
@@ -589,7 +669,7 @@ mod tests {
         let Some(path) = int8_resnet() else {
             return;
         };
-        let init = load_initializers(&path).unwrap();
+        let (_map, init) = load_initializers(&path).unwrap();
         let w = take_f32(&init, "onnx::Conv_370", &[32, 32, 3, 3]).unwrap();
         let b = take_f32(&init, "onnx::Conv_371", &[32]).unwrap();
         let sum: f32 = w.iter().sum();
@@ -604,12 +684,31 @@ mod tests {
     }
 
     #[test]
+    fn int8_raw_data_is_mmap_backed() {
+        let Some(path) = int8_resnet() else {
+            return;
+        };
+        let (_map, init) = load_initializers(&path).unwrap();
+        let mapped = init
+            .values()
+            .filter(|t| match &t.payload {
+                OnnxPayload::I8(b) => b.is_mapped(),
+                _ => false,
+            })
+            .count();
+        assert!(
+            mapped > 0,
+            "expected INT8 raw_data slices to stay in the mmap"
+        );
+    }
+
+    #[test]
     fn dequant_lstm784_matches_reference() {
         let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../models/int8/powerset_int8.onnx");
         if !p.is_file() {
             return;
         }
-        let init = load_initializers(&p).unwrap();
+        let (_map, init) = load_initializers(&p).unwrap();
         let w = take_f32(&init, "onnx::LSTM_784", &[2, 512, 60]).unwrap();
         let sum: f32 = w.iter().sum();
         assert!(

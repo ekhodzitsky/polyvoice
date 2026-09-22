@@ -367,6 +367,10 @@ pub struct ResNet34 {
     onnx_path: PathBuf,
     /// Compiled graph is the only conv path; layer weights were not loaded.
     graph_only: bool,
+    /// Read-only ONNX mapping. INT8 `raw_data` and the file pages stay
+    /// file-backed for the model lifetime. Do not madvise(DONTNEED).
+    #[allow(dead_code)]
+    onnx_map: Option<crate::onnx_init::MappedOnnx>,
 }
 
 impl ResNet34 {
@@ -378,13 +382,14 @@ impl ResNet34 {
         let graph_ready = crate::bnns_graph::warmup(path);
         #[cfg(not(target_vendor = "apple"))]
         let graph_ready = false;
-        let init = load_initializers(path)?;
+        let (onnx_map, init) = load_initializers(path)?;
         // When the compiled graph is live, skip dequantizing 36 convs into
         // FP32 — that copy was in the peak RSS together with the graph.
         let skip_convs = graph_ready && !cfg!(test);
         let mut net = Self::from_initializers(&init, skip_convs)?;
         net.onnx_path = path.to_path_buf();
         net.graph_only = skip_convs;
+        net.onnx_map = Some(onnx_map);
         Ok(net)
     }
 
@@ -454,6 +459,7 @@ impl ResNet34 {
             fc_out_q,
             onnx_path: PathBuf::new(),
             graph_only: false,
+            onnx_map: None,
         })
     }
 
@@ -1018,7 +1024,7 @@ fn take_act(init: &HashMap<String, OnnxTensor>, prefix: Option<&str>) -> Option<
     }
     let zp_name = format!("{prefix}_zero_point");
     let zp = init.get(&zp_name).map(|t| match &t.payload {
-        crate::onnx_init::OnnxPayload::I8(v) => v.first().copied().unwrap_or(-128),
+        crate::onnx_init::OnnxPayload::I8(v) => v.as_slice().first().copied().unwrap_or(-128),
         crate::onnx_init::OnnxPayload::I32(v) => v.first().map(|&x| x as i8).unwrap_or(-128),
         crate::onnx_init::OnnxPayload::F32(_) => -128,
     })?;
