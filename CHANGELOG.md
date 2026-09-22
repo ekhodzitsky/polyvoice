@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `pipeline-local`: powerset + ResNet34 kernels + VBx from a local directory
+  (`ModelRegistry::with_local_dir` + `vbx_plda_dir`) without the `download`
+  feature. SHA-256 and minisign still apply; missing or corrupt files error
+  with no network. Example: `examples/local_native.rs`.
+
 ### Changed
 
 - `PipelineBuilder::validate` rejects out-of-range public settings (NaN,

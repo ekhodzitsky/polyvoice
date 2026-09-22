@@ -73,6 +73,14 @@ ONNX-file adapters that additionally need `backend-tract` (listed under
 | `cli`, `ffi`, `mcp`, Python wheel | `pipeline-native` + `vbx` (+ extras). `PipelineConfig::default()` is VBx when `vbx` is on |
 | `cli-tract` | same CLI bins as `cli`, tract engine, no `ort`; `--legacy` rejected |
 | `pipeline-native` / `cli-native` | same v2 stack on hand-written kernels; **no ort, no tract**; `--legacy` rejected |
+| `pipeline-local` | same kernels + VBx from a local directory (`ModelRegistry::with_local_dir` + `vbx_plda_dir`). **No `download`**, so no ureq/rustls/ring. SHA-256 and minisign still apply |
+
+Runnable local-model copy:
+
+```bash
+cargo run --no-default-features --features pipeline-local --example local_native -- \
+  models/int8 fixtures/vbx-plda audio.wav
+```
 
 ## Reference consumer pattern
 

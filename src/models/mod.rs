@@ -2,14 +2,17 @@
 //! adapter selection by config string, and self-describing model metadata.
 
 pub mod adapter;
+#[cfg(feature = "download")]
 pub mod download;
 pub mod manifest;
 pub mod metadata;
 pub mod verify;
 pub use adapter::{AdapterError, AdapterFactory, AdapterRegistry, AdapterStage, BuiltinAdapter};
+#[cfg(feature = "download")]
 pub use download::{
     DownloadError, download_with_checksum, download_with_checksum_and_signature, verify_sha256,
 };
+#[cfg(feature = "download")]
 use download::{download_with_checksum_signature_and_cap, max_download_bytes};
 pub use manifest::{
     Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1, SCHEMA_V2, is_supported_schema,
@@ -145,8 +148,20 @@ pub enum RegistryError {
     CacheNotWritable { path: PathBuf },
     #[error("model '{model_id}' is not present in cache and offline mode is requested")]
     OfflineMissing { model_id: String },
+    #[error(
+        "checksum mismatch for {path}: expected {expected}, got {actual} \
+         (file is corrupt or not the manifest artifact; nothing was downloaded)"
+    )]
+    ChecksumMismatch {
+        path: PathBuf,
+        expected: String,
+        actual: String,
+    },
+    #[error("signature rejected for {path}: {detail}")]
+    SignatureRejected { path: PathBuf, detail: String },
     #[error("manifest error: {0}")]
     Manifest(#[from] ManifestError),
+    #[cfg(feature = "download")]
     #[error("download error: {0}")]
     Download(#[from] DownloadError),
     #[error("io error on {path}: {source}")]
@@ -174,6 +189,8 @@ pub struct ModelRegistry {
     /// manifest entries without a minisign signature (`UnsignedModel`). Debug
     /// builds stay lenient so local fixtures don't need signatures.
     require_signatures: bool,
+    /// `false` for [`Self::with_local_dir`]: never open a socket.
+    allow_download: bool,
 }
 
 /// Signature presence is enforced for profile-resolved models in release
@@ -187,6 +204,7 @@ impl ModelRegistry {
     /// Build a registry rooted at the user's cache directory (`~/.cache/polyvoice/models`
     /// on Linux, `~/Library/Caches/polyvoice/models` on macOS, `%LOCALAPPDATA%\polyvoice\models`
     /// on Windows) using the embedded default manifest.
+    #[cfg(feature = "download")]
     #[allow(clippy::should_implement_trait)]
     pub fn default() -> Result<Self, RegistryError> {
         let cache = dirs::cache_dir()
@@ -213,7 +231,33 @@ impl ModelRegistry {
             manifest: default_manifest(),
             cache_dir: path,
             require_signatures: REQUIRE_SIGNATURES_DEFAULT,
+            allow_download: cfg!(feature = "download"),
         })
+    }
+
+    /// Registry over files the caller already has. Never downloads.
+    ///
+    /// `dir` must already exist and contain manifest filenames
+    /// (`powerset_int8.onnx`, `resnet34_int8.onnx`, …). Each `ensure` checks
+    /// SHA-256 and, when the manifest carries one, the minisign signature.
+    /// A missing, corrupt, or unsigned artifact is an error — there is no
+    /// network fallback.
+    pub fn with_local_dir(dir: impl AsRef<Path>) -> Result<Self, RegistryError> {
+        let path = dir.as_ref().to_path_buf();
+        if !path.is_dir() {
+            return Err(RegistryError::CacheNotWritable { path });
+        }
+        Ok(Self {
+            manifest: default_manifest(),
+            cache_dir: path,
+            require_signatures: REQUIRE_SIGNATURES_DEFAULT,
+            allow_download: false,
+        })
+    }
+
+    /// Whether `ensure` may fetch a missing file. Local directories never do.
+    pub fn allows_download(&self) -> bool {
+        self.allow_download
     }
 
     /// { true }
@@ -253,6 +297,7 @@ impl ModelRegistry {
             manifest,
             cache_dir: path,
             require_signatures: REQUIRE_SIGNATURES_DEFAULT,
+            allow_download: false,
         })
     }
 
@@ -277,6 +322,56 @@ impl ModelRegistry {
     /// Downloads if missing. Idempotent: returns immediately when the cached file
     /// already matches the expected hash.
     pub fn ensure(&self, model_id: &str) -> Result<PathBuf, RegistryError> {
+        if !self.allow_download {
+            return self.ensure_local(model_id);
+        }
+        #[cfg(not(feature = "download"))]
+        {
+            self.ensure_local(model_id)
+        }
+        #[cfg(feature = "download")]
+        {
+            self.ensure_download(model_id)
+        }
+    }
+
+    /// Verify a file already in `cache_dir`. Does not open a socket.
+    pub fn ensure_local(&self, model_id: &str) -> Result<PathBuf, RegistryError> {
+        let entry = self
+            .manifest
+            .model(model_id)
+            .ok_or_else(|| RegistryError::ModelNotFound {
+                model_id: model_id.to_owned(),
+            })?;
+        let dest = self.cache_dir.join(&entry.filename);
+        if !dest.is_file() {
+            return Err(RegistryError::OfflineMissing {
+                model_id: model_id.to_owned(),
+            });
+        }
+        let actual = sha256_file(&dest)?;
+        if actual != entry.sha256 {
+            return Err(RegistryError::ChecksumMismatch {
+                path: dest,
+                expected: entry.sha256.clone(),
+                actual,
+            });
+        }
+        if let Some(sig) = entry.signature.as_deref() {
+            verify::verify_minisign(&dest, sig).map_err(|e| RegistryError::SignatureRejected {
+                path: dest.clone(),
+                detail: e.to_string(),
+            })?;
+        } else if self.require_signatures {
+            return Err(RegistryError::UnsignedModel {
+                model_id: model_id.to_owned(),
+            });
+        }
+        Ok(dest)
+    }
+
+    #[cfg(feature = "download")]
+    fn ensure_download(&self, model_id: &str) -> Result<PathBuf, RegistryError> {
         let entry = self
             .manifest
             .model(model_id)
@@ -409,6 +504,29 @@ impl ModelRegistry {
             embedder_path,
         })
     }
+}
+
+fn sha256_file(path: &Path) -> Result<String, RegistryError> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let f = std::fs::File::open(path).map_err(|e| RegistryError::Io {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+    let mut reader = std::io::BufReader::new(f);
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = reader.read(&mut buf).map_err(|e| RegistryError::Io {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 #[allow(clippy::unwrap_used)]
@@ -860,11 +978,39 @@ mod tests {
         let err = RegistryError::from(manifest_err);
         assert!(format!("{err}").contains("manifest error"));
 
-        let download_err = DownloadError::Io {
-            path: PathBuf::from("model.onnx"),
-            source: std::io::Error::other("boom"),
-        };
-        let err = RegistryError::from(download_err);
-        assert!(format!("{err}").contains("download error"));
+        #[cfg(feature = "download")]
+        {
+            let download_err = DownloadError::Io {
+                path: PathBuf::from("model.onnx"),
+                source: std::io::Error::other("boom"),
+            };
+            let err = RegistryError::from(download_err);
+            assert!(format!("{err}").contains("download error"));
+        }
+    }
+
+    #[test]
+    fn local_dir_missing_file_does_not_download() {
+        let tmp = TempDir::new().unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_manifest(manifest, tmp.path()).unwrap();
+        let err = r.ensure_local("hello_model").unwrap_err();
+        assert!(matches!(err, RegistryError::OfflineMissing { .. }), "{err}");
+        assert!(!format!("{err}").to_lowercase().contains("http"));
+    }
+
+    #[test]
+    fn local_dir_rejects_corrupt_bytes() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("hello.bin"), b"goodbye").unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_manifest(manifest, tmp.path()).unwrap();
+        let err = r.ensure_local("hello_model").unwrap_err();
+        assert!(
+            matches!(err, RegistryError::ChecksumMismatch { .. }),
+            "{err}"
+        );
     }
 }

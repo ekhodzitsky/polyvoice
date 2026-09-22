@@ -61,7 +61,7 @@ pre-release-replacements = [
 # StreamingPipeline).
 # docs.rs documents the production kernel path (crate-root Pipeline).
 [package.metadata.docs.rs]
-features = ["pipeline-native", "vbx", "attribution", "spectral"]
+features = ["pipeline-native", "pipeline-local", "vbx", "attribution", "spectral"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -93,8 +93,20 @@ pipeline-native = [
 ]
 # C FFI bindings (ABI v3). Same production stack as `cli` (kernels, no ort).
 ffi = ["pipeline-native", "vbx"]
+# SHA-256 + minisign + manifest parse for model files already on disk.
+# No HTTP client. `download` adds the network fetcher on top.
+local-models = ["dep:toml", "dep:sha2", "dep:minisign-verify"]
 # Library-level model registry with HTTP downloads + SHA-256 verification.
-download = ["dep:ureq", "dep:dirs", "dep:toml", "dep:sha2", "dep:minisign-verify"]
+download = ["local-models", "dep:ureq", "dep:dirs"]
+# Powerset + ResNet34 kernels + VBx from local ONNX/PLDA files. No ureq.
+pipeline-local = [
+    "local-models",
+    "embedder",
+    "resegmentation",
+    "embedder-native",
+    "segmenter-native",
+    "vbx",
+]
 # Shared clap surface for the CLI binaries. Engine comes from `cli` or
 # `cli-tract` — do not enable this flag alone.
 cli-bin = ["dep:clap", "dep:clap_complete"]
@@ -268,6 +280,10 @@ required-features = ["mcp"]
 [[example]]
 name = "build_asnorm_cohort"
 required-features = ["backend-tract", "embedder", "download"]
+
+[[example]]
+name = "local_native"
+required-features = ["pipeline-local"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(kani)'] }

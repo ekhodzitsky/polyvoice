@@ -73,7 +73,7 @@ pub use utils::merge_segments;
 pub mod wav;
 pub mod window;
 
-#[cfg(feature = "download")]
+#[cfg(feature = "local-models")]
 pub mod models;
 
 #[cfg(feature = "segmentation")]
@@ -158,7 +158,7 @@ pub mod pipeline;
         feature = "infer",
         all(feature = "segmenter-native", feature = "embedder-native")
     ),
-    feature = "download",
+    feature = "local-models",
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",
@@ -174,7 +174,7 @@ pub mod pipeline_v2;
         feature = "infer",
         all(feature = "segmenter-native", feature = "embedder-native")
     ),
-    feature = "download",
+    feature = "local-models",
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",
@@ -223,7 +223,7 @@ pub mod fbank_onnx;
 
 // Public re-exports for ergonomic use.
 pub use der::{DerDecomposition, DerResult, SpeakerRecall, WderResult, compute_der, compute_wder};
-#[cfg(feature = "download")]
+#[cfg(feature = "local-models")]
 pub use models::{ModelRegistry, ProfileModels, RegistryError};
 pub use overlap::OverlapRegion;
 pub use types::ClusterConfig;

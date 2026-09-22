@@ -1259,6 +1259,53 @@ fn build_ahc_with_as_norm_cohort_path_succeeds() {
     }
 }
 
+#[test]
+fn local_dir_and_registry_agree_on_the_same_artifacts() {
+    let models = repo_file("models/int8");
+    let plda = repo_file("fixtures/vbx-plda");
+    if !models.join("powerset_int8.onnx").is_file()
+        || !models.join("resnet34_int8.onnx").is_file()
+        || !plda.join("plda_transform.npy").is_file()
+    {
+        eprintln!("skip: local INT8 pair or PLDA fixture missing");
+        return;
+    }
+    let local = ModelRegistry::with_local_dir(&models).expect("local dir");
+    assert!(!local.allows_download());
+    let cache = ModelRegistry::with_cache_dir(&models).expect("cache dir");
+    let lp = local.ensure("powerset_int8").expect("local powerset");
+    let cp = cache.ensure("powerset_int8").expect("cache powerset");
+    assert_eq!(lp, cp);
+    let cfg = PipelineConfig {
+        vbx_plda_dir: Some(plda),
+        // One embedder session: the pool must not reorder reductions.
+        embedder_pool_size: 1,
+        ..PipelineConfig::default()
+    };
+    let run = |registry: ModelRegistry| {
+        let pipeline = fresh()
+            .config(cfg.clone())
+            .with_models_from(registry)
+            .build()
+            .expect("pipeline from verified local artifacts");
+        let sr = crate::SampleRate::new(16_000).expect("16 kHz");
+        let samples: Vec<f32> = (0..16_000).map(|i| (i as f32 * 0.05).sin() * 0.2).collect();
+        pipeline.run(&samples, sr).expect("run")
+    };
+    let turns = |r: &crate::DiarizationResult| {
+        r.turns
+            .iter()
+            .map(|t| (t.speaker.0, t.time.start, t.time.end))
+            .collect::<Vec<_>>()
+    };
+    let local_again = ModelRegistry::with_local_dir(&models).expect("local dir");
+    let a = run(local);
+    let a2 = run(local_again);
+    assert_eq!(turns(&a), turns(&a2), "local path must be deterministic");
+    let b = run(cache);
+    assert_eq!(turns(&a), turns(&b));
+}
+
 #[cfg(feature = "vbx")]
 #[test]
 fn build_vbx_never_touches_as_norm_config() {

@@ -102,10 +102,8 @@ pub(crate) fn build_profile_clusterer(
         ClustererKind::Vbx => {
             let max = config.max_speakers as usize;
             // PLDA resolution order: explicit `vbx_plda_dir` →
-            // `POLYVOICE_VBX_PLDA_DIR` env → registry download.
-            // This is the library's single env-resolution point;
-            // `pipeline_v2` always has `download`, so the registry
-            // fallback is available.
+            // `POLYVOICE_VBX_PLDA_DIR` env → registry download when this
+            // registry allows it. A local-model registry never downloads.
             //
             // VBx knobs stay `VbxClustererConfig::default()` unless the
             // caller opts in with `POLYVOICE_VBX_FROM_ENV=1` (offline
@@ -121,9 +119,28 @@ pub(crate) fn build_profile_clusterer(
                         max,
                         vbx_cfg,
                     ),
-                    None => crate::clusterer::vbx::VbxClusterer::from_registry_with_config(
-                        registry, max, vbx_cfg,
-                    ),
+                    None => {
+                        #[cfg(feature = "download")]
+                        {
+                            if registry.allows_download() {
+                                crate::clusterer::vbx::VbxClusterer::from_registry_with_config(
+                                    registry, max, vbx_cfg,
+                                )
+                            } else {
+                                Err(crate::clusterer::ClustererError::AlgorithmFailed {
+                                    detail: "vbx_plda_dir is required for a local model directory (this registry does not download)".into(),
+                                })
+                            }
+                        }
+                        #[cfg(not(feature = "download"))]
+                        {
+                            let _ = registry;
+                            Err(crate::clusterer::ClustererError::AlgorithmFailed {
+                                detail: "vbx_plda_dir is required when the download feature is off"
+                                    .into(),
+                            })
+                        }
+                    }
                 },
             }
             .map_err(|e| ConfigError::Load {

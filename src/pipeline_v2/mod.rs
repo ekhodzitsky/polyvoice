@@ -6,15 +6,15 @@
         feature = "infer",
         all(feature = "segmenter-native", feature = "embedder-native")
     ),
-    feature = "download",
+    feature = "local-models",
     feature = "segmentation",
     feature = "embedder",
     feature = "clusterer",
     feature = "resegmentation",
 )))]
 compile_error!(
-    "pipeline_v2 requires download + segmentation + embedder + clusterer + resegmentation \
-     and an engine (`onnx`, `backend-tract`, or `pipeline-native`)"
+    "pipeline_v2 requires local-models (or download) + segmentation + embedder + clusterer \
+     + resegmentation and an engine (`backend-tract` or native kernels)"
 );
 
 pub mod builder;
