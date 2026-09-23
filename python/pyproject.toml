@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "polyvoice"
-version = "0.21.0"
+version = "0.22.0"
 description = "Speaker diarization for Python — who spoke when. Hand-written INT8 kernels (~8.4 MB), no ONNX Runtime. VBx clustering, overlap detection."
 readme = "README.md"
 license = {text = "MIT"}

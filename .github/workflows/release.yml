@@ -164,7 +164,7 @@ jobs:
             ~/AppData/Local/ort.pyke.io
           key: ort-dfbin-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - run: pip install maturin
-      - run: maturin build --release --out dist
+      - run: maturin build --locked --release --out dist
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wheels-${{ matrix.os }}

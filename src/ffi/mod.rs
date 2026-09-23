@@ -155,6 +155,7 @@ polyvoice_pipeline_create(
                     crate::pipeline_v2::ConfigError::Load { .. } => {
                         PolyvoiceStatus::ModelLoad as c_int
                     }
+                    crate::pipeline_v2::ConfigError::InvalidSetting { .. } |
                     crate::pipeline_v2::ConfigError::MissingRegistry { .. } |
                     crate::pipeline_v2::ConfigError::CustomComponentInProfile { .. } |
                     crate::pipeline_v2::ConfigError::RegistryInCustomProfile |

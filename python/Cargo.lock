@@ -247,6 +247,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
+name = "memmap2"
+version = "0.9.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1219ed1b7f229ee7104d281dd01d6802fe28bb6e95d292942c4daacdeb798c0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "minisign-verify"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -326,7 +335,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "polyvoice"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -349,6 +358,7 @@ name = "polyvoice-kernels"
 version = "0.1.2"
 dependencies = [
  "cc",
+ "memmap2",
  "pkg-config",
  "rten-gemm",
  "rten-tensor",
@@ -357,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "polyvoice-python"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "polyvoice",
  "pyo3",

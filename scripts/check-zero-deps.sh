@@ -17,22 +17,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-pkg_in_graph() {
-  local pkg="$1"
-  shift
-  if cargo tree -e normal -i "$pkg" "$@" 2>/dev/null | grep -q .; then
-    return 0
-  fi
-  return 1
-}
-
 fail_if_pkg() {
   local pkg="$1"
   local label="$2"
   shift 2
-  if pkg_in_graph "$pkg" "$@"; then
+  local graph
+  graph="$(cargo tree --locked -e normal --prefix none "$@")" || exit 1
+  if grep -q "^${pkg} v" <<< "$graph"; then
     echo "FAIL: ${pkg} leaked into ${label}:"
-    cargo tree -e normal -i "$pkg" "$@" || true
+    printf '%s\n' "$graph"
     exit 1
   fi
   echo "OK: no ${pkg} in ${label}"
@@ -42,8 +35,10 @@ require_pkg() {
   local pkg="$1"
   local label="$2"
   shift 2
-  if ! pkg_in_graph "$pkg" "$@"; then
-    echo "FAIL: expected ${pkg} in ${label} but cargo tree -i found nothing"
+  local graph
+  graph="$(cargo tree --locked -e normal --prefix none "$@")" || exit 1
+  if ! grep -q "^${pkg} v" <<< "$graph"; then
+    echo "FAIL: expected ${pkg} in ${label} but cargo tree found nothing"
     exit 1
   fi
   echo "OK: ${pkg} present in ${label}"
@@ -88,10 +83,10 @@ fail_if_pkg ort "--all-features" --all-features
 echo ""
 echo "=== 3b. polyvoice-asr cli does not enable polyvoice/onnx ==="
 # Parakeet still depends on ort. The polyvoice package in that graph must not.
-if cargo tree -p polyvoice-asr --features cli -e normal -i ort --prefix none 2>/dev/null \
-    | grep -q '^polyvoice v'; then
+graph="$(cargo tree --locked -p polyvoice-asr --features cli -e normal -i ort --prefix none)"
+if grep -q '^polyvoice v' <<< "$graph"; then
   echo "FAIL: polyvoice depends on ort via polyvoice-asr --features cli:"
-  cargo tree -p polyvoice-asr --features cli -e normal -i ort || true
+  printf '%s\n' "$graph"
   exit 1
 fi
 echo "OK: polyvoice-asr --features cli does not enable polyvoice/onnx"

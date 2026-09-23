@@ -373,6 +373,12 @@ pub struct ResNet34 {
     onnx_map: Option<crate::onnx_init::MappedOnnx>,
 }
 
+impl Drop for ResNet34 {
+    fn drop(&mut self) {
+        crate::rten_matmul::invalidate_packed_weights();
+    }
+}
+
 impl ResNet34 {
     /// Load weights from shipping `resnet34_int8.onnx` or the FP32 file
     /// (initializers only; QDQ weights are dequantized).

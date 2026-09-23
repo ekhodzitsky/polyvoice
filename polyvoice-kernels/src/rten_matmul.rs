@@ -19,6 +19,29 @@ use rten_tensor::NdTensorView;
 #[cfg(not(target_vendor = "apple"))]
 use std::cell::RefCell;
 
+// Packed matrices are keyed by weight address. A model drop invalidates all
+// thread-local packs before freed addresses can belong to another model.
+#[cfg(not(target_vendor = "apple"))]
+static WEIGHT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub(crate) fn invalidate_packed_weights() {
+    #[cfg(not(target_vendor = "apple"))]
+    WEIGHT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+}
+
+#[cfg(not(target_vendor = "apple"))]
+fn refresh_packed_weights() {
+    let generation = WEIGHT_GENERATION.load(std::sync::atomic::Ordering::Acquire);
+    PACK_GENERATION.with(|seen| {
+        if seen.get() != generation {
+            PACKED_F32_A.with(|cache| cache.borrow_mut().clear());
+            PACKED_F32_B.with(|cache| cache.borrow_mut().clear());
+            PACKED_I8_B.with(|cache| cache.borrow_mut().clear());
+            seen.set(generation);
+        }
+    });
+}
+
 pub fn pin_parallelism() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
@@ -52,6 +75,7 @@ struct I8Scratch {
 
 #[cfg(not(target_vendor = "apple"))]
 thread_local! {
+    static PACK_GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     static F32_EXEC: GemmExecutor<f32, f32, f32> = {
         pin_parallelism();
         GemmExecutor::new()
@@ -97,6 +121,7 @@ pub fn gemm_rowbias(
     n: usize,
     k: usize,
 ) -> bool {
+    refresh_packed_weights();
     if m == 0 || n == 0 || k == 0 {
         return false;
     }
@@ -146,6 +171,7 @@ pub fn gemm_colbias(
     n: usize,
     k: usize,
 ) -> bool {
+    refresh_packed_weights();
     if m == 0 || n == 0 || k == 0 {
         return false;
     }
@@ -188,6 +214,7 @@ pub fn gemm_colbias(
 /// `C[m,n] += A[m,k] @ B[k,n]`.
 #[cfg(not(target_vendor = "apple"))]
 pub fn gemm_add(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) -> bool {
+    refresh_packed_weights();
     if m == 0 || n == 0 || k == 0 {
         return false;
     }
@@ -247,6 +274,7 @@ pub fn gemm_i8_static(
     k: usize,
     accumulate: bool,
 ) -> bool {
+    refresh_packed_weights();
     if m == 0 || n == 0 || k == 0 || a_scale.abs() < 1e-12 || !i8_exact_on_this_cpu() {
         return false;
     }
@@ -897,6 +925,40 @@ fn dequant_nchw(acc: &[i32], conv: &Conv2d, y: &mut Tensor, ni: usize, spatial: 
 
 #[cfg(all(test, not(target_vendor = "apple")))]
 mod tests {
+    #[test]
+    fn packed_weights_are_invalidated_across_threads() {
+        let mut weights = vec![1.0f32; 4];
+        let input = vec![1.0f32; 4];
+        let mut out = vec![0.0f32; 4];
+        assert!(super::gemm_colbias(
+            &input, &weights, &[0.0; 2], &mut out, 2, 2, 2
+        ));
+        assert_eq!(out, vec![2.0; 4]);
+        // Model destruction on another thread must invalidate this thread's
+        // packed weights before an allocator reuses the same address.
+        assert!(
+            std::thread::spawn(super::invalidate_packed_weights)
+                .join()
+                .is_ok()
+        );
+        weights.fill(3.0);
+        assert!(super::gemm_colbias(
+            &input, &weights, &[0.0; 2], &mut out, 2, 2, 2
+        ));
+        assert_eq!(out, vec![6.0; 4]);
+
+        assert!(super::gemm_rowbias(
+            &weights, &input, &[0.0; 2], &mut out, 2, 2, 2
+        ));
+        assert_eq!(out, vec![6.0; 4]);
+        super::invalidate_packed_weights();
+        weights.fill(5.0);
+        assert!(super::gemm_rowbias(
+            &weights, &input, &[0.0; 2], &mut out, 2, 2, 2
+        ));
+        assert_eq!(out, vec![10.0; 4]);
+    }
+
     use super::try_conv_i8;
     use crate::conv::Conv2d;
     use crate::tensor::Tensor;

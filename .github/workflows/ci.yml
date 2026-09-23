@@ -65,6 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - run: python3 scripts/test-dependency-checks.py
       - run: bash scripts/check-standalone-lockfiles.sh
 
   fmt:
@@ -479,6 +480,10 @@ jobs:
       - run: cargo test --no-default-features --features clusterer,vbx --lib --locked
       - run: cargo test --no-default-features --features clusterer,vbx --test library_vbx_from_dir --locked
       - run: cargo clippy --no-default-features --features clusterer,vbx --all-targets --locked -- -D warnings
+      # Local model loading must also compile its tests without download.
+      # Serial execution avoids races between process-environment tests.
+      - run: cargo test --no-default-features --features pipeline-local,vbx --lib --locked -- --test-threads=1
+      - run: cargo clippy --no-default-features --features pipeline-local,vbx --lib --tests --locked -- -D warnings
       # Hand-written kernels + kernel-only CLI (no ort, no tract).
       - run: cargo test -p polyvoice-kernels --locked
       - run: cargo clippy -p polyvoice-kernels --all-targets --locked -- -D warnings

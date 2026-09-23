@@ -11,8 +11,8 @@ EXPECTED="2.0.0-rc.12"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-versions="$(cargo metadata --format-version 1 2>/dev/null \
-  | python3 -c "import sys,json; print('\n'.join(sorted({p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='ort'})))")"
+metadata="$(cargo metadata --locked --format-version 1)"
+versions="$(python3 -c "import sys,json; print('\n'.join(sorted({p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='ort'})))" <<< "$metadata")"
 
 count="$(printf '%s\n' "$versions" | grep -c . || true)"
 

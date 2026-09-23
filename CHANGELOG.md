@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Invalidate thread-local packed GEMM weights when a native model is dropped,
+  preventing stale weights when subsequent models reuse allocation addresses.
+
+- Refresh the Python lockfile for mmap-backed kernels. Dependency checks and
+  wheel builds enforce locked resolution; Cargo failures no longer pass as
+  evidence that a forbidden dependency is absent.
+- Restore FFI compilation after configuration validation was added, mapping
+  invalid settings to `InvalidArg`. Local-pipeline tests now compile without
+  the optional downloader and are covered by CI.
+
+### Breaking
+
+- Development version advances to 0.22.0 for the accumulated API changes.
+  Exhaustive configuration literals must account for `PipelineConfig.reconstruct`
+  and `VbxClustererConfig.{ahc_on_raw_l2,soft_reassign}`; exhaustive error matches
+  must handle `ConfigError::InvalidSetting` and the local registry verification
+  variants `RegistryError::{ChecksumMismatch,SignatureRejected}`.
+
+- `PipelineConfig` gains `max_audio_samples`. Full struct literals must add
+  this field or use `..PipelineConfig::default()`. This API change is part
+  of 0.22.0. The default remains one hour
+  at 16 kHz; Rust callers can override it with `PipelineBuilder::max_audio_samples`.
+  C FFI and WAV-loading limits remain unchanged.
+
 ### Added
 
 - `pipeline-local`: powerset + ResNet34 kernels + VBx from a local directory

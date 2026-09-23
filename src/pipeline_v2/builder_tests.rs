@@ -339,10 +339,8 @@ fn validate_balanced_with_custom_segmenter_errors() {
 
 #[test]
 fn validate_custom_with_registry_errors() {
-    let registry = match ModelRegistry::default() {
-        Ok(r) => r,
-        Err(_) => return,
-    };
+    let tmp = tempfile::TempDir::new().expect("temp dir");
+    let registry = ModelRegistry::with_local_dir(tmp.path()).expect("local registry");
     let b = fresh()
         .profile(Profile::Custom)
         .with_segmenter(Box::new(MockSegmenter::default()))
@@ -601,7 +599,10 @@ fn build_native_with_local_models_succeeds() {
     }
     let registry = ModelRegistry::with_cache_dir(&cache).expect("registry");
     let p = fresh()
-        .profile(Profile::Balanced)
+        .config(PipelineConfig {
+            vbx_plda_dir: Some(repo_file("fixtures/vbx-plda")),
+            ..PipelineConfig::default()
+        })
         .with_models_from(registry)
         .build()
         .expect("native kernels build from local INT8 models");
@@ -623,7 +624,10 @@ fn native_pipeline_runs_short_sine() {
     }
     let registry = ModelRegistry::with_cache_dir(&cache).expect("registry");
     let p = fresh()
-        .profile(Profile::Balanced)
+        .config(PipelineConfig {
+            vbx_plda_dir: Some(repo_file("fixtures/vbx-plda")),
+            ..PipelineConfig::default()
+        })
         .with_models_from(registry)
         .build()
         .expect("build");
