@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Invalidate thread-local packed GEMM weights when a native model is dropped,
+  preventing stale weights when subsequent models reuse allocation addresses.
+
 - Refresh the Python lockfile for mmap-backed kernels. Dependency checks and
   wheel builds enforce locked resolution; Cargo failures no longer pass as
   evidence that a forbidden dependency is absent.

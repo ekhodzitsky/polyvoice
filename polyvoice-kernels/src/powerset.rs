@@ -60,6 +60,12 @@ pub struct Powerset {
     onnx_map: Option<crate::onnx_init::MappedOnnx>,
 }
 
+impl Drop for Powerset {
+    fn drop(&mut self) {
+        crate::rten_matmul::invalidate_packed_weights();
+    }
+}
+
 impl Powerset {
     pub fn from_onnx_path(path: &Path) -> Result<Self, KernelError> {
         crate::rten_matmul::pin_parallelism();
