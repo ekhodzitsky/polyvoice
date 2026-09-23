@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- `PipelineConfig` gains `max_audio_samples`. Full struct literals must add
+  this field or use `..PipelineConfig::default()`. Release this API change
+  in the next minor version, not a 0.21.x patch. The default remains one hour
+  at 16 kHz; Rust callers can override it with `PipelineBuilder::max_audio_samples`.
+  C FFI and WAV-loading limits remain unchanged.
+
 ### Added
 
 - `pipeline-local`: powerset + ResNet34 kernels + VBx from a local directory

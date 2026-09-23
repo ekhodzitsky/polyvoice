@@ -39,6 +39,14 @@ pub struct PipelineConfig {
     /// `0` up to `1`; a raw [`.config()`](crate::pipeline_v2::PipelineBuilder::config)
     /// value of `0` is rejected.
     pub embedder_pool_size: usize,
+    /// Maximum PCM length `Pipeline::run` accepts, in samples.
+    ///
+    /// Defaults to [`MAX_AUDIO_SAMPLES`](crate::pipeline_v2::MAX_AUDIO_SAMPLES),
+    /// one hour at 16 kHz. That default guards callers who hand the pipeline a
+    /// buffer they did not produce; a caller that controls the audio's
+    /// provenance, such as one diarizing a file it recorded itself, can raise
+    /// it. Zero accepts only empty input; the limit is inclusive.
+    pub max_audio_samples: usize,
     /// Where the ONNX/tract session would run. Product kernels ignore this
     /// and always execute on CPU. Only [`ExecutionProvider::Cpu`] (including
     /// [`ExecutionProvider::auto`], which resolves to CPU) is accepted.
@@ -105,6 +113,7 @@ impl Default for PipelineConfig {
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
             embedder_pool_size: default_pool_size(),
+            max_audio_samples: crate::pipeline_v2::MAX_AUDIO_SAMPLES,
             execution_provider: ExecutionProvider::auto(),
             vbx_plda_dir: None,
             embed_window_secs: None,
