@@ -1,6 +1,6 @@
 # Semver and API freeze
 
-Crate version is **0.21.x**. This is not `1.0.0`. The GO checklist in
+Development version is **0.22.0** (unreleased). This is not `1.0.0`. The GO checklist in
 [`PRODUCTION-READINESS.md`](../PRODUCTION-READINESS.md) stays open until a
 freeze window has held and the other 1.0 boxes are true.
 

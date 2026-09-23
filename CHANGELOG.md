@@ -18,9 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- Development version advances to 0.22.0 for the accumulated API changes.
+  Exhaustive configuration literals must account for `PipelineConfig.reconstruct`
+  and `VbxClustererConfig.{ahc_on_raw_l2,soft_reassign}`; exhaustive error matches
+  must handle `ConfigError::InvalidSetting` and the local registry verification
+  variants `RegistryError::{ChecksumMismatch,SignatureRejected}`.
+
 - `PipelineConfig` gains `max_audio_samples`. Full struct literals must add
-  this field or use `..PipelineConfig::default()`. Release this API change
-  in the next minor version, not a 0.21.x patch. The default remains one hour
+  this field or use `..PipelineConfig::default()`. This API change is part
+  of 0.22.0. The default remains one hour
   at 16 kHz; Rust callers can override it with `PipelineBuilder::max_audio_samples`.
   C FFI and WAV-loading limits remain unchanged.
 
