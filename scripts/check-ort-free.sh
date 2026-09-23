@@ -11,26 +11,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# Returns 0 if `ort` appears in the normal dependency graph for the given
-# cargo-tree args; 1 if cargo cannot resolve package ID `ort` (clean).
-ort_in_graph() {
-  # Redirect stderr: when clean, cargo prints "package ID specification `ort`
-  # did not match any packages" and exits non-zero. We only care whether any
-  # package lines land on stdout.
-  # Portable grep (CI images may not have ripgrep). Any stdout line means
-  # cargo resolved an `ort` package into the normal graph.
-  if cargo tree -e normal -i ort "$@" 2>/dev/null | grep -q .; then
-    return 0
-  fi
-  return 1
-}
-
 fail_if_ort() {
   local label="$1"
   shift
-  if ort_in_graph "$@"; then
+  local graph
+  graph="$(cargo tree --locked -e normal --prefix none "$@")" || exit 1
+  if grep -q '^ort v' <<< "$graph"; then
     echo "FAIL: ort leaked into ${label} dependency graph:"
-    cargo tree -e normal -i ort "$@" || true
+    printf '%s\n' "$graph"
     exit 1
   fi
   echo "OK: no ort in ${label}"

@@ -43,7 +43,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: pip install maturin pytest
-      - run: maturin build --release --out dist
+      - run: maturin build --locked --release --out dist
       - name: Wheel has no ONNX Runtime dylib
         shell: bash
         run: |

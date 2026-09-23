@@ -33,7 +33,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          args: --locked --release --out dist
           sccache: ${{ matrix.os != 'macos-latest' }}
           manylinux: ${{ matrix.manylinux || 'auto' }}
           working-directory: python

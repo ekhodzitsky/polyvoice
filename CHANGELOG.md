@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Refresh the Python lockfile for mmap-backed kernels. Dependency checks and
+  wheel builds enforce locked resolution; Cargo failures no longer pass as
+  evidence that a forbidden dependency is absent.
+
 ### Added
 
 - `pipeline-local`: powerset + ResNet34 kernels + VBx from a local directory
