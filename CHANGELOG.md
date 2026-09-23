@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Restore FFI compilation after configuration validation was added, mapping
+  invalid settings to `InvalidArg`. Local-pipeline tests now compile without
+  the optional downloader and are covered by CI.
+
 ### Added
 
 - `pipeline-local`: powerset + ResNet34 kernels + VBx from a local directory

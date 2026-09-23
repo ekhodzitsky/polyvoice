@@ -621,6 +621,7 @@ mod tests {
         assert_eq!(fast.embedder, bal.embedder);
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn registry_default_uses_user_cache() {
         let r = ModelRegistry::default().expect("default cache dir resolvable");
