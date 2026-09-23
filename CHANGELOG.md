@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refresh the Python lockfile for mmap-backed kernels. Dependency checks and
   wheel builds enforce locked resolution; Cargo failures no longer pass as
   evidence that a forbidden dependency is absent.
+- Restore FFI compilation after configuration validation was added, mapping
+  invalid settings to `InvalidArg`. Local-pipeline tests now compile without
+  the optional downloader and are covered by CI.
 
 ### Added
 

@@ -339,10 +339,8 @@ fn validate_balanced_with_custom_segmenter_errors() {
 
 #[test]
 fn validate_custom_with_registry_errors() {
-    let registry = match ModelRegistry::default() {
-        Ok(r) => r,
-        Err(_) => return,
-    };
+    let tmp = tempfile::TempDir::new().expect("temp dir");
+    let registry = ModelRegistry::with_local_dir(tmp.path()).expect("local registry");
     let b = fresh()
         .profile(Profile::Custom)
         .with_segmenter(Box::new(MockSegmenter::default()))
