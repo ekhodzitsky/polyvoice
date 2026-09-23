@@ -599,7 +599,10 @@ fn build_native_with_local_models_succeeds() {
     }
     let registry = ModelRegistry::with_cache_dir(&cache).expect("registry");
     let p = fresh()
-        .profile(Profile::Balanced)
+        .config(PipelineConfig {
+            vbx_plda_dir: Some(repo_file("fixtures/vbx-plda")),
+            ..PipelineConfig::default()
+        })
         .with_models_from(registry)
         .build()
         .expect("native kernels build from local INT8 models");
@@ -621,7 +624,10 @@ fn native_pipeline_runs_short_sine() {
     }
     let registry = ModelRegistry::with_cache_dir(&cache).expect("registry");
     let p = fresh()
-        .profile(Profile::Balanced)
+        .config(PipelineConfig {
+            vbx_plda_dir: Some(repo_file("fixtures/vbx-plda")),
+            ..PipelineConfig::default()
+        })
         .with_models_from(registry)
         .build()
         .expect("build");
