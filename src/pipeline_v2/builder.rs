@@ -117,6 +117,16 @@ impl PipelineBuilder {
         self
     }
 
+    /// Set the maximum PCM length `run` accepts, in samples.
+    ///
+    /// Defaults to [`MAX_AUDIO_SAMPLES`](crate::pipeline_v2::MAX_AUDIO_SAMPLES),
+    /// one hour at 16 kHz. Raise it to diarize longer recordings whose
+    /// provenance the caller controls.
+    pub fn max_audio_samples(mut self, samples: usize) -> Self {
+        self.config.max_audio_samples = samples;
+        self
+    }
+
     /// Override the execution provider (defaults to
     /// `ExecutionProvider::auto()` via `PipelineConfig::default`).
     pub fn execution_provider(mut self, ep: crate::pipeline_v2::ExecutionProvider) -> Self {
