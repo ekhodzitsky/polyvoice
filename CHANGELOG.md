@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Linux native builds now use Rust kernels regardless of installed BLAS.
+  Enable `system-openblas` for the optional LP64 OpenBLAS backend; missing
+  development files fail clearly instead of silently selecting a fallback.
+  `--all-features` includes this opt-in. Darwin remains unchanged.
+
 - `PipelineBuilder::validate` rejects out-of-range public settings (NaN,
   infinity, `max_speakers == 0`, `min_cluster_size == 0`, non-positive
   embed windows, AHC thresholds outside [-1, 1], AS-norm `top_n < 2`,

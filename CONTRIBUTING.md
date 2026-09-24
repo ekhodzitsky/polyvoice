@@ -113,3 +113,8 @@ Library docs: [docs/API.md](docs/API.md).
 ## License
 
 By contributing, you agree that your contributions will be licensed under MIT.
+
+On Linux, `--all-features` and the release checks require LP64 OpenBLAS
+development files and `pkg-config` because they enable `system-openblas`.
+Ordinary `--features cli` builds use Rust kernels without BLAS. See the
+[backend contract](docs/strategy/zero-deps.md#linux-backend-selection).

@@ -3,8 +3,9 @@
 #
 # Same protocol as scripts/linux-cpu-der-gate.sh (v2+VBx, INT8 pair, EP=cpu,
 # powerset N=8). Builds `--features cli-native` so libonnxruntime is not
-# linked. On Linux, GEMM uses system OpenBLAS when pkg-config finds it
-# (Docker image installs libopenblas-dev).
+# linked. Linux defaults to Rust kernels, matching release assets. To measure
+# the optional LP64 OpenBLAS path, set FEATURES=cli-native,system-openblas;
+# install its development files and pkg-config first. Reports record FEATURES.
 #
 # Usage:
 #   bash scripts/linux-cpu-native-der-gate.sh

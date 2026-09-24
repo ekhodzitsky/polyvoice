@@ -36,6 +36,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install optional OpenBLAS backend
+        if: runner.os == 'Linux' && contains(matrix.flags, '--all-features')
+        run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
       # Pin a complete, present Xcode on macOS: the floating `macos-latest`
       # image intermittently leaves a default selection whose clang runtime
       # (`libclang_rt.osx.a`) is missing, breaking the link with
@@ -93,6 +96,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install optional OpenBLAS backend
+        if: runner.os == 'Linux' && contains(matrix.flags, '--all-features')
+        run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
       # See the `check` job: deterministic Xcode so macOS linking is stable.
       - if: runner.os == 'macOS'
         id: xcode
@@ -133,6 +139,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install optional OpenBLAS backend
+        if: runner.os == 'Linux' && contains(matrix.flags, '--all-features')
+        run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
       # See the `check` job: deterministic Xcode so macOS linking is stable.
       - if: runner.os == 'macOS'
         id: xcode
@@ -212,6 +221,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install optional OpenBLAS backend
+        run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps --all-features
@@ -230,6 +241,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Install optional OpenBLAS backend
+        run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
@@ -365,6 +378,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install optional OpenBLAS backend
+        run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
@@ -524,3 +539,13 @@ jobs:
       - run: |
           sudo apt-get update && sudo apt-get install -y minisign
       - run: ./scripts/sign-models.sh --dry-run
+
+  linux-blas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
+      - name: Verify Rust default and explicit OpenBLAS artifacts
+        run: bash scripts/check-linux-blas.sh

@@ -10,16 +10,20 @@ fn main() {
             .compile("pv_bnns_conv");
         println!("cargo:rustc-link-lib=framework=Accelerate");
     }
+    #[cfg(feature = "system-openblas")]
     if std::env::var("CARGO_CFG_TARGET_OS").ok().as_deref() == Some("linux") {
-        // System OpenBLAS — same role as Accelerate on Apple. Missing pkg is
-        // fine: GEMM stays on the in-crate kernel.
-        let mut probed = pkg_config::Config::new();
-        probed.cargo_metadata(true);
-        if probed.probe("openblas").is_ok()
-            || probed.probe("openblas64").is_ok()
-            || probed.probe("blas").is_ok()
-        {
-            println!("cargo:rustc-cfg=linux_cblas");
+        // Only the LP64 OpenBLAS ABI provides the i32 CBLAS arguments and
+        // openblas_set_num_threads used by linux_cblas. Generic BLAS and
+        // ILP64 openblas64 are not interchangeable with this interface.
+        if let Err(error) = pkg_config::Config::new().probe("openblas") {
+            eprintln!(
+                "system-openblas requires LP64 OpenBLAS development files and pkg-config \
+                 (for example, libopenblas-dev and pkg-config on Debian/Ubuntu). \
+                 Set PKG_CONFIG_PATH for a non-system installation, or disable \
+                 system-openblas to use Rust kernels.\n{error}"
+            );
+            std::process::exit(1);
         }
+        println!("cargo:rustc-cfg=linux_cblas");
     }
 }

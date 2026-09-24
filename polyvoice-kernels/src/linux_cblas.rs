@@ -1,6 +1,6 @@
 //! System OpenBLAS `cblas_sgemm` on Linux (same role as Accelerate on Apple).
 //!
-//! Linked only when `build.rs` finds OpenBLAS via pkg-config. Callers pin
+//! Linked only with `system-openblas` and LP64 OpenBLAS via pkg-config. Callers pin
 //! `OPENBLAS_NUM_THREADS=1` so the BLAS pool does not fight window/embed workers.
 
 #![cfg(linux_cblas)]
@@ -76,4 +76,19 @@ pub fn pin_to_one_thread() {
             openblas_set_num_threads(1);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn lp64_sgemm_preserves_row_major_layout_and_scaling() {
+        let a = [1.0, -2.0, 3.0, 4.0, 5.0, -6.0];
+        let b = [1.0, 2.0, 3.0, 4.0, -5.0, 6.0];
+        let mut c = [2.0, 4.0, 6.0, 8.0];
+        // SAFETY: A is 2x3, B is 3x2, and C is 2x2; all dimensions fit i32.
+        unsafe {
+            super::sgemm_rowmajor(a.as_ptr(), b.as_ptr(), c.as_mut_ptr(), 2, 2, 3, 0.5, 2.0);
+        }
+        assert_eq!(c, [-6.0, 14.0, 36.5, 12.0]);
+    }
 }

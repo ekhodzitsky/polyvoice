@@ -79,15 +79,14 @@ jobs:
         env:
           OUT: benchmarks/results/linux-cpu-native-der-ci
           EP: cpu
-          FEATURES: cli
+          # Match release assets: Rust kernels, no system-openblas.
+          FEATURES: cli-native
           POLYVOICE_POWERSET_BATCH_SIZE: "8"
           POLYVOICE_VBX_PLDA_DIR: ${{ github.workspace }}/fixtures/vbx-plda
           ASSERT_BASELINE: "1"
           BASELINE_JSON: ${{ github.workspace }}/tests/der_baseline.json
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libopenblas-dev pkg-config
           if [ "$MODE" = "full" ]; then
             export MAX_VOX=0 MAX_AMI=0
           else

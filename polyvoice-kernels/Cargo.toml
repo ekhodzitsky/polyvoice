@@ -7,6 +7,11 @@ description = "Hand-written WeSpeaker ResNet34 kernels for polyvoice — not a g
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 
+[features]
+default = []
+# Linux-only LP64 OpenBLAS; other targets keep their native implementation.
+system-openblas = ["dep:pkg-config"]
+
 [dependencies]
 # Pure-Rust GEMM (INT8 + FP32, NEON/dotprod/AVX). Justified: Linux has no
 # BNNS/AMX; OpenBLAS in the Desktop VM is ~10 GFLOP/s. Not a second ONNX
@@ -22,7 +27,7 @@ memmap2 = "0.9"
 
 [build-dependencies]
 cc = "1"
-pkg-config = "0.3"
+pkg-config = { version = "0.3", optional = true }
 
 [lints.clippy]
 unwrap_used = "deny"

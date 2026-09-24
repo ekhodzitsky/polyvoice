@@ -25,6 +25,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-mutants
+      - run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
       - run: cargo mutants --all-features --timeout 300
       - if: always()
         uses: actions/upload-artifact@v4

@@ -42,8 +42,8 @@ mean no C/C++ code, no system libraries, or zero Rust crates.
 
 - Empty default features provide the BYO core with normal Rust dependencies.
 - Native Darwin inference compiles C shims and links Accelerate/BNNS.
-- Native Linux uses Rust kernels and currently auto-detects installed BLAS.
-  Making that choice explicit and reproducible remains a release requirement.
+- Native Linux uses Rust kernels by default; `system-openblas` explicitly
+  enables the optional LP64 OpenBLAS backend.
 - Download-enabled builds pull TLS dependencies, including `ring` native
   code. `pipeline-local` omits the downloader and its TLS graph.
 - Python also depends on the Python runtime/ABI.
