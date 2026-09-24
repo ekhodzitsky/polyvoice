@@ -12,8 +12,8 @@ WAV in, speaker turns out.
 
 A speaker diarization crate. Powerset neural segmentation, WeSpeaker
 ResNet34 embeddings, VBx clustering with automatic speaker count. One
-`Pipeline` call from 16 kHz mono to timestamped turns. The default build
-pulls **no ONNX Runtime**: hand-written INT8 kernels, ~8.4 MB production
+`Pipeline` call from 16 kHz mono to timestamped turns. The native product uses
+**no ONNX Runtime**: hand-written INT8 kernels, ~8.4 MB production
 model pair, MIT, ungated. No ONNX Runtime in the core crate.
 Python, C FFI and a CLI ship from the same crate.
 
@@ -82,7 +82,7 @@ Like-for-like, strict collar 0, VoxConverse-test (232 files). Full matrix
 | Job | diarization crate | research diarization |
 | Runtime | Rust, CPU-only | PyTorch, GPU recommended |
 | Weights | MIT, ungated | HF token required |
-| Default deps | none | PyTorch stack |
+| External ML runtime | none (native kernels) | PyTorch stack |
 | DER₀ | 13.3 % | **11.3 %** |
 | Speed | **~162× realtime** (Ryzen AI 9 HX 370) | GPU-bound |
 
@@ -120,7 +120,7 @@ audio (f32 PCM)
 
 | Platform | Get it |
 |---|---|
-| Linux x86_64 / ARM64, macOS, Windows | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) |
+| Linux x86_64 / ARM64, macOS ARM64, Windows x86_64 | [Pre-built binaries](https://github.com/ekhodzitsky/polyvoice/releases/latest) |
 | Rust library (kernels, no ort) | `cargo add polyvoice --features "pipeline-native,vbx"` |
 | From source | `cargo install polyvoice --features cli` · `"cli,audio-io"` · `cli-tract` · `ffi` |
 
@@ -141,7 +141,11 @@ ort-free BYO core; models and engines are opt-in features
 [production readiness](PRODUCTION-READINESS.md) |
 [CHANGELOG](CHANGELOG.md)
 
-Batch diarization only: no ASR, no speaker identification.
+The native product provides batch diarization: no ASR or speaker identification.
+BYO Rust streaming is a separate API. Empty default features still depend on
+Rust crates; native Darwin uses C shims and Accelerate, and download-enabled
+builds include native crypto. See the [dependency contract](docs/strategy/zero-deps.md)
+and [1.0 scope and release gates](PRODUCTION-READINESS.md).
 Beta (0.x): the public API may break between minor versions — pin an exact
 version in production. MIT.
 

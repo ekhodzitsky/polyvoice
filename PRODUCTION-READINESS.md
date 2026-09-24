@@ -1,367 +1,157 @@
-# Production Readiness Assessment
+# Production readiness and the 1.0 contract
 
-> **Version:** 0.21.x | **Date:** 2026-09-14 | **Scope:** Rust library + Python bindings + FFI + CLI
->
-> **Last updated:** 2026-09-14 — Linux kernel full-split filled (VoxConverse-test
-> DER₀ **13.34 %** / AMI-test **24.19 %**, VBx AHC seed 0.6). Product CLI /
-> FFI / MCP / Python / `polyvoice-transcribe` diarization run hand-written
-> kernels (`pipeline-native`), not `libonnxruntime`. ONNX Runtime is opt-in
-> Pure-Rust tract is **opt-in smoke only**.
-> Canonical accuracy protocol: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
-> Zero-deps strategy: [`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md).
+**Development version: 0.22.0 (unreleased). Updated: 2026-09-24.**
+**1.0 status: NOT GO.** The contract below defines the intended release;
+it does not certify the current revision or start the RC window.
 
-## Executive Summary
+## Supported product scope
 
-**Status: NOT GO for public unattended production. OK for controlled internal use.**
+The 1.0 product is **batch speaker diarization on CPU**, using powerset
+segmentation, ResNet34 INT8 embeddings and VBx clustering (v2). The default
+production model pair is `powerset_int8` + `resnet34_int8`. The result is
+speaker turns, not speaker identity or transcription.
 
-As of **0.21.x**, polyvoice is a hardened pre-1.0 engine: model signing is
-enforced on release builds for profile-resolved models, CI covers the main
-desktop targets, and **full VoxConverse-test + AMI-test DER** keeps
-**pipeline v2 + VBx** as the CLI / FFI / Python / MCP default. The **engine**
-split is:
+| Surface | Intended 1.0 contract |
+|---------|-----------------------|
+| Rust | Crate-root `Pipeline`, configuration, errors and result types; `pipeline-native,vbx` with model downloads, or `pipeline-local` with caller-provided local assets |
+| CLI | `cli` uses the native v2 + VBx pipeline; documented flags, exit behavior and JSON output |
+| Python | Installed `polyvoice` wheel, `Pipeline` and result API, using the same native engine |
+| C FFI | Published header, ABI v3, lifecycle, status codes and input validation |
+| JSON | Versioned [result schema](schema/diarization-result-v1.json) |
 
-- **CLI / FFI / MCP / Python / transcribe diarization:** hand-written INT8
-  kernels (`cli` = `pipeline-native`). No `libonnxruntime`. Darwin holds the
-  native scoreboard floors (`tests/native_scoreboard.json`). Linux kernels
-  hold the published non-Apple product numbers.
-- **Parakeet TDT** (`polyvoice-asr`): still uses `ort` 2.0.0-rc.12. Not core
-  diarization.
+`--clusterer ahc` changes clustering within v2. It does not select the former
+Silero pipeline. The product CLI rejects `--legacy`.
 
-It is still **not** ready for multi-tenant public APIs or unattended production
-services, because:
+Existing BYO Rust API commitments remain: `LegacyPipeline`,
+`StreamingPipeline`, `Embedder`, `EnergyVad` and local VBx loading stay within
+the [advertised API policy](docs/semver.md). Their caller-supplied models and
+streaming latency do not inherit the native batch accuracy/performance
+claim. Native powerset streaming is not a 1.0 requirement.
 
-1. **Pre-1.0 API** — no backward-compatibility commitment until `1.0.0`.
-2. **Parakeet still links `ort` RC** (`2.0.0-rc.12`). Product diarization
-   surfaces no longer do. The core crate has no `ort` dependency.
-3. **Cross-corpus validation is thin** — solid VoxConverse + AMI coverage;
-   NOTSOFAR-1 has a measured micro-gate (3-meeting subset) but CALLHOME /
-   DIHARD (and similar) are not release-gated.
-4. **Pure-Rust (tract) path is not product-ready** — opt-in only
-   (`backend-tract` + signed `powerset_fp32_tract` + FP32 ResNet); ~9× slower
-   than ort; no full-split release gate.
+| Adjacent surface | Release scope |
+|------------------|---------------|
+| MCP | Opt-in experimental protocol/tool surface. Uses native diarization, but its tool API is outside the 1.0 stability promise |
+| tract and ONNX-file adapters | Experimental inference alternatives; not required for native product qualification |
+| Companion ASR / Parakeet | Independent product and dependency lifecycle; its ONNX Runtime dependency does not block diarization 1.0 |
+| Hosted services | Authentication, tenant isolation, scheduling, quotas and SLA are deployment responsibilities. Library 1.0 does not certify an unattended multi-tenant service |
 
-**Suitable for:** controlled internal services, desktop apps, and edge pilots
-where audio conditions are known and operators can pin versions and re-verify
-DER after upgrades. Desktop / CLI / Python deploys can avoid `ort` entirely.
+## Dependency contract
 
-**Not suitable for:** public multi-tenant APIs, unattended SLA-bound services,
-or security-critical deployments that require a frozen public API and
-multi-corpus proof.
+**No ONNX Runtime** is already the core diarization contract. It does not
+mean no C/C++ code, no system libraries, or zero Rust crates.
 
----
+- Empty default features provide the BYO core with normal Rust dependencies.
+- Native Darwin inference compiles C shims and links Accelerate/BNNS.
+- Native Linux uses Rust kernels and currently auto-detects installed BLAS.
+  Making that choice explicit and reproducible remains a release requirement.
+- Download-enabled builds pull TLS dependencies, including `ring` native
+  code. `pipeline-local` omits the downloader and its TLS graph.
+- Python also depends on the Python runtime/ABI.
 
-## Current surface (0.21.x truth)
+Literal zero external crates and fully pure-Rust Darwin inference are
+long-term goals, not prerequisites for 1.0. Accurate dependency disclosure,
+locked release inputs, and reproducible backend selection are prerequisites.
+See the [dependency strategy](docs/strategy/zero-deps.md) for the exact terms
+and feature/platform matrix.
 
-| Area | State |
-|------|--------|
-| Crate version | `0.21.0` |
-| WAVE ingest | **`ryf`** (WAVE family → mono f32); `audio-io` still `symphonia` + `rubato` for non-WAV |
-| Production models | **INT8 only** (`powerset_int8` + `resnet34_int8`, ~8.4 MB) |
-| CLI / FFI / MCP engine | **kernels** (`pipeline-native`); `--legacy` / `--clusterer ahc` opt out |
-| Python engine | **kernels** (same v2 + VBx as the CLI; pass `clusterer="ahc"` to opt out) |
-| Opt-in ONNX-file inference | `--features cli-tract` (tract, no ort) |
-| Full-split DER (no-collar micro, INT8, **Linux kernels**) | Vox **13.34%** / AMI **24.19%** — [`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
-| Full-split DER (no-collar micro, INT8, **ort** Linux/CPU, AHC seed 0.5 protocol) | Vox **14.94%** / AMI **24.19%** — [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) |
-| Darwin native full-split (M1 Pro, kernels) | Vox **13.33%** / AMI **23.61%** / ~**169× / 200×** RTFx (2026-09-22, AHC seed 0.6) — [`darwin-native-der-2026-09-22/`](benchmarks/results/darwin-native-der-2026-09-22/) |
-| Darwin native Vox-3 scoreboard | DER₀ **7.11 / 7.39**, ≥**117×**, pair ≤ 8 414 314 B, peak RSS ≤ **556 MiB** |
-| Linux native RTF (Ryzen AI 9 HX 370) | Vox ~**162×**; AMI ~**193×**; Vox-3 ~**111×** jobs=1 / ~**158×** wall at `--jobs 3` |
-| Inference (product CLI) | **`polyvoice-kernels`** (Darwin Accelerate/BNNS; Linux `rten-gemm`) |
-| Inference (opt-in ONNX files) | tract (`cli-tract`); no `OrtSession` in core |
-| Inference (opt-in tract) | `POLYVOICE_INFERENCE_BACKEND=tract` + `backend-tract`: signed `powerset_fp32_tract` + **FP32** ResNet; smoke DER only |
-| Models | Profile segmenter/embedder minisign-signed in release; VBx PLDA registry downloads are minisign-signed; opt-in `powerset_fp32_tract` is minisign-signed (release `models-tract-v1`) |
-| Native ORT binary | Not in the core crate. Parakeet (`polyvoice-asr`) still hash-pins via ort-sys; see [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
-| Library features | `pipeline-native` + `vbx` (CLI parity). Crate-root `Pipeline` needs that gate; `PipelineConfig::default()` is **VBx** when `vbx` is on |
+## Platforms and required release evidence
 
-Honest reading: v2+VBx INT8 kernels are the **measured product pipeline** on
-Linux (Vox 13.34 % / AMI 24.19 %) and Darwin (Vox 13.33 % / AMI 23.61 %;
-Vox-3 scoreboard floors hold). Linux/CPU **ort** is a historical comparison
-protocol, not the product CLI. Product CLI has no `--legacy` path. Tract is
-an **opt-in research path**. Public production still needs multi-corpus gates
-and an API freeze.
+The intended native target set follows the current CLI release matrix:
 
----
+| Platform | Rust target | Required 1.0 evidence |
+|----------|-------------|-----------------------|
+| Linux x86_64 | `x86_64-unknown-linux-gnu` | Packaged Rust consumer, CLI and C consumer run on target; native model smoke and platform quality gate |
+| Linux ARM64 | `aarch64-unknown-linux-gnu` | Same checks on ARM64 hardware; cross-compilation alone is insufficient |
+| macOS ARM64 | `aarch64-apple-darwin` | Same checks plus the locked Darwin scoreboard |
+| Windows x86_64 | `x86_64-pc-windows-msvc` | Same checks with the shipped DLL/header and executable |
 
-## Gap Analysis
+This table is an acceptance requirement, not a claim that every check is
+already automated. Release metadata must record supported OS baselines,
+CPU requirements, system libraries and compiler versions. macOS Intel and
+other targets are not in this release matrix. wasm32 checks cover the
+algorithm/BYO subset, not complete native diarization.
 
-### 1. Version & API Stability ❌
+For each target, test an external Rust consumer against the packaged crate
+with empty defaults, `pipeline-native,vbx`, and `pipeline-local`. Run a
+consumer against the actual release CLI and C library/header, including
+invalid input, errors, lifecycle and JSON compatibility. The local-assets
+consumer must run without HTTP/TLS dependencies or network access. Source
+tree tests alone are insufficient evidence for packaged artifacts.
 
-| Item | Status | Risk |
-|------|--------|------|
-| Semantic version | `0.21.0` | Pre-1.0 — API may change between `0.x` minors |
-| `semver-checks` | Passes in CI | Only checks public API surface; pre-1.0 still allows breaking changes |
-| CHANGELOG | Maintained | Tracks 0.11→0.21; CLI default flip to v2+VBx was 0.11; kernels default was 0.18; WAVE `ryf` was 0.19 |
+Python qualification is per **wheel platform, interpreter and ABI**. The
+current tag release workflow builds on Linux x86_64, macOS ARM64 and Windows
+x86_64 using CPython 3.12; the separate wheel workflow also includes Linux
+ARM64. Before advertising any wheel combination, install that artifact in a
+clean environment and test import, real diarization, results and errors.
+`requires-python >=3.9` is package metadata, not proof of wheel availability
+or qualification for every newer interpreter. Publish the tested matrix
+with each release; do not infer it from source-only Python CI.
 
-**Gap:** Still pre-`1.0.0`, so Cargo 0.x would allow a silent break. The
-advertised surface is in a freeze window: [`docs/semver.md`](docs/semver.md).
-Consumers should pin `0.21.x` (or tighter) and read the CHANGELOG before
-upgrading.
+## Quality and resource evidence
 
-**Remediation:** Keep the freeze window; ship `1.0.0` only when this document
-says GO.
+The [benchmark protocol](docs/BENCHMARKS.md) remains the source of truth for
+accuracy. Existing measurements establish baselines, not certification of a
+future release candidate:
 
----
+| Native CPU measurement | VoxConverse-test DER₀ (232 files) | AMI-test DER₀ (16 files) | Evidence |
+|------------------------|-----------------------------------|-------------------------|----------|
+| Linux x86_64, 2026-09-13 | 13.34% | 24.19% | [Report](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/) |
+| Darwin ARM64, 2026-09-22 | 13.33% | 23.61% | [Report](benchmarks/results/darwin-native-der-2026-09-22/) |
 
-### 2. Dependency Supply Chain ⚠️
+Release evidence must cover full VoxConverse-test and AMI-test plus at least
+one additional licensed corpus or documented fixed subset. Publish file
+lists, collar/overlap policy, aggregate metrics and predeclared regression
+thresholds. A small smoke test does not replace full-split evaluation.
+Each supported platform needs a native quality gate; full-split reference
+runs remain required on Linux x86_64 and Darwin ARM64.
 
-| Dependency | Version | Risk |
-|------------|---------|------|
-| `polyvoice-kernels` | workspace | Product CLI. Darwin uses Accelerate/BNNS (C shims); Linux uses `rten-gemm` (pure Rust). MSRV 1.94. |
-| `ort` (ONNX Runtime) | `2.0.0-rc.12` | **RC, not stable.** Linked only by **Parakeet** (`polyvoice-asr`). Not in the core crate. |
-| Native ORT binary | pinned via ort-sys | Hash-verified download for **Parakeet only** (`polyvoice-asr`); residual trust in pyke builds + CDN cold-fetch |
-| `faer` (spectral clustering) | Optional | Not used in the default pipeline |
-| `paste` | Latest | Unmaintained (LOW; no CVE) |
+The Darwin Vox-3 protocol (euqef / fuzfh / msbyq, collar 0, balanced v2 + VBx,
+INT8 pair) retains **all** floors from
+[`tests/native_scoreboard.json`](tests/native_scoreboard.json):
 
-**Gap:** `ort` is no longer the product-CLI or Python-wheel backend. Residual
-risk is the Parakeet `ort` RC track. Tract is a spike/goal, not shipped
-parity. Kernels replace ort for CLI/FFI/MCP/Python.
+| Characteristic | Release limit |
+|----------------|---------------|
+| DER₀ micro | ≤ 7.11% |
+| DER₀ macro | ≤ 7.39% |
+| Real-time factor | ≥ 117× |
+| On-disk INT8 pair | ≤ 8,414,314 bytes |
+| Peak process RSS | ≤ 556 MiB |
 
-**Remediation:**
-- Keep the product CLI and Python wheel on kernels; do not pull `ort` back
-  into `cli` or the wheel.
-- Track `ort` 2.0 stable for Parakeet; re-verify pins on every
-  RC → stable bump.
-- Keep the `InferenceRuntime` surface clean so ONNX backends stay swappable.
-- Retain provenance docs and CI cache of the verified native binary for the
-  opt-in ONNX path.
+A speed gain cannot excuse a memory or accuracy regression. Timing and RSS
+must use the reference host/protocol; these numbers are not portable speed
+promises for arbitrary hardware. Record Linux performance separately on its
+reference host, including jobs and wall/per-file timing.
 
-Evidence: [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md),
-`Cargo.toml` pin, `scripts/check-ort-version.sh`, `scripts/check-zero-deps.sh`.
-
----
-
-### 3. Security Posture ✅
-
-| Control | Status | Evidence |
-|---------|--------|----------|
-| Model signing (Minisign) | Implemented | Streaming verify; pubkey baked in; **release builds require signatures** for profile-resolved models |
-| ONNX header validation | Implemented | Pre-load DOS guard (ONNX path) |
-| ORT native binary provenance | Documented + CI-cached | [`docs/security/ort-native-binary-provenance.md`](docs/security/ort-native-binary-provenance.md) |
-| TLS for downloads | Implemented | `ureq` + `rustls` + `webpki-roots` |
-| FFI sandbox | Implemented | Path traversal guard, sample limits, panic logging |
-| `cargo audit` | In CI | 0 HIGH / 0 MEDIUM expected on green main |
-| Fuzzing | Active | libFuzzer targets for fbank, VAD, overlap, cluster assign |
-
-**Gap:** Residual LOW noise (e.g. unmaintained transitive crates). No independent
-third-party security audit. RC-track runtime remains a supply-chain residual
-on Parakeet.
-
----
-
-### 4. Correctness Verification ✅ / ⚠️
-
-| Tool | Coverage | Note |
-|------|----------|------|
-| Unit / integration tests | Broad `src/` + `tests/` | Structural coverage good |
-| Native scoreboard | `tests/native_scoreboard.rs` | Darwin Vox-3 floors: DER, RTF, model bytes, peak RSS |
-| Miri | Focused PR-gate set | `ffi_smoke`, `miri_resegmentation`, `test_ahc` — not a full-lib multi-hour run |
-| Loom | `loom_pool.rs` | Session / pool concurrency model |
-| Proptest | In CI | DER / k-means / AHC / types property suites |
-| DER regression gates | Legacy + v2 + Linux/CPU ort + Linux native | Headline no-collar metric release-gated; Linux native full-split filled 2026-09-13 |
-
-**Gap:** Full-lib Miri is intentionally not the PR gate (cost). Darwin
-full-split has not been re-run since the VBx AHC seed 0.6 retune.
-
----
-
-### 5. Dataset Validation ⚠️ / ❌
-
-Canonical figures: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) and
-`tests/der_baseline.json` (legacy unless noted).
-
-| Dataset | Files | DER (collar 0) | DER (0.25 s) | Used in CI? |
-|---------|-------|----------------|--------------|-------------|
-| VoxConverse test (legacy) | 232 | **18.54%** | 12.91% | Full split not PR-gated; numbers are release-canonical |
-| VoxConverse test (legacy, 10-file) | 10 | 27.08% (micro) | 15.82% (macro gate) | Yes (gated subset) |
-| e2e smoke (legacy) | 1 | 14.52% | 6.62% | Yes |
-| AMI test Mix-Headset (legacy) | 16 | **32.87%** | 25.20% | Full split tracked; long-form floor via single-meeting gate |
-| AMI EN2002a (legacy, single) | 1 | 42.90% | 34.62% | Yes (gated) |
-| pipeline v2 + VBx **INT8** (Vox / AMI, **ort** host / CoreML) | 232 / 16 | **15.02%** / **24.50%** | 10.33% / 16.82% | INT8 since 0.17; full-split 2026-08-10 |
-| pipeline v2 + VBx **INT8** **Linux/CPU ort** (Vox / AMI) | 232 / 16 | **14.94%** / **24.19%** | 10.27% / 16.60% | Historical comparison row; not a live engine |
-| Darwin native kernels (Vox / AMI, M1 Pro) | 232 / 16 | **13.33%** / **23.61%** | — | 2026-09-22, AHC seed 0.6; RTFx ~169× / ~200× |
-| Linux native kernels | 232 / 16 | **13.34%** / **24.19%** | — | 2026-09-13, AHC seed 0.6; RTFx ~162× / ~193× |
-| tract pure-Rust (3 short Vox, M1 Pro) | 3 | ~**7.22%** (vs ort ~7.41%) | — | Opt-in; not a release gate |
-| tract pure-Rust (10 shortest Vox, ≈560 s) | 10 | **8.86%** (vs ort **9.18%**) | — | RTFx ~11 vs ~99 |
-| tract pure-Rust (**AMI-test 16**, M1 Pro) | 16 | **23.42%** (vs ort **24.63%**) | — | RTFx ~19 vs ~154; `scripts/tract-der-gate.sh` |
-| CALLHOME | — | — | — | **Not measured / not gated** |
-| DIHARD | — | — | — | **Not measured / not gated** |
-
-**Gap:** The default v2+VBx INT8 path has full-split VoxConverse and AMI on
-desktop baselines, the **Linux/CPU ort** comparison protocol, **Linux
-native kernels** (13.34 % / 24.19 %), and **Darwin native kernels**
-(13.33 % / 23.61 %, 2026-09-22). **Multi-corpus DER beyond Vox/AMI remains
-absent**: no CALLHOME/DIHARD release gate. Linux kernels trail pyannote 3.1
-published 11.3 % by about **2 pp** no-collar on VoxConverse. Tract is **not**
-release-gated at full-split size.
-
-**Remediation:**
-- Cite Linux kernels as the non-Apple product protocol
-  ([`linux-cpu-native-der-2026-09-13-vbx-ahc/`](benchmarks/results/linux-cpu-native-der-2026-09-13-vbx-ahc/)).
-  Historical ort numbers remain as comparison rows, not a live engine.
-- Add at least one additional corpus (CALLHOME and/or DIHARD subset) to the
-  release DER matrix.
-- Do not pull `ort` back into `cli`.
-
----
-
-### 6. Pipeline story (honest dual path) ⚠️
-
-| Path | How to run | Role in 0.21.x |
-|------|------------|----------------|
-| **v2 + VBx kernels (CLI/FFI/MCP/Python/transcribe default)** | `cargo install polyvoice --features cli` / `pip install polyvoice` | Product; Darwin scoreboard + Linux full-split |
-| **v2 + VBx tract** | `--features cli-tract` | Opt-in smoke; not the product CLI |
-| **Legacy** | CLI `--legacy` / `--clusterer ahc` | Supported escape hatch; former default (Silero + AHC) |
-
-**Gap:** The pipeline default flipped at 0.11 (v2+VBx) and the engine default
-flipped at 0.18 (kernels). Legacy still ships as an escape hatch, so dual
-pipelines continue to tax docs, gates, and bindings. Library
-`PipelineConfig::default()` matches the front doors (**VBx** when the `vbx`
-feature is on). 1.0 should not ship with two first-class paths; retire or
-clearly demote legacy once v2+VBx has broader multi-corpus proof.
-
----
-
-### 7. Inference runtime independence ⚠️
-
-| Item | Status |
-|------|--------|
-| Product CLI/FFI/MCP/Python | **`polyvoice-kernels`** (`pipeline-native`) — no `InferenceRuntime` dylib |
-| `InferenceRuntime` trait | **Exists** (`src/onnx/runtime.rs`) for ONNX-shaped backends |
-| ONNX-file implementation | tract (`cli-tract`); no `OrtSession` in core |
-| Pure-Rust ONNX backend | **`TractSession`** behind `backend-tract` + `POLYVOICE_INFERENCE_BACKEND=tract` |
-| Tract powerset | Shipping graphs fail load; **rewrite** via `scripts/export-powerset-tract.py`; pipeline remaps when present |
-| Tract embedder | Builder forces **FP32** `wespeaker_resnet34` (INT8 ResNet under tract collapses speakers) |
-| Tract accuracy | 3-file Vox smoke DER ≈ ort; **not** full-split gated; ~9× slower RTFx on smoke host |
-| Execution providers | CoreML / XNNPACK (and related) wired as **ort-specific** config, not kernel or tract |
-
-**Gap:** Product CLI **does not lock to ort**. Residual lock: **Python** still
-does. Tract is a real optional backend with smoke evidence — but rewrite models
-are not the product default, INT8 embedder is unsafe under tract, and
-large-corpus DER/RTF is open. See
-[`docs/strategy/zero-deps.md`](docs/strategy/zero-deps.md).
-
----
-
-### 8. CI / Platform Coverage ✅
-
-| Target | CI | Notes |
-|--------|-----|-------|
-| x86_64 Linux | ✅ | Primary |
-| x86_64 / aarch64 macOS | ✅ | Native kernels + CoreML path where configured |
-| x86_64 Windows | ✅ | |
-| aarch64 Linux | ✅ | Cross job; native INT8 GEMM is the product CLI |
-| wasm32 | ✅ | Compile / smoke (not full ONNX diarization) |
-| Python wheels | ✅ | Maturin (macOS / Linux / Windows); kernels, no `ort` |
-
-Miri is a **focused** PR gate rather than a multi-hour full-suite job. Fuzz and
-audit remain active.
-
----
-
-### 9. Documentation & Onboarding ✅
-
-| Asset | Status |
-|-------|--------|
-| README | Install, usage, links, honest accuracy framing; kernels default |
-| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Canonical DER / RTF with collar protocol |
-| [`docs/PIPELINE-ARCHITECTURE.md`](docs/PIPELINE-ARCHITECTURE.md) | Pipeline who-calls-whom |
-| [`docs/DEVELOPMENT-PROCESS.md`](docs/DEVELOPMENT-PROCESS.md) | Development process checklist |
-| Security provenance | ORT native binary (opt-in path) + model signing story |
-| `CONTRIBUTING.md` | Setup and contribution guidelines |
-| FFI | C header + examples / smoke tests (`ffi` = kernels) |
-
----
-
-## Go/No-Go Matrix
-
-_As of 0.21.x — product CLI, Python wheel, and transcribe diarization are
-kernels, Parakeet still `ort` 2.0.0-rc.12, INT8 profiles + v2+VBx default,
-legacy as an escape hatch, and multi-corpus DER is incomplete. Public
-unattended stays NO-GO._
-
-| Scenario | Verdict | Rationale |
-|----------|---------|-----------|
-| Internal microservice (controlled audio, ops on-call) | **GO with caveats** | Pin crate; prefer the kernel CLI to avoid `ort` RC; re-run DER after upgrades; no public SLA |
-| Desktop app (local processing) | **GO** | User owns hardware; ~8.4 MB INT8; no `libonnxruntime` on the product CLI; tolerate pre-1.0 API |
-| Public cloud API (multi-tenant, unattended) | **NO-GO** | Dual pipeline, thin multi-corpus proof, pre-1.0 API |
-| Embedded / edge (aarch64) | **GO with testing** | Cross-compile works; measure DER/RTF on target hardware (Linux native RTF ≠ Darwin) |
-| Security-critical (government, finance) | **NO-GO** | Needs broader audit + multi-corpus validation |
-
----
+Every qualifying report must identify the candidate revision, artifact and
+model hashes, features, dataset/protocol, host and toolchain. A green report
+from another revision is historical evidence until the release gate checks
+its applicability; changed model or inference code requires fresh runs.
 
 ## 1.0 GO checklist
 
-All items must be true before declaring production-ready / shipping `1.0.0` as
-**GO** for broader deployment. Worded as outcomes — not internal tracker IDs.
+All boxes require linked evidence before the release is declared GO.
 
-- [ ] **Single default pipeline.** One validated CLI/Python/FFI path; no dual
-      “legacy vs experimental” default. Experimental flags may remain for R&D
-      but must not be required for the shipped claim. Library
-      `PipelineConfig::default()` matches front-door VBx when `vbx` is on.
-- [ ] **Public API freeze + semver policy.** Documented stability rules; no
-      silent breaking churn on the advertised surface for a freeze window; then
-      `1.0.0`. Policy: [`docs/semver.md`](docs/semver.md). Window is open;
-      crate is still `0.21.x`.
-- [ ] **Runtime story closed.** Product CLI, Python wheel, and transcribe
-      diarization are kernels. Remaining: Parakeet
-      TDT still uses `ort`; tract remains opt-in smoke; `ort` 2.x stable
-      should be re-verified for the opt-in path.
-- [ ] **Multi-corpus DER gate.** Release-blocking DER on VoxConverse **and** AMI
-      **and** at least one additional corpus (CALLHOME and/or DIHARD subset),
-      with collar and overlap policy published next to the numbers.
-- [ ] **Accuracy target path.** VoxConverse-test no-collar success metric on the
-      default path at **≤13–14%** (stretch ≤12%), with AMI not stagnating in the
-      high-20s/30s without a documented plan — see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
-      Linux kernels are **13.34 %** / AMI **24.19 %**. Darwin full-split is
-      **13.33 %** / **23.61 %** (2026-09-22, AHC seed 0.6).
-- [ ] **This document says GO.** `PRODUCTION-READINESS.md` re-reviewed and
-      signed off for the intended deployment class (internal vs public).
+- [ ] **API boundary finalized.** Advertised Rust features, CLI, Python,
+      C ABI and JSON contracts have compatibility checks. Publicly reachable
+      implementation details are resolved before the final freeze.
+- [ ] **Dependency/build contract enforced.** No ONNX Runtime in core product
+      graphs; downloader-free local mode; explicit Linux BLAS selection;
+      locked release inputs and disclosed native/system dependencies.
+- [ ] **Quality and resource gates enforced.** Revision-bound full-split
+      Vox/AMI, an additional corpus, platform quality checks, and all five
+      Darwin scoreboard limits pass without lowering floors.
+- [ ] **Packaged consumers pass.** Actual Rust packages, CLI assets, Python
+      wheels and C artifacts pass the target/surface matrix above; supported
+      OS, CPU and Python combinations are published.
+- [ ] **Repository release checks pass.** Formatting, clippy, tests,
+      compatibility, dependency/security checks and documentation checks pass
+      for the release candidate; unresolved failures are not waived by this document.
+- [ ] **RC stability window completed.** At least two published candidates
+      and 14 consecutive days under the [RC policy](docs/semver.md#release-candidate-window),
+      with consumer evidence and no unresolved release-blocking regressions.
+- [ ] **Readiness reviewed for the exact release.** Link the evidence and
+      remaining limitations here, then explicitly change the release verdict.
 
-Until every box is checked, the honest status remains:
-
-> **NOT GO for public unattended production; OK for controlled internal use.**
-
----
-
-## Recommended blockers (summary)
-
-| Blocker | Why it blocks 1.0 / public GO |
-|---------|-------------------------------|
-| Dual pipeline families (BYO vs v2) | Intentional; still doubles docs/gates if not documented |
-| Parakeet still `ort` RC | Supply-chain risk on the ASR companion |
-| Thin multi-corpus DER | Outside Vox/AMI only NOTSOFAR micro-gate; no CALLHOME/DIHARD |
-| Pre-1.0 API | Breaking changes without major bump |
-| Accuracy gap vs leaders | ~2 pp no-collar on VoxConverse vs pyannote 3.1 (11.3 %); speaker counting still dominant error |
-
----
-
-## Metrics (snapshot, 0.21.x)
-
-| Metric | Value |
-|--------|-------|
-| Crate version | 0.21.0 |
-| Deployable footprint | **~8.4 MB** INT8 production pair (FP32 ids optional / not profile-default) |
-| Product CLI engine | kernels (`pipeline-native`); no `libonnxruntime` |
-| Speed (kernels, Darwin Vox-3 scoreboard) | ≥**117×** realtime; peak RSS ≤ **556 MiB** |
-| Speed (kernels, Darwin full-split M1 Pro) | Vox ~**169×**; AMI ~**200×** |
-| Speed (kernels, Linux Vox-3, Ryzen AI 9 HX 370) | ~**111×** jobs=1; ~**158×** wall at `--jobs 3` |
-| Speed (kernels, Linux full-split) | Vox ~**162×**; AMI ~**193×** |
-| Speed (INT8, Linux/CPU **ort** full-split, same host) | Vox ~**150×**; AMI ~**171×** |
-| VoxConverse-test DER (v2+VBx INT8 Linux **kernels**, 232, collar 0) | **13.34%** |
-| VoxConverse-test DER (v2+VBx INT8, 232, collar 0, **ort** host) | **15.02%** |
-| VoxConverse-test DER (v2+VBx INT8 Linux/CPU **ort**, 232, collar 0) | **14.94%** |
-| VoxConverse-test DER (v2+VBx INT8 Darwin **kernels**, 232, collar 0) | **13.33%** |
-| VoxConverse-test DER (legacy, 232, collar 0) | 18.54% |
-| AMI-test DER (v2+VBx INT8 Linux **kernels**, 16, collar 0) | **24.19%** |
-| AMI-test DER (v2+VBx INT8, 16, collar 0, **ort** host / Linux) | **24.50%** / **24.19%** |
-| AMI-test DER (v2+VBx INT8 Darwin **kernels**, 16, collar 0) | **23.61%** |
-| AMI-test DER (legacy, 16, collar 0) | 32.87% |
-| Default pipeline | v2 + VBx |
-| Default CLI engine | kernels (0.18+) |
-| Escape hatch | `--clusterer ahc` |
-| Inference backends | **Product CLI / Python:** kernels. **Opt-in:** tract (`cli-tract`) |
-| Model authenticity | Minisign; required on release profile resolution |
-| Security audit (cargo audit on green main) | 0 HIGH, 0 MEDIUM expected |
-
-For competitor context, collar protocol, and reproduction commands, use
-[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) — do not treat this readiness file as
-the accuracy source of truth.
+The open checklist is the release decision. Experimental tract performance,
+Parakeet runtime upgrades and removal of every external Rust crate are
+tracked separately and must not be substituted for these batch-product gates.

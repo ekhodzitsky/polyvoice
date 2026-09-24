@@ -247,7 +247,7 @@ cfg.as_norm = Some(AsNormConfig {
 | `--as-norm` | Enable AS-norm (requires `--clusterer ahc`) |
 | `--cohort PATH` | Imposter cohort `.npy` (implies / pairs with `--as-norm`) |
 | `--domain-profile voxconverse\|ami\|callhome` | Calibrated AHC profile (AHC only) |
-| `--legacy` | Offline BYO stack (Silero + AHC), not pipeline v2 |
+| `--legacy` | Rejected; BYO offline processing is available through the Rust `LegacyPipeline` API |
 
 ### `PipelineBuilder` (v2 — production)
 
