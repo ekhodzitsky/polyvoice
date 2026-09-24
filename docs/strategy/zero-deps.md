@@ -1,163 +1,108 @@
-# Zero-dependency aspiration (pure Rust / no native dylib)
+# Dependency reduction toward pure Rust
 
-**Status:** active engineering constraint (Claude.md / AGENTS.md).  
-**Updated:** 2026-08-26  
+**Updated: 2026-09-24.** Native batch diarization is the product default;
+ONNX Runtime is absent from the core crate. Dependency reduction continues,
+but the product is not literally zero-dependency or entirely pure Rust.
 
-## Goal
+## Terms and the 1.0 boundary
 
-Ship speaker diarization without a C/C++ toolchain or prebuilt native
-runtimes (`libonnxruntime`, CoreML bindings, etc.) for the **core library
-path**, and progressively shrink the production path toward the same.
+| Claim | Meaning | Current status |
+|-------|---------|----------------|
+| No ONNX Runtime | No `ort` / `ort-sys` or `libonnxruntime` in the selected product graph | Core diarization meets this; companion ASR is separate |
+| Pure Rust implementation | Selected implementation and transitive dependencies do not compile/link C/C++ or assembly components | BYO algorithm core qualifies; full native/download-enabled product does not |
+| No native build/runtime dependencies | No extra native toolchain components or linked native libraries beyond the documented platform runtime | Not a blanket product claim: Darwin C shims/Accelerate, optional Linux BLAS and downloader crypto matter |
+| Zero external Rust crates | No third-party Cargo dependencies | Not achieved, including with empty default features |
 
-**How:** only the ops polyvoice actually runs, in small workspace crates.
-Do **not** clone ONNX Runtime, tract, or a general ONNX executor.
+Pure Rust does not mean a static executable, absence of libc, or freedom from
+OS/ABI requirements. Distribution claims must name the feature set, target
+and linked libraries. GNU Linux artifacts still have libc requirements.
 
-## Incremental path (narrow crates, not clones)
+For 1.0, enforce the no-ORT product graph, explicit reproducible backend
+selection, and honest dependency disclosure. Literal zero crates and
+replacement of Darwin Accelerate/BNNS are longer-term work; they do not block
+the [batch release contract](../../PRODUCTION-READINESS.md).
 
-| Step | What | Not |
-|------|------|-----|
-| **0** | Honest feature graph: `infer` / `onnx` / `backend-tract`. `pipeline-tract` has **no** `ort`. | (done) |
-| **1** | Optional `cli-tract` (same CLI bins, tract engine, no dylib). `--legacy` rejected. | Rewriting the CLI |
-| **2** | `polyvoice-kernels`: **WeSpeaker ResNet34 only** (fused-BN Conv2d, ReLU, residual, stats-pool, GEMM). Initializers from shipping ONNX. Feature `embedder-native`. | Candle/Burn/tract clone |
-| **3** | Same crate: **powerset LSTM** (SincNet + 4× biLSTM). Feature `segmenter-native`. N>1 works. | Generic Scan / all ONNX ops |
-| **4 (now)** | `cli` / `ffi` / `mcp` / Python wheel / transcribe diarization = `pipeline-native` (no ort, no tract). Darwin Vox-3 holds the scoreboard floors. Linux kernels are ahead of same-host ort on speed (Vox ~162× / AMI ~193× / Vox-3 wall ~158×) and hold Vox DER₀ 13.34 % / AMI 24.19 %. ONNX Runtime is gone from the core crate. Parakeet (`polyvoice-asr`) still uses `ort`. | Pulling `ort` back into `cli` |
-| **skip** | Silero (v2 powerset already does VAD). Full protobuf ONNX parser. | — |
+## Current feature and platform matrix
 
-Cross-platform is the default of this path: no `libonnxruntime`, no glibc pin, no CoreML/XNNPACK. Linux / macOS / Windows; clustering is already wasm32-clean.
+| Surface | Dependency behavior |
+|---------|---------------------|
+| `default = []` | BYO embedder, Energy VAD and algorithm core. Rust dependencies remain (`ndarray`, `realfft`, `serde`, etc.); no model engine/downloads |
+| `clusterer`, `vbx`, `vad-earshot` | Optional Rust algorithms; local VBx assets do not require downloading |
+| `pipeline-local` | Native v2 + VBx with local assets; no `ureq`, `rustls` or `ring` in its graph. Still includes Rust crates and platform kernel dependencies |
+| `pipeline-native,vbx` | Native product plus downloader/model registry |
+| `cli`, `ffi`, Python | Native v2 + VBx, download-enabled; no ORT or tract. Python adds its interpreter/ABI |
+| `mcp` | Same native engine and downloads, plus experimental protocol/server dependencies |
+| `backend-tract` | Opt-in Rust ONNX engine; no ORT. This does not certify every surrounding feature as pure Rust |
+| `pipeline-tract`, `cli-tract` | Experimental tract pipeline plus downloader/TLS; not a fully pure-Rust dependency graph |
+| `polyvoice-asr` | Independent Parakeet companion; still uses ONNX Runtime |
 
-Do not add another general ML framework. Do not pull `ort` back into the core crate or the Python wheel. Parakeet keeps its own `ort` pin.
+Native kernels have platform-specific implementations:
 
-## Current matrix
+- **Darwin:** C shims compiled by `cc`, linked to system Accelerate/BNNS.
+  No ONNX Runtime, but not a pure-Rust inference stack.
+- **Linux:** `rten-gemm` and in-crate kernels, with system BLAS currently
+  selected automatically through `pkg-config` when present. That implicit
+  host-dependent choice must become explicit before 1.0.
+- **Windows:** Rust kernel path; platform/runtime linking and download crypto
+  still need to be considered for the complete artifact.
 
-| Surface | Pure Rust? | Quality / notes |
-|---------|------------|-----------------|
-| `default = []` + BYO `Embedder` + `EnergyVad` + AHC/VBx | **Yes** | Library mode; no models bundled |
-| `vad-earshot` (`EarshotVad`) | **Yes** (weights in crate) | Legacy VAD only; **+2.65 pp DER** vs Silero on measured subset — **opt-in only** |
-| `backend-tract` / `pipeline-tract` (no `onnx`) | **Yes** (tract-onnx; **no ort**) | Feature graph no longer pulls `libonnxruntime` |
-| `backend-tract` embedders (ResNet34 FP32/INT8, CAM++) | **Yes** (tract is pure Rust) | Numerical parity with ort within tol |
-| `backend-tract` + Silero ONNX | **No (load fail)** | Nested `If` / analyse |
-| `backend-tract` + powerset **shipping** ONNX | **No (load fail)** | nested `If` + `InstanceNormalization` |
-| `backend-tract` + rewrite + **FP32** ResNet | **Yes (smoke DER)** | remaps powerset; builder forces `wespeaker_resnet34` (INT8 ResNet unsafe under tract); ~9× slower RTFx; 3-file Vox DER ≈ ort |
-| `backend-tract` + INT8 ResNet | **No (accuracy)** | ort↔tract cosine ~0; speakers collapse — **not used** when tract is selected |
-| `cli-tract` | **Yes** (tract-onnx; **no ort**) | Same `polyvoice` / `polyvoice-bench` / `polyvoice-measure` bins; `--legacy` rejected |
-| `embedder-native` (`ResNet34Native`) | **Yes** | Hand-written ResNet34; ort cosine 1.0 on 1 s fixture; no dylib |
-| `segmenter-native` (`PowersetNative`) | **Yes** | SincNet + 4× biLSTM; N>1; 1 s vs ort cosine 1.0 |
-| `pipeline-native` / `cli` / `ffi` | **Kernels** (Darwin: C shims + Accelerate/BNNS; Linux: `rten-gemm` + in-crate INT8 conv) | **Product default.** No `ort`. Vox-3 DER₀ **7.11%**, **≥117×** on Apple. Linux x86_64 (AVX-512 VNNI conv + vectorized LSTM gates, core-scaled embedder pool, graph-faithful QDQ, VBx AHC seed 0.6): VoxConverse DER₀ 13.34% / RTFx ~162×, AMI 24.19% / ~193× — ahead of same-host ort on speed everywhere (ort ~150×/~171×). BYO `default = []` stays pure Rust. |
-| Python wheel | **Kernels** (same as `cli`) | **Product.** No `ort`. |
-| `polyvoice-asr` | **Parakeet** (`ort`) | Companion only; not core diarization |
+The kernel crate also has build dependencies such as `cc` and `pkg-config`.
+Download-enabled features add `ureq` → `rustls` → `ring`, which includes native
+crypto code/toolchain requirements. Removing HTTP/TLS via `pipeline-local`
+does not remove Darwin's C shims or system frameworks.
 
-CI freezes the pure-Rust **invariants** via:
+## Ordered work
 
-```bash
-bash scripts/check-zero-deps.sh   # includes check-ort-free.sh
-```
+1. Preserve the native product's no-ORT/no-tract graph and the downloader-free
+   local graph. Do not reintroduce a generic ML runtime to reduce one kernel.
+2. Make Linux BLAS selection explicit; build/test the Rust fallback and any
+   opt-in system backend independently with documented linking requirements.
+3. Reduce avoidable dependencies using existing code or the standard library;
+   account for build dependencies and transitive costs as well as direct crates.
+4. Evaluate a fully Rust Darwin kernel path against the same accuracy, speed,
+   model-size and RSS floors. A slower or larger path is not a product replacement.
+5. Evaluate download crypto/toolchain alternatives separately. Keep model
+   signature verification and trust-boundary validation intact.
 
-## What “done” looks like for production
+Implement only the operations used by powerset and ResNet34; do not clone a
+general ONNX executor. No silent quality regression to claim fewer dependencies.
+The [locked scoreboard](../../tests/native_scoreboard.json) remains binding.
 
-The product CLI (`cli` / `ffi` / `mcp`) already meets this bar via
-`polyvoice-kernels` (step 4): powerset + ResNet34 INT8 without `ort`, VAD
-folded into powerset, clustering already Rust-only. Linux native is past
-the old ort band on both axes: faster than same-host ort on all three
-protocols (162×/193×/158×-wall vs 150×/171×/151×). Native VBx AHC seed
-0.6 (VoxConverse-dev): Vox-232 DER₀ 13.34 %, AMI 24.19 %. Residual:
-tract remains the slower ONNX-shaped opt-in. The Python wheel is kernels.
-
-A shipping *tract* profile would still need:
-
-1. Powerset segmentation without ort (rewrite graph — done, not product).
-2. Embedder without ort (tract can for FP32 ResNet34; INT8 collapses).
-3. VAD unused (v2 powerset) or pure-Rust with DER gate ≤ ε vs Silero.
-4. Clustering Rust-only (already: AHC / VBx / optional faer spectral).
-
-## Unblockers (ordered)
-
-1. ~~**Powerset ONNX re-export**~~ — **done** (`scripts/export-powerset-tract.py`):
-   inline identical `If`, expand InstanceNorm; tract loads with concrete
-   `[1,1,160000]`. See
-   [`benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md`](../../benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md).
-2. ~~**Wire pipeline**~~ — **done** (opt-in remap + N=1).
-3. ~~**Release RTF + DER smoke**~~ — **measured + root-caused** (2026-08-12):
-   rewrite OK; INT8 ResNet under tract collapses; builder uses FP32 ResNet.
-4. ~~**Larger DER + RTF**~~ — Vox-10 short subset + **AMI-test full 16**
-   (M1 Pro): AMI DER₀ tract **23.42%** vs ort **24.63%** (Δ **−1.21 pp**);
-   RTFx **18.8** vs **153.5** (~**8.2×** slower). Helper:
-   `scripts/tract-der-gate.sh`. Notes:
-   [`tract-der-ami-2026-08-13`](../../benchmarks/results/tract-der-ami-2026-08-13/NOTES.md),
-   [`powerset-tract-rtf-der-2026-08-12`](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md).
-   Still **not** product default / not Linux full-split tract gate.
-   Tract **cannot** micro-batch N>1 (LSTM `Scan` fails at eval). Parallelism:
-   - session **pool>1** (windows in one file): Vox-3 pool=4 vs 1 → **19.3× vs 8.1×** RTFx
-   - `polyvoice-bench --jobs N` (files): cuts corpus **wall** (3 files: 5.5 s @
-     jobs=3 vs 6.9 s @ jobs=1/pool=4). `jobs × pool ≤ cores`. Same DER.
-5. ~~**Ship rewrite via registry**~~ — signed `powerset_fp32_tract` on release
-   `models-tract-v1`; builder `ensure`s it under tract. Local
-   `install-tract-models.sh` remains a dev shortcut.
-6. **Silero** only if legacy remains product-relevant; else drop from pure-Rust target.
-7. **Earshot** re-tune if legacy pure path is needed (current Δ fails 0.3 pp gate).
-8. **Optional rten spike** only if fixed-T tract remains too slow/limited after accuracy work.
-9. Do **not** bump crate MSRV solely for tract (tract MSRV 1.91; crate is already 1.94 for `rten-simd`).
-
-## Install tract assets
-
-**Preferred (registry):** with `download` + network, the pipeline builder calls
-`ModelRegistry::ensure("powerset_fp32_tract")` and `ensure("wespeaker_resnet34")`
-when `POLYVOICE_INFERENCE_BACKEND=tract`. Artifact release:
-`models-tract-v1` on GitHub.
-
-**Local dev shortcut** (offline / regenerate rewrite):
+## Checks and their limits
 
 ```bash
-bash scripts/install-tract-models.sh
-# or: bash scripts/install-tract-models.sh --skip-export
-```
-
-## Commands
-
-```bash
-# Invariants (CI)
+# Existing dependency invariants (normal Cargo edges):
 bash scripts/check-zero-deps.sh
 
-# Tract load / parity (needs models under models/ or models/int8/)
-cargo test --lib --features "onnx,backend-tract" onnx::parity -- --nocapture
+# Inspect normal AND build edges for the exact selected target:
+cargo tree --locked --no-default-features --features pipeline-local -e normal,build
+cargo tree --locked --no-default-features --features cli -e normal,build
 
-# Build tract-friendly powerset (needs models/powerset_fp32.onnx)
-python3 scripts/export-powerset-tract.py --verify
-cargo test --lib --features "onnx,segmentation,backend-tract" powerset_fp32_tract_friendly -- --nocapture
-cargo test --lib --features "onnx,segmentation,backend-tract" tract_backend_segments -- --nocapture
+# Downloader-free consumer (requires local models and PLDA assets):
+cargo run --no-default-features --features pipeline-local --example local_native -- \
+  models/int8 fixtures/vbx-plda audio.wav
 
-# Optional tract CLI (not product default):
-# bash scripts/install-tract-models.sh
-# cargo run --release --features cli-tract -- …
-
-# Product CLI (kernels, no ort/tract):
-# cargo run --release --features cli -- …
-
-
-# Native ResNet34 + powerset (no ONNX runtime)
-cargo test -p polyvoice-kernels
-cargo test --lib --features "onnx,embedder,embedder-native" native_matches_onnx_resnet34
-cargo test --lib --features "onnx,segmentation,segmenter-native" native_matches_ort_one_second
-# Full v2, no ort/tract:
-cargo test --lib --features "pipeline-native,vbx" native_pipeline_runs_short_sine
-cargo run --release --features cli-native -- meeting.wav
-
-# Earshot unit tests
-cargo test --lib --features vad-earshot earshot_vad
-
-# Earshot vs Silero DER (legacy arm)
-cargo run --release --features "cli,vad-earshot" --bin polyvoice-measure -- vad-parity \
-  --dataset data/ami-test-single --output /tmp/vad-parity.json
+# Product CLI:
+cargo run --release --features cli --bin polyvoice -- diarize meeting.wav
 ```
 
-## Non-goals (for now)
+The dependency script checks package presence/absence; it does not prove
+zero crates, absence of native code, or absence of system dylibs. Its
+informational summary is not a linker audit. Inspect target-specific build
+scripts and the actual release artifact's imports as well as Cargo graphs.
 
-- Making CoreML / XNNPACK pure-Rust (EP is ort-native).
-- Training our own models.
-- Silent quality regressions to claim “zero deps”.
+## Experimental tract evidence
 
-## Related artifacts
+Tract is not the product default or a prerequisite for native 1.0. Its
+powerset path needs a rewritten graph and uses FP32 ResNet because the
+measured INT8 embedder path collapsed speakers. Historical results and model
+preparation are retained in:
 
-- [`benchmarks/results/tract-backend-verdict.md`](../../benchmarks/results/tract-backend-verdict.md)
-- [`benchmarks/results/earshot-vad-notes.md`](../../benchmarks/results/earshot-vad-notes.md)
-- [`benchmarks/results/native-kernels-rtf-der-2026-08-13/NOTES.md`](../../benchmarks/results/native-kernels-rtf-der-2026-08-13/NOTES.md)
-- [`docs/library-mode.md`](../library-mode.md)
+- [Powerset export notes](../../benchmarks/results/powerset-tract-export-2026-08-12/NOTES.md)
+- [Tract runtime/accuracy notes](../../benchmarks/results/powerset-tract-rtf-der-2026-08-12/NOTES.md)
+- [AMI evaluation](../../benchmarks/results/tract-der-ami-2026-08-13/NOTES.md)
+- [Backend verdict](../../benchmarks/results/tract-backend-verdict.md)
+- [Earshot measurements](../../benchmarks/results/earshot-vad-notes.md)
+- [Library mode and feature inventory](../library-mode.md)
+
+These reports describe measured revisions, not current release certification.

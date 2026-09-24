@@ -27,7 +27,7 @@ For the **development process** checklist (spec → types → verify), see
 
 | Consumer | Path |
 |----------|------|
-| CLI `polyvoice` | **v2 + VBx kernels** (`--features cli`); `--legacy` → BYO offline stack |
+| CLI `polyvoice` | **v2 + VBx kernels** (`--features cli`); `--legacy` is rejected; BYO offline is a Rust API |
 | FFI | v2 kernels only (`ffi` = `pipeline-native`) |
 | Python | **v2 + VBx kernels** (same engine as CLI / FFI / MCP); `clusterer="ahc"` opt-out |
 | MCP `polyvoice-mcp` | v2 + VBx kernels (`clusterer=ahc` opt-out) |
@@ -44,7 +44,7 @@ falls back to AHC. Pass `clusterer: ClustererKind::Ahc { .. }` to opt out.
 
 | Knob | Legacy (`DiarizationConfig` / `ClusterConfig`) | v2 (`PipelineConfig`) |
 |------|-----------------------------------------------|------------------------|
-| Default clusterer (CLI/Python/FFI) | AHC when `--legacy` | **VBx** (`PipelineConfig::default()` with feature `vbx`) |
+| Default clusterer (CLI/Python/FFI) | AHC in the BYO offline stack | **VBx** (`PipelineConfig::default()` with feature `vbx`) |
 | AHC threshold | `DEFAULT_AHC_THRESHOLD` (0.45) | same constant when AHC is selected |
 | `min_cluster_size` | **2** (prunes singletons on the dense-window path) | **1** (no prune; powerset + short clips) |
 

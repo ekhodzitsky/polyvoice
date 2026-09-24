@@ -1,6 +1,6 @@
-# Documentation index (polyvoice 0.20)
+# Documentation index
 
-Crate version: **0.20.x** ([CHANGELOG](../CHANGELOG.md)). Production profiles
+Development version: **0.22.0 (unreleased)** ([CHANGELOG](../CHANGELOG.md)). Production profiles
 use **INT8** models only. CLI / FFI / MCP default is **kernels**
 (`pipeline-native`), not ONNX Runtime. Canonical accuracy protocol:
 [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
@@ -19,9 +19,9 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md) — who calls whom
 - rustdoc: https://docs.rs/polyvoice
 
-### Rust library (ONNX Runtime)
+### Rust library (experimental tract)
 - Features: `pipeline-tract` + `vbx` (opt-in; no ort)
-- Same crate-root `Pipeline` as kernels; engine is `ort` instead of `polyvoice-kernels`
+- Same crate-root `Pipeline` as kernels; engine is tract instead of `polyvoice-kernels`
 
 ### Rust library (BYO / no ONNX)
 - [library-mode.md](library-mode.md) — empty default features, surface inventory
@@ -35,7 +35,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - [../include/polyvoice.h](../include/polyvoice.h) — ABI v3
 - [../examples/ffi_usage.c](../examples/ffi_usage.c)
 
-### Agents / MCP / schema
+### Agents / experimental MCP / schema
 - [../examples/agent_quickstart.md](../examples/agent_quickstart.md)
 - [../schema/diarization-result-v1.json](../schema/diarization-result-v1.json)
 
@@ -57,7 +57,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 
 ### Strategy / competitors (not product manuals)
 - [COMPETITORS.md](COMPETITORS.md)
-- [strategy/zero-deps.md](strategy/zero-deps.md) — pure-Rust / no native dylib path
+- [strategy/zero-deps.md](strategy/zero-deps.md) — dependency definitions, platform requirements and pure-Rust roadmap
 - [strategy/2026-06-20-wavlm-eend-spike.md](strategy/2026-06-20-wavlm-eend-spike.md)
 
 ### Archival
@@ -79,6 +79,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 |------|----------|
 | Ort-free BYO | `--no-default-features` (+ `clusterer`, `vbx` optional) |
 | Kernels library | `pipeline-native` + `vbx` (CLI parity) |
+| Native library with local assets, no downloader | `pipeline-local` |
 | Tract ONNX-file library | `pipeline-tract` + `vbx` |
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (= `pipeline-native` + `vbx`; no `ort`) |
 | CLI with tract | `cli-tract` |

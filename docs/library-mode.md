@@ -68,7 +68,7 @@ ONNX-file adapters that additionally need `backend-tract` (listed under
 | Feature / surface | Notes |
 |-------------------|--------|
 | `download` / `ModelRegistry` | HTTP registry + SHA-256 / minisign; **no ort** |
-| crate-root `Pipeline` (`pipeline_v2`) | `pipeline-native` (kernels: CLI / FFI / MCP / Python) or `pipeline-tract` |
+| crate-root `Pipeline` (`pipeline_v2`) | `pipeline-native` (kernels: CLI / FFI / MCP / Python) or `pipeline-local` (local assets, no downloader), or experimental `pipeline-tract` |
 | `pipeline-tract` | same v2 stack, tract only — **no ort** |
 | `cli`, `ffi`, `mcp`, Python wheel | `pipeline-native` + `vbx` (+ extras). `PipelineConfig::default()` is VBx when `vbx` is on |
 | `cli-tract` | same CLI bins as `cli`, tract engine, no `ort`; `--legacy` rejected |
@@ -220,3 +220,7 @@ product decision (`pipeline_v2` on kernels remains the CLI default).
 - Example: `examples/byo_embedder.rs`
 - PLDA fixtures: `fixtures/vbx-plda/`
 - CI job `ort-free-core` / `scripts/check-ort-free.sh` — regression gate
+
+“No ONNX Runtime” does not imply zero Rust dependencies or a fully pure-Rust
+native build. See the [dependency/platform contract](strategy/zero-deps.md)
+and [1.0 scope](../PRODUCTION-READINESS.md).
