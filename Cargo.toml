@@ -68,6 +68,8 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
+# Opt-in Linux LP64 OpenBLAS for enabled native kernels; no effect on Darwin.
+system-openblas = ["polyvoice-kernels?/system-openblas"]
 # InferenceRuntime surface (tensors, factory, session trait). No native dylib.
 # Enabled by `backend-tract`. Stages that load ONNX *files* via tract depend
 # on this, not on a concrete engine. The product CLI does not enable `infer`.
