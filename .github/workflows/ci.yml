@@ -338,6 +338,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # cargo-semver-checks enables public features, including system-openblas.
+      - run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2

@@ -40,8 +40,9 @@ Native kernels have platform-specific implementations:
 
 - **Darwin:** C shims compiled by `cc`, linked to system Accelerate/BNNS.
   No ONNX Runtime, but not a pure-Rust inference stack.
-- **Linux:** `rten-gemm` and in-crate kernels, with no system BLAS by default. `system-openblas` explicitly enables LP64
-  OpenBLAS via `pkg-config`; missing prerequisites fail the build.
+- **Linux:** `rten-gemm` and in-crate kernels, with no system BLAS by default.
+  `system-openblas` explicitly enables LP64 OpenBLAS via `pkg-config`; missing
+  prerequisites fail the build.
 - **Windows:** Rust kernel path; platform/runtime linking and download crypto
   still need to be considered for the complete artifact.
 
@@ -130,6 +131,8 @@ pkg-config for the target libraries. Generic BLAS is not supported because
 the adapter uses `openblas_set_num_threads` and 32-bit CBLAS integer arguments.
 The optional backend retains Rust GEMM/INT8 routing where that already wins;
 it enables OpenBLAS for the existing CBLAS branches, not every multiplication.
+Floating-point differences can change clustering and DER; qualify the selected
+backend on your audio rather than assuming bit-identical results.
 
 CI runs `scripts/check-linux-blas.sh` with OpenBLAS installed for both builds:
 kernel numerical tests, unavailable-pkg-config failure, and `readelf`/`ldd`
@@ -138,3 +141,7 @@ BLAS/OpenBLAS. Benchmark reports must record `FEATURES`; use
 `FEATURES=cli-native,system-openblas` only for explicitly labeled OpenBLAS
 comparisons. Historical auto-detected builds need their original linkage
 record before assigning them a backend label.
+
+[Linux backend comparison](../../benchmarks/results/linux-blas-selection-2026-09-24/NOTES.md)
+records fixed-subset quality, artifact hashes and the limits of the measured
+throughput/RSS evidence.
