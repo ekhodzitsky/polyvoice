@@ -87,7 +87,8 @@ struct Args {
     /// (hop w/2) for more embeddings per speaker. Omit for one embedding/segment.
     #[arg(long)]
     embed_window: Option<f32>,
-    /// ONNX execution provider: auto|cpu|coreml|nnapi|cuda|xnnpack. Omitted =
+    /// Execution provider: auto|cpu (product kernels are CPU-only; the
+    /// other tract names are rejected before any model download). Omitted =
     /// each pipeline's shipped default (legacy embedder: cpu; v2: auto), so
     /// committed DER baselines stay reproducible. The resolved provider is
     /// recorded in the report for per-backend RTFx comparison.
@@ -415,18 +416,16 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
             } else {
                 None
             };
-            let mut cfg = PipelineConfig {
-                profile,
-                clusterer,
-                embed_window_secs: args.embed_window,
-                execution_provider: resolved_ep,
-                binarization,
-                as_norm,
-                domain,
-                embedder_model: args.embedder.clone(),
-                reconstruct: args.reconstruct,
-                ..PipelineConfig::default()
-            };
+            let mut cfg = PipelineConfig::default();
+            cfg.profile = profile;
+            cfg.clusterer = clusterer;
+            cfg.embed_window_secs = args.embed_window;
+            cfg.execution_provider = resolved_ep;
+            cfg.as_norm = as_norm;
+            cfg.domain = domain;
+            cfg.experimental.binarization = binarization;
+            cfg.experimental.embedder_model = args.embedder.clone();
+            cfg.experimental.reconstruct = args.reconstruct;
             if let Some(mcs) = args.min_cluster_size {
                 cfg.min_cluster_size = mcs;
             }

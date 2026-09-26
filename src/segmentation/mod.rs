@@ -75,6 +75,7 @@ pub const MIN_AUDIO_SAMPLES: usize = 1600;
 
 /// Errors from `Segmenter` implementations.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum SegmentationError {
     #[error("audio too short: {actual_secs:.3}s < {min_secs:.3}s required")]
     AudioTooShort { actual_secs: f32, min_secs: f32 },

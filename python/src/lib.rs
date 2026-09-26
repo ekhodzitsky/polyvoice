@@ -254,10 +254,8 @@ impl Pipeline {
         }
         .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("model registry: {e}")))?;
 
-        let mut cfg = PipelineConfig {
-            profile,
-            ..PipelineConfig::default()
-        };
+        let mut cfg = PipelineConfig::default();
+        cfg.profile = profile;
         match clusterer {
             // VBx is the default (matches the CLI); the builder resolves PLDA
             // via vbx_plda_dir → POLYVOICE_VBX_PLDA_DIR → registry download.

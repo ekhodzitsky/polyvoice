@@ -436,6 +436,7 @@ fn assign_nearest(embs: &[Vec<f32>], centroids: &[Vec<f32>]) -> Vec<usize> {
 /// was retuned on VoxConverse-dev for native INT8 embeddings; it is still one
 /// global value, never branched on dataset name.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct VbxClustererConfig {
     /// VBx variational-inference hyperparameters.
     pub vbx: VbxConfig,

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// Errors from `download_with_checksum` and `verify_sha256`.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum DownloadError {
     #[error("io error on {path}: {source}")]
     Io {

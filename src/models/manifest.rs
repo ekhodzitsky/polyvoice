@@ -95,6 +95,7 @@ pub struct ModelEntry {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ManifestError {
     #[error("toml parse error: {0}")]
     Toml(#[from] toml::de::Error),

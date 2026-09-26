@@ -153,7 +153,7 @@ pub(crate) fn build_profile_clusterer(
             // mode always forces GMM.
             let windowed = config.embed_window_secs.is_some_and(|w| w > 0.0);
             vbx = vbx.auto_gmm_for_windowed(windowed);
-            if config.reconstruct && !vbx_from_env_enabled() {
+            if config.experimental.reconstruct && !vbx_from_env_enabled() {
                 // Window-local units over-cluster at the shipped 1.6 s
                 // filter; 5 s was the Vox-dev minimum for this path.
                 vbx = vbx.with_min_embedding_secs(5.0);

@@ -27,12 +27,12 @@ use polyvoice::types::{Profile, SampleRate};
 use polyvoice::{Pipeline, PipelineConfig};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // PipelineConfig::default() is VBx when the `vbx` feature is on.
+    // PipelineConfig::default() is VBx when the `vbx` feature is on. The
+    // struct is non-exhaustive: start from the default and assign fields.
+    let mut config = PipelineConfig::default();
+    config.profile = Profile::Balanced;
     let pipeline = Pipeline::builder()
-        .config(PipelineConfig {
-            profile: Profile::Balanced,
-            ..PipelineConfig::default()
-        })
+        .config(config)
         .with_models_from(ModelRegistry::default()?)
         .build()?;
     // 16 kHz WAV via ryf. Other rates/formats: `--features audio-io`.

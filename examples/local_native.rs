@@ -51,10 +51,8 @@ fn main() -> ExitCode {
 
 fn run(models: PathBuf, plda: PathBuf, wav: PathBuf) -> Result<String, Box<dyn std::error::Error>> {
     let registry = ModelRegistry::with_local_dir(&models)?;
-    let config = PipelineConfig {
-        vbx_plda_dir: Some(plda),
-        ..PipelineConfig::default()
-    };
+    let mut config = PipelineConfig::default();
+    config.vbx_plda_dir = Some(plda);
     let pipeline = Pipeline::builder()
         .config(config)
         .with_models_from(registry)

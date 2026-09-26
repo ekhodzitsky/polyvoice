@@ -2,20 +2,27 @@
 //!
 //! Added in v0.6.
 
+// `plda`, `assign`, and `short_filter` are implementation detail of the VBx
+// and v2 stitching paths: reachable for the bench binaries, hidden from the
+// documented (and semver-checked) surface.
+#[doc(hidden)]
 #[cfg(feature = "vbx")]
 pub mod plda;
 #[cfg(feature = "vbx")]
 pub mod vbx;
 
 pub mod asnorm;
+#[doc(hidden)]
 pub mod assign;
 pub mod domain;
+#[doc(hidden)]
 pub mod short_filter;
 
 pub use asnorm::{
     AsNormClusterer, AsNormCohort, AsNormConfig, AsNormError, CohortSource, DEFAULT_AS_NORM_TOP_N,
     DEFAULT_ASNORM_COHORT_MODEL_ID,
 };
+#[doc(hidden)]
 pub use assign::{
     LocalGlobalDuration, build_cooccurrence, hungarian_local_to_global, majority_local_to_global,
 };
@@ -23,6 +30,7 @@ pub use domain::{
     AMI, CALLHOME, DEFAULT_DOMAIN_PROFILE, DOMAIN_PROFILES, DomainProfile, VOXCONVERSE,
     domain_profile,
 };
+#[doc(hidden)]
 pub use short_filter::{
     partition_by_min_duration, reassign_short_by_cosine, reassign_short_by_features,
 };
@@ -79,6 +87,7 @@ pub trait Clusterer: Send + Sync {
 
 /// Errors from `Clusterer` implementations.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ClustererError {
     #[error("too few embeddings: got {actual}, need at least {min}")]
     TooFewEmbeddings { actual: usize, min: usize },

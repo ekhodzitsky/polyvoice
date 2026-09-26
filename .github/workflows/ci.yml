@@ -334,18 +334,23 @@ jobs:
         env:
           LOOM_MAX_PREEMPTIONS: 3
 
+  # Advertised Rust surfaces against the latest release tag, one run per
+  # feature set, always as a minor release so 0.x compatibility lints apply.
+  # The probe run hides frozen entry points in a scratch copy and requires
+  # the gate to report them.
   semver-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # cargo-semver-checks enables public features, including system-openblas.
-      - run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-semver-checks
-      - run: cargo semver-checks check-release
+      - run: bash scripts/check-semver.sh
+      - run: bash scripts/check-semver.sh --probe
 
   audit:
     runs-on: ubuntu-latest
