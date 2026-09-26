@@ -880,21 +880,16 @@ fn build_vbx_from_env_plda_dir_succeeds() {
         clusterer: ClustererKind::Vbx,
         ..PipelineConfig::default()
     };
-    // The builder is the library's single env-resolution point; nextest
-    // isolates each test in its own process, so mutating the environment
-    // here cannot leak into other tests.
-    unsafe {
-        std::env::set_var("POLYVOICE_VBX_PLDA_DIR", repo_file("fixtures/vbx-plda"));
-    }
-    let built = fresh()
+    // The builder is the library's single env-resolution point; the shared
+    // guard serialises env mutation and restores the caller's value.
+    let mut env = crate::test_env::lock();
+    env.set("POLYVOICE_VBX_PLDA_DIR", repo_file("fixtures/vbx-plda"));
+    fresh()
         .config(cfg)
         .with_models_from(registry)
         .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build();
-    unsafe {
-        std::env::remove_var("POLYVOICE_VBX_PLDA_DIR");
-    }
-    built.expect("VBx builds from the PLDA dir named by the env var");
+        .build()
+        .expect("VBx builds from the PLDA dir named by the env var");
 }
 
 #[cfg(feature = "vbx")]
@@ -926,6 +921,10 @@ fn build_vbx_from_registry_cache_succeeds() {
         clusterer: ClustererKind::Vbx,
         ..PipelineConfig::default()
     };
+    // Only the registry may satisfy this build: hold the env lock and clear
+    // the PLDA-dir override for the duration.
+    let mut env = crate::test_env::lock();
+    env.remove("POLYVOICE_VBX_PLDA_DIR");
     let p = fresh()
         .config(cfg)
         .with_models_from(registry)
@@ -1175,6 +1174,11 @@ fn load_as_norm_cohort_missing_model_id_guides_to_explicit_path() {
             crate::clusterer::DEFAULT_ASNORM_COHORT_MODEL_ID.to_owned(),
         ),
     };
+    // The env override would win over the empty manifest, so clear it under
+    // the lock: a concurrent override test or the caller's shell must not
+    // turn this offline failure into a success.
+    let mut env = crate::test_env::lock();
+    env.remove("POLYVOICE_ASNORM_COHORT");
     let err = load_as_norm_cohort(&cfg, &registry).expect_err("must fail offline");
     let msg = err.to_string();
     assert!(msg.contains("asnorm_cohort"), "{msg}");
@@ -1194,16 +1198,9 @@ fn load_as_norm_cohort_env_override_wins_over_registry() {
         // can make this load succeed.
         cohort: crate::clusterer::CohortSource::ModelId("absent_cohort".to_owned()),
     };
-    // nextest runs each test in its own process, so the env var cannot
-    // leak into other tests.
-    unsafe {
-        std::env::set_var("POLYVOICE_ASNORM_COHORT", &cohort_path);
-    }
-    let loaded = load_as_norm_cohort(&cfg, &registry);
-    unsafe {
-        std::env::remove_var("POLYVOICE_ASNORM_COHORT");
-    }
-    let cohort = loaded.expect("env override supplies the cohort");
+    let mut env = crate::test_env::lock();
+    env.set("POLYVOICE_ASNORM_COHORT", &cohort_path);
+    let cohort = load_as_norm_cohort(&cfg, &registry).expect("env override supplies the cohort");
     assert_eq!(cohort.rows().len(), 2);
 }
 

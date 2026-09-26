@@ -394,35 +394,19 @@ fn clusterer_config_defaults_are_the_dev_tuning() {
 
 #[test]
 fn from_env_overlays_valid_values_and_ignores_malformed() {
-    // Edition 2024 marks env mutation unsafe. nextest isolates tests in
-    // their own processes, so this cannot leak into other env-sensitive tests.
-    unsafe {
-        std::env::set_var("POLYVOICE_VBX_FA", "0.42");
-        std::env::set_var("POLYVOICE_VBX_FB", "not-a-float");
-        std::env::set_var("POLYVOICE_VBX_LOOP_PROB", "0.5");
-        std::env::set_var("POLYVOICE_VBX_AHC_THRESHOLD", "0.7");
-        std::env::set_var("POLYVOICE_VBX_EMB_SCALE", "2.5");
-        std::env::set_var("POLYVOICE_VBX_MIN_EMB_SECS", "2.0");
-        std::env::set_var("POLYVOICE_VBX_AHC_ASC_MEMBERS", "3");
-        std::env::set_var("POLYVOICE_VBX_AHC_RAW_L2", "1");
-        std::env::set_var("POLYVOICE_VBX_SOFT_REASSIGN", "true");
-    }
+    // Process-env mutation is serialised and undone by the shared guard.
+    let mut env = crate::test_env::lock();
+    env.set("POLYVOICE_VBX_FA", "0.42");
+    env.set("POLYVOICE_VBX_FB", "not-a-float");
+    env.set("POLYVOICE_VBX_LOOP_PROB", "0.5");
+    env.set("POLYVOICE_VBX_AHC_THRESHOLD", "0.7");
+    env.set("POLYVOICE_VBX_EMB_SCALE", "2.5");
+    env.set("POLYVOICE_VBX_MIN_EMB_SECS", "2.0");
+    env.set("POLYVOICE_VBX_AHC_ASC_MEMBERS", "3");
+    env.set("POLYVOICE_VBX_AHC_RAW_L2", "1");
+    env.set("POLYVOICE_VBX_SOFT_REASSIGN", "true");
     let c = VbxClustererConfig::from_env();
-    unsafe {
-        for k in [
-            "POLYVOICE_VBX_FA",
-            "POLYVOICE_VBX_FB",
-            "POLYVOICE_VBX_LOOP_PROB",
-            "POLYVOICE_VBX_AHC_THRESHOLD",
-            "POLYVOICE_VBX_EMB_SCALE",
-            "POLYVOICE_VBX_MIN_EMB_SECS",
-            "POLYVOICE_VBX_AHC_ASC_MEMBERS",
-            "POLYVOICE_VBX_AHC_RAW_L2",
-            "POLYVOICE_VBX_SOFT_REASSIGN",
-        ] {
-            std::env::remove_var(k);
-        }
-    }
+    drop(env);
     let d = VbxClustererConfig::default();
     assert!((c.vbx.fa - 0.42).abs() < 1e-12);
     assert!(
