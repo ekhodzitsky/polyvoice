@@ -62,6 +62,8 @@ pub(crate) mod hungarian;
 pub mod kmeans;
 #[cfg(feature = "spectral")]
 pub mod spectral;
+#[cfg(test)]
+pub(crate) mod test_env;
 pub use features::{FbankConfig, FbankExtractor};
 pub mod format;
 pub mod overlap;

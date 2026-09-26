@@ -253,82 +253,62 @@ mod tests {
 mod vbx_env_tests {
     use super::vbx_config_for_pipeline;
     use crate::clusterer::vbx::VbxClustererConfig;
-    use std::sync::Mutex;
+    use crate::test_env::EnvGuard;
 
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
-    fn clear_vbx_env() {
-        unsafe {
-            for k in [
-                "POLYVOICE_VBX_FROM_ENV",
-                "POLYVOICE_VBX_FA",
-                "POLYVOICE_VBX_FB",
-                "POLYVOICE_VBX_LOOP_PROB",
-                "POLYVOICE_VBX_AHC_THRESHOLD",
-                "POLYVOICE_VBX_EMB_SCALE",
-                "POLYVOICE_VBX_MIN_EMB_SECS",
-                "POLYVOICE_VBX_AHC_ASC_MEMBERS",
-                "POLYVOICE_VBX_AHC_RAW_L2",
-                "POLYVOICE_VBX_SOFT_REASSIGN",
-                "POLYVOICE_VBX_CLEAN_MASK",
-                "POLYVOICE_VBX_FILTER_CLEAN",
-                "POLYVOICE_VBX_CLEAN_FALLBACK_SECS",
-            ] {
-                std::env::remove_var(k);
-            }
+    fn clear_vbx_env(env: &mut EnvGuard) {
+        for k in [
+            "POLYVOICE_VBX_FROM_ENV",
+            "POLYVOICE_VBX_FA",
+            "POLYVOICE_VBX_FB",
+            "POLYVOICE_VBX_LOOP_PROB",
+            "POLYVOICE_VBX_AHC_THRESHOLD",
+            "POLYVOICE_VBX_EMB_SCALE",
+            "POLYVOICE_VBX_MIN_EMB_SECS",
+            "POLYVOICE_VBX_AHC_ASC_MEMBERS",
+            "POLYVOICE_VBX_AHC_RAW_L2",
+            "POLYVOICE_VBX_SOFT_REASSIGN",
+            "POLYVOICE_VBX_CLEAN_MASK",
+            "POLYVOICE_VBX_FILTER_CLEAN",
+            "POLYVOICE_VBX_CLEAN_FALLBACK_SECS",
+        ] {
+            env.remove(k);
         }
     }
 
     #[test]
     fn from_env_gate_is_required_to_overlay_knobs() {
-        let _lock = env_lock();
-        clear_vbx_env();
-        unsafe {
-            std::env::set_var("POLYVOICE_VBX_FA", "0.99");
-        }
+        let mut env = crate::test_env::lock();
+        clear_vbx_env(&mut env);
+        env.set("POLYVOICE_VBX_FA", "0.99");
         let c = vbx_config_for_pipeline();
         let d = VbxClustererConfig::default();
         assert!(
             (c.vbx.fa - d.vbx.fa).abs() < 1e-12,
             "FA overlay must require POLYVOICE_VBX_FROM_ENV"
         );
-        unsafe {
-            std::env::set_var("POLYVOICE_VBX_FROM_ENV", "1");
-            std::env::set_var("POLYVOICE_VBX_FA", "0.42");
-        }
+        env.set("POLYVOICE_VBX_FROM_ENV", "1");
+        env.set("POLYVOICE_VBX_FA", "0.42");
         let c = vbx_config_for_pipeline();
         assert!((c.vbx.fa - 0.42).abs() < 1e-12);
-        clear_vbx_env();
-        unsafe {
-            std::env::set_var("POLYVOICE_VBX_FROM_ENV", "true");
-            std::env::set_var("POLYVOICE_VBX_EMB_SCALE", "3.5");
-        }
+        clear_vbx_env(&mut env);
+        env.set("POLYVOICE_VBX_FROM_ENV", "true");
+        env.set("POLYVOICE_VBX_EMB_SCALE", "3.5");
         let c = vbx_config_for_pipeline();
         assert!((c.emb_scale - 3.5).abs() < 1e-6);
-        clear_vbx_env();
     }
 
     #[test]
     fn scoring_chain_mask_env_requires_from_env_gate() {
-        let _lock = env_lock();
-        clear_vbx_env();
-        unsafe {
-            std::env::set_var("POLYVOICE_VBX_CLEAN_MASK", "1");
-            std::env::set_var("POLYVOICE_VBX_FILTER_CLEAN", "1");
-        }
+        let mut env = crate::test_env::lock();
+        clear_vbx_env(&mut env);
+        env.set("POLYVOICE_VBX_CLEAN_MASK", "1");
+        env.set("POLYVOICE_VBX_FILTER_CLEAN", "1");
         let (mask, filter) = super::scoring_chain_mask_env();
         assert!(mask.is_none(), "mask overlay must require FROM_ENV");
         assert!(!filter, "filter overlay must require FROM_ENV");
-        unsafe {
-            std::env::set_var("POLYVOICE_VBX_FROM_ENV", "1");
-        }
+        env.set("POLYVOICE_VBX_FROM_ENV", "1");
         let (mask, filter) = super::scoring_chain_mask_env();
         assert_eq!(mask, Some(2.0));
         assert!(filter);
-        clear_vbx_env();
     }
 }
