@@ -29,12 +29,10 @@ fn run_v2_pipeline_on_file(
     rttm_dir: &Path,
 ) -> (DerDecomposition, usize, usize) {
     let registry = ModelRegistry::default().expect("registry");
-    let config = PipelineConfig {
-        profile: Profile::Balanced,
-        sample_rate: SampleRate::new(16000).unwrap(),
-        resegment_overlap: false,
-        ..PipelineConfig::default()
-    };
+    let mut config = PipelineConfig::default();
+    config.profile = Profile::Balanced;
+    config.sample_rate = SampleRate::new(16000).unwrap();
+    config.resegment_overlap = false;
     let pipeline = Pipeline::builder()
         .config(config)
         .profile(Profile::Balanced)
@@ -185,11 +183,10 @@ fn v2_der_notsofar_3_file_subset() {
     let registry = ModelRegistry::default().expect("registry");
     // Match the bench invocation the baseline was recorded with:
     // `polyvoice-bench --pipeline v2 --clusterer vbx`.
+    let mut config = PipelineConfig::default();
+    config.clusterer = polyvoice::ClustererKind::Vbx;
     let pipeline = Pipeline::builder()
-        .config(PipelineConfig {
-            clusterer: polyvoice::pipeline_v2::ClustererKind::Vbx,
-            ..PipelineConfig::default()
-        })
+        .config(config)
         .profile(Profile::Balanced)
         .with_models_from(registry)
         .build()

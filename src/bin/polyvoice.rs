@@ -131,11 +131,10 @@ struct DiarizeArgs {
     /// embedding/segment. Ignored with `--legacy`.
     #[arg(long)]
     embed_window: Option<f32>,
-    /// ONNX execution provider: `auto` (CoreML on Apple Silicon, XNNPACK on
-    /// aarch64 Linux, else CPU), `cpu`, `coreml`, `nnapi`, `cuda`, `xnnpack`.
-    /// Providers not compiled into this build log a warning and run on CPU.
-    /// Applies to the default v2 path; legacy keeps its built-in per-session
-    /// defaults.
+    /// Execution provider: `auto` or `cpu`. The product kernels run on the
+    /// CPU only; `coreml`, `nnapi`, `cuda`, and `xnnpack` are parsed for
+    /// tract builds and rejected before any model download when the build
+    /// cannot execute them (no silent CPU fallback).
     #[arg(long, default_value = "auto")]
     execution_provider: String,
     /// Also emit a single-speaker (exclusive) timeline. In JSON this is the
@@ -479,16 +478,14 @@ fn run_v2_pipeline(
         domain_profile.as_deref(),
     )?;
     let ep = cli_common::parse_execution_provider(execution_provider)?;
-    let mut config = PipelineConfig {
-        profile,
-        clusterer: clusterer_kind,
-        vbx_plda_dir,
-        as_norm: as_norm_config,
-        domain,
-        embed_window_secs: embed_window,
-        execution_provider: ep,
-        ..PipelineConfig::default()
-    };
+    let mut config = PipelineConfig::default();
+    config.profile = profile;
+    config.clusterer = clusterer_kind;
+    config.vbx_plda_dir = vbx_plda_dir;
+    config.as_norm = as_norm_config;
+    config.domain = domain;
+    config.embed_window_secs = embed_window;
+    config.execution_provider = ep;
     if let Some(n) = max_clusters {
         config.max_speakers = cli_common::max_speakers_u8(n)?;
     }

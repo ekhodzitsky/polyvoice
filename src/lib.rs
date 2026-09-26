@@ -182,7 +182,7 @@ pub mod pipeline_v2;
     feature = "clusterer",
     feature = "resegmentation",
 ))]
-pub use pipeline_v2::{Pipeline, PipelineConfig, PipelineError};
+pub use pipeline_v2::{ClustererKind, Pipeline, PipelineBuilder, PipelineConfig, PipelineError};
 
 /// Shared wiring helpers for the CLI-family binaries (`polyvoice`,
 /// `polyvoice-bench`, `polyvoice-measure`, `polyvoice-mcp`): flag-to-config

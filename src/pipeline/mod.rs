@@ -38,6 +38,7 @@ use crate::wav;
 use std::path::Path;
 
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum LegacyPipelineError {
     #[error("invalid configuration: {0}")]
     InvalidConfig(#[from] ConfigError),

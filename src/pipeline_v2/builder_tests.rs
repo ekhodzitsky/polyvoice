@@ -242,7 +242,7 @@ fn validate_rejects_non_finite_and_out_of_range_before_registry() {
     );
     assert_invalid(
         |c| {
-            c.binarization = Some(crate::segmentation::BinarizationConfig {
+            c.experimental.binarization = Some(crate::segmentation::BinarizationConfig {
                 onset: f32::NAN,
                 ..crate::segmentation::BinarizationConfig::default()
             })
@@ -566,10 +566,8 @@ fn build_native_unknown_embedder_model_errors() {
         return;
     }
     let registry = ModelRegistry::with_cache_dir(&cache).expect("registry");
-    let cfg = crate::pipeline_v2::PipelineConfig {
-        embedder_model: Some("not_a_real_embedder".into()),
-        ..crate::pipeline_v2::PipelineConfig::default()
-    };
+    let mut cfg = crate::pipeline_v2::PipelineConfig::default();
+    cfg.experimental.embedder_model = Some("not_a_real_embedder".into());
     let err = fresh()
         .config(cfg)
         .with_models_from(registry)

@@ -202,6 +202,7 @@ impl DiarizationConfig {
 /// window iterator) or silently degrade the output (out-of-range cosine
 /// threshold, negative or non-finite durations).
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[non_exhaustive]
 pub enum ConfigError {
     /// `window.window_secs` must be finite and > 0.
     #[error("window.window_secs must be finite and > 0, got {0}")]

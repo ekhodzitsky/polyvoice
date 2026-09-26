@@ -45,12 +45,10 @@ fn pipeline_v2_balanced_resnet34_ahc_der_under_10_percent() {
 
     let registry = ModelRegistry::default().expect("model registry");
 
-    let config = PipelineConfig {
-        profile: Profile::Balanced,
-        sample_rate: SampleRate::new(16000).unwrap(),
-        resegment_overlap: false,
-        ..PipelineConfig::default()
-    };
+    let mut config = PipelineConfig::default();
+    config.profile = Profile::Balanced;
+    config.sample_rate = SampleRate::new(16000).unwrap();
+    config.resegment_overlap = false;
 
     let pipeline = Pipeline::builder()
         .config(config)
@@ -91,12 +89,10 @@ fn pipeline_v2_mobile_resnet34_ahc_der_under_10_percent() {
 
     let registry = ModelRegistry::default().expect("model registry");
 
-    let config = PipelineConfig {
-        profile: Profile::Mobile,
-        sample_rate: SampleRate::new(16000).unwrap(),
-        resegment_overlap: false,
-        ..PipelineConfig::default()
-    };
+    let mut config = PipelineConfig::default();
+    config.profile = Profile::Mobile;
+    config.sample_rate = SampleRate::new(16000).unwrap();
+    config.resegment_overlap = false;
 
     let pipeline = Pipeline::builder()
         .config(config)

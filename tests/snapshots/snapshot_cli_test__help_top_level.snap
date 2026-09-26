@@ -50,7 +50,7 @@ Options:
       --embed-window <EMBED_WINDOW>
           v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Ignored with `--legacy`
       --execution-provider <EXECUTION_PROVIDER>
-          ONNX execution provider: `auto` (CoreML on Apple Silicon, XNNPACK on aarch64 Linux, else CPU), `cpu`, `coreml`, `nnapi`, `cuda`, `xnnpack`. Providers not compiled into this build log a warning and run on CPU. Applies to the default v2 path; legacy keeps its built-in per-session defaults [default: auto]
+          Execution provider: `auto` or `cpu`. The product kernels run on the CPU only; `coreml`, `nnapi`, `cuda`, and `xnnpack` are parsed for tract builds and rejected before any model download when the build cannot execute them (no silent CPU fallback) [default: auto]
       --exclusive
           Also emit a single-speaker (exclusive) timeline. In JSON this is the additive `exclusive_turns` field beside the overlap-aware `turns`. For RTTM/SRT/VTT/TXT the exclusive timeline is written instead (ASR- reconciliation surface — concurrent speakers are collapsed per frame)
       --latency-preset <PRESET>

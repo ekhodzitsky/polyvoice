@@ -53,6 +53,7 @@ pub trait VoiceActivityDetector: Send {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum VadError {
     #[error("model error: {0}")]
     Model(String),

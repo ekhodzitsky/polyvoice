@@ -80,6 +80,7 @@ pub struct OverlapRegionInput {
 
 /// Errors from `Resegmenter` implementations.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ResegmentError {
     #[error("centroid dim mismatch at index {index}: expected {expected}, got {actual}")]
     CentroidDimMismatch {

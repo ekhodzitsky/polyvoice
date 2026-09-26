@@ -11,6 +11,7 @@ use crate::segmentation::Segmenter;
 use crate::types::Profile;
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ConfigError {
     #[error("profile {profile:?} requires .with_models_from() call")]
     MissingRegistry { profile: Profile },
@@ -128,7 +129,9 @@ impl PipelineBuilder {
     }
 
     /// Override the execution provider (defaults to
-    /// `ExecutionProvider::auto()` via `PipelineConfig::default`).
+    /// `ExecutionProvider::auto()` via `PipelineConfig::default`). Product
+    /// kernels execute on the CPU only: [`validate`](Self::validate) rejects
+    /// every other provider instead of falling back.
     pub fn execution_provider(mut self, ep: crate::pipeline_v2::ExecutionProvider) -> Self {
         self.config.execution_provider = ep;
         self
@@ -329,7 +332,7 @@ fn build_native_stages(
             }
         })?,
     );
-    if let Some(id) = config.embedder_model.as_deref() {
+    if let Some(id) = config.experimental.embedder_model.as_deref() {
         let embedder = load_native_embedder_override(registry, config, id)?;
         return Ok((segmenter, embedder));
     }
@@ -438,7 +441,7 @@ fn build_onnx_stages(
         config.embedder_pool_size
     };
     let mut seg_cfg = crate::segmentation::PowersetConfig::default();
-    seg_cfg.aggregation.binarization = config.binarization;
+    seg_cfg.aggregation.binarization = config.experimental.binarization;
     seg_cfg.pool_size = pool;
     let segmenter_path = if use_tract {
         tracing::info!(

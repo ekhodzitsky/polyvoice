@@ -1,12 +1,19 @@
 //! Model registry — manifest-driven downloads with SHA-256 verification,
 //! adapter selection by config string, and self-describing model metadata.
 
+// `adapter`, `metadata`, and `verify` are registry internals (type-erased
+// adapter lookup, ONNX metadata sniffing, checksum/signature helpers). They
+// stay reachable but are hidden from the documented, semver-checked surface.
+#[doc(hidden)]
 pub mod adapter;
 #[cfg(feature = "download")]
 pub mod download;
 pub mod manifest;
+#[doc(hidden)]
 pub mod metadata;
+#[doc(hidden)]
 pub mod verify;
+#[doc(hidden)]
 pub use adapter::{AdapterError, AdapterFactory, AdapterRegistry, AdapterStage, BuiltinAdapter};
 #[cfg(feature = "download")]
 pub use download::{
@@ -17,6 +24,7 @@ use download::{download_with_checksum_signature_and_cap, max_download_bytes};
 pub use manifest::{
     Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1, SCHEMA_V2, is_supported_schema,
 };
+#[doc(hidden)]
 pub use metadata::{MetaSource, ModelConfigMeta, load_model_config, read_onnx_metadata_props};
 
 use crate::types::Profile;
@@ -131,6 +139,7 @@ pub fn default_manifest() -> Manifest {
 
 /// Errors from `ModelRegistry` operations.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum RegistryError {
     #[error("model '{model_id}' not found in manifest")]
     ModelNotFound { model_id: String },

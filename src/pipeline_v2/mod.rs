@@ -17,9 +17,11 @@ compile_error!(
      + resegmentation and an engine (`backend-tract` or native kernels)"
 );
 
-pub mod builder;
+// `builder` and `config` are private: their types are the `pipeline_v2`
+// root re-exports below, which is the only path the API freeze names.
+mod builder;
 mod clusterer_factory;
-pub mod config;
+mod config;
 mod reconstruct;
 
 #[allow(clippy::unwrap_used)]
@@ -38,7 +40,7 @@ use crate::types::{DiarizationResult, SampleRate, Segment, SpeakerId, SpeakerTur
 use crate::utils::{l2_normalize, merge_segments};
 
 pub use builder::{ConfigError, PipelineBuilder};
-pub use config::{ClustererKind, ExecutionProvider, PipelineConfig};
+pub use config::{ClustererKind, ExecutionProvider, ExperimentalConfig, PipelineConfig};
 
 /// Wall-clock seconds per pipeline stage, from [`Pipeline::run_with_timings`].
 /// In pipeline v2 voice-activity detection is part of the powerset segmenter,
@@ -193,6 +195,7 @@ fn window_confidence_sum(
 pub const MAX_AUDIO_SAMPLES: usize = 16_000 * 3_600;
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum PipelineError {
     #[error("audio sample rate {actual} unsupported, expected 16000")]
     UnsupportedSampleRate { actual: u32 },
@@ -297,7 +300,7 @@ impl Pipeline {
         let mut timings = StageTimings::default();
 
         let t = std::time::Instant::now();
-        if self.config.reconstruct {
+        if self.config.experimental.reconstruct {
             match self.segmenter.windows(samples)? {
                 Some(windows) if !windows.is_empty() => {
                     timings.segmentation_secs = t.elapsed().as_secs_f64();
@@ -649,19 +652,19 @@ impl Pipeline {
         labels: &[usize],
         cannot_link: &[(u8, u8)],
     ) -> std::collections::HashMap<u8, SpeakerId> {
-        // Ablation toggle (PipelineConfig::disable_seg_overlap): return an
+        // Ablation toggle (ExperimentalConfig::disable_seg_overlap): return an
         // empty map so every overlap region takes the mixed-embedding fallback.
         // Lets the segmentation-derived overlap path be A/B-measured against
         // the legacy path in one binary.
-        if self.config.disable_seg_overlap {
+        if self.config.experimental.disable_seg_overlap {
             return std::collections::HashMap::new();
         }
         let local_idx: Vec<u8> = sources.iter().map(|s| s.local_speaker_idx).collect();
         let durations: Vec<f64> = sources.iter().map(|s| s.time.duration()).collect();
         let cooc = crate::clusterer::build_cooccurrence(&local_idx, labels, &durations);
-        // Ablation (PipelineConfig::majority_local_map): majority vote instead
+        // Ablation (ExperimentalConfig::majority_local_map): majority vote instead
         // of Hungarian.
-        if self.config.majority_local_map {
+        if self.config.experimental.majority_local_map {
             return crate::clusterer::majority_local_to_global(&cooc);
         }
         crate::clusterer::hungarian_local_to_global(&cooc, cannot_link)

@@ -845,7 +845,7 @@ fn build_overlap_inputs_skips_non_finite_overlap_embedding() {
 #[test]
 fn map_local_to_global_disable_toggle_returns_empty_map() {
     let mut cfg = custom_cfg();
-    cfg.disable_seg_overlap = true;
+    cfg.experimental.disable_seg_overlap = true;
     let p = pipeline_custom(
         cfg,
         Vec::new(),
@@ -864,7 +864,7 @@ fn map_local_to_global_disable_toggle_returns_empty_map() {
 #[test]
 fn map_local_to_global_majority_toggle_maps_by_vote() {
     let mut cfg = custom_cfg();
-    cfg.majority_local_map = true;
+    cfg.experimental.majority_local_map = true;
     let p = pipeline_custom(
         cfg,
         Vec::new(),

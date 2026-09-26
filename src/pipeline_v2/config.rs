@@ -5,7 +5,14 @@ use crate::types::{Profile, SampleRate};
 use std::path::PathBuf;
 
 /// Top-level configuration for the v1.0 Pipeline. Mirrors spec §5.2 verbatim.
+///
+/// The struct is `#[non_exhaustive]`: start from [`PipelineConfig::default`]
+/// and assign the fields you need. Fields may be added in minor releases
+/// without breaking that pattern. Everything here except
+/// [`experimental`](Self::experimental) is part of the frozen contract
+/// (`docs/semver.md`).
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct PipelineConfig {
     pub profile: Profile,
     /// Sample rate of `run` audio. Shipping profiles (`Mobile`, `Balanced`,
@@ -21,13 +28,6 @@ pub struct PipelineConfig {
     /// Ignored for VBx, which chooses its own speaker count.
     pub min_cluster_size: usize,
     pub resegment_overlap: bool,
-    /// Ablation: empty the local→global speaker map so every overlap region
-    /// takes the mixed-embedding fallback instead of the segmenter's own
-    /// two-speaker assignment. Ships `false` (the overlap-accuracy win).
-    pub disable_seg_overlap: bool,
-    /// Ablation: majority vote instead of Hungarian assignment for the
-    /// local→global speaker map. Ships `false`.
-    pub majority_local_map: bool,
     /// Drop speech regions shorter than this. Finite and `>= 0` (`0` keeps
     /// every region). NaN and infinity are rejected.
     pub min_speech_secs: f32,
@@ -66,10 +66,6 @@ pub struct PipelineConfig {
     /// the cost of more embedder calls. Sub-`w` segments still embed once.
     /// `Some` must be finite and `> 0`.
     pub embed_window_secs: Option<f32>,
-    /// Optional calibrated binarization of segmentation posteriors (onset/offset
-    /// hysteresis + min-duration smoothing) instead of per-frame argmax.
-    /// `None` keeps the shipped argmax behavior.
-    pub binarization: Option<crate::segmentation::BinarizationConfig>,
     /// Optional AS-norm score normalization for the fixed-threshold AHC
     /// clusterer: pairwise cosine scores are z-normalized against an imposter
     /// cohort before merging, so one threshold generalizes across recording
@@ -82,6 +78,32 @@ pub struct PipelineConfig {
     /// time; `None` keeps the configured threshold. Profiles are data (see
     /// [`crate::clusterer::domain`]) — never code branching.
     pub domain: Option<crate::clusterer::DomainProfile>,
+    /// Measurement and ablation switches. Outside the stability contract:
+    /// see [`ExperimentalConfig`]. The defaults are the shipped behavior.
+    pub experimental: ExperimentalConfig,
+}
+
+/// Measurement-only and ablation switches of the v2 pipeline.
+///
+/// **Not covered by the API freeze.** Fields may be added, renamed, or
+/// removed in any minor release, and none of them changes the shipped
+/// defaults. They exist so `polyvoice-bench` can A/B alternative paths in one
+/// binary. Construct via [`Default`] and assign fields; the struct is
+/// `#[non_exhaustive]`.
+#[derive(Clone, Debug, Default)]
+#[non_exhaustive]
+pub struct ExperimentalConfig {
+    /// Ablation: empty the local→global speaker map so every overlap region
+    /// takes the mixed-embedding fallback instead of the segmenter's own
+    /// two-speaker assignment. Ships `false` (the overlap-accuracy win).
+    pub disable_seg_overlap: bool,
+    /// Ablation: majority vote instead of Hungarian assignment for the
+    /// local→global speaker map. Ships `false`.
+    pub majority_local_map: bool,
+    /// Optional calibrated binarization of segmentation posteriors (onset/offset
+    /// hysteresis + min-duration smoothing) instead of per-frame argmax.
+    /// `None` keeps the shipped argmax behavior.
+    pub binarization: Option<crate::segmentation::BinarizationConfig>,
     /// Measurement-only embedder override on the native powerset path.
     /// `None` keeps the profile embedder (`resnet34_int8` kernels).
     /// `Some("cam_pp_int8")` / `Some("cam_pp_fp32")` keeps native powerset and
@@ -108,8 +130,6 @@ impl Default for PipelineConfig {
             // ~49%). 1 = no pruning; tune per-call if a split-heavy file needs it.
             min_cluster_size: 1,
             resegment_overlap: true,
-            disable_seg_overlap: false,
-            majority_local_map: false,
             min_speech_secs: 0.25,
             max_gap_secs: 0.5,
             embedder_pool_size: default_pool_size(),
@@ -117,16 +137,17 @@ impl Default for PipelineConfig {
             execution_provider: ExecutionProvider::auto(),
             vbx_plda_dir: None,
             embed_window_secs: None,
-            binarization: None,
             as_norm: None,
             domain: None,
-            embedder_model: None,
-            reconstruct: false,
+            experimental: ExperimentalConfig::default(),
         }
     }
 }
 
+/// Clustering backend selection. `#[non_exhaustive]`: match with a wildcard
+/// arm; new backends may appear in minor releases.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ClustererKind {
     NmeSc,
     /// Fixed-threshold agglomerative clustering. `threshold` is cosine
@@ -139,13 +160,21 @@ pub enum ClustererKind {
     Vbx,
 }
 
-// Ort owns the live EP type (session construction). Kernel-only builds
-// (`pipeline-native`) have no `onnx` module — same variants, ignored at run.
+// Tract owns the live EP type (session construction). Kernel-only builds
+// (`pipeline-native`) have no `onnx` module — same variants, never executed.
 #[cfg(feature = "infer")]
 pub use crate::onnx::ExecutionProvider;
 
+/// Where a session would run. Product kernels execute on the CPU only:
+/// [`ExecutionProvider::Cpu`] and [`ExecutionProvider::auto`] (which resolves
+/// to CPU) are the only values [`PipelineBuilder::validate`] accepts. The
+/// other variants exist for tract builds and are rejected, never silently
+/// downgraded. `#[non_exhaustive]`: match with a wildcard arm.
+///
+/// [`PipelineBuilder::validate`]: crate::pipeline_v2::PipelineBuilder::validate
 #[cfg(not(feature = "infer"))]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ExecutionProvider {
     Cpu,
     CoreMl,
@@ -254,7 +283,7 @@ impl PipelineConfig {
                 ),
             ));
         }
-        if let Some(bin) = self.binarization {
+        if let Some(bin) = self.experimental.binarization {
             if !(bin.onset.is_finite() && (0.0..=1.0).contains(&bin.onset)) {
                 return Err(bad(
                     "binarization.onset",
@@ -318,16 +347,17 @@ mod tests {
         assert_eq!(cfg.max_speakers, 20);
         assert_eq!(cfg.min_cluster_size, 1);
         assert!(cfg.resegment_overlap);
-        assert!(!cfg.disable_seg_overlap);
-        assert!(!cfg.majority_local_map);
+        assert!(!cfg.experimental.disable_seg_overlap);
+        assert!(!cfg.experimental.majority_local_map);
         assert!((cfg.min_speech_secs - 0.25).abs() < f32::EPSILON);
         assert!((cfg.max_gap_secs - 0.5).abs() < f32::EPSILON);
         assert!(cfg.embedder_pool_size >= 1);
         assert!(cfg.embedder_pool_size <= 4);
         assert!(cfg.as_norm.is_none());
         assert!(cfg.domain.is_none());
-        assert!(cfg.embedder_model.is_none());
-        assert!(!cfg.reconstruct);
+        assert!(cfg.experimental.embedder_model.is_none());
+        assert!(!cfg.experimental.reconstruct);
+        assert!(cfg.experimental.binarization.is_none());
     }
 
     #[test]

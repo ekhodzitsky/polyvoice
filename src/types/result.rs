@@ -124,6 +124,7 @@ pub struct Transcript {
 
 /// Audio metadata for a [`DiarizationResult`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[non_exhaustive]
 pub struct AudioMeta {
     /// Audio duration in seconds.
     pub duration_secs: f64,
@@ -138,6 +139,7 @@ pub struct AudioMeta {
 /// `clusterer`) are populated when the model registry is threaded through — an
 /// empty string means "not recorded".
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[non_exhaustive]
 pub struct Provenance {
     /// Crate version that produced the result.
     pub version: String,
@@ -154,6 +156,7 @@ pub struct Provenance {
 /// Per-speaker rollup for a [`DiarizationResult`], exposing the speaker both as a
 /// numeric `id` and the canonical `SPEAKER_NN` `label`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SpeakerSummary {
     /// Canonical string label, e.g. "SPEAKER_00".
     pub label: String,
@@ -187,6 +190,7 @@ fn default_schema_version() -> String {
 /// Schema family stays `diarization-result-v1`: new fields are optional and
 /// omitted when empty, so consumers that ignore unknown keys remain compatible.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct DiarizationResult {
     pub segments: Vec<Segment>,
     pub turns: Vec<SpeakerTurn>,

@@ -352,15 +352,13 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
         .ensure_for_profile(profile)
         .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
 
-    let config = PipelineConfig {
-        profile,
-        clusterer: clusterer_kind,
-        max_speakers,
-        vbx_plda_dir: match input.vbx_plda_dir.as_ref() {
-            Some(s) => Some(confine_path(Path::new(s), root.as_deref(), "vbx_plda_dir")?),
-            None => None,
-        },
-        ..PipelineConfig::default()
+    let mut config = PipelineConfig::default();
+    config.profile = profile;
+    config.clusterer = clusterer_kind;
+    config.max_speakers = max_speakers;
+    config.vbx_plda_dir = match input.vbx_plda_dir.as_ref() {
+        Some(s) => Some(confine_path(Path::new(s), root.as_deref(), "vbx_plda_dir")?),
+        None => None,
     };
     let pipeline = cli_common::build_v2_pipeline(config, registry)
         .map_err(|e| err(ERR_MODEL_LOAD, format!("{e:#}")))?;

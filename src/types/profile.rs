@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Added in v0.6.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum Profile {
     Mobile,
     Balanced,
