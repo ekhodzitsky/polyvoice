@@ -33,7 +33,7 @@ pub const ONNX_MIN_HEADER_BYTES: usize = 64;
 ///
 /// Canonical home is here (the module that owns session creation) so the
 /// low-level constructors can name it without depending on `pipeline_v2`;
-/// `pipeline_v2::config` re-exports it, so existing imports keep compiling.
+/// `pipeline_v2` re-exports it, so existing imports keep compiling.
 ///
 /// EP is **ort-specific config** — it is not part of [`InferenceRuntime`].
 /// Stages pass it only at session construction via [`build_session_with_ep`].
@@ -41,6 +41,7 @@ pub const ONNX_MIN_HEADER_BYTES: usize = 64;
 /// EP values are accepted for API compatibility with `PipelineConfig` but
 /// tract always runs on CPU. Unwired names never fail the build.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ExecutionProvider {
     /// Always available. No EP registration; ort uses its built-in CPU path.
     Cpu,

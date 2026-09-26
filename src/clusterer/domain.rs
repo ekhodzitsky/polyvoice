@@ -7,6 +7,7 @@
 
 /// A calibrated scoring profile for one evaluation domain.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct DomainProfile {
     /// Stable lowercase name (CLI value): `voxconverse`, `ami`, `callhome`.
     pub name: &'static str,

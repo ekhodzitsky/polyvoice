@@ -34,6 +34,7 @@ pub const DEFAULT_ASNORM_COHORT_MODEL_ID: &str = "asnorm_cohort_voxdev";
 
 /// Where the imposter cohort comes from.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum CohortSource {
     /// Explicit local `.npy` file: shape `(N, D)`, dtype `'<f4'`, C-order.
     Path(PathBuf),
@@ -43,6 +44,7 @@ pub enum CohortSource {
 
 /// AS-norm configuration for the fixed-threshold AHC clusterer.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct AsNormConfig {
     /// Number of top cohort scores per embedding used for mean/std estimation.
     /// `top_n <= 1` yields a zero-dispersion top-N set, which falls back to
@@ -53,8 +55,18 @@ pub struct AsNormConfig {
     pub cohort: CohortSource,
 }
 
+impl AsNormConfig {
+    /// AS-norm against `cohort`, estimating mean/std from the `top_n` best
+    /// cohort scores per embedding ([`DEFAULT_AS_NORM_TOP_N`] is the shipped
+    /// value; the pipeline rejects `top_n < 2`).
+    pub fn new(cohort: CohortSource, top_n: usize) -> Self {
+        Self { top_n, cohort }
+    }
+}
+
 /// Errors loading an [`AsNormCohort`].
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum AsNormError {
     #[error("as-norm cohort io error on {path}: {detail}")]
     Io { path: String, detail: String },

@@ -15,6 +15,7 @@ use std::path::Path;
 
 /// Errors loading or applying a [`PldaModel`].
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum PldaError {
     #[error("plda param io error on {path}: {detail}")]
     Io { path: String, detail: String },

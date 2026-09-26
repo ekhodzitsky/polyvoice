@@ -253,15 +253,14 @@ cfg.as_norm = Some(AsNormConfig {
 
 ```rust
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::ClustererKind;
 use polyvoice::types::{Profile, SampleRate};
-use polyvoice::{Pipeline, PipelineConfig};
+use polyvoice::{ClustererKind, Pipeline, PipelineConfig};
 
-let cfg = PipelineConfig {
-    profile: Profile::Balanced,
-    clusterer: ClustererKind::Vbx, // CLI parity
-    ..PipelineConfig::default()
-};
+// `PipelineConfig` is `#[non_exhaustive]`: start from the default and
+// assign the fields you need (struct literals do not compile outside the crate).
+let mut cfg = PipelineConfig::default();
+cfg.profile = Profile::Balanced;
+cfg.clusterer = ClustererKind::Vbx; // CLI parity
 let pipeline = Pipeline::builder()
     .config(cfg)
     .with_models_from(ModelRegistry::default()?)

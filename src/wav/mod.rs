@@ -23,6 +23,7 @@ mod decode;
 mod resample;
 
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum WavError {
     #[error("failed to read WAV: {0}")]
     Read(String),

@@ -21,6 +21,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- The stable Rust API boundary is finalized for 1.0 (`docs/semver.md`).
+  `PipelineConfig` is `#[non_exhaustive]`: struct literals, including
+  `PipelineConfig { .., ..Default::default() }`, no longer compile outside
+  the crate. Migration: `let mut cfg = PipelineConfig::default();` and
+  assign fields. The measurement-only switches `disable_seg_overlap`,
+  `majority_local_map`, `binarization`, `embedder_model`, and `reconstruct`
+  moved to `PipelineConfig::experimental` (`ExperimentalConfig`, outside the
+  stability contract; `polyvoice-bench` is the only shipped user).
+- `#[non_exhaustive]` on `ClustererKind`, `ExecutionProvider`, `Profile`,
+  `CohortSource`, `AsNormConfig` (use `AsNormConfig::new`), `DomainProfile`
+  (use the `VOXCONVERSE` / `AMI` constants), `VbxClustererConfig` (assign on
+  `Default`), the output structs `DiarizationResult`, `SpeakerSummary`,
+  `AudioMeta`, `Provenance` (use `DiarizationResult::new` / `Default`), and
+  the error enums `PipelineError`, `pipeline_v2::ConfigError`,
+  `RegistryError`, `ManifestError`, `DownloadError`, `ClustererError`,
+  `PldaError`, `AsNormError`, `SegmentationError`, `ResegmentError`,
+  `WavError`, `VadError`, `LegacyPipelineError`, and `types::ConfigError`.
+  Exhaustive `match` expressions on them need a wildcard arm. `SpeakerTurn`,
+  `Segment`, `TimeRange`, and the transcript value types stay exhaustive on
+  purpose because consumers construct them.
+- `pipeline_v2::builder` and `pipeline_v2::config` are private modules; the
+  items remain at `pipeline_v2::{PipelineBuilder, ConfigError, PipelineConfig,
+  ClustererKind, ExecutionProvider}`. `clusterer::{plda, assign, short_filter}`
+  and `models::{adapter, metadata, verify}` are `#[doc(hidden)]` with their
+  re-exports: still compiled, no longer part of the checked surface.
+- `polyvoice --execution-provider` help no longer claims a CPU fallback:
+  product builds accept `auto` and `cpu` and reject the other names before
+  any model download (behavior unchanged since the validation release).
 - Development version advances to 0.22.0 for the accumulated API changes.
   Exhaustive configuration literals must account for `PipelineConfig.reconstruct`
   and `VbxClustererConfig.{ahc_on_raw_l2,soft_reassign}`; exhaustive error matches
@@ -35,6 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Crate-root re-exports `PipelineBuilder` and `ClustererKind` beside
+  `Pipeline` / `PipelineConfig` / `PipelineError`; `AsNormConfig::new`.
+- `scripts/check-semver.sh` replaces the bare `cargo semver-checks` CI step:
+  it compares the product (`pipeline-native` + `vbx`), BYO (no features),
+  BYO + `vbx`, and `pipeline-local` surfaces against the latest release tag
+  as a minor release, accepts a break only with a minor bump plus a
+  `### Breaking` entry, and `--probe` proves the gate reports a hidden entry
+  point. Feature sets that do not exist at the baseline are skipped.
 - `pipeline-local`: powerset + ResNet34 kernels + VBx from a local directory
   (`ModelRegistry::with_local_dir` + `vbx_plda_dir`) without the `download`
   feature. SHA-256 and minisign still apply; missing or corrupt files error

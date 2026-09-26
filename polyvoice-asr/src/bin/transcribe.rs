@@ -83,10 +83,8 @@ fn main() -> Result<()> {
     let profile: Profile = args.profile.parse().context("invalid --profile")?;
     let registry = ModelRegistry::default().context("model registry")?;
 
-    let mut config = PipelineConfig {
-        profile,
-        ..PipelineConfig::default()
-    };
+    let mut config = PipelineConfig::default();
+    config.profile = profile;
     match args.clusterer {
         ClustererArg::Vbx => {
             config.clusterer = ClustererKind::Vbx;

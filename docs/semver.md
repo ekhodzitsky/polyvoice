@@ -7,17 +7,23 @@ freeze window has held and the other 1.0 boxes are true.
 This document is the advertised-surface contract. Breaking the frozen
 surface without a CHANGELOG **Breaking** entry is a bug.
 
-CI: `cargo semver-checks check-release` (job `semver-checks` in
-`.github/workflows/ci.yml`) on the Rust library. CLI help snapshots, the
-FFI header, and `schema/diarization-result-v1.json` cover the other doors.
+CI: `scripts/check-semver.sh` (job `semver-checks` in
+`.github/workflows/ci.yml`) runs `cargo-semver-checks` on the Rust library,
+see [the gate](#semver-gate) below. CLI help snapshots, the FFI header, and
+`schema/diarization-result-v1.json` cover the other doors.
 
 ## Advertised surfaces (final RC window not started)
 
+The frozen Rust surface is **every `pub` item that is not `#[doc(hidden)]`
+and is reachable in one of the four checked feature sets** below. The
+"Contract" column names the entry points consumers should build on; other
+public items in those sets are checked the same way.
+
 | Surface | Contract | Gate |
 |---------|----------|------|
-| Product library | Crate-root `Pipeline` / `PipelineConfig` / `PipelineError` via `pipeline-native` + `vbx`, or `pipeline-local` | `cargo-semver-checks`; rustdoc |
-| Result types | `types::{DiarizationResult, SpeakerTurn, SpeakerId, TimeRange, Profile, SampleRate}` | `cargo-semver-checks` |
-| BYO / no-ort | `LegacyPipeline`, `StreamingPipeline`, `Embedder`, `EnergyVad`, `VbxClusterer::from_dir` with `--no-default-features` (enable `vbx` for VBx) | `docs/library-mode.md`; job `ort-free-core` |
+| Product library (`pipeline-native` + `vbx`, or `pipeline-local`) | Crate root `Pipeline`, `PipelineBuilder`, `PipelineConfig` (every field except `experimental`), `ClustererKind`, `PipelineError`; `pipeline_v2::{ConfigError, ExecutionProvider, StageTimings, MAX_AUDIO_SAMPLES}`; `ModelRegistry`, `ProfileModels`, `RegistryError`, `models::{Manifest, ManifestError}`; `clusterer::{AsNormConfig, CohortSource, DomainProfile, VOXCONVERSE, AMI}`; `VbxClusterer`, `VbxClustererConfig`; `wav::load_audio` | semver sets `product`, `local`; rustdoc |
+| Result types | `types::{DiarizationResult, SpeakerTurn, Segment, SpeakerSummary, AudioMeta, Provenance, SpeakerId, TimeRange, Confidence, Profile, SampleRate}` | every semver set; JSON schema |
+| BYO / no inference runtime | `pipeline::{LegacyPipeline, LegacyPipelineError}`, `streaming::{StreamingPipeline, LatencyPreset}`, `Embedder`, `EmbedderError`, `EnergyVad`, `VadConfig`, `VadError`, `VoiceActivityDetector`, `DiarizationConfig`, `ClusterConfig`, `ConfigError`, `Clusterer`, `ClustererError`, `AhcClusterer`, `VbxClusterer::from_dir` (`vbx`) with `--no-default-features` | semver sets `byo`, `byo-vbx`; `docs/library-mode.md`; job `ort-free-core` |
 | CLI (`--features cli`) | Flags in `tests/snapshots/snapshot_cli_test__help_top_level.snap` | insta snapshot |
 | Python | `polyvoice.Pipeline`, `polyvoice.DiarizationResult` | wheel tests |
 | C FFI | [`include/polyvoice.h`](../include/polyvoice.h) ABI v3 | `ffi_smoke` |
@@ -25,24 +31,76 @@ FFI header, and `schema/diarization-result-v1.json` cover the other doors.
 
 Additive changes on these surfaces are fine (new optional JSON fields, new
 CLI flags, new FFI enum slots that keep old numbers). Removals, renames, and
-meaning changes are breaking. Adding fields to exhaustive Rust structs or
-variants to exhaustive enums can also break consumers; “additive” does not
-automatically mean compatible.
+meaning changes are breaking.
+
+### Extensibility rules
+
+Which Rust additions stay compatible is decided per type, not by habit:
+
+- **Configuration structs are `#[non_exhaustive]`**: `PipelineConfig`,
+  `ExperimentalConfig`, `AsNormConfig`, `VbxClustererConfig`,
+  `DomainProfile`. Construct them from `Default` (or `AsNormConfig::new`,
+  the domain constants) and assign fields; struct literals do not compile
+  outside the crate. Adding a field is a minor change.
+- **Enums are `#[non_exhaustive]`**: `ClustererKind`, `ExecutionProvider`,
+  `Profile`, `CohortSource`, and every error enum on the checked surfaces
+  (`PipelineError`, `pipeline_v2::ConfigError`, `RegistryError`,
+  `ManifestError`, `DownloadError`, `ClustererError`, `PldaError`,
+  `AsNormError`, `SegmentationError`, `ResegmentError`, `WavError`,
+  `VadError`, `LegacyPipelineError`, `types::ConfigError`, `EmbedderError`).
+  Match with a wildcard arm; adding a variant is a minor change.
+- **Output structs are `#[non_exhaustive]`**: `DiarizationResult`,
+  `SpeakerSummary`, `AudioMeta`, `Provenance`. Consumers read them and use
+  `DiarizationResult::new` / `Default` to build test values, so a new JSON
+  field is additive in Rust as well.
+- **Value types stay exhaustive**: `SpeakerTurn`, `Segment`, `TimeRange`,
+  `Word`, `WordAlignment`, `Transcript`, `SpeakerId`, `Confidence`,
+  `SampleRate`. Consumers construct them, so adding a field is **breaking**.
+- `PipelineConfig::experimental` (`ExperimentalConfig`) is outside the
+  freeze: its fields may change in any minor release and none of them
+  changes the shipped defaults.
 
 ## Out of freeze
 
-- tract (`cli-tract`) and BYO ONNX-file adapters on tract
+- `PipelineConfig::experimental` and everything it switches
+- `#[doc(hidden)]` items: `cli_common`, `clusterer::{plda, assign,
+  short_filter}`, `models::{adapter, metadata, verify}` — still compiled,
+  ignored by `cargo-semver-checks`
+- tract (`cli-tract`, `pipeline-tract`, `backend-tract`) and BYO ONNX-file
+  adapters on tract; `ExecutionProvider` values other than `Cpu` / `auto`
+  are rejected by `PipelineBuilder::validate` on product builds
 - MCP protocol/tool API (`mcp`); experimental even though its engine is native
 - Silero, CAM++ / ECAPA / ERes2Net, EP-only knobs
-- `#[doc(hidden)]` items (`cli_common`)
 - Domain profile `callhome` (uncalibrated placeholder)
-- Internal modules (`pipeline_v2` internals, kernels, bench binaries)
+- Kernel crate internals and bench binaries
 - Experimental CLI flags already hidden (`--v2`)
 
-Public reachability still matters: calling a module internal here does not
-hide it from Rust consumers. The final API audit must resolve those boundaries
-and cover every advertised feature combination before the RC window starts.
 The CLI rejects `--legacy`; it is not a supported runtime fallback.
+
+## Semver gate
+
+`scripts/check-semver.sh` compares the working tree with the **latest `v*`
+tag** (override: `SEMVER_BASELINE=<rev>`) using `cargo-semver-checks`, once
+per feature set:
+
+| Set | Features |
+|-----|----------|
+| `product` | `pipeline-native`, `vbx` |
+| `byo` | none |
+| `byo-vbx` | `clusterer`, `vbx` |
+| `local` | `pipeline-local` |
+
+Every run passes `--release-type minor`, so the 0.x compatibility lints are
+evaluated instead of being waived by the version bump. A detected break is
+accepted only when the crate's minor version is above the baseline's **and**
+`CHANGELOG.md` has a `### Breaking` section under `## [Unreleased]`;
+otherwise the job fails and names what is missing. A set whose features do
+not exist at the baseline is skipped: a feature introduced after the last
+release has no contract until that release is tagged.
+
+`scripts/check-semver.sh --probe` hides `EnergyVad` and the crate-root
+`Pipeline` in a scratch copy and requires every compared set to report the
+removal. CI runs the gate and the probe on every push.
 
 ## Release-candidate window
 
