@@ -27,7 +27,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 CONSUMERS = ROOT / "scripts/artifact-consumers"
 LINUX_LIBS = re.compile(r"^(lib(c|m|gcc_s|pthread|dl|rt|util)\.so(?:\.\d+)*|ld-linux[^/]*\.so(?:\.\d+)*)$")
-WINDOWS_LIBS = re.compile(r"^(api-ms-win-[\w-]+|ext-ms-win-[\w-]+|kernel32|advapi32|bcrypt|bcryptprimitives|crypt32|ntdll|user32|userenv|ws2_32|ole32|shell32|secur32|synchronization|ucrtbase|vcruntime140(?:_1)?|msvcp140)\.dll$", re.I)
+WINDOWS_LIBS = re.compile(r"^(api-ms-win-[\w-]+|ext-ms-win-[\w-]+|kernel32|advapi32|bcrypt|bcryptprimitives|crypt32|ntdll|user32|userenv|ws2_32|ole32|combase|shell32|secur32|synchronization|ucrtbase|vcruntime140(?:_1)?|msvcp140)\.dll$", re.I)
 
 
 def run(args, cwd, env=None):
@@ -97,6 +97,7 @@ def native_imports(path, env, wheel=False):
         names = re.findall(r"^\s+([\w.-]+\.dll)\s*$", text, re.M | re.I)
     if not names:
         raise ValueError(f"no native dependencies found for {path}")
+    print(f"{path.name} native imports: {sorted(set(names))}", flush=True)
     for name in set(names):
         check_library(name, system, wheel)
     return sorted(set(names))

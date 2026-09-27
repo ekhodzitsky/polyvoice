@@ -40,6 +40,7 @@ class GateTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 smoke.check_library(name, system)
         smoke.check_library("libc.so.6", "Linux")
+        smoke.check_library("combase.dll", "Windows")
         smoke.check_library("python312.dll", "Windows", wheel=True)
         smoke.check_library("/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate", "Darwin")
 
