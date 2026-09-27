@@ -396,5 +396,45 @@
     },
     "_status": "operational — NOTSOFAR-1 dev-set-1 fixed 3-meeting subset (MTG_30860/30861/30862, first three sorted meeting ids) used by the der_v2_baseline_test gate; same measurement as the full 36-meeting run, macro-averaged over the subset.",
     "_filled_by": "benchmarks/results/notsofar-dev/v2-vbx-3file-collar025.json"
+  },
+  "notsofar_eval_native": {
+    "revision": "d05f0ce021b244b89e01ef2117ab5f75572108a7",
+    "manifest_sha256": "a7b35771e5696ecb4f2b286e79dcfde101f7baa505975c32527a39840c4c0c12",
+    "scorer_sha256": "a262a7a7aed34990ffb3396bbc7cd00be25feb80da48e5b5a9f02605d2a3593f",
+    "model_hashes": {
+      "powerset_int8": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b",
+      "resnet34_int8": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3",
+      "vbx_plda_lda": "e20c9b012bebd1aabda5a38a127e63a43cf35debdc502715fc143e2fb6bc3c4b",
+      "vbx_plda_mean1": "e424c0c352182aa8e0f555dec1f3b30e29a20b9ed6b25d339f112af92e51e36f",
+      "vbx_plda_mean2": "6f6fb708a2037197b5b84ffeaa8f140cb878088fbecd6ab042ad26a7691bd2cf",
+      "vbx_plda_mu": "d286d48acf99bbc1ed1502fed0a3e361ae5626ce1870c8be9f7397c5e47886c6",
+      "vbx_plda_phi_computed": "6ef7cf2f5a23a45b66f440f9a996a4cf5c047b369829af695d50ef18aa0a35e3",
+      "vbx_plda_transform": "90261469714415743f4b8a86ee6b89466db858bde3c5944367cccfb7abd34f14"
+    },
+    "protocol": {
+      "collar_seconds": 0.0,
+      "score_overlap": true,
+      "frame_seconds": 0.01,
+      "reference": "Utterance start_time/end_time; preserve overlap; retain segments at least 1 ms, matching the historical NOTSOFAR converter."
+    },
+    "der_micro": 38.33861980646135,
+    "der_macro": 36.7048495539134,
+    "components_micro": {
+      "miss": 22.286655983995438,
+      "false_alarm": 1.7461659353075691,
+      "confusion": 14.305797887158352
+    },
+    "speaker_count": {
+      "exact": 37,
+      "plus_minus_1": 46,
+      "off_by_2_or_more": 46,
+      "files": 129
+    },
+    "files": 129,
+    "profile": "balanced",
+    "pipeline": "v2",
+    "clusterer": "vbx",
+    "report": "benchmarks/results/notsofar-eval-native-2026-09-27/report.json",
+    "_status": "Native Linux held-out reference; full 129-meeting evaluation, no calibration. Regression tolerance is frozen in the corpus manifest; not release-candidate qualification."
   }
 }

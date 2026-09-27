@@ -168,6 +168,22 @@ Artifacts: [`benchmarks/results/notsofar-dev/`](../benchmarks/results/notsofar-d
 A fixed 3-meeting subset (`MTG_30860/30861/30862`) is gated in
 `tests/der_v2_baseline_test.rs`.
 
+## Accuracy — NOTSOFAR-1 held-out evaluation (129 meetings)
+
+Default native balanced INT8 v2 + VBx on Linux x86_64, 2026-09-27: **DER₀
+micro 38.338620%, macro 36.704850%**. Overlap scored; micro miss/false alarm/
+confusion: **22.286656 / 1.746166 / 14.305798%**. The full evaluation split
+uses one predetermined far-field channel per meeting, distinct from the
+historical development split above. All 129 hypotheses reproduced byte-for-byte
+in a second full run, with no evaluation-set calibration.
+
+The predeclared regression allowance is 2 pp on each aggregate; the current
+limits are **40.338620% micro / 38.704850% macro**. Speaker count is exact in
+37/129 meetings, over-counted in 82 and under-counted in 10. This remains a
+substantial far-field quality limitation, not an official challenge score or
+cross-platform release qualification. See the [frozen protocol](notsofar-eval.md)
+and [per-file evidence and failure cases](../benchmarks/results/notsofar-eval-native-2026-09-27/README.md).
+
 ## polyvoice speaker-count & error decomposition
 
 A low DER can hide bad speaker counting; we report it explicitly.
