@@ -40,6 +40,14 @@ class GateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unresolved"):
                 smoke.native_imports(Path('/tmp/fake'), {})
 
+    def test_macho_install_name_is_not_an_import(self):
+        path = Path('/tmp/_polyvoice.cpython-312-darwin.so')
+        identity = '@rpath/polyvoice._polyvoice.cpython-312-darwin.so'
+        listing = f'{path}:\n\t{identity} (compatibility version 0.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n'
+        with patch.object(smoke.platform, 'system', return_value='Darwin'), \
+             patch.object(smoke, 'run', side_effect=[listing, f'{path}:\n{identity}\n']):
+            self.assertEqual(smoke.native_imports(path, {}, wheel=True), ['/usr/lib/libSystem.B.dylib'])
+
     def test_corrupted_asset_cannot_pass(self):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)

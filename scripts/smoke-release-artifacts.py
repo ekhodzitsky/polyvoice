@@ -84,8 +84,10 @@ def native_imports(path, env, wheel=False):
     elif system == "Darwin":
         text = run(["otool", "-L", path], path.parent, env)
         names = [line.strip().split(" (")[0] for line in text.splitlines()[1:]]
-        # A dylib's first entry may be its own install name.
-        names = [n for n in names if Path(n).name != path.name]
+        # The library's install name can differ from its installed filename.
+        identity = run(["otool", "-D", path], path.parent, env)
+        own_names = {line.strip() for line in identity.splitlines()[1:]}
+        names = [n for n in names if n not in own_names]
     else:
         text = run(["dumpbin", "/DEPENDENTS", path], path.parent, env)
         names = re.findall(r"^\s+([\w.-]+\.dll)\s*$", text, re.M | re.I)
@@ -103,7 +105,11 @@ def compiler_env():
         install = run([vswhere, "-latest", "-products", "*", "-requires",
                        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"], ROOT).strip()
         vcvars = Path(install) / "VC/Auxiliary/Build/vcvars64.bat"
-        output = run(["cmd", "/d", "/c", f'call "{vcvars}" >nul && set'], ROOT)
+        # Keep batch syntax out of subprocess's Windows argv quoting.
+        with tempfile.TemporaryDirectory(prefix="polyvoice-msvc-") as directory:
+            script = Path(directory) / "environment.cmd"
+            script.write_text(f'@call "{vcvars}" >nul\n@if errorlevel 1 exit /b 1\n@set\n')
+            output = run(["cmd", "/d", "/c", script], ROOT)
         for line in output.splitlines():
             if "=" in line and not line.startswith("="):
                 key, value = line.split("=", 1)
