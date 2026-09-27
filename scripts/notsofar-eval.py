@@ -102,15 +102,19 @@ def reference_turns(path, duration):
 
 
 def hypothesis_turns(result, duration):
+    if type(result['num_speakers']) is not int or result['num_speakers'] < 0:
+        raise ValueError('invalid hypothesis speaker count')
     turns = []
     for turn in result['turns']:
         start, end = turn['time']['start'], turn['time']['end']
         if not (math.isfinite(start) and math.isfinite(end) and 0 <= start < end <= duration + 0.1):
             raise ValueError('invalid hypothesis time')
         speaker = turn['speaker']
-        if type(speaker) is not int or not 0 <= speaker < result['num_speakers']:
+        if type(speaker) is not int or speaker < 0:
             raise ValueError('invalid hypothesis speaker')
         turns.append((start, end, str(speaker)))
+    if len({speaker for _, _, speaker in turns}) != result['num_speakers']:
+        raise ValueError('inconsistent hypothesis speaker count')
     # Empty output is scored as missed speech, never omitted from the aggregate.
     return turns
 

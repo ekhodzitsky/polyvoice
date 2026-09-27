@@ -92,6 +92,15 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(score.der, 100)
         self.assertEqual(score.miss, score.scored_ref)
 
+    def test_speaker_ids_need_not_be_contiguous_but_count_must_match(self):
+        result = {'num_speakers': 2, 'turns': [
+            {'speaker': 4, 'time': {'start': 0, 'end': 1}},
+            {'speaker': 7, 'time': {'start': 1, 'end': 2}}]}
+        self.assertEqual(evaluation.hypothesis_turns(result, 2), [(0, 1, '4'), (1, 2, '7')])
+        result['num_speakers'] = 3
+        with self.assertRaisesRegex(ValueError, 'speaker count'):
+            evaluation.hypothesis_turns(result, 2)
+
     def test_reference_preserves_overlap_and_rejects_bad_times(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'gt.json'
