@@ -142,7 +142,10 @@ def measure(manifest, args):
     validate_dataset(manifest, args.data)
     if command(['git', 'status', '--porcelain', '--untracked-files=normal']):
         raise ValueError('commit source changes before measuring; use an ignored output directory')
-    models = tomllib.loads((ROOT / 'src/models/manifest.toml').read_text())['models']
+    registry = tomllib.loads((ROOT / 'src/models/manifest.toml').read_text())
+    if registry['profiles']['balanced'] != {'segmenter': 'powerset_int8', 'embedder': 'resnet34_int8'}:
+        raise ValueError('balanced model selection changed; review the frozen protocol')
+    models = registry['models']
     model_ids = ['powerset_int8', 'resnet34_int8'] + sorted(k for k in models if k.startswith('vbx_plda_'))
     hashes = {}
     for key in model_ids:
@@ -183,8 +186,9 @@ def measure(manifest, args):
         if result.returncode:
             raise RuntimeError(f'{mid} inference failed: {result.stderr}')
         output = json.loads(result.stdout)
-        if output['provenance']['version'] != version.removeprefix('polyvoice '):
-            raise ValueError('inference version mismatch')
+        if (output['provenance']['version'] != version.removeprefix('polyvoice ')
+                or output['provenance']['profile'] != 'balanced'):
+            raise ValueError('inference version/profile mismatch')
         (args.output / (mid + '.json')).write_text(result.stdout)
         score = der.score_file(reference, hypothesis_turns(output, duration), collar=0, skip_overlap=False)
         if score.scored_ref <= 0:
