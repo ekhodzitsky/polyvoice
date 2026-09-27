@@ -373,6 +373,12 @@ jobs:
           tool: cargo-deny
       - run: cargo deny check advisories licenses bans sources
 
+  corpus-protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/test-notsofar-eval.py
+
   # Relative markdown links under README/docs/python/examples (no network).
   docs-links:
     runs-on: ubuntu-latest

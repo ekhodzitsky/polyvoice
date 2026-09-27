@@ -88,3 +88,5 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 | Multi-format audio | `audio-io` (often with `cli` or `cli-tract`): other containers + resample |
 
 Full table: [library-mode.md](library-mode.md) and [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+- [Held-out NOTSOFAR evaluation](notsofar-eval.md): frozen corpus, scoring protocol and regression gate.

@@ -61,7 +61,7 @@ def download(manifest, directory):
             temporary.unlink(missing_ok=True)
         print(f'downloaded {path.name}', flush=True)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(fetch, assets(manifest, directory)))
 
 

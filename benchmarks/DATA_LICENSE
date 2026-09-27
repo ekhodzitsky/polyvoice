@@ -40,3 +40,11 @@ NOTSOFAR-1 (dev-set-1, single-channel)
            converted to RTTM by ../scripts/notsofar-to-rttm.py.
   License: CC-BY-4.0 (see the dataset's DATA_LICENSE file).
   Audio:   downloaded via scripts/download-notsofar.sh — NOT redistributed here.
+
+NOTSOFAR-1 (full evaluation split, single-channel)
+  Source:  https://huggingface.co/datasets/microsoft/NOTSOFAR
+  Split:   benchmark-datasets/eval_set/240825.1_eval_full_with_GT
+           All 129 meetings; first sorted sc_* device, ch0.wav per meeting.
+  License: CC-BY-4.0, pinned LICENSE.txt checksum in
+           manifests/notsofar-eval.json. No audio/GT text redistribution.
+  Protocol and attribution: ../docs/notsofar-eval.md.
