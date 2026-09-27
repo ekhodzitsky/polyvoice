@@ -49,6 +49,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - [eres2netv2.md](eres2netv2.md) · [eres2netv2-measured.md](eres2netv2-measured.md)
 
 ### Contributors
+- [release-artifacts.md](release-artifacts.md) — packaged consumers, release matrix and publication prerequisites
 - [../CONTRIBUTING.md](../CONTRIBUTING.md) — feature recipes, deprecations toward 1.0
 - [DEVELOPMENT-PROCESS.md](DEVELOPMENT-PROCESS.md) — **development process** (not runtime architecture)
 - [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md) — **runtime** architecture
