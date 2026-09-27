@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "benchmarks"))
 import der
 
 MANIFEST = ROOT / "benchmarks/manifests/notsofar-eval.json"
-BASELINE = ROOT / "benchmarks/manifests/notsofar-eval-baseline.json"
+BASELINE = ROOT / "tests/der_baseline.json"
 
 
 def sha(path):
@@ -207,7 +207,7 @@ def measure(manifest, args):
                   elapsed_seconds=time.monotonic() - started, audio_seconds=sum(f['audio_seconds'] for f in report['per_file']))
     report['status'] = 'measured (baseline establishment only)'
     if not args.record_only:
-        check_report(report, json.loads(BASELINE.read_text()), manifest)
+        check_report(report, json.loads(BASELINE.read_text())["notsofar_eval_native"], manifest)
         report['status'] = 'passed'
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps({k: report[k] for k in ['status', 'der_micro', 'der_macro', 'components_micro', 'speaker_count']}, indent=2))

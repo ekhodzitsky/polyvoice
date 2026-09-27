@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import zipfile
+import hashlib
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('evaluation', Path(__file__).with_name('notsofar-eval.py'))
@@ -15,6 +17,19 @@ spec.loader.exec_module(evaluation)
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_committed_baseline_has_full_coverage_and_verifiable_hypotheses(self):
+        manifest = json.loads(evaluation.MANIFEST.read_text())
+        baseline = json.loads(evaluation.BASELINE.read_text())['notsofar_eval_native']
+        report_path = evaluation.ROOT / baseline['report']
+        report = json.loads(report_path.read_text())
+        self.assertEqual(baseline['manifest_sha256'], evaluation.sha(evaluation.MANIFEST))
+        self.assertEqual(baseline['scorer_sha256'], evaluation.sha(evaluation.ROOT / 'benchmarks/der.py'))
+        evaluation.check_report(report, baseline, manifest)
+        with zipfile.ZipFile(report_path.with_name('hypotheses.zip')) as archive:
+            self.assertEqual(set(archive.namelist()), {f['name'] + '.json' for f in report['per_file']})
+            for item in report['per_file']:
+                self.assertEqual(hashlib.sha256(archive.read(item['name'] + '.json')).hexdigest(), item['hypothesis_sha256'])
+
     def test_transient_download_retries_but_corruption_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
