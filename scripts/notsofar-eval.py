@@ -4,6 +4,7 @@ import argparse
 import concurrent.futures
 import dataclasses
 import hashlib
+import http.client
 import json
 import math
 import os
@@ -15,6 +16,7 @@ import sys
 import time
 import tomllib
 import urllib.request
+import urllib.error
 import wave
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,8 +55,17 @@ def download(manifest, directory):
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(path.suffix + '.tmp')
         try:
-            with urllib.request.urlopen(base + entry['path'], timeout=120) as response, temporary.open('wb') as out:
-                shutil.copyfileobj(response, out)
+            for attempt in range(3):
+                try:
+                    with urllib.request.urlopen(base + entry['path'], timeout=120) as response, temporary.open('wb') as out:
+                        shutil.copyfileobj(response, out)
+                    break
+                except (OSError, http.client.HTTPException) as error:
+                    if isinstance(error, urllib.error.HTTPError) and error.code < 500 and error.code not in (408, 429):
+                        raise
+                    if attempt == 2:
+                        raise
+                    time.sleep(2 ** (attempt + 1))
             verify(entry, temporary)
             temporary.replace(path)
         finally:

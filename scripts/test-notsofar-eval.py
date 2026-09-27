@@ -2,10 +2,12 @@
 """Fail-closed checks for held-out corpus evaluation."""
 import copy
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('evaluation', Path(__file__).with_name('notsofar-eval.py'))
 evaluation = importlib.util.module_from_spec(spec)
@@ -13,6 +15,25 @@ spec.loader.exec_module(evaluation)
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_transient_download_retries_but_corruption_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / 'source'
+            source.write_bytes(b'test')
+            manifest = {'repository': 'https://example.test', 'revision': 'frozen', 'files': [],
+                        'license': {'path': 'LICENSE.txt', 'size': 4, 'sha256': evaluation.sha(source)}}
+            with patch.object(evaluation.urllib.request, 'urlopen', side_effect=[
+                    evaluation.http.client.RemoteDisconnected(), io.BytesIO(b'test')]) as fetch, \
+                 patch.object(evaluation.time, 'sleep'):
+                evaluation.download(manifest, root / 'download')
+                self.assertEqual(fetch.call_count, 2)
+            with patch.object(evaluation.urllib.request, 'urlopen', return_value=io.BytesIO(b'evil')) as fetch:
+                with self.assertRaisesRegex(ValueError, 'checksum'):
+                    evaluation.download(manifest, root / 'corrupt')
+                self.assertEqual(fetch.call_count, 1)
+            self.assertFalse((root / 'corrupt/LICENSE.txt').exists())
+            self.assertFalse((root / 'corrupt/LICENSE.txt.tmp').exists())
+
     def setUp(self):
         self.manifest = {'files': [{'id': 'meeting'}], 'regression_tolerance_pp': 2.0}
         self.report = {'manifest_sha256': 'manifest', 'scorer_sha256': 'scorer', 'protocol': {'collar_seconds': 0},
