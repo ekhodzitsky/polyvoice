@@ -31,7 +31,11 @@ WINDOWS_LIBS = re.compile(r"^(api-ms-win-[\w-]+|ext-ms-win-[\w-]+|kernel32|advap
 
 
 def run(args, cwd, env=None):
-    result = subprocess.run([str(x) for x in args], cwd=cwd, env=env, text=True,
+    args = [str(x) for x in args]
+    # Windows executable lookup does not use the child environment's PATH.
+    if os.name == "nt" and env:
+        args[0] = shutil.which(args[0], path=env.get("PATH")) or args[0]
+    result = subprocess.run(args, cwd=cwd, env=env, text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1800)
     if result.returncode:
         raise RuntimeError(f"command failed ({result.returncode}): {args}\n{result.stdout}\n{result.stderr}")

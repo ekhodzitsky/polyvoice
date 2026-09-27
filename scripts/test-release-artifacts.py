@@ -16,6 +16,15 @@ spec.loader.exec_module(smoke)
 
 
 class GateTests(unittest.TestCase):
+    def test_windows_tool_uses_compiler_environment_path(self):
+        env = {"PATH": "C:/MSVC/bin"}
+        with patch.object(smoke.os, 'name', 'nt'), \
+             patch.object(smoke.shutil, 'which', return_value='C:/MSVC/bin/dumpbin.exe') as which, \
+             patch.object(smoke.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='ok')) as child:
+            self.assertEqual(smoke.run(['dumpbin', '/DEPENDENTS', 'consumer.exe'], '.', env), 'ok')
+            which.assert_called_once_with('dumpbin', path=env['PATH'])
+            self.assertEqual(child.call_args.args[0][0], 'C:/MSVC/bin/dumpbin.exe')
+
     def test_real_audio_cannot_pass_with_empty_or_invalid_results(self):
         for result in ({}, {"num_speakers": 0, "turns": []},
                        {"num_speakers": 1, "turns": [{"speaker": 0, "time": {"start": 0, "end": float('nan')}}]},
