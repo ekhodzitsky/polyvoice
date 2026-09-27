@@ -101,6 +101,12 @@ Release evidence must cover full VoxConverse-test and AMI-test plus at least
 one additional licensed corpus or documented fixed subset. Publish file
 lists, collar/overlap policy, aggregate metrics and predeclared regression
 thresholds. A small smoke test does not replace full-split evaluation.
+A held-out Linux native reference is now recorded for all 129 NOTSOFAR evaluation
+meetings: DER₀ micro **38.338620%**, macro **36.704850%**, with a predeclared
+2 pp regression budget for each aggregate. The [protocol and repeatability evidence](docs/notsofar-eval.md)
+include complete coverage, checksums and failure cases. This reference does not
+replace a run on the release revision or qualification on other platforms.
+
 Each supported platform needs a native quality gate; full-split reference
 runs remain required on Linux x86_64 and Darwin ARM64.
 

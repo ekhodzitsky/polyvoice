@@ -25,6 +25,13 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(baseline['manifest_sha256'], evaluation.sha(evaluation.MANIFEST))
         self.assertEqual(baseline['scorer_sha256'], evaluation.sha(evaluation.ROOT / 'benchmarks/der.py'))
         evaluation.check_report(report, baseline, manifest)
+        repeated = json.loads(report_path.with_name('verification.json').read_text())
+        evaluation.check_report(repeated, baseline, manifest)
+        self.assertEqual(repeated['status'], 'passed')
+        for key in ['der_micro', 'der_macro', 'components_micro']:
+            self.assertEqual(repeated[key], report[key])
+        self.assertEqual([(f['name'], f['hypothesis_sha256']) for f in repeated['per_file']],
+                         [(f['name'], f['hypothesis_sha256']) for f in report['per_file']])
         with zipfile.ZipFile(report_path.with_name('hypotheses.zip')) as archive:
             self.assertEqual(set(archive.namelist()), {f['name'] + '.json' for f in report['per_file']})
             for item in report['per_file']:

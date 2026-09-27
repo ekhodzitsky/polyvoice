@@ -4,6 +4,7 @@ Development version: **0.22.0 (unreleased)** ([CHANGELOG](../CHANGELOG.md)). Pro
 use **INT8** models only. CLI / FFI / MCP default is **kernels**
 (`pipeline-native`), not ONNX Runtime. Canonical accuracy protocol:
 [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
+- [Held-out NOTSOFAR evaluation](notsofar-eval.md): frozen corpus, scoring protocol and regression gate.
 [PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md). API freeze:
 [semver.md](semver.md).
 
@@ -88,5 +89,3 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 | Multi-format audio | `audio-io` (often with `cli` or `cli-tract`): other containers + resample |
 
 Full table: [library-mode.md](library-mode.md) and [CONTRIBUTING.md](../CONTRIBUTING.md).
-
-- [Held-out NOTSOFAR evaluation](notsofar-eval.md): frozen corpus, scoring protocol and regression gate.
