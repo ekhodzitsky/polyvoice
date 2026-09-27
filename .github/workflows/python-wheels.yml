@@ -37,6 +37,18 @@ jobs:
           sccache: ${{ matrix.os != 'macos-latest' }}
           manylinux: ${{ matrix.manylinux || 'auto' }}
           working-directory: python
+      - name: Smoke-test the installed wheel and native dependencies
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          wheel = next(pathlib.Path('python/dist').glob('*.whl'))
+          subprocess.run([sys.executable, 'scripts/smoke-release-artifacts.py', '--wheel', str(wheel),
+                          '--report', 'wheel-smoke.json'], check=True)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-report-${{ matrix.os }}-${{ matrix.target }}
+          path: wheel-smoke.json
+          if-no-files-found: error
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:

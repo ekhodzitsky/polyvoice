@@ -56,3 +56,7 @@ Full protocol, collar/averaging disclosure, and competitor numbers:
 [docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/master/docs/BENCHMARKS.md).
 
 See the [full repository](https://github.com/ekhodzitsky/polyvoice) for Rust / C / CLI APIs, benchmarks, and development docs.
+
+Release wheels are qualified on CPython 3.12 for Linux x86_64/ARM64, macOS
+ARM64 and Windows x86_64. Other source-build interpreters are not an implied
+wheel support promise. See the [artifact matrix and checks](../docs/release-artifacts.md).

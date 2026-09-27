@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Release artifact qualification on Linux x86_64/ARM64, macOS ARM64 and Windows
+  x86_64: installed CLI/wheel/C inference, packaged Rust consumers and native
+  dependency checks gate publication. Reports identify the exact tested files.
+
 - Crate-root re-exports `PipelineBuilder` and `ClustererKind` beside
   `Pipeline` / `PipelineConfig` / `PipelineError`; `AsNormConfig::new`.
 - `scripts/check-semver.sh` replaces the bare `cargo semver-checks` CI step:
@@ -77,6 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with no network. Example: `examples/local_native.rs`.
 
 ### Changed
+
+- Prepare `polyvoice-kernels` 0.1.3 and require it from core. The published
+  0.1.2 lacks the explicit OpenBLAS feature; kernels must be published separately
+  before the core release can pass registry-based artifact qualification.
 
 - Linux native builds now use Rust kernels regardless of installed BLAS.
   Enable `system-openblas` for the optional LP64 OpenBLAS backend; missing

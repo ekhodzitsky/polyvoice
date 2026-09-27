@@ -79,9 +79,8 @@ consumer must run without HTTP/TLS dependencies or network access. Source
 tree tests alone are insufficient evidence for packaged artifacts.
 
 Python qualification is per **wheel platform, interpreter and ABI**. The
-current tag release workflow builds on Linux x86_64, macOS ARM64 and Windows
-x86_64 using CPython 3.12; the separate wheel workflow also includes Linux
-ARM64. Before advertising any wheel combination, install that artifact in a
+tag release workflow qualifies Linux x86_64/ARM64, macOS ARM64 and Windows
+x86_64 using CPython 3.12 through the [artifact gate](docs/release-artifacts.md). Before advertising any wheel combination, install that artifact in a
 clean environment and test import, real diarization, results and errors.
 `requires-python >=3.9` is package metadata, not proof of wheel availability
 or qualification for every newer interpreter. Publish the tested matrix
