@@ -1,0 +1,1701 @@
+{
+  "schema_version": 1,
+  "corpus": "NOTSOFAR-1",
+  "repository": "https://huggingface.co/datasets/microsoft/NOTSOFAR",
+  "revision": "ba8fd0f034ce185fe4d24f47e53b4b8194795f07",
+  "split": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT",
+  "license": {
+    "spdx": "CC-BY-4.0",
+    "path": "LICENSE.txt",
+    "size": 18650,
+    "sha256": "7e7170e3cebf88a9f60c7b8421418323c09304da1af4d5e90f4da1dc1c8a2661"
+  },
+  "selection": "All 129 meetings; first lexicographically sorted sc_* device, ch0.wav; one recording per meeting. No filtering by inference results.",
+  "calibration": "No calibration on this split. Historical dev-set-1 is disjoint by meeting ID; do not tune on eval.",
+  "protocol": {
+    "collar_seconds": 0.0,
+    "score_overlap": true,
+    "frame_seconds": 0.01,
+    "reference": "Utterance start_time/end_time; preserve overlap; retain segments at least 1 ms, matching the historical NOTSOFAR converter."
+  },
+  "regression_tolerance_pp": 2.0,
+  "files": [
+    {
+      "id": "MTG_32000",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32000/sc_meetup_0/ch0.wav",
+        "size": 11628288,
+        "sha256": "8b43d41c70b761cae7be761cfec5514d148548c37aa1b4f5ee9820f7f5d33b16"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32000/gt_transcription.json",
+        "size": 213302,
+        "sha256": "fc75f3bf418f527051b904b6ee68ea97b003aba215da95160806392b3eda08bc"
+      }
+    },
+    {
+      "id": "MTG_32003",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32003/sc_meetup_0/ch0.wav",
+        "size": 12060608,
+        "sha256": "75bb363e5f207f6fb1dfdb622e2af787310e58522859c939c6020c8363f86e71"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32003/gt_transcription.json",
+        "size": 206827,
+        "sha256": "6d91b4c50569e1dec1a2b26f95ad2fc025055b0f1b160a793413f4f33343ec8a"
+      }
+    },
+    {
+      "id": "MTG_32004",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32004/sc_meetup_0/ch0.wav",
+        "size": 12300928,
+        "sha256": "96c8d27bccb7831f8f45e6877ed287665cfafd9a94f33ae2cbdb0f33224290f1"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32004/gt_transcription.json",
+        "size": 207713,
+        "sha256": "d7ef128d38a6d4bfcfe48561d0b286086523d39ce4b193b2aafcb89c2a3dc6f9"
+      }
+    },
+    {
+      "id": "MTG_32005",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32005/sc_meetup_0/ch0.wav",
+        "size": 14748448,
+        "sha256": "1c85ceea06a59f84f26a5c4bb0f6876bcba12321fe439db16f02d502143182c3"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32005/gt_transcription.json",
+        "size": 207845,
+        "sha256": "c2bb88d6e020c0f9ae5692a99f7dd9cbd4c83f2e13e9fc8f7855e9f183bc8d57"
+      }
+    },
+    {
+      "id": "MTG_32006",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32006/sc_meetup_0/ch0.wav",
+        "size": 12255808,
+        "sha256": "02f49d286fbb3ada1cb5ec49e076a6d498d140124d11b420cfcee94b7ecc5ec6"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32006/gt_transcription.json",
+        "size": 224525,
+        "sha256": "323cb14d9bb129d67645128bc5a65559c830b54982541bc577de86f199ce955b"
+      }
+    },
+    {
+      "id": "MTG_32007",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32007/sc_meetup_0/ch0.wav",
+        "size": 11899648,
+        "sha256": "333438c6763a77e3bfbb5695602c9f8b67f4c28718a6a0f687edba76da13ac31"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32007/gt_transcription.json",
+        "size": 189961,
+        "sha256": "4609e6f6d6d7443ad43af49a77105bc98679af15081c9896ba1ab655a73d4700"
+      }
+    },
+    {
+      "id": "MTG_32008",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32008/sc_meetup_0/ch0.wav",
+        "size": 13971968,
+        "sha256": "f76dc86972ba2490b104658f5eb639bc6996f57627ba52f01a99b41b85480fa2"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32008/gt_transcription.json",
+        "size": 286668,
+        "sha256": "41aa90f4f1f1ef616fac3179a609a8890172add2e775eb18e37bbab9666eb9d5"
+      }
+    },
+    {
+      "id": "MTG_32009",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32009/sc_meetup_0/ch0.wav",
+        "size": 11358528,
+        "sha256": "ddf9db7ac5d03519ac4560985e644343ae43f56805b26b5296e1f0ded1485b0f"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32009/gt_transcription.json",
+        "size": 168208,
+        "sha256": "60a938f160430d338b277da01889ac03242a6dbe2f88a0550beb5959ed76020f"
+      }
+    },
+    {
+      "id": "MTG_32020",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32020/sc_meetup_0/ch0.wav",
+        "size": 11475008,
+        "sha256": "0ef06c2adb8230c76e83fa4a0498b607ec9fa07664b871c23545dd171637f4e5"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32020/gt_transcription.json",
+        "size": 199532,
+        "sha256": "ce98ad1b16b728f3610807b6bffcbb52698a0c4c6561dfd70b21e7dd70ad5635"
+      }
+    },
+    {
+      "id": "MTG_32021",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32021/sc_meetup_0/ch0.wav",
+        "size": 11538528,
+        "sha256": "751d2e0003f0f31a8756cd590b08f1b19ae662d54b4d33dfa906deac3f6b405c"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32021/gt_transcription.json",
+        "size": 185978,
+        "sha256": "a813c630c8742e3fc9feaf88787b92560a76efd9981fe6f730484eda94957274"
+      }
+    },
+    {
+      "id": "MTG_32022",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32022/sc_meetup_0/ch0.wav",
+        "size": 11519648,
+        "sha256": "86fc64f7e6af43d6b7f2632437593fb7716705e92c4aa3f8aaa4119a7ef7110a"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32022/gt_transcription.json",
+        "size": 190720,
+        "sha256": "016cc2759d266c6fc01156a44bfbb3f0edcdb07d3bef74c6676c20b002389c78"
+      }
+    },
+    {
+      "id": "MTG_32023",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32023/sc_meetup_0/ch0.wav",
+        "size": 11549408,
+        "sha256": "90dad104c0c5e295f324ba8820608189f2e2b34337b2d8940a0c5c4c049a4143"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32023/gt_transcription.json",
+        "size": 208637,
+        "sha256": "28a78804e3ebb3f076199e8c354e371e12202771141ab78736942acfc58d3330"
+      }
+    },
+    {
+      "id": "MTG_32024",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32024/sc_meetup_0/ch0.wav",
+        "size": 11488928,
+        "sha256": "123b580654d6c0764037e41bf7d750819f3913b47621afca9ec52bf4c07ed61e"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32024/gt_transcription.json",
+        "size": 207044,
+        "sha256": "0d6a9ec954f4ff888f25c83824e71523fd50ceaa9797b02607f2a98a07e0724a"
+      }
+    },
+    {
+      "id": "MTG_32025",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32025/sc_meetup_0/ch0.wav",
+        "size": 11508928,
+        "sha256": "1802092dff7aeede0f0325561bfa72e4ce3774e717be6fbb7f6ea2abb60191cc"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32025/gt_transcription.json",
+        "size": 219263,
+        "sha256": "0e671368e75080b42cbc79f8a6d6137f88d3fdfef114dbb83acdd9070114e339"
+      }
+    },
+    {
+      "id": "MTG_32026",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32026/sc_meetup_0/ch0.wav",
+        "size": 11662048,
+        "sha256": "adb7e3c97454416abdc91daf284c371e7ec2e979d51c30dda43ba457c3f12a8a"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32026/gt_transcription.json",
+        "size": 186112,
+        "sha256": "59e0756560af3f150fb0559c915b32452e13802c8ca959c4a2b0078c9f8fb47b"
+      }
+    },
+    {
+      "id": "MTG_32027",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32027/sc_meetup_0/ch0.wav",
+        "size": 11551168,
+        "sha256": "ba956dc8b1f44c5187f2b9908fb70ebbe5484f8e8953bc19dadc292c6e3217b8"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32027/gt_transcription.json",
+        "size": 235523,
+        "sha256": "13ccb9c5d6bfdf369b3984cf56f1a184c2472b714fd85cbb32bc0a0fbd43a7d0"
+      }
+    },
+    {
+      "id": "MTG_32029",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32029/sc_meetup_0/ch0.wav",
+        "size": 11675168,
+        "sha256": "6333ae61607e21ccbcb3604f102721184193c9866ea63037f6406b4a554b3659"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32029/gt_transcription.json",
+        "size": 216384,
+        "sha256": "800467e0fd0b1a3a273400d4510c0177fd4f6d43d5c14c49889dc9b6b26ce028"
+      }
+    },
+    {
+      "id": "MTG_32030",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32030/sc_meetup_0/ch0.wav",
+        "size": 11495648,
+        "sha256": "0fb5e45b2a374d2d00e9571ef5da78789f26d7fc1a4d6fa3e7286e1469fa6a28"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32030/gt_transcription.json",
+        "size": 223983,
+        "sha256": "6e4f23d3cdee72dc670c209747e5804960ea32784ba1872ab152c93f390f0f34"
+      }
+    },
+    {
+      "id": "MTG_32040",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32040/sc_meetup_0/ch0.wav",
+        "size": 11494368,
+        "sha256": "6bf57d826b728625b1e31bd085bd68f2585f6446aa177092896016e87973f75e"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32040/gt_transcription.json",
+        "size": 192097,
+        "sha256": "5d182075a176157a2f3b9cc7e14b2f5cf2ef7227a1a5f8020fa56d5ee5a8e0de"
+      }
+    },
+    {
+      "id": "MTG_32041",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32041/sc_meetup_0/ch0.wav",
+        "size": 11641728,
+        "sha256": "f35e2a28d7030f5b4c3ab98da6f37be4cd9615e6e0eb26fe56456f31cbc54402"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32041/gt_transcription.json",
+        "size": 235211,
+        "sha256": "cba3dbe6a39ffa44f541cb077db2a83e5a73364c28dc1e2e08a3f94a966995d7"
+      }
+    },
+    {
+      "id": "MTG_32042",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32042/sc_meetup_0/ch0.wav",
+        "size": 11457248,
+        "sha256": "f712208dce5ca15e718f29734e9c28efde669a0db7d2206bcaa77825bb32306c"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32042/gt_transcription.json",
+        "size": 220437,
+        "sha256": "219260327b8ead0578f1d60a2815601a92536c17f9ebafd666ee27fc8f96a2f8"
+      }
+    },
+    {
+      "id": "MTG_32045",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32045/sc_meetup_0/ch0.wav",
+        "size": 11471488,
+        "sha256": "9f35dfbaa2045800a5966e84402d4f2cc64fcb4f5fe19f7a09f5e0e01f7614f1"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32045/gt_transcription.json",
+        "size": 195835,
+        "sha256": "da4389dcc64e2393f7423fce8452f8981d523c9e7e459b4a02a0067cc4fb4a48"
+      }
+    },
+    {
+      "id": "MTG_32046",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32046/sc_meetup_0/ch0.wav",
+        "size": 11505728,
+        "sha256": "ceef7cfcd543cdb55f2bdf388bba61850e58179d6de378058a372b30da6a2a00"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32046/gt_transcription.json",
+        "size": 131768,
+        "sha256": "cd0e04aecf892be4b2de4509a29868b3d3eee8d1d8aaf3ea873caa02b55f53e2"
+      }
+    },
+    {
+      "id": "MTG_32047",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32047/sc_meetup_0/ch0.wav",
+        "size": 12216448,
+        "sha256": "02cc3e1f40183c0ff6a184f47dd1454c21b6b398d39cca619e660f0cc539345d"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32047/gt_transcription.json",
+        "size": 184149,
+        "sha256": "9001beee3da9fa34cd176c85e0e379f8ce8080b6bbfd2284043404a8e304967e"
+      }
+    },
+    {
+      "id": "MTG_32048",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32048/sc_meetup_0/ch0.wav",
+        "size": 11471008,
+        "sha256": "d1e5c37991bffbfcd03e8f8bbdfcac2959ec28f7f42427aa965451210e01b0bc"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32048/gt_transcription.json",
+        "size": 207156,
+        "sha256": "c9900a788f37ffa6f535eed293fa2154a46eb66b9c75ce3e0a5bbd5b5b65cced"
+      }
+    },
+    {
+      "id": "MTG_32049",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32049/sc_meetup_0/ch0.wav",
+        "size": 11420768,
+        "sha256": "8714b4e636d4fc99eab1c99aa3920b06d35f710f865f87029c01043a5429ce2b"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32049/gt_transcription.json",
+        "size": 195520,
+        "sha256": "930849f617409d0ebd798670b271673c6c4d4655f2c48318604077be18b5903b"
+      }
+    },
+    {
+      "id": "MTG_32050",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32050/sc_meetup_0/ch0.wav",
+        "size": 11538688,
+        "sha256": "3d1813bd281177adc249ec0796b0394d42ba08ab465ae075067912c8b3844f1a"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32050/gt_transcription.json",
+        "size": 244428,
+        "sha256": "06a8e71258215effe1d74bc707a7aa22c489518fdc4695b64b3217332777f45a"
+      }
+    },
+    {
+      "id": "MTG_32051",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32051/sc_meetup_0/ch0.wav",
+        "size": 11582688,
+        "sha256": "b95d71e451b4bccb32f52d6845a4e1ceb33aa9e6031e7231a9a5e1bc40134d46"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32051/gt_transcription.json",
+        "size": 221751,
+        "sha256": "23a806c9733792ff5277a9805ef26ecd38629ed6aa16a359d030af27abfdbd6c"
+      }
+    },
+    {
+      "id": "MTG_32052",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32052/sc_meetup_0/ch0.wav",
+        "size": 11540128,
+        "sha256": "658f627a98b0b92df9f384f64d3e3e80358aad5e29c0f17245e0b31bb80cb24e"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32052/gt_transcription.json",
+        "size": 227376,
+        "sha256": "48a24b22cffaf73f04c0c00cb7e91372cca26789825bc2455d75557073bc1608"
+      }
+    },
+    {
+      "id": "MTG_32053",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32053/sc_meetup_0/ch0.wav",
+        "size": 11713888,
+        "sha256": "9ac80fc0e78215764948d91b529ae906f2e7fca973c14e72b715ec34bbf7c298"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32053/gt_transcription.json",
+        "size": 208653,
+        "sha256": "98a2b0a09dfa7f8afa0506f353328e064b0c474d1ee8c78b694e0cd9f7ca8f82"
+      }
+    },
+    {
+      "id": "MTG_32054",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32054/sc_meetup_0/ch0.wav",
+        "size": 11530208,
+        "sha256": "84e8b69d24f900ce0a08eadcb778ac8c40538c2604453c63bbe910f7c0f8ccb1"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32054/gt_transcription.json",
+        "size": 206253,
+        "sha256": "4d50ad65ab904d035382fbea32c31386d15127310c1580182b018c3294256849"
+      }
+    },
+    {
+      "id": "MTG_32055",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32055/sc_meetup_0/ch0.wav",
+        "size": 11571168,
+        "sha256": "fa1281b7de57d4b08730cf0b613b5a25efe6adf53fad9615c0fa0a9391fbd4b2"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32055/gt_transcription.json",
+        "size": 199002,
+        "sha256": "150ca5f160ddf257ef58e291c784b34d2f4ba10ac0b65c81e5b405bcceb0568d"
+      }
+    },
+    {
+      "id": "MTG_32060",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32060/sc_meetup_0/ch0.wav",
+        "size": 11569088,
+        "sha256": "5908b285b6e68bea383a2a6272cc52619fed10df3fe028e7439ebdcd8701e671"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32060/gt_transcription.json",
+        "size": 159698,
+        "sha256": "f1dc9bf5d1fc430756bf0e5df6331c15e47e386d69e538e9bc219a7acefb8803"
+      }
+    },
+    {
+      "id": "MTG_32061",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32061/sc_meetup_0/ch0.wav",
+        "size": 11502048,
+        "sha256": "ec3b51a3c6ac135e41daaeb5c836031ba92dea1afdf33a56f67963bcdd5bb2ea"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32061/gt_transcription.json",
+        "size": 163193,
+        "sha256": "356f0f30f1519dafc839d8cb220c2554e87566261792cb538458e33e5cd0ae3d"
+      }
+    },
+    {
+      "id": "MTG_32062",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32062/sc_meetup_0/ch0.wav",
+        "size": 11478688,
+        "sha256": "7d332dbccfaef8422e2207a29fb97cc4a59c995776990cfee355644f3997c483"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32062/gt_transcription.json",
+        "size": 135455,
+        "sha256": "7716873665bc66a1ef0921128d2116152e628b9cd164ba696542777eca5e4c11"
+      }
+    },
+    {
+      "id": "MTG_32063",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32063/sc_meetup_0/ch0.wav",
+        "size": 11711008,
+        "sha256": "0257770de4316ac6a2961bc5006d7f49f8b8d0f06e3a3bfaac827946a128c78b"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32063/gt_transcription.json",
+        "size": 185469,
+        "sha256": "37d9acacbeae27bf0026b7ad46d642283d755c419d781301acb004c1d6352e3a"
+      }
+    },
+    {
+      "id": "MTG_32064",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32064/sc_meetup_0/ch0.wav",
+        "size": 11506368,
+        "sha256": "d02d33e843d6d2ddcb84affce1c28c0ac961be66e6aefb2acdbfdea9033dcfdc"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32064/gt_transcription.json",
+        "size": 172106,
+        "sha256": "540108005d2d019fd5266bdddc05e7b921fdfa587b65f991ce875e731e2e865b"
+      }
+    },
+    {
+      "id": "MTG_32065",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32065/sc_meetup_0/ch0.wav",
+        "size": 11474528,
+        "sha256": "587f4feabb46f3910a32c8a58e10daba382e72596ddc5f7cb1e8628d6652facf"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32065/gt_transcription.json",
+        "size": 175241,
+        "sha256": "748bc47e39f43b9d8dcea637999dd7ac576218c0c662b42cddbadcaa5e784b47"
+      }
+    },
+    {
+      "id": "MTG_32066",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32066/sc_meetup_0/ch0.wav",
+        "size": 11455808,
+        "sha256": "f2374a54d8cff7e0a87106bcfb106265bdc3d8901570bec53c8e2f5b0fde6c87"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32066/gt_transcription.json",
+        "size": 223096,
+        "sha256": "815dbf8273b6b992a0e59a512a0fc6ef99e5a68a9f3f715dbb4e780a80d47dd2"
+      }
+    },
+    {
+      "id": "MTG_32067",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32067/sc_meetup_0/ch0.wav",
+        "size": 11474528,
+        "sha256": "eb9bdaff27101a70ca8297004160d045556e0865515aacd827554dbd367512cb"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32067/gt_transcription.json",
+        "size": 215184,
+        "sha256": "7221c76c9cdf5d65511ffd9ff7790f4ed4311acf05601f5529c37ba55c68ff1b"
+      }
+    },
+    {
+      "id": "MTG_32068",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32068/sc_meetup_0/ch0.wav",
+        "size": 11452128,
+        "sha256": "aeb04cc533ff4a96046e9378f41e06b02acf60c5ef1132641b5baa6a58ffbd03"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32068/gt_transcription.json",
+        "size": 199224,
+        "sha256": "198121562ec33856a9036b6549b2b783bd22c999e4136ebf2cc08402398c99d4"
+      }
+    },
+    {
+      "id": "MTG_32069",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32069/sc_meetup_0/ch0.wav",
+        "size": 11471968,
+        "sha256": "b57eb0865d5e41573e390d936c6eb21bc9155aa343f8a97579bf706d0534ef08"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32069/gt_transcription.json",
+        "size": 189176,
+        "sha256": "c684e39f8add19751273b5d42dd4b53e1e6ae7b739245bdcff555f8dd476dadf"
+      }
+    },
+    {
+      "id": "MTG_32070",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32070/sc_meetup_0/ch0.wav",
+        "size": 11525088,
+        "sha256": "1ce61ef0b4bdef2cee8f25a3b519ec60b7aa3d1e543b1c75ca0ff390e3f6ef3d"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32070/gt_transcription.json",
+        "size": 198679,
+        "sha256": "60cfe694807d263548caf4981fa4e453b2934a5518fbc3e68f519345887ca1c9"
+      }
+    },
+    {
+      "id": "MTG_32071",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32071/sc_meetup_0/ch0.wav",
+        "size": 11654208,
+        "sha256": "59d90c2e048d5f3adefb020666cabea5c3df6ce2a453c295bc9cd69c28e909d7"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32071/gt_transcription.json",
+        "size": 199148,
+        "sha256": "b57520aa3f6f7750fd378b9162a568296050bc4f66d4ace5ba85ae6b91ef50be"
+      }
+    },
+    {
+      "id": "MTG_32072",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32072/sc_meetup_0/ch0.wav",
+        "size": 11694048,
+        "sha256": "98991c2c1745aa2be35934aa1110960f16016be551806c939c0a7188276d3164"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32072/gt_transcription.json",
+        "size": 177173,
+        "sha256": "602fe090eebc0b5793946ce09320d73f7b533fd7a0ca3a9b038cd23b2ad751cb"
+      }
+    },
+    {
+      "id": "MTG_32073",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32073/sc_meetup_0/ch0.wav",
+        "size": 11430848,
+        "sha256": "2a06e85aedf55ddf645ac0411cefcd52ddfc7a3170680a7f93424c15ab10349e"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32073/gt_transcription.json",
+        "size": 187037,
+        "sha256": "f2b98731797479517be1d42c256d047c63a24e42d3b86d67bb84b4b1b8ce838d"
+      }
+    },
+    {
+      "id": "MTG_32074",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32074/sc_meetup_0/ch0.wav",
+        "size": 11583808,
+        "sha256": "19f0b8f86b0e2d4a1168d75cc1725f74d85f57fd24f7fb56982f14a9e6d95147"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32074/gt_transcription.json",
+        "size": 228670,
+        "sha256": "9ff3f175a8ff02f3c458e876bd27294cdc5aad286210dcda19b6bd7faf305fe0"
+      }
+    },
+    {
+      "id": "MTG_32075",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32075/sc_meetup_0/ch0.wav",
+        "size": 11483648,
+        "sha256": "561750bdd029b3ada8d8f4ef8438e98710ca6e101f10c23be6a7593fdba1a35b"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32075/gt_transcription.json",
+        "size": 196742,
+        "sha256": "ba3879d0e24c32e01835c07325a270fb223f0bc4c3aa2bc865e3de5440f451bd"
+      }
+    },
+    {
+      "id": "MTG_32080",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32080/sc_meetup_0/ch0.wav",
+        "size": 11448608,
+        "sha256": "016bb14c7d85e44fdd77f38bb5673cf716814f722181d0128918429e5bcdb778"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32080/gt_transcription.json",
+        "size": 171604,
+        "sha256": "39e91508213d6dfedc97149c031487a8be45c6c5736a7a49b13745fcb78b6d3c"
+      }
+    },
+    {
+      "id": "MTG_32081",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32081/sc_meetup_0/ch0.wav",
+        "size": 11451968,
+        "sha256": "1f795b30d9a540613f94b1aaa2f4ac4329432a570cbc222ea59c8a5c71c74391"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32081/gt_transcription.json",
+        "size": 190802,
+        "sha256": "ee26431eb3e579f55cdfc69577ff9257c3e219bb3a46b9c4b633142f08fc9505"
+      }
+    },
+    {
+      "id": "MTG_32082",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32082/sc_meetup_0/ch0.wav",
+        "size": 11491008,
+        "sha256": "957d6720d027cf44141b7c3f5c7facc3d49d6c50ebc21588be5591402fdd2c19"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32082/gt_transcription.json",
+        "size": 162216,
+        "sha256": "f0ba3caade5a8f6d2cc5d0690702ea30c3455e619000b313d6a93c57945d689e"
+      }
+    },
+    {
+      "id": "MTG_32084",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32084/sc_meetup_0/ch0.wav",
+        "size": 11463488,
+        "sha256": "0afe2ccdcd088cba1c87a51b79ce1a2a3336da23c9095b48dde31500fe253416"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32084/gt_transcription.json",
+        "size": 168804,
+        "sha256": "30f44f3a9c89e8819644f8d8784cc34efdbfd5849549190dc8e325715f2a552b"
+      }
+    },
+    {
+      "id": "MTG_32085",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32085/sc_meetup_0/ch0.wav",
+        "size": 11477888,
+        "sha256": "9e9f912d7bd80a63855e2b6bcfb28c312091f5f627d355356fe8b1ad3eac8bba"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32085/gt_transcription.json",
+        "size": 258124,
+        "sha256": "92951d0a08a9bb6dfb090bb25110fa04d90f46a3d6e3289a0a13cce4bd0f7abd"
+      }
+    },
+    {
+      "id": "MTG_32086",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32086/sc_meetup_0/ch0.wav",
+        "size": 11456768,
+        "sha256": "07afff543b6bb086103dca789aa1837e60f06904e00f0f4177de0685a03557ce"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32086/gt_transcription.json",
+        "size": 213898,
+        "sha256": "bb0f0be779be1955787fafd18c2881c66fa2e31849cd241f7661a960f107579a"
+      }
+    },
+    {
+      "id": "MTG_32087",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32087/sc_meetup_0/ch0.wav",
+        "size": 11458048,
+        "sha256": "77dcc69d869e7af69f98730cf8268cd0b82051d8e0ed2a70f777197f6f4a9e63"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32087/gt_transcription.json",
+        "size": 193644,
+        "sha256": "e1133e9e50a0fb3c419a97a5c053a266f86b2be87cbaed3d467dc44c18c59ae2"
+      }
+    },
+    {
+      "id": "MTG_32088",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32088/sc_meetup_0/ch0.wav",
+        "size": 11467168,
+        "sha256": "12b5cb19890d42dafea8b9110adf9aa56506a008366e6753e53d1e70cdcbfdd5"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32088/gt_transcription.json",
+        "size": 185145,
+        "sha256": "1a74fc06e6ec93050f9671ad597c8466751833f5c4ae805634b229ea91bfc3c8"
+      }
+    },
+    {
+      "id": "MTG_32089",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32089/sc_meetup_0/ch0.wav",
+        "size": 11460288,
+        "sha256": "08457b9541634c312d1ba086ab3ceb0d075b86d444a3390e004fe1c5b5175a08"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32089/gt_transcription.json",
+        "size": 158436,
+        "sha256": "a87fa8ec6a02fed73d65f7a3f1b594b1e0193bc270511d8a6557e72af8abcdb4"
+      }
+    },
+    {
+      "id": "MTG_32090",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32090/sc_meetup_0/ch0.wav",
+        "size": 11455968,
+        "sha256": "d6cc07e8d27f034106d7578857567515591d640f708740605a9851d02f56d540"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32090/gt_transcription.json",
+        "size": 210286,
+        "sha256": "d133bcfdd2f78a14fe4ab7636789b79f2dcd47a8ad5242b612ecf930f46fcc27"
+      }
+    },
+    {
+      "id": "MTG_32091",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32091/sc_meetup_0/ch0.wav",
+        "size": 11526368,
+        "sha256": "24f3e1b2c8d3f9c8644156450ba3c983702c20a664225161d53e805b4178be3d"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32091/gt_transcription.json",
+        "size": 161773,
+        "sha256": "ff0d01235ac751fff926b485d82c880a8cbd5051fa4e4cbedc1272de219f4ee2"
+      }
+    },
+    {
+      "id": "MTG_32092",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32092/sc_meetup_0/ch0.wav",
+        "size": 11471328,
+        "sha256": "15732649f10fcf50ed9b8652a3a3b24e0117db19a7d2cbfca4b41b877cf10a11"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32092/gt_transcription.json",
+        "size": 161434,
+        "sha256": "0c3bee6440f79fec722befaf0976ecce51d75e0da91ec25548372aebd2192be7"
+      }
+    },
+    {
+      "id": "MTG_32093",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32093/sc_meetup_0/ch0.wav",
+        "size": 11400608,
+        "sha256": "b28faff8acd9490aa1613b4e888b556841ecc56aca62b09424f997831332743d"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32093/gt_transcription.json",
+        "size": 245118,
+        "sha256": "28aaec7b965e8a94dd05ddc1e9dad3a1ecdfb695a9743afb66bdae046dede118"
+      }
+    },
+    {
+      "id": "MTG_32094",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32094/sc_meetup_0/ch0.wav",
+        "size": 12002848,
+        "sha256": "59d30c73741db1154cf4c6c02bdb3a24422f0cd82b2f308411d6ef0e51c3f7e9"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32094/gt_transcription.json",
+        "size": 211883,
+        "sha256": "6d0cf9e811e3bba1ca13f6ed4345be10a97dc0ef704fbde83d7641d915cf8e4b"
+      }
+    },
+    {
+      "id": "MTG_32095",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32095/sc_meetup_0/ch0.wav",
+        "size": 11524768,
+        "sha256": "0bc7d8269d9baf4f0a5f25c00640343aa40c6240ff0096b5adbf9164ddb3f08b"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32095/gt_transcription.json",
+        "size": 216850,
+        "sha256": "a4eeb024e0b7a1e11de8bffafdc9bec68c7a933bcab0df0fa493a4f6ff9c8fa4"
+      }
+    },
+    {
+      "id": "MTG_32100",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32100/sc_meetup_0/ch0.wav",
+        "size": 15301248,
+        "sha256": "e92dd4d932aee6ad386da21d18eb5831b573572bba9def62a931c4a1f6fa8efa"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32100/gt_transcription.json",
+        "size": 298285,
+        "sha256": "54c04855f009f82f2701387f3f5f1c9669f6d78a488868a502777acb24419608"
+      }
+    },
+    {
+      "id": "MTG_32101",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32101/sc_meetup_0/ch0.wav",
+        "size": 15259808,
+        "sha256": "0eafea03fc85f35d2f32ac6460faa7e03110cf42ce28e6b2aed05eebcf726317"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32101/gt_transcription.json",
+        "size": 335133,
+        "sha256": "dec3d6f8862abf6f3d9ec355d77aeb5a0cd7c254ea33bce0cc294f2477f1299f"
+      }
+    },
+    {
+      "id": "MTG_32102",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32102/sc_meetup_0/ch0.wav",
+        "size": 15316608,
+        "sha256": "913433449436e84c39e1b7f43a3d3de7e906ef11702e860dbb9f8eb8ce34fd9d"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32102/gt_transcription.json",
+        "size": 322722,
+        "sha256": "7dc5b618f3c6964f811ea3b14d9ddb6bb942b43db6fb623333ba4f76f984b83a"
+      }
+    },
+    {
+      "id": "MTG_32103",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32103/sc_meetup_0/ch0.wav",
+        "size": 15303168,
+        "sha256": "a594d5ef4d9ec8dc0812d1d116b84ab9ee00916e1ba8c212ad18d0ef9e1ac15e"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32103/gt_transcription.json",
+        "size": 299296,
+        "sha256": "bd714efacafa0a6f89e6c1552efd1be264e5fa2cee739c0285da538eaed05977"
+      }
+    },
+    {
+      "id": "MTG_32104",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32104/sc_meetup_0/ch0.wav",
+        "size": 15288608,
+        "sha256": "05964ece56279b0e4f0948d7630eb037859ee1e082f5d12b13d1fafc33a6270c"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32104/gt_transcription.json",
+        "size": 316162,
+        "sha256": "4b2ca2d30d881eae881eade7c24b7f0eb6f0aa76cf30fff43d61780d65a1076e"
+      }
+    },
+    {
+      "id": "MTG_32105",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32105/sc_meetup_0/ch0.wav",
+        "size": 15324608,
+        "sha256": "8db03bbc71c97a84791494302648884ff963744ebb48c04c5ac75634fbb42bed"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32105/gt_transcription.json",
+        "size": 152569,
+        "sha256": "f83ef8082bea41c3bfef6cda2e1432a5af368966f920379b1f6923f80e74a0dd"
+      }
+    },
+    {
+      "id": "MTG_32106",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32106/sc_meetup_0/ch0.wav",
+        "size": 15306848,
+        "sha256": "f97697ce7b5f5587d8e9badc7b5459e77bf227541c65e7636bae9a7f73b42a75"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32106/gt_transcription.json",
+        "size": 313296,
+        "sha256": "288b40d3797c5dae41a15bd418ce18f8a58e8652f5263dea52f626944c0be777"
+      }
+    },
+    {
+      "id": "MTG_32107",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32107/sc_meetup_0/ch0.wav",
+        "size": 15310848,
+        "sha256": "e36da1470ef67624ffdb1e0695d6abec3c5a11d66d25ed4f6ff77b90166c3fff"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32107/gt_transcription.json",
+        "size": 360711,
+        "sha256": "b2faeb7dd4b2379298ad9e2de094285ffa0393353a05f41f454d43f1b4dd232e"
+      }
+    },
+    {
+      "id": "MTG_32108",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32108/sc_meetup_0/ch0.wav",
+        "size": 15286048,
+        "sha256": "45ab450b84c4ca6fba2f07a1be7fc533881edcd2cb855f9b4a7d99420959edd5"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32108/gt_transcription.json",
+        "size": 312432,
+        "sha256": "39c64bf23487a65b4d72f2ef01bc9d9e0ceb74afdad86e38bcc5beca40924396"
+      }
+    },
+    {
+      "id": "MTG_32109",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32109/sc_meetup_0/ch0.wav",
+        "size": 15340128,
+        "sha256": "7b3a8f006d474ef3c154294b17ba083222527657be2902860487487774780372"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32109/gt_transcription.json",
+        "size": 205728,
+        "sha256": "059cbf4c0132a6f4a9633fb792745f591200dcb2069c61ce8ddddc67978bdaa6"
+      }
+    },
+    {
+      "id": "MTG_32110",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32110/sc_meetup_0/ch0.wav",
+        "size": 15318528,
+        "sha256": "57974e98c0a54782cf522b81858b1f6ddac3c1f3254c27cad2057c50756dc074"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32110/gt_transcription.json",
+        "size": 435564,
+        "sha256": "58a7bd5c381c9e7c751ab757a63a80ee10fe368defb845ba4fe20fc07fc888d5"
+      }
+    },
+    {
+      "id": "MTG_32175",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32175/sc_meetup_0/ch0.wav",
+        "size": 11442368,
+        "sha256": "4a3215d1f1f2a6902d34b181dfb7059e592231949ac8f99256c2ec07f4981e06"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32175/gt_transcription.json",
+        "size": 191568,
+        "sha256": "e053ef757b3f54f4045eea627b861b2ace52930ec99851d92f26b942bf432b93"
+      }
+    },
+    {
+      "id": "MTG_32178",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32178/sc_meetup_0/ch0.wav",
+        "size": 11461888,
+        "sha256": "b0b9ad9b6bc6c835e05222a2568867be5feb9dcf1ad713760e87a109d3abfa76"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32178/gt_transcription.json",
+        "size": 182655,
+        "sha256": "adfe135007de6d429a968ad828a6acbb709b2efc7807030785ef6b0bfa2e8d59"
+      }
+    },
+    {
+      "id": "MTG_32179",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32179/sc_meetup_0/ch0.wav",
+        "size": 11508448,
+        "sha256": "1e928509537eeba0607e421eaa2584b67feaf92b88c8d0693ffb127105f07f0a"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32179/gt_transcription.json",
+        "size": 212397,
+        "sha256": "588c429a7453aa6f11a8215f4ca44836ce27d3718fef434287e1a29700754e58"
+      }
+    },
+    {
+      "id": "MTG_32180",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32180/sc_meetup_0/ch0.wav",
+        "size": 11484448,
+        "sha256": "7213c232baf053454b651cab1a5b3c4ed386208d5bae1f609486406eaf4018d2"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32180/gt_transcription.json",
+        "size": 212280,
+        "sha256": "978ca31b243c69edbb03581abd04f0e5d28f90f46b016c52161446ca42ae621b"
+      }
+    },
+    {
+      "id": "MTG_32181",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32181/sc_meetup_0/ch0.wav",
+        "size": 11473888,
+        "sha256": "2903b18a095c0844efa7ffd9ad36827d4268dd355a4372c59aa935baa21581b1"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32181/gt_transcription.json",
+        "size": 212798,
+        "sha256": "4ca453ab50de0a092d420290906d71d652cf81991e3ebf886aeade025d3535e2"
+      }
+    },
+    {
+      "id": "MTG_32182",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32182/sc_meetup_0/ch0.wav",
+        "size": 11422848,
+        "sha256": "d5d185e5d6181bb6f01796656c2510be8d76a8488ccb6a9c5f3bb6d42a53718e"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32182/gt_transcription.json",
+        "size": 203477,
+        "sha256": "648ac78d2b43a48810e57ca28753cf9a65f8fcf367dfc0afd49d3b07bab07f33"
+      }
+    },
+    {
+      "id": "MTG_32183",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32183/sc_meetup_0/ch0.wav",
+        "size": 11708928,
+        "sha256": "f425622610d77d17016beb2f07725d288c53f9d130680313bd2ce42713e113b2"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32183/gt_transcription.json",
+        "size": 216498,
+        "sha256": "7f0c99a0044b11566588923efcc96b8b67009ce39c283be26a2fff63efa53802"
+      }
+    },
+    {
+      "id": "MTG_32184",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32184/sc_meetup_0/ch0.wav",
+        "size": 11476128,
+        "sha256": "2a3d0b553625eb74b4982a0c9b5003f01e895258e15f270678df82049b42ec83"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32184/gt_transcription.json",
+        "size": 230340,
+        "sha256": "25d66fe9847f9e2d16dcbf554e6410dd1b11b6e99cfa9739a743ea938a58b2e3"
+      }
+    },
+    {
+      "id": "MTG_32185",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32185/sc_meetup_0/ch0.wav",
+        "size": 11511488,
+        "sha256": "dd44d1faf66e48ba72bc2e655a5299e01b3a557a7c84051d0d6f7649776586c2"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32185/gt_transcription.json",
+        "size": 159083,
+        "sha256": "4a6ae2531c38333aeb8f8ff35c2c00959094118f1a770c867a33d3ad7a4e6e66"
+      }
+    },
+    {
+      "id": "MTG_32186",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32186/sc_meetup_0/ch0.wav",
+        "size": 11488448,
+        "sha256": "357b2e05507dd5da55172096bbb183d79c3fbe1f020f7bb80143e41fa7da981f"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32186/gt_transcription.json",
+        "size": 202017,
+        "sha256": "54df2d1193e61679b3b035d308e8bcd8fbe4aed1fd343132659ead71d486f3d3"
+      }
+    },
+    {
+      "id": "MTG_32188",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32188/sc_meetup_0/ch0.wav",
+        "size": 11466048,
+        "sha256": "b0a2470cfc97b998800f866da8514698ee53927ff0866b9a4867b5f28418edf8"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32188/gt_transcription.json",
+        "size": 324676,
+        "sha256": "524a19f3a5c692db715bfe9fdd43ece8f0a279bbd04c209d5d909a75bccdfde5"
+      }
+    },
+    {
+      "id": "MTG_32189",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32189/sc_meetup_0/ch0.wav",
+        "size": 11438528,
+        "sha256": "978102010f6a4746bb2316a3d44bfb075021c98c87d1deed19ff059d88ad5f9c"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32189/gt_transcription.json",
+        "size": 233893,
+        "sha256": "ecd12f0e29bd9f4202042e2b52d5593f44ee6b6e8b2a2f68f0230999c0b7fd52"
+      }
+    },
+    {
+      "id": "MTG_32190",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32190/sc_meetup_0/ch0.wav",
+        "size": 11498688,
+        "sha256": "8c21a1968577a8cab9f30bf7e092e77012741275394b01646b3a18a62ea38f32"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32190/gt_transcription.json",
+        "size": 192610,
+        "sha256": "975b082d61cdaa7a22d72c65ec858db243da663c9a476540fd13b3410470b421"
+      }
+    },
+    {
+      "id": "MTG_32191",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32191/sc_meetup_0/ch0.wav",
+        "size": 11511488,
+        "sha256": "362c52929e2ab98acdf701772c264379406724d5d19bbdc1fcd8f6bb5337e0c9"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32191/gt_transcription.json",
+        "size": 194904,
+        "sha256": "b9a023f9f9036e534f48a4e1d8f3f9af90f05f1f272101ad73efdebc1fd779fc"
+      }
+    },
+    {
+      "id": "MTG_32250",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32250/sc_meetup_0/ch0.wav",
+        "size": 11445728,
+        "sha256": "1efb518340a3f313e045c3d0eb463fc3a332293f0990cdf57dde4fa42ddfc0bc"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32250/gt_transcription.json",
+        "size": 187110,
+        "sha256": "d543072407b0e0a74b1c25c01fa6d9b6aecb7bb450eb46e2ebbd7fdb4a611dfb"
+      }
+    },
+    {
+      "id": "MTG_32251",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32251/sc_meetup_0/ch0.wav",
+        "size": 11450368,
+        "sha256": "5a275a2d13111c4937b1f5af33b72d43bb463d495f16a6eda5c3866a6b9312f3"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32251/gt_transcription.json",
+        "size": 186726,
+        "sha256": "a3a0f4870d4b67be1144e0360709f429794cee0c960f0bae4649f293eb0c4b1c"
+      }
+    },
+    {
+      "id": "MTG_32252",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32252/sc_meetup_0/ch0.wav",
+        "size": 11463328,
+        "sha256": "fd173bd4b8127884ae5042fe4f3597bdfb35f918fd32cc7480fbda029118ec42"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32252/gt_transcription.json",
+        "size": 202526,
+        "sha256": "a6af40717da2e9172d24b8e20ad1bdb64ee11141c35e18f796773990adb8584c"
+      }
+    },
+    {
+      "id": "MTG_32254",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32254/sc_meetup_0/ch0.wav",
+        "size": 11487168,
+        "sha256": "e59c8eb2349be73d03ec744935f2867fcc88fab8db55f5706dbaa35f466e7b87"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32254/gt_transcription.json",
+        "size": 193438,
+        "sha256": "5c8fdf22afa38d11f14460888dc9a0e7ea087a0f0a6393c80563a3b279b87d34"
+      }
+    },
+    {
+      "id": "MTG_32255",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32255/sc_meetup_0/ch0.wav",
+        "size": 11515008,
+        "sha256": "94397c69e07ff4200db50524018fa77e5ab10b48187047fe39ad59f989a2bc37"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32255/gt_transcription.json",
+        "size": 166092,
+        "sha256": "a42e1c0554469257ece726013d46ceb84b94e6f0449ea68fb5d259627ec379ba"
+      }
+    },
+    {
+      "id": "MTG_32256",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32256/sc_meetup_0/ch0.wav",
+        "size": 11646208,
+        "sha256": "4b1952245eaf7fd1dff7583748f000eb9da4a2e5bda12a949553b507464968fe"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32256/gt_transcription.json",
+        "size": 115870,
+        "sha256": "49d0e69b9806ac61b5406ed4b510036281e2bd5945a34c944edfe8393160243e"
+      }
+    },
+    {
+      "id": "MTG_32257",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32257/sc_meetup_0/ch0.wav",
+        "size": 11479328,
+        "sha256": "77ec1fcad19f2b5827edabfba54482e75b44dabc1ea080f65fc0f560c1eec3ef"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32257/gt_transcription.json",
+        "size": 288645,
+        "sha256": "7b2c1b071083c141008fd77a81097e855f8c2bfd15a359a71c8900be02c1f99d"
+      }
+    },
+    {
+      "id": "MTG_32260",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32260/sc_meetup_0/ch0.wav",
+        "size": 11490048,
+        "sha256": "e36d85a4ee51972bcab8432cfa630084e1b721c7506f3074fa758bfbcc870e7c"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32260/gt_transcription.json",
+        "size": 187765,
+        "sha256": "b1d02b6df282c2c879c6cb42c4cf6ea22a60059533c86872cd532315895f5ad7"
+      }
+    },
+    {
+      "id": "MTG_32261",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32261/sc_meetup_0/ch0.wav",
+        "size": 11468768,
+        "sha256": "e69bd63aeefd0038a5df105f2d0756b73104774ed544472c6fcb054b8941e859"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32261/gt_transcription.json",
+        "size": 228607,
+        "sha256": "d89af2d5e4a1680f3a59d6fa85145356c27b6305334940ef7e2bf281711adc09"
+      }
+    },
+    {
+      "id": "MTG_32263",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32263/sc_meetup_0/ch0.wav",
+        "size": 11500928,
+        "sha256": "4ff2ab554e98d06586050fda50f7ac556eae22a9e329a7773c1580eeb011369f"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32263/gt_transcription.json",
+        "size": 197539,
+        "sha256": "07cd74f4d74e8da330a1119f292ab7f23b6861ba097a565765d7a7a880d7cf8f"
+      }
+    },
+    {
+      "id": "MTG_32264",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32264/sc_meetup_0/ch0.wav",
+        "size": 11430368,
+        "sha256": "3d01dd0a1b8469b4937b8ac88f6ec095183dc3b804a665cb62110a00bb2d24bd"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32264/gt_transcription.json",
+        "size": 209005,
+        "sha256": "3e1a1611692c5d390811bb453735d5cf59c54223acff1997c8654ade50be90ae"
+      }
+    },
+    {
+      "id": "MTG_32265",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32265/sc_meetup_0/ch0.wav",
+        "size": 11467968,
+        "sha256": "7220ff6031302599a38cdae715735bda395810d1265a4da6ee6c2af1459740b4"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32265/gt_transcription.json",
+        "size": 181431,
+        "sha256": "010d3d49decbf522cf5bde20a01809970a523652a518a76b50591eec2477ce90"
+      }
+    },
+    {
+      "id": "MTG_32266",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32266/sc_meetup_0/ch0.wav",
+        "size": 11488768,
+        "sha256": "32c767f63afe36f785e91bee50bdfbd9271182166b20571a027c616b2d763fc8"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32266/gt_transcription.json",
+        "size": 179158,
+        "sha256": "3bc46049740ec32deeb0262d6bb8aa3be8dcb00b8fc01712291e24a4ffff759b"
+      }
+    },
+    {
+      "id": "MTG_32310",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32310/sc_meetup_0/ch0.wav",
+        "size": 11500768,
+        "sha256": "c9395aa79456e2935cf0c3882c38ede479ed5c12067b9c119bad019f2e69c3b5"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32310/gt_transcription.json",
+        "size": 169865,
+        "sha256": "22eab4ad129cbeeaef710282c0cd4f9589f8d0dd9c835437d9df088953e20cbf"
+      }
+    },
+    {
+      "id": "MTG_32311",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32311/sc_meetup_0/ch0.wav",
+        "size": 11472928,
+        "sha256": "f6b00678d682d56056aac0b9b71b4ce2753750a64c6fb312c0a3e5977bf73ea2"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32311/gt_transcription.json",
+        "size": 155709,
+        "sha256": "90e053c39e38d0e537d02b7fcd0549da9216c44db986bd4e5e59ac6cf8cf5fd7"
+      }
+    },
+    {
+      "id": "MTG_32312",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32312/sc_meetup_0/ch0.wav",
+        "size": 11495328,
+        "sha256": "4e12f9aac0284e0c75ea01b4ad4555cbce766e27e234f223704670e58998bcd6"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32312/gt_transcription.json",
+        "size": 170688,
+        "sha256": "c347359f228e5276dd4c20e08839882a705a9f4e82aa95c91db9f5417453cf22"
+      }
+    },
+    {
+      "id": "MTG_32313",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32313/sc_meetup_0/ch0.wav",
+        "size": 11496288,
+        "sha256": "7976b34a57da8c0b97bb35fa2cc8dd23b8729f7921f190e6866b9921dc81f848"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32313/gt_transcription.json",
+        "size": 155570,
+        "sha256": "cc64102221013181218ee7ba2e169cc8c6ab55067962dee360ece56fa4e681b5"
+      }
+    },
+    {
+      "id": "MTG_32314",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32314/sc_meetup_0/ch0.wav",
+        "size": 11464288,
+        "sha256": "f32b897c729a4eb3597981fb44970cef2dba465f9115cc30b7c50e66783678ea"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32314/gt_transcription.json",
+        "size": 210631,
+        "sha256": "258fe19c9bc06f3f24741075130ef3af51f99eecedb6ae3b0b2f138f58cdde93"
+      }
+    },
+    {
+      "id": "MTG_32315",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32315/sc_meetup_0/ch0.wav",
+        "size": 11492288,
+        "sha256": "f9783bee25bea14fe3f325cd76373c6312d9947ef6282e148c5cd26e27d56e86"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32315/gt_transcription.json",
+        "size": 247534,
+        "sha256": "83c4a8f26fdbc6ed3a4bda9208c2eb9f0efc9d7dee3df6cb624d5627ab340cf4"
+      }
+    },
+    {
+      "id": "MTG_32316",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32316/sc_meetup_0/ch0.wav",
+        "size": 11429408,
+        "sha256": "ccea046e620591769732021b2d62e844527afb4e3067914979666ab31194041e"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32316/gt_transcription.json",
+        "size": 153410,
+        "sha256": "cb93b3d2bdaf1da07adbec7db343abfc3ac788722cc9e21f79f99b458a0d5e5f"
+      }
+    },
+    {
+      "id": "MTG_32317",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32317/sc_meetup_0/ch0.wav",
+        "size": 11494368,
+        "sha256": "22dff73465bb9cdb0d50a4ad9bdfc36e786db6086e531b3f3ec0894c4048db4e"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32317/gt_transcription.json",
+        "size": 177250,
+        "sha256": "cdc16393f2464d679cfa7f812e7561f45bec83dfa3ed9c61d6b098781ef30e6e"
+      }
+    },
+    {
+      "id": "MTG_32319",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32319/sc_meetup_0/ch0.wav",
+        "size": 11782688,
+        "sha256": "1294b6b0363d6c8df7d52636cae4df8c136de0c0ee01d3e6507fb3af4f7a95ff"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32319/gt_transcription.json",
+        "size": 160144,
+        "sha256": "0dca572aef4abc8c68ffce3c982b1818b0c7f06bf35763b68fc7ba7df8ee03f7"
+      }
+    },
+    {
+      "id": "MTG_32320",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32320/sc_meetup_0/ch0.wav",
+        "size": 11435168,
+        "sha256": "eb09e6e736fdb2fee47ad7a03df27adba5c62f45d939420dd72a4c492433817c"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32320/gt_transcription.json",
+        "size": 153857,
+        "sha256": "49d42fad3a4a10d502c7e5093dd5f4acdc5c0f099e6e5e10c3d41701a362c9ce"
+      }
+    },
+    {
+      "id": "MTG_32321",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32321/sc_meetup_0/ch0.wav",
+        "size": 11426208,
+        "sha256": "4d996a369d15daffc52455d04b0ebb28e10b89531790b616a294daeb7e4497db"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32321/gt_transcription.json",
+        "size": 167773,
+        "sha256": "a88b772a779a1a69416af6439dc4f87d0bac278fc2e0eeab0de1fb3f69164e80"
+      }
+    },
+    {
+      "id": "MTG_32322",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32322/sc_meetup_0/ch0.wav",
+        "size": 11493568,
+        "sha256": "c4a87768685a885d72e9cfb5a6709de38f22de77096b02e2ef6c70bbe2b2fcf7"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32322/gt_transcription.json",
+        "size": 174814,
+        "sha256": "86d34e4a8fa09dd500e62af11cfb8731c31048683d5a8c8c190c94146979f52c"
+      }
+    },
+    {
+      "id": "MTG_32323",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32323/sc_meetup_0/ch0.wav",
+        "size": 11504288,
+        "sha256": "527ffcbc9f6993eaf2e7da2d376a07ee3157a35a0cd334e580899ac559172801"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32323/gt_transcription.json",
+        "size": 175201,
+        "sha256": "d427a2f1fda8aba3e97959b3e2e0e3ef22c6058821c03aba986fd6e81c1b51b7"
+      }
+    },
+    {
+      "id": "MTG_32325",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32325/sc_meetup_0/ch0.wav",
+        "size": 11443168,
+        "sha256": "38964561d19bcb47bdb96fb0dbefcd539eab256933a1d16912cd446e1dcc78c6"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32325/gt_transcription.json",
+        "size": 180623,
+        "sha256": "97d26c112911eec6eef9f0a2f3e54fa4d6e3ddc630589e29f36abf7d3fee3b7a"
+      }
+    },
+    {
+      "id": "MTG_32331",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32331/sc_meetup_0/ch0.wav",
+        "size": 11521248,
+        "sha256": "584d042e9b0364baa3dcaef32819dc0e1d5d91702690fc1897a44bc39e798529"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32331/gt_transcription.json",
+        "size": 158825,
+        "sha256": "2659a84e97aa5ae63abc23835efd7ee7b8ea4d2e8aea3e48a40a194e79b7db7d"
+      }
+    },
+    {
+      "id": "MTG_32332",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32332/sc_meetup_0/ch0.wav",
+        "size": 11475008,
+        "sha256": "77c6e76bf8f7bb4c5807c2df4350e02dd1b4e0bdcdf95f7aebed2b1661b74c99"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32332/gt_transcription.json",
+        "size": 158079,
+        "sha256": "ee3a937e9b78592a7280f710fbb4664743a15ad2b47a0abed075139b424dfeee"
+      }
+    },
+    {
+      "id": "MTG_32333",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32333/sc_meetup_0/ch0.wav",
+        "size": 11454848,
+        "sha256": "5ac4ae72373dc9efd060a48b745700a01bb331d7c8815a2ef1eaa276b4d2879b"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32333/gt_transcription.json",
+        "size": 157677,
+        "sha256": "bfcd0b23d6315f030acda669f7d13324e153128c279551f900c31aa822d10bc7"
+      }
+    },
+    {
+      "id": "MTG_32334",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32334/sc_meetup_0/ch0.wav",
+        "size": 11457408,
+        "sha256": "1c45dfdac3c3cedfc323d5a3da068fba566fd21109879677e17f981c37800e51"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32334/gt_transcription.json",
+        "size": 160266,
+        "sha256": "5ca7929b3991ebe0d662514d8928b52aec418a758443539ff5c863908fe21ff5"
+      }
+    },
+    {
+      "id": "MTG_32335",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32335/sc_meetup_0/ch0.wav",
+        "size": 11414528,
+        "sha256": "9ad78b70c0f5789d7a0f7f4f54cdfdf394a2f0d76cfea4f19c033bccca1149cf"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32335/gt_transcription.json",
+        "size": 153494,
+        "sha256": "18d82bedfe96bd0b0c981f3bbbde2e9fc7824dba7d75d57ca75c5ea1a4b83a01"
+      }
+    },
+    {
+      "id": "MTG_32336",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32336/sc_meetup_0/ch0.wav",
+        "size": 11467008,
+        "sha256": "f0296bad6f54996ad7e3c56f23ed1e2553c698a2be37dddfc542c1bc985cef11"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32336/gt_transcription.json",
+        "size": 146945,
+        "sha256": "97454c524d07a178837db887d9da2653c4a3725c2052c8005f0e31a538324fc1"
+      }
+    },
+    {
+      "id": "MTG_32337",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32337/sc_meetup_0/ch0.wav",
+        "size": 12961248,
+        "sha256": "5262c3fc4c71c7b9724927854e8982c4145cb0ed6eb854ed58a34b1871c1d827"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32337/gt_transcription.json",
+        "size": 169617,
+        "sha256": "545b062984dcf04f39c89e0b11a004cccf97aafdc395a872f19c813e3f88335a"
+      }
+    },
+    {
+      "id": "MTG_32338",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32338/sc_meetup_0/ch0.wav",
+        "size": 11436288,
+        "sha256": "ebd1139c5c89e20c78f810e017be28baf1624990d326bf01c37b5124ba0b3b07"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32338/gt_transcription.json",
+        "size": 159269,
+        "sha256": "437d5bd361a91e27b1ffc78fe805af40f6b9288dd12d4e346b31c5c1a0162e5e"
+      }
+    },
+    {
+      "id": "MTG_32339",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32339/sc_meetup_0/ch0.wav",
+        "size": 11424768,
+        "sha256": "144b687fcd6929cec8918df2a7ec0f0ec84fd7ace73d8e13424b27d6d867284c"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32339/gt_transcription.json",
+        "size": 169178,
+        "sha256": "4169093746c5bf72d132a09bb9f54cc58742d3fc0b556a236395eb6c01afc4f1"
+      }
+    },
+    {
+      "id": "MTG_32341",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32341/sc_meetup_0/ch0.wav",
+        "size": 11473728,
+        "sha256": "97aec4062084bc05c1d8e62305742c40cd371d29bc1c31fd0aea3282f9ae35d4"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32341/gt_transcription.json",
+        "size": 163541,
+        "sha256": "7d5c35180ca7030fe8f5bd2ba3229bfa443de1e256900eb09c5d305bbfa79a74"
+      }
+    },
+    {
+      "id": "MTG_32342",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32342/sc_meetup_0/ch0.wav",
+        "size": 11470688,
+        "sha256": "25e5064b27f1f241ebbeeca9b5c726cbc3a72a6ac9bfbd0c16782c80d4d78568"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32342/gt_transcription.json",
+        "size": 194001,
+        "sha256": "2460b224098592d51187992faaf706d5d09595ec0648f66b32429fb383833676"
+      }
+    },
+    {
+      "id": "MTG_32344",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32344/sc_meetup_0/ch0.wav",
+        "size": 11509888,
+        "sha256": "a3423af7985d798d005abb655b29b6dd97e33f2547f3f2567c67b488f12fda3a"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32344/gt_transcription.json",
+        "size": 164644,
+        "sha256": "cc9048116938201029c1bd5173254c76689422be7c415a9c36e9f9685c062a22"
+      }
+    },
+    {
+      "id": "MTG_32345",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32345/sc_meetup_0/ch0.wav",
+        "size": 11452128,
+        "sha256": "e51e80b667029910ec8cda6fd49015c1e743f79ab9956b3b0bf9cc20a73c927b"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32345/gt_transcription.json",
+        "size": 149407,
+        "sha256": "474bb12fac759554a7c2568d4ed409a34a9ea699e5c19808f2f04ead8e1e61f7"
+      }
+    },
+    {
+      "id": "MTG_32346",
+      "audio": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32346/sc_meetup_0/ch0.wav",
+        "size": 11478048,
+        "sha256": "7c98b336448a10fc1d5fd857cf766ce4972ed2e1f8346448fbd3af8ced7725b0"
+      },
+      "reference": {
+        "path": "benchmark-datasets/eval_set/240825.1_eval_full_with_GT/MTG/MTG_32346/gt_transcription.json",
+        "size": 245278,
+        "sha256": "7f40fff71db8f528e5d367863ec4ab08fa9e2e19fe868055b76f99f1d2b0568b"
+      }
+    }
+  ]
+}

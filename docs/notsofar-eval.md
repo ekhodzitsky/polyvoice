@@ -1,0 +1,76 @@
+# Held-out NOTSOFAR evaluation
+
+This protocol uses the full NOTSOFAR-1 evaluation split
+`benchmark-datasets/eval_set/240825.1_eval_full_with_GT`: **129 meetings**, one
+single-channel far-field device per meeting. The first lexicographically sorted
+`sc_*` device's `ch0.wav` is selected before inference. No meeting is selected or
+excluded based on its score. This is distinct from the historical 36-meeting
+dev-set-1 measurement; the meeting ID sets are disjoint.
+
+## Access and licensing
+
+Microsoft's [official dataset mirror](https://huggingface.co/datasets/microsoft/NOTSOFAR)
+provides audio and ground truth without a purchase or access token under
+[CC BY 4.0](https://huggingface.co/datasets/microsoft/NOTSOFAR/blob/ba8fd0f034ce185fe4d24f47e53b4b8194795f07/LICENSE.txt).
+Attribute the NOTSOFAR-1 dataset and its creators when publishing results; see
+[the challenge repository](https://github.com/microsoft/NOTSOFAR1-Challenge).
+The checked-in [manifest](../benchmarks/manifests/notsofar-eval.json) pins the
+repository revision, all source paths, byte sizes and SHA-256 checksums,
+including the license and reference annotations. Audio totals 1,536,380,832
+bytes. Audio and ground-truth text are downloaded locally, not redistributed.
+
+## Frozen protocol
+
+- Default native CLI, balanced INT8 powerset + ResNet34, v2 + VBx; no speaker
+  count hint, domain profile, threshold override, or evaluation-set calibration.
+- Collar **0 seconds**, overlap scored, 10 ms frame scoring using the existing
+  `benchmarks/der.py` implementation and optimal speaker mapping.
+- Reference utterance start/end times are used, preserving overlap. Segments
+  shorter than 1 ms are excluded, matching the historical NOTSOFAR converter.
+  Word-level timestamps are not substituted for speech-activity annotation.
+- DER micro and macro, micro miss/false-alarm/confusion, speaker counts and
+  per-meeting components are reported. Empty hypotheses count as missed speech.
+- The regression allowance is **2.0 percentage points** above the frozen native
+  baseline for **each** of micro and macro DER. This allowance is declared before
+  measurement and carries over the historical NOTSOFAR baseline's tolerance.
+  It is a regression budget, not a claim that the baseline quality is sufficient
+  for every application or a substitute for the locked Darwin scoreboard floors.
+
+The evaluation split is held out from project calibration. Historical development
+results do not qualify it; do not tune configuration or models against these
+scores. This does not establish absence of overlap with every upstream pretrained
+model's training data. The domain is distant-microphone office meetings, not
+telephone calls or arbitrary languages; AMI's close-talk mix is a different
+recording condition, but both corpora contain meetings.
+
+## Reproduction and required gate
+
+Use Python 3.11+ and Cargo; the harness adds no dependency. Download the normal
+balanced models with the product's model downloader, then point `--models` to
+the cache containing the two INT8 models and six PLDA arrays.
+
+```bash
+python3 scripts/notsofar-eval.py download
+python3 scripts/notsofar-eval.py run --models "$HOME/.cache/polyvoice/models"
+```
+
+Use a clean committed checkout. The harness builds the current CLI with
+`cargo build --locked --release --features cli --bin polyvoice` and records the
+revision, binary/scorer/manifest/model hashes, host, compiler, build flags, exact
+commands and individual hypotheses. Output goes to the ignored
+`bench-results/notsofar-eval/`; use a fresh `--output` directory for another run.
+
+The required run fails on missing/corrupt inputs, partial or duplicate coverage,
+inference errors, protocol changes or either exceeded regression limit. Download
+failures never become successful skips. Existing files are rehashed rather than
+trusted by filename. All 129 meetings are required; there is no max-files option.
+The separate `--record-only` mode establishes the initial baseline and explicitly
+**does not** report a passing release gate.
+
+The baseline and measurement report will be recorded after the initial frozen
+run. Release integration and revision-bound multi-corpus evidence remain separate
+from establishing this baseline.
+
+```bash
+python3 scripts/test-notsofar-eval.py
+```
