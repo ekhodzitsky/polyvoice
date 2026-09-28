@@ -373,6 +373,30 @@ jobs:
           tool: cargo-deny
       - run: cargo deny check advisories licenses bans sources
 
+  darwin-rust-kernels:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Rust kernel numerical tests
+        run: cargo test --locked --release -p polyvoice-kernels --features experimental-darwin-rust
+      - name: Local-model build, linkage and inference
+        run: bash scripts/check-darwin-rust.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: darwin-rust-audit
+          path: |
+            bench-results/darwin-rust-audit/*.txt
+            bench-results/darwin-rust-audit/*.log
+            bench-results/darwin-rust-audit/*.json
+            bench-results/darwin-rust-audit/*.tsv
+          if-no-files-found: error
+
   corpus-protocol:
     runs-on: ubuntu-latest
     steps:

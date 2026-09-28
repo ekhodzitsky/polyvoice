@@ -6,7 +6,7 @@
 //! GEMM does not spawn extra workers; BNNS uses 2 threads on large feature
 //! maps and 1 otherwise. Override with `POLYVOICE_BNNS_THREADS`.
 
-#![cfg(target_vendor = "apple")]
+#![cfg(apple_accelerate)]
 
 use crate::tensor::Tensor;
 use std::collections::{HashMap, HashSet};

@@ -1,35 +1,36 @@
 //! Packed GEMM via `rten-gemm` (pure Rust, INT8 + FP32).
 //!
-//! Used off-Apple: no AMX/BNNS, and system OpenBLAS in the Desktop Linux VM
+//! Used without Accelerate, including the experimental Apple Rust backend.
+//! There is no AMX/BNNS, and system OpenBLAS in the Desktop Linux VM
 //! is ~10 GFLOP/s. rten-gemm has NEON/dotprod/i8mm (and AVX/VNNI on x86).
-//! Apple keeps BNNS / Accelerate. Rayon is pinned to 1 thread so this does
+//! Apple uses BNNS / Accelerate by default. Rayon is pinned to 1 thread so this does
 //! not fight window/embed workers.
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 use crate::conv::Conv2d;
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 use crate::tensor::Tensor;
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 use rten_gemm::{
     BiasVector, ColOffsets, GemmExecutor, GemmInputA, GemmInputB, GemmOptions, Im2Col,
     PackedAMatrix, PackedBMatrix, QuantParams, RowOffsets,
 };
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 use rten_tensor::NdTensorView;
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 use std::cell::RefCell;
 
 // Packed matrices are keyed by weight address. A model drop invalidates all
 // thread-local packs before freed addresses can belong to another model.
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 static WEIGHT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 pub(crate) fn invalidate_packed_weights() {
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     WEIGHT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 fn refresh_packed_weights() {
     let generation = WEIGHT_GENERATION.load(std::sync::atomic::Ordering::Acquire);
     PACK_GENERATION.with(|seen| {
@@ -53,12 +54,12 @@ pub fn pin_parallelism() {
         }
         #[cfg(linux_cblas)]
         crate::linux_cblas::pin_to_one_thread();
-        #[cfg(target_vendor = "apple")]
+        #[cfg(apple_accelerate)]
         crate::accelerate::pin_to_one_thread();
     });
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 struct I8Scratch {
     xq: Vec<i8>,
     padded: Vec<i8>,
@@ -73,7 +74,7 @@ struct I8Scratch {
     col_x: Vec<i32>,
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 thread_local! {
     static PACK_GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     static F32_EXEC: GemmExecutor<f32, f32, f32> = {
@@ -107,11 +108,11 @@ thread_local! {
     static KN_T: RefCell<Vec<i8>> = const { RefCell::new(Vec::new()) };
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 const PACK_CAP: usize = 32;
 
 /// `C[m,n] = A[m,k] @ B[k,n] + bias[m]`.
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 pub fn gemm_rowbias(
     a: &[f32],
     b: &[f32],
@@ -161,7 +162,7 @@ pub fn gemm_rowbias(
 }
 
 /// `C[m,n] = A[m,k] @ B[k,n] + bias[n]`.
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 pub fn gemm_colbias(
     a: &[f32],
     b: &[f32],
@@ -212,7 +213,7 @@ pub fn gemm_colbias(
 }
 
 /// `C[m,n] += A[m,k] @ B[k,n]`.
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 pub fn gemm_add(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) -> bool {
     refresh_packed_weights();
     if m == 0 || n == 0 || k == 0 {
@@ -258,7 +259,7 @@ pub fn gemm_add(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usiz
 /// Activation scale is a **fixed per-op** value (not min/max of `A`).
 /// `B` is INT8 `[k, n]` with per-column or scalar scale/zp (zp is 0 for
 /// the shipping signed LSTM weights).
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 #[allow(clippy::too_many_arguments)]
 pub fn gemm_i8_static(
     a: &[f32],
@@ -373,7 +374,7 @@ pub fn gemm_i8_static(
 /// documented upstream hazard. Exact paths: aarch64 (SDOT/generic, i32
 /// accumulate) and x86_64 with AVX512-VNNI (VPDPBUSD). Elsewhere callers
 /// must fall back to the in-crate integer path.
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 fn i8_exact_on_this_cpu() -> bool {
     #[cfg(target_arch = "aarch64")]
     {
@@ -391,7 +392,7 @@ fn i8_exact_on_this_cpu() -> bool {
 
 /// `B` is qlinear `[n, k]`. Transposed to `[k, n]` and run Unpacked: rten's
 /// prepacked B path does not apply per-column zp (LSTM weights are zp 0).
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 #[allow(clippy::too_many_arguments)]
 pub fn gemm_u8i8_nk(
     a_u8: &[u8],
@@ -477,7 +478,7 @@ pub fn gemm_u8i8_nk(
     })
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 fn dequant_acc(
     acc: &[i32],
     a_scale: f32,
@@ -510,7 +511,7 @@ fn dequant_acc(
     }
 }
 
-#[cfg(all(not(target_vendor = "apple"), target_arch = "aarch64"))]
+#[cfg(all(not(apple_accelerate), target_arch = "aarch64"))]
 fn dequant_acc_neon(
     acc: &[i32],
     a_scale: f32,
@@ -552,7 +553,7 @@ fn dequant_acc_neon(
     }
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 fn quant_u8_static(src: &[f32], scale: f32, zp: u8, dst: &mut [u8]) {
     let s = if scale.abs() < 1e-12 { 1.0 } else { scale };
     let z = f32::from(zp);
@@ -570,7 +571,7 @@ fn quant_u8_static(src: &[f32], scale: f32, zp: u8, dst: &mut [u8]) {
 }
 
 /// Same `vdiv` + `vrndaq` + clamp as the scalar loop (Rust `f32::round`).
-#[cfg(all(not(target_vendor = "apple"), target_arch = "aarch64"))]
+#[cfg(all(not(apple_accelerate), target_arch = "aarch64"))]
 fn quant_u8_neon(src: &[f32], s: f32, z: f32, dst: &mut [u8], n: usize) {
     use std::arch::aarch64::{
         vaddq_f32, vcombine_u8, vcombine_u16, vcvtq_u32_f32, vdivq_f32, vld1q_f32, vmaxq_f32,
@@ -638,7 +639,7 @@ fn quant_u8_neon(src: &[f32], s: f32, z: f32, dst: &mut [u8], n: usize) {
 /// Virtual-im2col INT8 conv. A is weights `[oc, k]` as u8 (zp 128); B is a
 /// padded CHW activation image so rten packs im2col blocks instead of a full
 /// column buffer. Pad pixels are `act_zp`.
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 pub fn try_conv_i8(conv: &Conv2d, x: &Tensor, y: &mut Tensor, relu: bool) -> bool {
     if conv.q_w.is_empty() || conv.out_scale.is_empty() || x.n == 0 || !i8_exact_on_this_cpu() {
         return false;
@@ -691,7 +692,7 @@ pub fn try_conv_i8(conv: &Conv2d, x: &Tensor, y: &mut Tensor, relu: bool) -> boo
     })
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 #[allow(clippy::too_many_arguments)]
 fn run_i8_conv(
     conv: &Conv2d,
@@ -821,7 +822,7 @@ fn run_i8_conv(
     true
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 fn quantize_i8(src: &[f32], scale: f32, zp: i8, dst: &mut [i8]) {
     let s = if scale.abs() < 1e-12 { 1.0 } else { scale };
     let z = f32::from(zp);
@@ -831,7 +832,7 @@ fn quantize_i8(src: &[f32], scale: f32, zp: i8, dst: &mut [i8]) {
     }
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 #[allow(clippy::too_many_arguments)]
 fn copy_nchw_pad(
     src: &[i8],
@@ -853,7 +854,7 @@ fn copy_nchw_pad(
     }
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 #[allow(clippy::too_many_arguments)]
 fn fill_im2col_offsets(
     ic: usize,
@@ -906,7 +907,7 @@ fn fill_im2col_offsets(
     }
 }
 
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 fn dequant_nchw(acc: &[i32], conv: &Conv2d, y: &mut Tensor, ni: usize, spatial: usize, relu: bool) {
     for o in 0..conv.oc {
         let s = conv.out_scale.get(o).copied().unwrap_or(1.0);
@@ -923,7 +924,7 @@ fn dequant_nchw(acc: &[i32], conv: &Conv2d, y: &mut Tensor, ni: usize, spatial: 
     }
 }
 
-#[cfg(all(test, not(target_vendor = "apple")))]
+#[cfg(all(test, not(apple_accelerate)))]
 mod tests {
     #[test]
     fn packed_weights_are_invalidated_across_threads() {

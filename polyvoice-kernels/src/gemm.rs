@@ -10,7 +10,7 @@ pub fn gemm_bias(a: &[f32], b: &[f32], bias: &[f32], c: &mut [f32], m: usize, n:
     debug_assert_eq!(b.len(), k.saturating_mul(n));
     debug_assert_eq!(bias.len(), n);
     debug_assert_eq!(c.len(), m.saturating_mul(n));
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     if rten_worth_it(m, n, k) && crate::rten_matmul::gemm_colbias(a, b, bias, c, m, n, k) {
         return;
     }
@@ -44,7 +44,7 @@ pub fn gemm_bias_row(
     debug_assert_eq!(c.len(), m.saturating_mul(n));
     // Small N (LSTM-like) stays on the long saxpy; conv spatial maps use a
     // register-blocked kernel so B's N-panel stays in registers across M.
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     if rten_worth_it(m, n, k) && crate::rten_matmul::gemm_rowbias(a, b, bias, c, m, n, k) {
         return;
     }
@@ -66,21 +66,21 @@ pub fn gemm_bias_row(
 }
 
 /// FLOPs below this stay on the in-crate kernel (cblas launch cost).
-#[cfg(any(target_vendor = "apple", linux_cblas))]
+#[cfg(any(apple_accelerate, linux_cblas))]
 const ACCEL_MIN_FLOPS: usize = 32 * 64 * 32;
 
 /// rten-gemm wins on fat N×K even when M is the LSTM batch (8).
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(not(apple_accelerate))]
 fn rten_worth_it(m: usize, n: usize, k: usize) -> bool {
     n >= 64 && k >= 32 && m.saturating_mul(n).saturating_mul(k) >= 8 * 64 * 32
 }
 
-#[cfg(any(target_vendor = "apple", linux_cblas))]
+#[cfg(any(apple_accelerate, linux_cblas))]
 fn accel_worth_it(m: usize, n: usize, k: usize) -> bool {
     m.saturating_mul(n).saturating_mul(k) >= ACCEL_MIN_FLOPS
 }
 
-#[cfg(any(target_vendor = "apple", linux_cblas))]
+#[cfg(any(apple_accelerate, linux_cblas))]
 fn sgemm(
     a: *const f32,
     b: *const f32,
@@ -91,7 +91,7 @@ fn sgemm(
     alpha: f32,
     beta: f32,
 ) {
-    #[cfg(target_vendor = "apple")]
+    #[cfg(apple_accelerate)]
     unsafe {
         crate::accelerate::sgemm_rowmajor(a, b, c, m, n, k, alpha, beta);
     }
@@ -101,15 +101,15 @@ fn sgemm(
     }
 }
 
-#[cfg(any(target_vendor = "apple", linux_cblas))]
+#[cfg(any(apple_accelerate, linux_cblas))]
 fn pin_blas() {
-    #[cfg(target_vendor = "apple")]
+    #[cfg(apple_accelerate)]
     crate::accelerate::pin_to_one_thread();
     #[cfg(linux_cblas)]
     crate::linux_cblas::pin_to_one_thread();
 }
 
-#[cfg(any(target_vendor = "apple", linux_cblas))]
+#[cfg(any(apple_accelerate, linux_cblas))]
 fn try_accel_rowbias(
     a: &[f32],
     b: &[f32],
@@ -131,7 +131,7 @@ fn try_accel_rowbias(
     true
 }
 
-#[cfg(any(target_vendor = "apple", linux_cblas))]
+#[cfg(any(apple_accelerate, linux_cblas))]
 fn try_accel_colbias(
     a: &[f32],
     b: &[f32],
@@ -152,7 +152,7 @@ fn try_accel_colbias(
     true
 }
 
-#[cfg(any(target_vendor = "apple", linux_cblas))]
+#[cfg(any(apple_accelerate, linux_cblas))]
 fn try_accel_add(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) -> bool {
     if !accel_worth_it(m, n, k) {
         return false;
@@ -168,7 +168,7 @@ fn try_accel_add(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usi
     true
 }
 
-#[cfg(not(any(target_vendor = "apple", linux_cblas)))]
+#[cfg(not(any(apple_accelerate, linux_cblas)))]
 fn try_accel_rowbias(
     _: &[f32],
     _: &[f32],
@@ -181,7 +181,7 @@ fn try_accel_rowbias(
     false
 }
 
-#[cfg(not(any(target_vendor = "apple", linux_cblas)))]
+#[cfg(not(any(apple_accelerate, linux_cblas)))]
 fn try_accel_colbias(
     _: &[f32],
     _: &[f32],
@@ -194,7 +194,7 @@ fn try_accel_colbias(
     false
 }
 
-#[cfg(not(any(target_vendor = "apple", linux_cblas)))]
+#[cfg(not(any(apple_accelerate, linux_cblas)))]
 fn try_accel_add(_: &[f32], _: &[f32], _: &mut [f32], _: usize, _: usize, _: usize) -> bool {
     false
 }
@@ -379,7 +379,7 @@ pub fn gemm_add(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usiz
     debug_assert_eq!(a.len(), m.saturating_mul(k));
     debug_assert_eq!(b.len(), k.saturating_mul(n));
     debug_assert_eq!(c.len(), m.saturating_mul(n));
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     if rten_worth_it(m, n, k) && crate::rten_matmul::gemm_add(a, b, c, m, n, k) {
         return;
     }

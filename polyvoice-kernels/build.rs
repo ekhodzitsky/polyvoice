@@ -1,6 +1,10 @@
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(linux_cblas)");
-    if std::env::var("CARGO_CFG_TARGET_VENDOR").ok().as_deref() == Some("apple") {
+    println!("cargo:rustc-check-cfg=cfg(apple_accelerate)");
+    if std::env::var("CARGO_CFG_TARGET_VENDOR").ok().as_deref() == Some("apple")
+        && !cfg!(feature = "experimental-darwin-rust")
+    {
+        println!("cargo:rustc-cfg=apple_accelerate");
         println!("cargo:rerun-if-changed=src/bnns_conv.c");
         println!("cargo:rerun-if-changed=src/bnns_graph.c");
         cc::Build::new()

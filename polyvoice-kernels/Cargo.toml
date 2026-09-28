@@ -9,6 +9,8 @@ repository = "https://github.com/ekhodzitsky/polyvoice"
 
 [features]
 default = []
+# Experimental Apple Rust kernels; not qualified against the locked scoreboard.
+experimental-darwin-rust = []
 # Linux-only LP64 OpenBLAS; other targets keep their native implementation.
 system-openblas = ["dep:pkg-config"]
 

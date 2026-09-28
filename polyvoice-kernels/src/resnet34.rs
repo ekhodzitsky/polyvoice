@@ -384,9 +384,9 @@ impl ResNet34 {
     /// (initializers only; QDQ weights are dequantized).
     pub fn from_onnx_path(path: &Path) -> Result<Self, KernelError> {
         crate::rten_matmul::pin_parallelism();
-        #[cfg(target_vendor = "apple")]
+        #[cfg(apple_accelerate)]
         let graph_ready = crate::bnns_graph::warmup(path);
-        #[cfg(not(target_vendor = "apple"))]
+        #[cfg(not(apple_accelerate))]
         let graph_ready = false;
         let (onnx_map, init) = load_initializers(path)?;
         // When the compiled graph is live, skip dequantizing 36 convs into
@@ -489,7 +489,7 @@ impl ResNet34 {
                 x.set(0, 0, m, t, frames[t * N_MELS + m]);
             }
         }
-        #[cfg(target_vendor = "apple")]
+        #[cfg(apple_accelerate)]
         if let Some(y) = crate::bnns_graph::try_forward(&self.onnx_path, &x)? {
             x = y;
         } else if self.graph_only {
@@ -501,7 +501,7 @@ impl ResNet34 {
             after_stem(&mut x, &self.layer1);
             x = run_layers(&self.layer1, &self.layer2, &self.layer3, &self.layer4, x);
         }
-        #[cfg(not(target_vendor = "apple"))]
+        #[cfg(not(apple_accelerate))]
         {
             x = self.stem.forward(&x);
             after_stem(&mut x, &self.layer1);
@@ -550,7 +550,7 @@ impl ResNet34 {
             }
         }
         let n_img = items.len();
-        #[cfg(target_vendor = "apple")]
+        #[cfg(apple_accelerate)]
         if n_img > 1 && crate::bnns_graph::resolve_path(&self.onnx_path).is_some() {
             let mut out = Vec::with_capacity(n_img);
             for (flat, &ti) in items.iter().zip(n_frames.iter()) {
@@ -1100,7 +1100,7 @@ mod tests {
         let Some(path) = model_path() else {
             return;
         };
-        #[cfg(target_vendor = "apple")]
+        #[cfg(apple_accelerate)]
         if crate::bnns_graph::resolve_path(&path).is_none() {
             eprintln!("skip: resnet34_bnns.mlmodelc missing");
             return;

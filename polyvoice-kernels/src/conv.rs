@@ -199,7 +199,7 @@ impl Conv2d {
     }
 
     /// Identity of the live weight buffer — BNNS filter cache key (Apple only).
-    #[cfg(target_vendor = "apple")]
+    #[cfg(apple_accelerate)]
     fn weight_id(&self) -> usize {
         if !self.q_w.is_empty() {
             self.q_w.as_ptr() as usize
@@ -229,7 +229,7 @@ impl Conv2d {
         ow: usize,
         relu: bool,
     ) {
-        #[cfg(target_vendor = "apple")]
+        #[cfg(apple_accelerate)]
         {
             if crate::bnns::try_conv2d(
                 w,

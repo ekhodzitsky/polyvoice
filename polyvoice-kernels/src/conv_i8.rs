@@ -272,7 +272,13 @@ pub(crate) fn i8_conv_on() -> bool {
             if has_avx512_vnni() {
                 return true;
             }
-            cfg!(all(target_os = "linux", target_arch = "aarch64"))
+            cfg!(all(
+                target_arch = "aarch64",
+                any(
+                    target_os = "linux",
+                    all(target_vendor = "apple", not(apple_accelerate))
+                )
+            ))
         })
     }
 }
@@ -282,7 +288,7 @@ pub fn try_conv(conv: &Conv2d, x: &Tensor, y: &mut Tensor, relu: bool) -> bool {
     if conv.q_w_pad.is_empty() || conv.out_scale.is_empty() || x.n == 0 {
         return false;
     }
-    // Apple: BNNS Winograd is faster; keep integer GEMM opt-in.
+    // Apple with Accelerate: BNNS Winograd is faster; keep integer GEMM opt-in.
     // Linux aarch64 (SDOT) and x86_64 with AVX-512 VNNI: no BNNS — the
     // exact integer GEMM is the faster default. POLYVOICE_NO_I8_CONV=1
     // forces the float path; POLYVOICE_I8_CONV=1 forces integer everywhere.
@@ -291,7 +297,7 @@ pub fn try_conv(conv: &Conv2d, x: &Tensor, y: &mut Tensor, relu: bool) -> bool {
     }
     // Full-map rten im2col is slower than the in-crate 4×16 SDOT kernel
     // (ResNet T=400: ~520 ms vs ~230 ms). Opt in with POLYVOICE_RTEN_CONV=1.
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     if std::env::var_os("POLYVOICE_RTEN_CONV").is_some()
         && crate::rten_matmul::try_conv_i8(conv, x, y, relu)
     {
