@@ -103,6 +103,15 @@ class BundleTests(unittest.TestCase):
     def test_complete_bundle_passes(self):
         self.verify()
 
+    def test_manifest_matches_both_historical_full_splits(self):
+        manifest = quality.read(quality.MANIFEST)
+        for folder in ['linux-cpu-native-der-2026-09-13-vbx-ahc', 'darwin-native-der-2026-09-22']:
+            for name, count in [('voxconverse-test', 232), ('ami-test', 16)]:
+                ids = [row['id'] for row in manifest[name]]
+                self.assertEqual(len(ids), count)
+                historical = quality.read(quality.ROOT / 'benchmarks/results' / folder / (name + '.json'))
+                quality.coverage([row['filename'] for row in historical['per_file']], ids)
+
     def test_missing_platform_cannot_pass(self):
         (self.root / 'Darwin-arm64/evidence.json').unlink()
         with self.assertRaises(FileNotFoundError):
@@ -112,7 +121,10 @@ class BundleTests(unittest.TestCase):
         path = self.root / 'Darwin-arm64/evidence.json'
         original = quality.read(path)
         mutations = [lambda e: e.update(revision='c' * 40), lambda e: e.update(clean_tree=False),
-                     lambda e: e.update(status='failed'), lambda e: e.update(manifest_sha256='d' * 64),
+                     lambda e: e.update(status='failed'), lambda e: e.update(model_bytes=0),
+                     lambda e: e.update(measured_at='invalid'),
+                     lambda e: e['commands'].pop('native-vox3'),
+                     lambda e: e['host'].update(cpu=''), lambda e: e.update(manifest_sha256='d' * 64),
                      lambda e: e['model_hashes'].pop(next(k for k in e['model_hashes'] if k.startswith('vbx_plda_'))),
                      lambda e: e['host'].update(isolated=False),
                      lambda e: e['host'].update(runner_environment='github-hosted'),

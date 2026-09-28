@@ -148,8 +148,9 @@ def validate_host(host, target):
         require(host['runner_environment'] in ('local', 'self-hosted'), 'shared CI cannot certify scoreboard')
 
 
-def verify_platform(directory, revision, target):
-    evidence = read(directory / 'evidence.json')
+def verify_platform(directory, revision, target, evidence=None):
+    if evidence is None:
+        evidence = read(directory / 'evidence.json')
     require(evidence['schema'] == 1 and evidence['status'] == 'passed', 'missing successful evidence')
     require(evidence['revision'] == revision and evidence['clean_tree'] is True, 'stale/dirty evidence')
     require(evidence['protocol'] == PROTOCOL and evidence['build_command'] == BUILD, 'build/protocol mismatch')
@@ -158,6 +159,8 @@ def verify_platform(directory, revision, target):
     require(evidence['model_hashes'] == {k: v['sha256'] for k, v in registry_models().items()}, 'model/PLDA mismatch')
     require(re.fullmatch('[0-9a-f]{64}', evidence['binary_sha256']) is not None, 'missing binary hash')
     validate_host(evidence['host'], target)
+    require(evidence['model_bytes'] == sum(registry_models()[k]['size'] for k in
+            ('powerset_int8', 'resnet34_int8')), 'reported model size differs from pinned pair')
     require(datetime.fromisoformat(evidence['measured_at']).tzinfo is not None, 'missing measurement timezone')
     names = ['voxconverse-test', 'ami-test'] + (['native-vox3'] if target == 'Darwin-arm64' else [])
     expected_files = {name + '.json' for name in names}
@@ -205,7 +208,10 @@ def collect(args):
         (s.split(':', 1)[1].strip() for s in Path('/proc/cpuinfo').read_text().splitlines() if s.startswith('model name')), '')
     validate_host(host, target)
     env = {k: v for k, v in os.environ.items() if not k.startswith('POLYVOICE_')}
-    require(not any(env.get(k) for k in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_RUSTFLAGS')),
+    require(not any(v for k, v in env.items() if k in
+                    ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_RUSTFLAGS', 'CARGO_BUILD_TARGET')
+                    or k.startswith('CARGO_PROFILE_RELEASE_') or
+                    (k.startswith('CARGO_TARGET_') and k.endswith('_RUSTFLAGS'))),
             'unset custom Rust build flags for release measurements')
     env['CARGO_TARGET_DIR'] = str(ROOT / 'target')
     # Match ModelRegistry::default on the two qualified platforms.
@@ -254,13 +260,10 @@ def collect(args):
         require(sha(cache / entry['filename']) == evidence['model_hashes'][key], 'model changed during measurement')
     evidence['status'] = 'passed'
     # Publish success only after all checks, including resource floors, pass.
-    temporary = args.output / 'evidence.json'
+    verify_platform(args.output, revision, target, evidence)
+    temporary = args.output / 'evidence.json.tmp'
     temporary.write_text(json.dumps(evidence, indent=2) + '\n')
-    try:
-        verify_platform(args.output, revision, target)
-    except Exception:
-        temporary.unlink()
-        raise
+    temporary.replace(args.output / 'evidence.json')
     print(f'PASS {target} {revision}: {args.output}')
 
 

@@ -20,8 +20,10 @@ jobs:
       matrix:
         include:
           - platform: Linux-x86_64
+            data_variable: QUALITY_LINUX_DATA
             labels: '["self-hosted", "Linux", "X64", "polyvoice-quality"]'
           - platform: Darwin-arm64
+            data_variable: QUALITY_DARWIN_DATA
             labels: '["self-hosted", "macOS", "ARM64", "polyvoice-scoreboard"]'
     runs-on: ${{ fromJSON(matrix.labels) }}
     timeout-minutes: 360
@@ -29,7 +31,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Measure full native corpora and locked scoreboard
         env:
-          DATA_ROOT: ${{ matrix.platform == 'Linux-x86_64' && vars.QUALITY_LINUX_DATA || vars.QUALITY_DARWIN_DATA }}
+          DATA_ROOT: ${{ vars[matrix.data_variable] }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           python3 scripts/release-quality.py collect \
