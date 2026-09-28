@@ -41,6 +41,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - [../schema/diarization-result-v1.json](../schema/diarization-result-v1.json)
 
 ### Security / ops
+- [Release quality evidence](release-quality.md) — exact-revision full-corpus and Darwin resource gates.
 - [../PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md)
 - [security/ort-native-binary-provenance.md](security/ort-native-binary-provenance.md)
 - [security/audit-2026-05-08.md](security/audit-2026-05-08.md) — **historical** (May 2026)
