@@ -107,6 +107,11 @@ meetings: DER₀ micro **38.338620%**, macro **36.704850%**, with a predeclared
 include complete coverage, checksums and failure cases. This reference does not
 replace a run on the release revision or qualification on other platforms.
 
+The [release evidence gate](docs/release-quality.md) now requires complete reports
+for the exact release commit before publication. It retains model/PLDA hashes,
+hosts and commands; old or missing measurements block release. Provisioned Linux
+and isolated Darwin runners must produce fresh passing evidence.
+
 Each supported platform needs a native quality gate; full-split reference
 runs remain required on Linux x86_64 and Darwin ARM64.
 

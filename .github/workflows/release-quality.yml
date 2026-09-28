@@ -1,0 +1,43 @@
+name: Release quality evidence
+
+# Dispatch on master before tagging that exact commit. Runners must be provisioned
+# with the pinned corpora, registry models/PLDA, Python >=3.11 and Rust.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-quality-hosts
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    if: github.ref == 'refs/heads/master'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux-x86_64
+            labels: '["self-hosted", "Linux", "X64", "polyvoice-quality"]'
+          - platform: Darwin-arm64
+            labels: '["self-hosted", "macOS", "ARM64", "polyvoice-scoreboard"]'
+    runs-on: ${{ fromJSON(matrix.labels) }}
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Measure full native corpora and locked scoreboard
+        env:
+          DATA_ROOT: ${{ matrix.platform == 'Linux-x86_64' && vars.QUALITY_LINUX_DATA || vars.QUALITY_DARWIN_DATA }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          python3 scripts/release-quality.py collect \
+            --data-root "${DATA_ROOT:-$PWD/data}" \
+            --output "bench-results/release-quality-${{ github.run_id }}-${{ github.run_attempt }}/$PLATFORM" --isolated-host
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quality-${{ matrix.platform }}
+          path: bench-results/release-quality-${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.platform }}/
+          if-no-files-found: error
+          retention-days: 90

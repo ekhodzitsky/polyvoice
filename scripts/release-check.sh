@@ -5,6 +5,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Full measurements must describe this exact clean revision. Missing evidence
+# blocks before expensive compilation; smoke checks below remain complementary.
+python3 scripts/release-quality.py verify \
+  --evidence "${POLYVOICE_RELEASE_EVIDENCE:-bench-results/release-quality}"
+
 # The DER regression steps below must actually run on real audio. Require the
 # data to be present (and make the in-test guards hard-fail on absence) so a
 # partial cache/download miss can never silently green-light a release.

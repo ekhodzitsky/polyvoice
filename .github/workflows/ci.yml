@@ -378,6 +378,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/test-notsofar-eval.py
+      - run: python3 scripts/test-release-quality.py
 
   # Relative markdown links under README/docs/python/examples (no network).
   docs-links:
