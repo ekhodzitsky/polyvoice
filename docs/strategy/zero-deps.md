@@ -52,6 +52,16 @@ Download-enabled features add `ureq` → `rustls` → `ring`, which includes nat
 crypto code/toolchain requirements. Removing HTTP/TLS via `pipeline-local`
 does not remove Darwin's C shims or system frameworks.
 
+## Experimental Apple backend
+
+The opt-in `pipeline-local,experimental-darwin-rust` path reuses existing Rust
+kernels without compiling the Apple C shims or linking Accelerate/BNNS.
+It adds no dependencies; external Rust crates, the `cc` build utility and
+existing Rust inline assembly remain. It is not the default and is not
+qualified against the locked M1 Pro performance floors. See the
+[build audit and comparison procedure](../darwin-rust-experiment.md).
+Download-enabled features still carry their separate native crypto costs.
+
 ## Ordered work
 
 1. Preserve the native product's no-ORT/no-tract graph and the downloader-free

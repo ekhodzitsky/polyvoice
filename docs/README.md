@@ -41,6 +41,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - [../schema/diarization-result-v1.json](../schema/diarization-result-v1.json)
 
 ### Security / ops
+- [Experimental Apple Rust kernels](darwin-rust-experiment.md) — build/link audit and pending M1 Pro comparison.
 - [Release quality evidence](release-quality.md) — exact-revision full-corpus and Darwin resource gates.
 - [../PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md)
 - [security/ort-native-binary-provenance.md](security/ort-native-binary-provenance.md)

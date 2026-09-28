@@ -3,7 +3,7 @@
 //! One compiled graph with dynamic T replaces 36 per-layer BNNS creates.
 //! Missing artifact → caller keeps the layer path.
 
-#![cfg(target_vendor = "apple")]
+#![cfg(apple_accelerate)]
 
 use crate::error::KernelError;
 use crate::tensor::Tensor;

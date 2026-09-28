@@ -263,7 +263,7 @@ fn take_lstm(
         HIDDEN,
         input,
     );
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     {
         if let (Ok(wq), Ok(rq)) = (take_lstm_i8(init, w, input), take_lstm_i8(init, r, HIDDEN)) {
             return Ok(layer.with_i8(wq.0, wq.1, wq.2, rq.0, rq.1, rq.2));
@@ -274,7 +274,7 @@ fn take_lstm(
 
 /// LSTM QDQ payload as `[2, K, 4H]` (GEMM `B` layout). The INT8 file stores
 /// last-two axes swapped vs the FP32 `[2, 4H, K]` layout.
-#[cfg_attr(target_vendor = "apple", allow(dead_code))]
+#[cfg_attr(apple_accelerate, allow(dead_code))]
 fn take_lstm_i8(
     init: &HashMap<String, OnnxTensor>,
     name: &str,
@@ -288,7 +288,7 @@ fn take_lstm_i8(
     Ok((transpose_i8_last2(&raw, 2, four, k_dim), scale, zp))
 }
 
-#[cfg_attr(target_vendor = "apple", allow(dead_code))]
+#[cfg_attr(apple_accelerate, allow(dead_code))]
 fn transpose_i8_last2(data: &[i8], d0: usize, d1: usize, d2: usize) -> Vec<i8> {
     let mut out = vec![0i8; d0.saturating_mul(d1).saturating_mul(d2)];
     for a in 0..d0 {

@@ -299,7 +299,7 @@ mod avx512_gates {
 /// One bidirectional LSTM layer. `input_size` is I, `hidden` is H.
 // The INT8 weight path below is wired up only on non-Apple targets; on Apple
 // the fields/methods exist but stay unread, so silence the lint there only.
-#[cfg_attr(target_vendor = "apple", allow(dead_code))]
+#[cfg_attr(apple_accelerate, allow(dead_code))]
 pub struct BiLstm {
     pub hidden: usize,
     pub input: usize,
@@ -364,7 +364,7 @@ impl BiLstm {
     }
 
     /// Attach shipping QDQ weights. `w_zp`/`r_zp` must be all-zero (signed INT8).
-    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
+    #[cfg_attr(apple_accelerate, allow(dead_code))]
     pub fn with_i8(
         mut self,
         w_i8: Vec<i8>,
@@ -473,7 +473,7 @@ impl BiLstm {
     }
 }
 
-#[cfg_attr(target_vendor = "apple", allow(dead_code))]
+#[cfg_attr(apple_accelerate, allow(dead_code))]
 const A_ZP: u8 = 128;
 
 fn try_i8_w(
@@ -488,7 +488,7 @@ fn try_i8_w(
     i_sz: usize,
     dir: usize,
 ) -> bool {
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     {
         if layer.w_i8.is_empty() {
             return false;
@@ -510,7 +510,7 @@ fn try_i8_w(
             false,
         );
     }
-    #[cfg(target_vendor = "apple")]
+    #[cfg(apple_accelerate)]
     {
         let _ = (layer, x, bias, xw, seq, batch, four_h, i_sz, dir);
         false
@@ -527,7 +527,7 @@ fn try_i8_r(
     h: usize,
     dir: usize,
 ) -> bool {
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     {
         if layer.r_i8.is_empty() {
             return false;
@@ -549,14 +549,14 @@ fn try_i8_r(
             true,
         );
     }
-    #[cfg(target_vendor = "apple")]
+    #[cfg(apple_accelerate)]
     {
         let _ = (layer, ht, gates, batch, four_h, h, dir);
         false
     }
 }
 
-#[cfg_attr(target_vendor = "apple", allow(dead_code))]
+#[cfg_attr(apple_accelerate, allow(dead_code))]
 fn dir_affine<'a>(scale: &'a [f32], zp: &'a [i8], dir: usize, n: usize) -> (&'a [f32], &'a [i8]) {
     let s = if scale.len() == 2 * n {
         &scale[dir * n..(dir + 1) * n]

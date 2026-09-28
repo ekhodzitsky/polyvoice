@@ -108,7 +108,7 @@ pub fn dyn_matmul(
 ) -> Vec<f32> {
     let (xq, xs, xz) = dyn_quant_u8(x);
     let mut y = vec![0.0f32; m.saturating_mul(n)];
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     if crate::rten_matmul::gemm_u8i8_nk(&xq, xz, w, w_scale, w_zp, bias, &mut y, m, n, k, xs) {
         return y;
     }
@@ -121,7 +121,7 @@ pub fn dyn_matmul(
 mod tests {
     use super::*;
 
-    #[cfg(not(target_vendor = "apple"))]
+    #[cfg(not(apple_accelerate))]
     #[test]
     fn dyn_matmul_rten_matches_scalar() {
         let m = 6;

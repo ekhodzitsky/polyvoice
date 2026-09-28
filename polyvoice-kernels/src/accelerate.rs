@@ -3,7 +3,7 @@
 //! Linked only on Apple targets. Callers pin `VECLIB_MAXIMUM_THREADS=1` so
 //! this does not fight window/embed thread pools.
 
-#![cfg(target_vendor = "apple")]
+#![cfg(apple_accelerate)]
 
 const CBLAS_ROW_MAJOR: i32 = 101;
 const CBLAS_NO_TRANS: i32 = 111;
