@@ -1,0 +1,322 @@
+[
+  {
+    "name": "product-warmup",
+    "started_at": "2026-09-29T09:39:41.496294+00:00",
+    "command": [
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+      "tests/data/native-vox3",
+      "--profile",
+      "balanced",
+      "--pipeline",
+      "v2",
+      "--clusterer",
+      "vbx",
+      "--execution-provider",
+      "cpu",
+      "--collar",
+      "0",
+      "--jobs",
+      "1",
+      "--output",
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-warmup.json"
+    ],
+    "before": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:24 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:39  up 26 days, 23:58, 31 users, load averages: 3.13 7.04 8.90"
+    },
+    "after": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:24 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:39  up 26 days, 23:58, 31 users, load averages: 3.13 7.04 8.90"
+    },
+    "metrics": {
+      "der_no_collar_micro": 7.108843537414966,
+      "der_no_collar_macro": 7.388943723772969,
+      "rt_factor_avg": 157.31343729612902,
+      "model_bytes": 8414314,
+      "rss_mib": 441.84375
+    },
+    "floor_verdict": "all floors pass"
+  },
+  {
+    "name": "rust-warmup",
+    "started_at": "2026-09-29T09:39:53.359260+00:00",
+    "command": [
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+      "tests/data/native-vox3",
+      "--profile",
+      "balanced",
+      "--pipeline",
+      "v2",
+      "--clusterer",
+      "vbx",
+      "--execution-provider",
+      "cpu",
+      "--collar",
+      "0",
+      "--jobs",
+      "1",
+      "--output",
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-warmup.json"
+    ],
+    "before": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:23 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:39  up 26 days, 23:58, 31 users, load averages: 2.80 6.84 8.80"
+    },
+    "after": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:23 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:39  up 26 days, 23:58, 31 users, load averages: 2.80 6.84 8.80"
+    },
+    "metrics": {
+      "der_no_collar_micro": 7.006802721088436,
+      "der_no_collar_macro": 7.329480109646168,
+      "rt_factor_avg": 112.68244148056225,
+      "model_bytes": 8414314,
+      "rss_mib": 450.421875
+    },
+    "floor_verdict": "RTFx below locked floor"
+  },
+  {
+    "name": "product-1",
+    "started_at": "2026-09-29T09:40:05.773728+00:00",
+    "command": [
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+      "tests/data/native-vox3",
+      "--profile",
+      "balanced",
+      "--pipeline",
+      "v2",
+      "--clusterer",
+      "vbx",
+      "--execution-provider",
+      "cpu",
+      "--collar",
+      "0",
+      "--jobs",
+      "1",
+      "--output",
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-1.json"
+    ],
+    "before": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:23 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:58, 31 users, load averages: 3.06 6.76 8.75"
+    },
+    "after": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:23 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:58, 31 users, load averages: 2.90 6.67 8.71"
+    },
+    "metrics": {
+      "der_no_collar_micro": 7.108843537414966,
+      "der_no_collar_macro": 7.388943723772969,
+      "rt_factor_avg": 161.10777899467914,
+      "model_bytes": 8414314,
+      "rss_mib": 444.328125
+    },
+    "floor_verdict": "all floors pass"
+  },
+  {
+    "name": "rust-1",
+    "started_at": "2026-09-29T09:40:17.222273+00:00",
+    "command": [
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+      "tests/data/native-vox3",
+      "--profile",
+      "balanced",
+      "--pipeline",
+      "v2",
+      "--clusterer",
+      "vbx",
+      "--execution-provider",
+      "cpu",
+      "--collar",
+      "0",
+      "--jobs",
+      "1",
+      "--output",
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-1.json"
+    ],
+    "before": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:23 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:58, 31 users, load averages: 2.83 6.53 8.63"
+    },
+    "after": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:23 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:58, 31 users, load averages: 2.83 6.53 8.63"
+    },
+    "metrics": {
+      "der_no_collar_micro": 7.006802721088436,
+      "der_no_collar_macro": 7.329480109646168,
+      "rt_factor_avg": 115.75552815700269,
+      "model_bytes": 8414314,
+      "rss_mib": 448.75
+    },
+    "floor_verdict": "RTFx below locked floor"
+  },
+  {
+    "name": "rust-2",
+    "started_at": "2026-09-29T09:40:28.508933+00:00",
+    "command": [
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+      "tests/data/native-vox3",
+      "--profile",
+      "balanced",
+      "--pipeline",
+      "v2",
+      "--clusterer",
+      "vbx",
+      "--execution-provider",
+      "cpu",
+      "--collar",
+      "0",
+      "--jobs",
+      "1",
+      "--output",
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-2.json"
+    ],
+    "before": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:23 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:59, 31 users, load averages: 2.55 6.35 8.54"
+    },
+    "after": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t97%; charging; 0:23 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:59, 31 users, load averages: 2.55 6.35 8.54"
+    },
+    "metrics": {
+      "der_no_collar_micro": 7.006802721088436,
+      "der_no_collar_macro": 7.329480109646168,
+      "rt_factor_avg": 118.86354884613368,
+      "model_bytes": 8414314,
+      "rss_mib": 443.765625
+    },
+    "floor_verdict": "all floors pass"
+  },
+  {
+    "name": "product-2",
+    "started_at": "2026-09-29T09:40:39.764443+00:00",
+    "command": [
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+      "tests/data/native-vox3",
+      "--profile",
+      "balanced",
+      "--pipeline",
+      "v2",
+      "--clusterer",
+      "vbx",
+      "--execution-provider",
+      "cpu",
+      "--collar",
+      "0",
+      "--jobs",
+      "1",
+      "--output",
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-2.json"
+    ],
+    "before": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t98%; charging; 0:21 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:59, 31 users, load averages: 2.31 6.17 8.45"
+    },
+    "after": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t98%; charging; 0:21 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:59, 31 users, load averages: 2.29 6.10 8.42"
+    },
+    "metrics": {
+      "der_no_collar_micro": 7.108843537414966,
+      "der_no_collar_macro": 7.388943723772969,
+      "rt_factor_avg": 154.52313538793013,
+      "model_bytes": 8414314,
+      "rss_mib": 440.1875
+    },
+    "floor_verdict": "all floors pass"
+  },
+  {
+    "name": "product-3",
+    "started_at": "2026-09-29T09:40:51.273906+00:00",
+    "command": [
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+      "tests/data/native-vox3",
+      "--profile",
+      "balanced",
+      "--pipeline",
+      "v2",
+      "--clusterer",
+      "vbx",
+      "--execution-provider",
+      "cpu",
+      "--collar",
+      "0",
+      "--jobs",
+      "1",
+      "--output",
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-3.json"
+    ],
+    "before": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t98%; charging; 0:21 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:59, 31 users, load averages: 2.24 5.96 8.34"
+    },
+    "after": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t98%; charging; 0:21 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:40  up 26 days, 23:59, 31 users, load averages: 2.24 5.96 8.34"
+    },
+    "metrics": {
+      "der_no_collar_micro": 7.108843537414966,
+      "der_no_collar_macro": 7.388943723772969,
+      "rt_factor_avg": 163.69299415573394,
+      "model_bytes": 8414314,
+      "rss_mib": 439.671875
+    },
+    "floor_verdict": "all floors pass"
+  },
+  {
+    "name": "rust-3",
+    "started_at": "2026-09-29T09:41:02.307426+00:00",
+    "command": [
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+      "tests/data/native-vox3",
+      "--profile",
+      "balanced",
+      "--pipeline",
+      "v2",
+      "--clusterer",
+      "vbx",
+      "--execution-provider",
+      "cpu",
+      "--collar",
+      "0",
+      "--jobs",
+      "1",
+      "--output",
+      "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-3.json"
+    ],
+    "before": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t98%; charging; 0:21 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:41  up 26 days, 23:59, 31 users, load averages: 2.05 5.80 8.25"
+    },
+    "after": {
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t98%; charging; 0:21 remaining present: true",
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+      "uptime": "12:41  up 26 days, 23:59, 31 users, load averages: 2.05 5.80 8.25"
+    },
+    "metrics": {
+      "der_no_collar_micro": 7.006802721088436,
+      "der_no_collar_macro": 7.329480109646168,
+      "rt_factor_avg": 115.72210995989673,
+      "model_bytes": 8414314,
+      "rss_mib": 450.515625
+    },
+    "floor_verdict": "RTFx below locked floor"
+  }
+]
