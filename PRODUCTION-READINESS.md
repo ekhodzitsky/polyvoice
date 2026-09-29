@@ -4,6 +4,10 @@
 **1.0 status: NOT GO.** The contract below defines the intended release;
 it does not certify the current revision or start the RC window.
 
+The [2026-09-29 pre-candidate review](docs/release-readiness-review.md) records
+the reviewed revision, evidence gaps and the order of completion. Its verdict
+is **NO-GO**; the RC stability window has not started.
+
 ## Supported product scope
 
 The 1.0 product is **batch speaker diarization on CPU**, using powerset
