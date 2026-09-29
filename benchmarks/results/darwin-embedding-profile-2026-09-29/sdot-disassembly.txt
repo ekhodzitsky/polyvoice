@@ -1,0 +1,527 @@
+
+bench-results/darwin-embedding-profile/rust-symbols-target/release/polyvoice-bench:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+000000010018ea1c <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store>:
+; _RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store():
+10018ea1c: d10543ff    	sub	sp, sp, #0x150
+10018ea20: a9106ffc    	stp	x28, x27, [sp, #0x100]
+10018ea24: a9115ff8    	stp	x24, x23, [sp, #0x110]
+10018ea28: a91257f6    	stp	x22, x21, [sp, #0x120]
+10018ea2c: a9134ff4    	stp	x20, x19, [sp, #0x130]
+10018ea30: a9147bfd    	stp	x29, x30, [sp, #0x140]
+10018ea34: 910503fd    	add	x29, sp, #0x140
+10018ea38: aa0103e9    	mov	x9, x1
+10018ea3c: f9401fad    	ldr	x13, [x29, #0x38]
+10018ea40: f9400baa    	ldr	x10, [x29, #0x10]
+10018ea44: f9408408    	ldr	x8, [x0, #0x108]
+10018ea48: 6f00e400    	movi.2d	v0, #0000000000000000
+10018ea4c: ad0703e0    	stp	q0, q0, [sp, #0xe0]
+10018ea50: ad0603e0    	stp	q0, q0, [sp, #0xc0]
+10018ea54: ad0503e0    	stp	q0, q0, [sp, #0xa0]
+10018ea58: ad0403e0    	stp	q0, q0, [sp, #0x80]
+10018ea5c: ad0303e0    	stp	q0, q0, [sp, #0x60]
+10018ea60: ad0203e0    	stp	q0, q0, [sp, #0x40]
+10018ea64: ad0103e0    	stp	q0, q0, [sp, #0x20]
+10018ea68: d37ef54f    	lsl	x15, x10, #2
+10018ea6c: ad0003e0    	stp	q0, q0, [sp]
+10018ea70: f100111f    	cmp	x8, #0x4
+10018ea74: 54000a03    	b.lo	0x10018ebb4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x198>
+10018ea78: d280000b    	mov	x11, #0x0               ; =0
+10018ea7c: f94017b5    	ldr	x21, [x29, #0x28]
+10018ea80: a948300e    	ldp	x14, x12, [x0, #0x80]
+10018ea84: d342fd10    	lsr	x16, x8, #2
+10018ea88: 927cedf1    	and	x17, x15, #0xfffffffffffffff0
+10018ea8c: 9b103a2e    	madd	x14, x17, x16, x14
+10018ea90: f9403413    	ldr	x19, [x0, #0x68]
+10018ea94: 9b0a7d11    	mul	x17, x8, x10
+10018ea98: 8b110270    	add	x16, x19, x17
+10018ea9c: 8b080261    	add	x1, x19, x8
+10018eaa0: 8b110031    	add	x17, x1, x17
+10018eaa4: 91000941    	add	x1, x10, #0x2
+10018eaa8: 9b014d01    	madd	x1, x8, x1, x19
+10018eaac: 91000d54    	add	x20, x10, #0x3
+10018eab0: 9b144d13    	madd	x19, x8, x20, x19
+10018eab4: 6f00e401    	movi.2d	v1, #0000000000000000
+10018eab8: 6f00e403    	movi.2d	v3, #0000000000000000
+10018eabc: 6f00e405    	movi.2d	v5, #0000000000000000
+10018eac0: 6f00e402    	movi.2d	v2, #0000000000000000
+10018eac4: 6f00e404    	movi.2d	v4, #0000000000000000
+10018eac8: 6f00e406    	movi.2d	v6, #0000000000000000
+10018eacc: a941d3b6    	ldp	x22, x20, [x29, #0x18]
+10018ead0: d37ef694    	lsl	x20, x20, #2
+10018ead4: 927ae694    	and	x20, x20, #0xffffffffffffffc0
+10018ead8: 6f00e407    	movi.2d	v7, #0000000000000000
+10018eadc: 6f00e410    	movi.2d	v16, #0000000000000000
+10018eae0: 6f00e411    	movi.2d	v17, #0000000000000000
+10018eae4: d344feb5    	lsr	x21, x21, #4
+10018eae8: 8b151ad5    	add	x21, x22, x21, lsl #6
+10018eaec: 6f00e413    	movi.2d	v19, #0000000000000000
+10018eaf0: 6f00e415    	movi.2d	v21, #0000000000000000
+10018eaf4: 6f00e412    	movi.2d	v18, #0000000000000000
+10018eaf8: 6f00e414    	movi.2d	v20, #0000000000000000
+10018eafc: 6f00e416    	movi.2d	v22, #0000000000000000
+10018eb00: 6f00e417    	movi.2d	v23, #0000000000000000
+10018eb04: 14000021    	b	0x10018eb88 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x16c>
+10018eb08: 8b0b0236    	add	x22, x17, x11
+10018eb0c: 8b0b0037    	add	x23, x1, x11
+10018eb10: 8b0b0278    	add	x24, x19, x11
+10018eb14: bc6b6a18    	ldr	s24, [x16, x11]
+10018eb18: 0d4092d8    	ld1.s	{ v24 }[1], [x22]
+10018eb1c: 4d4082f8    	ld1.s	{ v24 }[2], [x23]
+10018eb20: 4d409318    	ld1.s	{ v24 }[3], [x24]
+10018eb24: d342fd76    	lsr	x22, x11, #2
+10018eb28: 9b165696    	madd	x22, x20, x22, x21
+10018eb2c: ad406ad9    	ldp	q25, q26, [x22]
+10018eb30: ad4172db    	ldp	q27, q28, [x22, #0x20]
+10018eb34: 4f98e337    	sdot	v23, v25, v24[0]
+10018eb38: 4fb8e336    	sdot	v22, v25, v24[1]
+10018eb3c: 4f98eb34    	sdot	v20, v25, v24[2]
+10018eb40: 4fb8eb32    	sdot	v18, v25, v24[3]
+10018eb44: 4f98e355    	sdot	v21, v26, v24[0]
+10018eb48: 4fb8e353    	sdot	v19, v26, v24[1]
+10018eb4c: 4f98eb51    	sdot	v17, v26, v24[2]
+10018eb50: 4fb8eb50    	sdot	v16, v26, v24[3]
+10018eb54: 4f98e367    	sdot	v7, v27, v24[0]
+10018eb58: 4fb8e366    	sdot	v6, v27, v24[1]
+10018eb5c: 4f98eb64    	sdot	v4, v27, v24[2]
+10018eb60: 4fb8eb62    	sdot	v2, v27, v24[3]
+10018eb64: 4f98e385    	sdot	v5, v28, v24[0]
+10018eb68: 4fb8e383    	sdot	v3, v28, v24[1]
+10018eb6c: 4f98eb81    	sdot	v1, v28, v24[2]
+10018eb70: 4fb8eb80    	sdot	v0, v28, v24[3]
+10018eb74: 91002176    	add	x22, x11, #0x8
+10018eb78: 9100116b    	add	x11, x11, #0x4
+10018eb7c: 910041ce    	add	x14, x14, #0x10
+10018eb80: eb0802df    	cmp	x22, x8
+10018eb84: 54000088    	b.hi	0x10018eb94 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x178>
+10018eb88: b4fffc0c    	cbz	x12, 0x10018eb08 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0xec>
+10018eb8c: 3dc001d8    	ldr	q24, [x14]
+10018eb90: 17ffffe5    	b	0x10018eb24 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x108>
+10018eb94: ad0057f7    	stp	q23, q21, [sp]
+10018eb98: ad024ff6    	stp	q22, q19, [sp, #0x40]
+10018eb9c: ad0447f4    	stp	q20, q17, [sp, #0x80]
+10018eba0: ad0643f2    	stp	q18, q16, [sp, #0xc0]
+10018eba4: ad0117e7    	stp	q7, q5, [sp, #0x20]
+10018eba8: ad030fe6    	stp	q6, q3, [sp, #0x60]
+10018ebac: ad0507e4    	stp	q4, q1, [sp, #0xa0]
+10018ebb0: ad0703e2    	stp	q2, q0, [sp, #0xe0]
+10018ebb4: 3940c3ab    	ldrb	w11, [x29, #0x30]
+10018ebb8: a94b0411    	ldp	x17, x1, [x0, #0xb0]
+10018ebbc: a94ca013    	ldp	x19, x8, [x0, #0xc8]
+10018ebc0: 8b0300ec    	add	x12, x7, x3
+10018ebc4: f94001ae    	ldr	x14, [x13]
+10018ebc8: 3600100e    	tbz	w14, #0x0, 0x10018edc8 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x3ac>
+10018ebcc: d2800009    	mov	x9, #0x0                ; =0
+10018ebd0: fd4009a1    	ldr	d1, [x13, #0x10]
+10018ebd4: 4e040420    	dup.4s	v0, v1[0]
+10018ebd8: 4e0c0421    	dup.4s	v1, v1[1]
+10018ebdc: f94005a0    	ldr	x0, [x13, #0x8]
+10018ebe0: eb0a002d    	subs	x13, x1, x10
+10018ebe4: 9a8d33ed    	csel	x13, xzr, x13, lo
+10018ebe8: 8b0f022e    	add	x14, x17, x15
+10018ebec: 8b0f026f    	add	x15, x19, x15
+10018ebf0: eb0a0110    	subs	x16, x8, x10
+10018ebf4: 9a9033f0    	csel	x16, xzr, x16, lo
+10018ebf8: 9b041951    	madd	x17, x10, x4, x6
+10018ebfc: 9b1130b1    	madd	x17, x5, x17, x12
+10018ec00: 910003ec    	mov	x12, sp
+10018ec04: 9100818c    	add	x12, x12, #0x20
+10018ec08: 8b000231    	add	x17, x17, x0
+10018ec0c: 91002231    	add	x17, x17, #0x8
+10018ec10: 9b047ca0    	mul	x0, x5, x4
+10018ec14: 6f00e402    	movi.2d	v2, #0000000000000000
+10018ec18: 52a85fc2    	mov	w2, #0x42fe0000         ; =1123942400
+10018ec1c: 4e040c43    	dup.4s	v3, w2
+10018ec20: 4f066464    	movi.4s	v4, #0xc3, lsl #24
+10018ec24: 14000039    	b	0x10018ed08 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x2ec>
+10018ec28: 4e22f4e7    	fmax.4s	v7, v7, v2
+10018ec2c: 6e20fce7    	fdiv.4s	v7, v7, v0
+10018ec30: 6e2188e7    	frinta.4s	v7, v7
+10018ec34: 4e27d427    	fadd.4s	v7, v1, v7
+10018ec38: 4ea3f4e7    	fmin.4s	v7, v7, v3
+10018ec3c: 4e24f4e7    	fmax.4s	v7, v7, v4
+10018ec40: 4ea1b8e7    	fcvtzs.4s	v7, v7
+10018ec44: 0e6148e7    	sqxtn.4h	v7, v7
+10018ec48: 0e2148e7    	sqxtn.8b	v7, v7
+10018ec4c: ad7fc590    	ldp	q16, q17, [x12, #-0x10]
+10018ec50: 4e21da10    	scvtf.4s	v16, v16
+10018ec54: 4ea51cb2    	mov.16b	v18, v5
+10018ec58: 4f861212    	fmla.4s	v18, v16, v6[0]
+10018ec5c: 4e22f650    	fmax.4s	v16, v18, v2
+10018ec60: 6e20fe10    	fdiv.4s	v16, v16, v0
+10018ec64: 6e218a10    	frinta.4s	v16, v16
+10018ec68: 4e30d430    	fadd.4s	v16, v1, v16
+10018ec6c: 4ea3f610    	fmin.4s	v16, v16, v3
+10018ec70: 4e24f610    	fmax.4s	v16, v16, v4
+10018ec74: 4ea1ba10    	fcvtzs.4s	v16, v16
+10018ec78: 0e614a10    	sqxtn.4h	v16, v16
+10018ec7c: 0e214a10    	sqxtn.8b	v16, v16
+10018ec80: 4e21da31    	scvtf.4s	v17, v17
+10018ec84: 4ea51cb2    	mov.16b	v18, v5
+10018ec88: 4f861232    	fmla.4s	v18, v17, v6[0]
+10018ec8c: 4e22f651    	fmax.4s	v17, v18, v2
+10018ec90: 6e20fe31    	fdiv.4s	v17, v17, v0
+10018ec94: 6e218a31    	frinta.4s	v17, v17
+10018ec98: 4e31d431    	fadd.4s	v17, v1, v17
+10018ec9c: 4ea3f631    	fmin.4s	v17, v17, v3
+10018eca0: 4e24f631    	fmax.4s	v17, v17, v4
+10018eca4: 4ea1ba31    	fcvtzs.4s	v17, v17
+10018eca8: 0e614a31    	sqxtn.4h	v17, v17
+10018ecac: 0e214a31    	sqxtn.8b	v17, v17
+10018ecb0: 1e260222    	fmov	w2, s17
+10018ecb4: 3dc00591    	ldr	q17, [x12, #0x10]
+10018ecb8: 4e21da31    	scvtf.4s	v17, v17
+10018ecbc: 4f861225    	fmla.4s	v5, v17, v6[0]
+10018ecc0: 4e22f4a5    	fmax.4s	v5, v5, v2
+10018ecc4: 0e9038e6    	zip1.2s	v6, v7, v16
+10018ecc8: 91000529    	add	x9, x9, #0x1
+10018eccc: 9101018c    	add	x12, x12, #0x40
+10018ecd0: fc1f8226    	stur	d6, [x17, #-0x8]
+10018ecd4: b9000222    	str	w2, [x17]
+10018ecd8: 6e20fca5    	fdiv.4s	v5, v5, v0
+10018ecdc: 6e2188a5    	frinta.4s	v5, v5
+10018ece0: 4e25d425    	fadd.4s	v5, v1, v5
+10018ece4: 4ea3f4a5    	fmin.4s	v5, v5, v3
+10018ece8: 4e24f4a5    	fmax.4s	v5, v5, v4
+10018ecec: 4ea1b8a5    	fcvtzs.4s	v5, v5
+10018ecf0: 0e6148a5    	sqxtn.4h	v5, v5
+10018ecf4: 0e2148a5    	sqxtn.8b	v5, v5
+10018ecf8: bd000625    	str	s5, [x17, #0x4]
+10018ecfc: 8b000231    	add	x17, x17, x0
+10018ed00: f100113f    	cmp	x9, #0x4
+10018ed04: 54002520    	b.eq	0x10018f1a8 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x78c>
+10018ed08: eb0901bf    	cmp	x13, x9
+10018ed0c: 54002740    	b.eq	0x10018f1f4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7d8>
+10018ed10: eb09021f    	cmp	x16, x9
+10018ed14: 54002780    	b.eq	0x10018f204 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7e8>
+10018ed18: bc6979c6    	ldr	s6, [x14, x9, lsl #2]
+10018ed1c: 8b0909e2    	add	x2, x15, x9, lsl #2
+10018ed20: 4d40c845    	ld1r.4s	{ v5 }, [x2]
+10018ed24: 3cde0187    	ldur	q7, [x12, #-0x20]
+10018ed28: 4e21d8f0    	scvtf.4s	v16, v7
+10018ed2c: 4ea51ca7    	mov.16b	v7, v5
+10018ed30: 4f861207    	fmla.4s	v7, v16, v6[0]
+10018ed34: 3707f7ab    	tbnz	w11, #0x0, 0x10018ec28 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x20c>
+10018ed38: 6e20fce7    	fdiv.4s	v7, v7, v0
+10018ed3c: 6e2188e7    	frinta.4s	v7, v7
+10018ed40: 4e27d427    	fadd.4s	v7, v1, v7
+10018ed44: 4ea3f4e7    	fmin.4s	v7, v7, v3
+10018ed48: 4e24f4e7    	fmax.4s	v7, v7, v4
+10018ed4c: 4ea1b8e7    	fcvtzs.4s	v7, v7
+10018ed50: 0e6148e7    	sqxtn.4h	v7, v7
+10018ed54: 0e2148e7    	sqxtn.8b	v7, v7
+10018ed58: ad7fc590    	ldp	q16, q17, [x12, #-0x10]
+10018ed5c: 4e21da10    	scvtf.4s	v16, v16
+10018ed60: 4ea51cb2    	mov.16b	v18, v5
+10018ed64: 4f861212    	fmla.4s	v18, v16, v6[0]
+10018ed68: 6e20fe50    	fdiv.4s	v16, v18, v0
+10018ed6c: 6e218a10    	frinta.4s	v16, v16
+10018ed70: 4e30d430    	fadd.4s	v16, v1, v16
+10018ed74: 4ea3f610    	fmin.4s	v16, v16, v3
+10018ed78: 4e24f610    	fmax.4s	v16, v16, v4
+10018ed7c: 4ea1ba10    	fcvtzs.4s	v16, v16
+10018ed80: 0e614a10    	sqxtn.4h	v16, v16
+10018ed84: 0e214a10    	sqxtn.8b	v16, v16
+10018ed88: 4e21da31    	scvtf.4s	v17, v17
+10018ed8c: 4ea51cb2    	mov.16b	v18, v5
+10018ed90: 4f861232    	fmla.4s	v18, v17, v6[0]
+10018ed94: 6e20fe51    	fdiv.4s	v17, v18, v0
+10018ed98: 6e218a31    	frinta.4s	v17, v17
+10018ed9c: 4e31d431    	fadd.4s	v17, v1, v17
+10018eda0: 4ea3f631    	fmin.4s	v17, v17, v3
+10018eda4: 4e24f631    	fmax.4s	v17, v17, v4
+10018eda8: 4ea1ba31    	fcvtzs.4s	v17, v17
+10018edac: 0e614a31    	sqxtn.4h	v17, v17
+10018edb0: 0e214a31    	sqxtn.8b	v17, v17
+10018edb4: 1e260222    	fmov	w2, s17
+10018edb8: 3dc00591    	ldr	q17, [x12, #0x10]
+10018edbc: 4e21da31    	scvtf.4s	v17, v17
+10018edc0: 4f861225    	fmla.4s	v5, v17, v6[0]
+10018edc4: 17ffffc0    	b	0x10018ecc4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x2a8>
+10018edc8: b9411010    	ldr	w16, [x0, #0x110]
+10018edcc: eb0a002d    	subs	x13, x1, x10
+10018edd0: 9a8d33ed    	csel	x13, xzr, x13, lo
+10018edd4: eb0a010e    	subs	x14, x8, x10
+10018edd8: 9a8e33ee    	csel	x14, xzr, x14, lo
+10018eddc: 360012f0    	tbz	w16, #0x0, 0x10018f038 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x61c>
+10018ede0: d2800010    	mov	x16, #0x0               ; =0
+10018ede4: 91045000    	add	x0, x0, #0x114
+10018ede8: fd400000    	ldr	d0, [x0]
+10018edec: 0e092c00    	smov.b	w0, v0[4]
+10018edf0: 1e220002    	scvtf	s2, w0
+10018edf4: 4e040401    	dup.4s	v1, v0[0]
+10018edf8: 4e040442    	dup.4s	v2, v2[0]
+10018edfc: 8b0f0231    	add	x17, x17, x15
+10018ee00: 8b0f026f    	add	x15, x19, x15
+10018ee04: 910003e0    	mov	x0, sp
+10018ee08: 91008013    	add	x19, x0, #0x20
+10018ee0c: 8b0300e0    	add	x0, x7, x3
+10018ee10: 9b041943    	madd	x3, x10, x4, x6
+10018ee14: 9b0300a0    	madd	x0, x5, x3, x0
+10018ee18: 9b047ca3    	mul	x3, x5, x4
+10018ee1c: 8b000929    	add	x9, x9, x0, lsl #2
+10018ee20: 91008129    	add	x9, x9, #0x20
+10018ee24: 52a85fc7    	mov	w7, #0x42fe0000         ; =1123942400
+10018ee28: 4e040ce3    	dup.4s	v3, w7
+10018ee2c: d37ef467    	lsl	x7, x3, #2
+10018ee30: 6f00e404    	movi.2d	v4, #0000000000000000
+10018ee34: 4f066465    	movi.4s	v5, #0xc3, lsl #24
+10018ee38: 1400000f    	b	0x10018ee74 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x458>
+10018ee3c: 91000610    	add	x16, x16, #0x1
+10018ee40: 6e21fcc6    	fdiv.4s	v6, v6, v1
+10018ee44: 6e2188c6    	frinta.4s	v6, v6
+10018ee48: 4e22d4c6    	fadd.4s	v6, v6, v2
+10018ee4c: 4ea3f4c6    	fmin.4s	v6, v6, v3
+10018ee50: 4e25f4c6    	fmax.4s	v6, v6, v5
+10018ee54: 4ea2d4c6    	fsub.4s	v6, v6, v2
+10018ee58: 4f8090c6    	fmul.4s	v6, v6, v0[0]
+10018ee5c: 3d800526    	str	q6, [x9, #0x10]
+10018ee60: 91010273    	add	x19, x19, #0x40
+10018ee64: 8b030000    	add	x0, x0, x3
+10018ee68: 8b070129    	add	x9, x9, x7
+10018ee6c: f100121f    	cmp	x16, #0x4
+10018ee70: 540019c0    	b.eq	0x10018f1a8 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x78c>
+10018ee74: eb1001bf    	cmp	x13, x16
+10018ee78: 54001da0    	b.eq	0x10018f22c <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x810>
+10018ee7c: eb1001df    	cmp	x14, x16
+10018ee80: 54001cc0    	b.eq	0x10018f218 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7fc>
+10018ee84: bc707a27    	ldr	s7, [x17, x16, lsl #2]
+10018ee88: 8b1009f4    	add	x20, x15, x16, lsl #2
+10018ee8c: 4d40ca86    	ld1r.4s	{ v6 }, [x20]
+10018ee90: eb02001f    	cmp	x0, x2
+10018ee94: 360006eb    	tbz	w11, #0x0, 0x10018ef70 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x554>
+10018ee98: 54001988    	b.hi	0x10018f1c8 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7ac>
+10018ee9c: 3cde0270    	ldur	q16, [x19, #-0x20]
+10018eea0: 4e21da10    	scvtf.4s	v16, v16
+10018eea4: 4ea61cd1    	mov.16b	v17, v6
+10018eea8: 4f871211    	fmla.4s	v17, v16, v7[0]
+10018eeac: 4e24f630    	fmax.4s	v16, v17, v4
+10018eeb0: 6e21fe10    	fdiv.4s	v16, v16, v1
+10018eeb4: 6e218a10    	frinta.4s	v16, v16
+10018eeb8: 4e22d610    	fadd.4s	v16, v16, v2
+10018eebc: 4ea3f610    	fmin.4s	v16, v16, v3
+10018eec0: 4e25f610    	fmax.4s	v16, v16, v5
+10018eec4: 4ea2d610    	fsub.4s	v16, v16, v2
+10018eec8: 4f809210    	fmul.4s	v16, v16, v0[0]
+10018eecc: 3c9e0130    	stur	q16, [x9, #-0x20]
+10018eed0: 91001014    	add	x20, x0, #0x4
+10018eed4: eb02029f    	cmp	x20, x2
+10018eed8: 54001768    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018eedc: 3cdf0270    	ldur	q16, [x19, #-0x10]
+10018eee0: 4e21da10    	scvtf.4s	v16, v16
+10018eee4: 4ea61cd1    	mov.16b	v17, v6
+10018eee8: 4f871211    	fmla.4s	v17, v16, v7[0]
+10018eeec: 4e24f630    	fmax.4s	v16, v17, v4
+10018eef0: 6e21fe10    	fdiv.4s	v16, v16, v1
+10018eef4: 6e218a10    	frinta.4s	v16, v16
+10018eef8: 4e22d610    	fadd.4s	v16, v16, v2
+10018eefc: 4ea3f610    	fmin.4s	v16, v16, v3
+10018ef00: 4e25f610    	fmax.4s	v16, v16, v5
+10018ef04: 4ea2d610    	fsub.4s	v16, v16, v2
+10018ef08: 4f809210    	fmul.4s	v16, v16, v0[0]
+10018ef0c: 3c9f0130    	stur	q16, [x9, #-0x10]
+10018ef10: 91002014    	add	x20, x0, #0x8
+10018ef14: eb02029f    	cmp	x20, x2
+10018ef18: 54001568    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018ef1c: 3dc00270    	ldr	q16, [x19]
+10018ef20: 4e21da10    	scvtf.4s	v16, v16
+10018ef24: 4ea61cd1    	mov.16b	v17, v6
+10018ef28: 4f871211    	fmla.4s	v17, v16, v7[0]
+10018ef2c: 4e24f630    	fmax.4s	v16, v17, v4
+10018ef30: 6e21fe10    	fdiv.4s	v16, v16, v1
+10018ef34: 6e218a10    	frinta.4s	v16, v16
+10018ef38: 4e22d610    	fadd.4s	v16, v16, v2
+10018ef3c: 4ea3f610    	fmin.4s	v16, v16, v3
+10018ef40: 4e25f610    	fmax.4s	v16, v16, v5
+10018ef44: 4ea2d610    	fsub.4s	v16, v16, v2
+10018ef48: 4f809210    	fmul.4s	v16, v16, v0[0]
+10018ef4c: 3d800130    	str	q16, [x9]
+10018ef50: 91003014    	add	x20, x0, #0xc
+10018ef54: eb02029f    	cmp	x20, x2
+10018ef58: 54001368    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018ef5c: 3dc00670    	ldr	q16, [x19, #0x10]
+10018ef60: 4e21da10    	scvtf.4s	v16, v16
+10018ef64: 4f871206    	fmla.4s	v6, v16, v7[0]
+10018ef68: 4e24f4c6    	fmax.4s	v6, v6, v4
+10018ef6c: 17ffffb4    	b	0x10018ee3c <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x420>
+10018ef70: 54001348    	b.hi	0x10018f1d8 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7bc>
+10018ef74: 3cde0270    	ldur	q16, [x19, #-0x20]
+10018ef78: 4e21da10    	scvtf.4s	v16, v16
+10018ef7c: 4ea61cd1    	mov.16b	v17, v6
+10018ef80: 4f871211    	fmla.4s	v17, v16, v7[0]
+10018ef84: 6e21fe30    	fdiv.4s	v16, v17, v1
+10018ef88: 6e218a10    	frinta.4s	v16, v16
+10018ef8c: 4e22d610    	fadd.4s	v16, v16, v2
+10018ef90: 4ea3f610    	fmin.4s	v16, v16, v3
+10018ef94: 4e25f610    	fmax.4s	v16, v16, v5
+10018ef98: 4ea2d610    	fsub.4s	v16, v16, v2
+10018ef9c: 4f809210    	fmul.4s	v16, v16, v0[0]
+10018efa0: 3c9e0130    	stur	q16, [x9, #-0x20]
+10018efa4: 91001014    	add	x20, x0, #0x4
+10018efa8: eb02029f    	cmp	x20, x2
+10018efac: 540010c8    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018efb0: 3cdf0270    	ldur	q16, [x19, #-0x10]
+10018efb4: 4e21da10    	scvtf.4s	v16, v16
+10018efb8: 4ea61cd1    	mov.16b	v17, v6
+10018efbc: 4f871211    	fmla.4s	v17, v16, v7[0]
+10018efc0: 6e21fe30    	fdiv.4s	v16, v17, v1
+10018efc4: 6e218a10    	frinta.4s	v16, v16
+10018efc8: 4e22d610    	fadd.4s	v16, v16, v2
+10018efcc: 4ea3f610    	fmin.4s	v16, v16, v3
+10018efd0: 4e25f610    	fmax.4s	v16, v16, v5
+10018efd4: 4ea2d610    	fsub.4s	v16, v16, v2
+10018efd8: 4f809210    	fmul.4s	v16, v16, v0[0]
+10018efdc: 3c9f0130    	stur	q16, [x9, #-0x10]
+10018efe0: 91002014    	add	x20, x0, #0x8
+10018efe4: eb02029f    	cmp	x20, x2
+10018efe8: 54000ee8    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018efec: 3dc00270    	ldr	q16, [x19]
+10018eff0: 4e21da10    	scvtf.4s	v16, v16
+10018eff4: 4ea61cd1    	mov.16b	v17, v6
+10018eff8: 4f871211    	fmla.4s	v17, v16, v7[0]
+10018effc: 6e21fe30    	fdiv.4s	v16, v17, v1
+10018f000: 6e218a10    	frinta.4s	v16, v16
+10018f004: 4e22d610    	fadd.4s	v16, v16, v2
+10018f008: 4ea3f610    	fmin.4s	v16, v16, v3
+10018f00c: 4e25f610    	fmax.4s	v16, v16, v5
+10018f010: 4ea2d610    	fsub.4s	v16, v16, v2
+10018f014: 4f809210    	fmul.4s	v16, v16, v0[0]
+10018f018: 3d800130    	str	q16, [x9]
+10018f01c: 91003014    	add	x20, x0, #0xc
+10018f020: eb02029f    	cmp	x20, x2
+10018f024: 54000d08    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018f028: 3dc00670    	ldr	q16, [x19, #0x10]
+10018f02c: 4e21da10    	scvtf.4s	v16, v16
+10018f030: 4f871206    	fmla.4s	v6, v16, v7[0]
+10018f034: 17ffff82    	b	0x10018ee3c <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x420>
+10018f038: d2800010    	mov	x16, #0x0               ; =0
+10018f03c: 8b0f0231    	add	x17, x17, x15
+10018f040: 8b0f026f    	add	x15, x19, x15
+10018f044: 910003e0    	mov	x0, sp
+10018f048: 91008013    	add	x19, x0, #0x20
+10018f04c: 8b0300e0    	add	x0, x7, x3
+10018f050: 9b041943    	madd	x3, x10, x4, x6
+10018f054: 9b0300a0    	madd	x0, x5, x3, x0
+10018f058: 9b047ca3    	mul	x3, x5, x4
+10018f05c: 8b000929    	add	x9, x9, x0, lsl #2
+10018f060: 91008129    	add	x9, x9, #0x20
+10018f064: d37ef467    	lsl	x7, x3, #2
+10018f068: 6f00e400    	movi.2d	v0, #0000000000000000
+10018f06c: 14000008    	b	0x10018f08c <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x670>
+10018f070: 91000610    	add	x16, x16, #0x1
+10018f074: 3d800521    	str	q1, [x9, #0x10]
+10018f078: 91010273    	add	x19, x19, #0x40
+10018f07c: 8b030000    	add	x0, x0, x3
+10018f080: 8b070129    	add	x9, x9, x7
+10018f084: f100121f    	cmp	x16, #0x4
+10018f088: 54000900    	b.eq	0x10018f1a8 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x78c>
+10018f08c: eb1001bf    	cmp	x13, x16
+10018f090: 54000ce0    	b.eq	0x10018f22c <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x810>
+10018f094: eb1001df    	cmp	x14, x16
+10018f098: 54000c00    	b.eq	0x10018f218 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7fc>
+10018f09c: bc707a22    	ldr	s2, [x17, x16, lsl #2]
+10018f0a0: 8b1009f4    	add	x20, x15, x16, lsl #2
+10018f0a4: 4d40ca81    	ld1r.4s	{ v1 }, [x20]
+10018f0a8: eb02001f    	cmp	x0, x2
+10018f0ac: 3600044b    	tbz	w11, #0x0, 0x10018f134 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x718>
+10018f0b0: 540008c8    	b.hi	0x10018f1c8 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7ac>
+10018f0b4: 3cde0263    	ldur	q3, [x19, #-0x20]
+10018f0b8: 4e21d863    	scvtf.4s	v3, v3
+10018f0bc: 4ea11c24    	mov.16b	v4, v1
+10018f0c0: 4f821064    	fmla.4s	v4, v3, v2[0]
+10018f0c4: 4e20f483    	fmax.4s	v3, v4, v0
+10018f0c8: 3c9e0123    	stur	q3, [x9, #-0x20]
+10018f0cc: 91001014    	add	x20, x0, #0x4
+10018f0d0: eb02029f    	cmp	x20, x2
+10018f0d4: 54000788    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018f0d8: 3cdf0263    	ldur	q3, [x19, #-0x10]
+10018f0dc: 4e21d863    	scvtf.4s	v3, v3
+10018f0e0: 4ea11c24    	mov.16b	v4, v1
+10018f0e4: 4f821064    	fmla.4s	v4, v3, v2[0]
+10018f0e8: 4e20f483    	fmax.4s	v3, v4, v0
+10018f0ec: 3c9f0123    	stur	q3, [x9, #-0x10]
+10018f0f0: 91002014    	add	x20, x0, #0x8
+10018f0f4: eb02029f    	cmp	x20, x2
+10018f0f8: 54000668    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018f0fc: 3dc00263    	ldr	q3, [x19]
+10018f100: 4e21d863    	scvtf.4s	v3, v3
+10018f104: 4ea11c24    	mov.16b	v4, v1
+10018f108: 4f821064    	fmla.4s	v4, v3, v2[0]
+10018f10c: 4e20f483    	fmax.4s	v3, v4, v0
+10018f110: 3d800123    	str	q3, [x9]
+10018f114: 91003014    	add	x20, x0, #0xc
+10018f118: eb02029f    	cmp	x20, x2
+10018f11c: 54000548    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018f120: 3dc00663    	ldr	q3, [x19, #0x10]
+10018f124: 4e21d863    	scvtf.4s	v3, v3
+10018f128: 4f821061    	fmla.4s	v1, v3, v2[0]
+10018f12c: 4e20f421    	fmax.4s	v1, v1, v0
+10018f130: 17ffffd0    	b	0x10018f070 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x654>
+10018f134: 54000528    	b.hi	0x10018f1d8 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7bc>
+10018f138: 3cde0263    	ldur	q3, [x19, #-0x20]
+10018f13c: 4e21d863    	scvtf.4s	v3, v3
+10018f140: 4ea11c24    	mov.16b	v4, v1
+10018f144: 4f821064    	fmla.4s	v4, v3, v2[0]
+10018f148: 3c9e0124    	stur	q4, [x9, #-0x20]
+10018f14c: 91001014    	add	x20, x0, #0x4
+10018f150: eb02029f    	cmp	x20, x2
+10018f154: 54000388    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018f158: 3cdf0263    	ldur	q3, [x19, #-0x10]
+10018f15c: 4e21d863    	scvtf.4s	v3, v3
+10018f160: 4ea11c24    	mov.16b	v4, v1
+10018f164: 4f821064    	fmla.4s	v4, v3, v2[0]
+10018f168: 3c9f0124    	stur	q4, [x9, #-0x10]
+10018f16c: 91002014    	add	x20, x0, #0x8
+10018f170: eb02029f    	cmp	x20, x2
+10018f174: 54000288    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018f178: 3dc00263    	ldr	q3, [x19]
+10018f17c: 4e21d863    	scvtf.4s	v3, v3
+10018f180: 4ea11c24    	mov.16b	v4, v1
+10018f184: 4f821064    	fmla.4s	v4, v3, v2[0]
+10018f188: 3d800124    	str	q4, [x9]
+10018f18c: 91003014    	add	x20, x0, #0xc
+10018f190: eb02029f    	cmp	x20, x2
+10018f194: 54000188    	b.hi	0x10018f1c4 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x7a8>
+10018f198: 3dc00663    	ldr	q3, [x19, #0x10]
+10018f19c: 4e21d863    	scvtf.4s	v3, v3
+10018f1a0: 4f821061    	fmla.4s	v1, v3, v2[0]
+10018f1a4: 17ffffb3    	b	0x10018f070 <__RNvNtCsa6Sq0Xu0CRm_17polyvoice_kernels7conv_i821kernel_4x16_zip_store+0x654>
+10018f1a8: a9547bfd    	ldp	x29, x30, [sp, #0x140]
+10018f1ac: a9534ff4    	ldp	x20, x19, [sp, #0x130]
+10018f1b0: a95257f6    	ldp	x22, x21, [sp, #0x120]
+10018f1b4: a9515ff8    	ldp	x24, x23, [sp, #0x110]
+10018f1b8: a9506ffc    	ldp	x28, x27, [sp, #0x100]
+10018f1bc: 910543ff    	add	sp, sp, #0x150
+10018f1c0: d65f03c0    	ret
+10018f1c4: aa1403e0    	mov	x0, x20
+10018f1c8: 90001123    	adrp	x3, 0x1003b3000 <__RNvNtCsfX5fnnn9khw_5bytes9bytes_mut13SHARED_VTABLE+0x8230>
+10018f1cc: 9119a063    	add	x3, x3, #0x668
+10018f1d0: aa0203e1    	mov	x1, x2
+10018f1d4: 9404de0b    	bl	0x1002c6a00 <__RNvNtNtCslWxY2MhVcag_4core5slice5index16slice_index_fail>
+10018f1d8: 8b0a0208    	add	x8, x16, x10
+10018f1dc: 9b041908    	madd	x8, x8, x4, x6
+10018f1e0: 9b053100    	madd	x0, x8, x5, x12
+10018f1e4: 90001123    	adrp	x3, 0x1003b3000 <__RNvNtCsfX5fnnn9khw_5bytes9bytes_mut13SHARED_VTABLE+0x8230>
+10018f1e8: 9119a063    	add	x3, x3, #0x668
+10018f1ec: aa0203e1    	mov	x1, x2
+10018f1f0: 9404de04    	bl	0x1002c6a00 <__RNvNtNtCslWxY2MhVcag_4core5slice5index16slice_index_fail>
+10018f1f4: 8b090140    	add	x0, x10, x9
+10018f1f8: 90001122    	adrp	x2, 0x1003b3000 <__RNvNtCsfX5fnnn9khw_5bytes9bytes_mut13SHARED_VTABLE+0x8230>
+10018f1fc: 9118e042    	add	x2, x2, #0x638
+10018f200: 9404dddd    	bl	0x1002c6974 <__RNvNtCslWxY2MhVcag_4core9panicking18panic_bounds_check>
+10018f204: 8b090140    	add	x0, x10, x9
+10018f208: 90001122    	adrp	x2, 0x1003b3000 <__RNvNtCsfX5fnnn9khw_5bytes9bytes_mut13SHARED_VTABLE+0x8230>
+10018f20c: 91194042    	add	x2, x2, #0x650
+10018f210: aa0803e1    	mov	x1, x8
+10018f214: 9404ddd8    	bl	0x1002c6974 <__RNvNtCslWxY2MhVcag_4core9panicking18panic_bounds_check>
+10018f218: 8b100140    	add	x0, x10, x16
+10018f21c: 90001122    	adrp	x2, 0x1003b3000 <__RNvNtCsfX5fnnn9khw_5bytes9bytes_mut13SHARED_VTABLE+0x8230>
+10018f220: 91194042    	add	x2, x2, #0x650
+10018f224: aa0803e1    	mov	x1, x8
+10018f228: 9404ddd3    	bl	0x1002c6974 <__RNvNtCslWxY2MhVcag_4core9panicking18panic_bounds_check>
+10018f22c: 8b100140    	add	x0, x10, x16
+10018f230: 90001122    	adrp	x2, 0x1003b3000 <__RNvNtCsfX5fnnn9khw_5bytes9bytes_mut13SHARED_VTABLE+0x8230>
+10018f234: 9118e042    	add	x2, x2, #0x638
+10018f238: 9404ddcf    	bl	0x1002c6974 <__RNvNtCslWxY2MhVcag_4core9panicking18panic_bounds_check>

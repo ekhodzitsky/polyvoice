@@ -1,0 +1,60 @@
+{
+  "revision": "0ed55f75df9fe2ba504c5e4c5ab1877de4e90f39",
+  "clean_tree": true,
+  "model_hashes": {
+    "powerset_int8": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b",
+    "resnet34_int8": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3",
+    "vbx_plda_lda": "e20c9b012bebd1aabda5a38a127e63a43cf35debdc502715fc143e2fb6bc3c4b",
+    "vbx_plda_mean1": "e424c0c352182aa8e0f555dec1f3b30e29a20b9ed6b25d339f112af92e51e36f",
+    "vbx_plda_mean2": "6f6fb708a2037197b5b84ffeaa8f140cb878088fbecd6ab042ad26a7691bd2cf",
+    "vbx_plda_mu": "d286d48acf99bbc1ed1502fed0a3e361ae5626ce1870c8be9f7397c5e47886c6",
+    "vbx_plda_phi_computed": "6ef7cf2f5a23a45b66f440f9a996a4cf5c047b369829af695d50ef18aa0a35e3",
+    "vbx_plda_transform": "90261469714415743f4b8a86ee6b89466db858bde3c5944367cccfb7abd34f14"
+  },
+  "model_bytes": 8414314,
+  "manifest_sha256": "bf19918126423fc4e0f07694f3b5962f37324a56f06a6ea4b99829e364ff36dd",
+  "environment": {
+    "HOME": "/Users/ekhodzitsky",
+    "USER": "ekhodzitsky",
+    "PATH": "/Users/ekhodzitsky/.cargo/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    "POLYVOICE_VBX_PLDA_DIR": "/Users/ekhodzitsky/Library/Caches/polyvoice/models"
+  },
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+  "host": "Darwin MacBook-Pro.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:41 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T6000 arm64",
+  "hardware": "machdep.cpu.brand_string: Apple M1 Pro\nhw.ncpu: 10\nhw.memsize: 17179869184",
+  "power_settings": "Battery Power:\n Sleep On Power Button 1\n lowpowermode         1\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 0\n networkoversleep     0\n sleep                1\n lessbright           1\n tcpkeepalive         1\n disksleep            10\nAC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         180\n womp                 1\n networkoversleep     0\n sleep                1\n tcpkeepalive         1\n disksleep            10",
+  "builds": {
+    "product": {
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--no-default-features",
+        "--features",
+        "cli",
+        "--bin",
+        "polyvoice-bench"
+      ],
+      "target": "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target",
+      "binary_sha256": "72453404a6361055ff2faa1a054efb2ea851780286d560269c2078d8b3ab1396",
+      "linkage": "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench:\n\t/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate (compatibility version 1.0.0, current version 4.0.0)\n\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)"
+    },
+    "rust": {
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--no-default-features",
+        "--features",
+        "cli,experimental-darwin-rust",
+        "--bin",
+        "polyvoice-bench"
+      ],
+      "target": "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target",
+      "binary_sha256": "8b0efded8c21bc99b92436220331286237867e76f0e20ee85a957debfb60d8d6",
+      "linkage": "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)"
+    }
+  }
+}
