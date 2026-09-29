@@ -1,0 +1,55 @@
+    Finished `release` profile [optimized] target(s) in 0.13s
+     Running unittests src/lib.rs (bench-results/fused-packing/target/release/deps/polyvoice_kernels-46bab9b870fe1b8b)
+
+running 1 test
+test conv_i8::fused_pack_tests::bench_direct_packing_shapes ... packing_shape ic=32 oc=32 h=80 w=400 repeat=0 reference=true ms=3.347550
+packing_shape ic=32 oc=32 h=80 w=400 repeat=0 reference=false ms=2.639592
+packing_shape ic=32 oc=32 h=80 w=400 repeat=1 reference=false ms=2.626508
+packing_shape ic=32 oc=32 h=80 w=400 repeat=1 reference=true ms=3.286083
+packing_shape ic=32 oc=32 h=80 w=400 repeat=2 reference=true ms=3.283400
+packing_shape ic=32 oc=32 h=80 w=400 repeat=2 reference=false ms=2.618250
+packing_shape ic=32 oc=32 h=80 w=400 repeat=3 reference=false ms=2.617033
+packing_shape ic=32 oc=32 h=80 w=400 repeat=3 reference=true ms=3.271000
+packing_shape ic=32 oc=32 h=80 w=400 repeat=4 reference=true ms=3.266650
+packing_shape ic=32 oc=32 h=80 w=400 repeat=4 reference=false ms=2.613292
+packing_shape ic=32 oc=32 h=80 w=400 repeat=5 reference=false ms=2.610058
+packing_shape ic=32 oc=32 h=80 w=400 repeat=5 reference=true ms=3.266408
+packing_shape ic=64 oc=64 h=40 w=200 repeat=0 reference=true ms=2.478858
+packing_shape ic=64 oc=64 h=40 w=200 repeat=0 reference=false ms=2.157325
+packing_shape ic=64 oc=64 h=40 w=200 repeat=1 reference=false ms=2.146542
+packing_shape ic=64 oc=64 h=40 w=200 repeat=1 reference=true ms=2.479600
+packing_shape ic=64 oc=64 h=40 w=200 repeat=2 reference=true ms=2.483250
+packing_shape ic=64 oc=64 h=40 w=200 repeat=2 reference=false ms=2.135967
+packing_shape ic=64 oc=64 h=40 w=200 repeat=3 reference=false ms=2.138517
+packing_shape ic=64 oc=64 h=40 w=200 repeat=3 reference=true ms=2.618858
+packing_shape ic=64 oc=64 h=40 w=200 repeat=4 reference=true ms=2.483375
+packing_shape ic=64 oc=64 h=40 w=200 repeat=4 reference=false ms=2.138208
+packing_shape ic=64 oc=64 h=40 w=200 repeat=5 reference=false ms=2.137233
+packing_shape ic=64 oc=64 h=40 w=200 repeat=5 reference=true ms=2.477483
+packing_shape ic=128 oc=128 h=20 w=100 repeat=0 reference=true ms=2.139767
+packing_shape ic=128 oc=128 h=20 w=100 repeat=0 reference=false ms=1.967517
+packing_shape ic=128 oc=128 h=20 w=100 repeat=1 reference=false ms=1.965650
+packing_shape ic=128 oc=128 h=20 w=100 repeat=1 reference=true ms=2.149967
+packing_shape ic=128 oc=128 h=20 w=100 repeat=2 reference=true ms=2.178200
+packing_shape ic=128 oc=128 h=20 w=100 repeat=2 reference=false ms=1.967325
+packing_shape ic=128 oc=128 h=20 w=100 repeat=3 reference=false ms=1.965700
+packing_shape ic=128 oc=128 h=20 w=100 repeat=3 reference=true ms=2.142158
+packing_shape ic=128 oc=128 h=20 w=100 repeat=4 reference=true ms=2.142325
+packing_shape ic=128 oc=128 h=20 w=100 repeat=4 reference=false ms=1.959933
+packing_shape ic=128 oc=128 h=20 w=100 repeat=5 reference=false ms=1.955592
+packing_shape ic=128 oc=128 h=20 w=100 repeat=5 reference=true ms=2.142817
+packing_shape ic=256 oc=256 h=10 w=50 repeat=0 reference=true ms=2.181892
+packing_shape ic=256 oc=256 h=10 w=50 repeat=0 reference=false ms=2.061783
+packing_shape ic=256 oc=256 h=10 w=50 repeat=1 reference=false ms=2.062017
+packing_shape ic=256 oc=256 h=10 w=50 repeat=1 reference=true ms=2.179608
+packing_shape ic=256 oc=256 h=10 w=50 repeat=2 reference=true ms=2.179650
+packing_shape ic=256 oc=256 h=10 w=50 repeat=2 reference=false ms=2.062225
+packing_shape ic=256 oc=256 h=10 w=50 repeat=3 reference=false ms=2.061725
+packing_shape ic=256 oc=256 h=10 w=50 repeat=3 reference=true ms=2.180317
+packing_shape ic=256 oc=256 h=10 w=50 repeat=4 reference=true ms=2.180375
+packing_shape ic=256 oc=256 h=10 w=50 repeat=4 reference=false ms=2.063292
+packing_shape ic=256 oc=256 h=10 w=50 repeat=5 reference=false ms=2.064067
+packing_shape ic=256 oc=256 h=10 w=50 repeat=5 reference=true ms=2.179575
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 0.68s

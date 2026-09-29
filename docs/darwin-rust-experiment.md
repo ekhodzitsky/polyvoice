@@ -104,6 +104,21 @@ limitation. The next bounded experiment is to investigate fewer intermediate
 KN-to-zip copies while retaining exact integer results. This profiling work
 does not change kernels, threads, dependencies or the default backend.
 
+## Direct packing optimization
+
+The [direct-packing experiment](../benchmarks/results/darwin-fused-packing-2026-09-29/README.md)
+retains a measured optimization in the experimental Apple ARM64 path: input
+rows are packed straight into the existing SDOT layout, avoiding the intermediate
+KN copy. Exact packed-byte and convolution-output tests pass. Representative
+convolutions take 5.4–20.1% less time; median Vox-3 RTFx increases from 115.183
+to 126.397. All six candidate runs and the warm-up pass every unchanged floor,
+with RTFx at least 119.718 and RSS at most 456.579 MiB. DER and model bytes
+are unchanged from the preceding Rust version.
+
+The comparison used the same M1 Pro under explicitly accepted background load.
+It supports keeping the optimization, not isolated-host release certification.
+The backend remains experimental; Accelerate/BNNS is still the product default.
+
 ## Required comparison before any promotion
 
 On the isolated Apple M1 Pro, use one clean source revision, identical cached
@@ -156,6 +171,6 @@ source dependency surface cannot compensate for any regression. Keep failures
 as experimental evidence; do not tune the test set, weaken limits, mix metrics
 from different runs or silently switch the product backend. This experiment
 is not accepted by the [product release evidence gate](release-quality.md).
-The measured comparison above does not meet the promotion requirement.
-Any future candidate needs a fresh, quiescent same-host comparison that
-passes every floor; performance qualification and promotion remain open.
+The latest packing candidate passes all observed floors in its retained series,
+but promotion still needs a fresh, quiescent same-host comparison and the
+applicable release evidence. Historical results do not qualify later revisions.

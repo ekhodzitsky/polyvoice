@@ -1,0 +1,93 @@
+   Compiling crossbeam-utils v0.8.21
+   Compiling crossbeam-epoch v0.9.20
+   Compiling proc-macro2 v1.0.106
+   Compiling rayon-core v1.13.0
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling either v1.16.0
+   Compiling typeid v1.0.3
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling rten-base v0.25.0
+   Compiling libc v0.2.186
+   Compiling cc v1.2.64
+   Compiling thiserror v2.0.18
+   Compiling smallvec v1.15.2
+   Compiling rten-simd v0.25.0
+   Compiling polyvoice-kernels v0.1.3 (/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/polyvoice-kernels)
+   Compiling syn v2.0.117
+   Compiling thiserror-impl v2.0.18
+   Compiling crossbeam-deque v0.8.6
+   Compiling rayon v1.12.0
+   Compiling memmap2 v0.9.11
+   Compiling rten-parallel v0.25.0
+   Compiling rten-tensor v0.25.0
+   Compiling rten-gemm v0.25.0
+    Finished `release` profile [optimized] target(s) in 22.20s
+     Running unittests src/lib.rs (bench-results/fused-packing/default-target/release/deps/polyvoice_kernels-bd2d3364bc6b5c64)
+
+running 56 tests
+test conv::tests::conv1x1_is_per_pixel_gemm ... ok
+test conv::tests::conv3x3_s1_p1_preserves_spatial ... ok
+test conv::tests::conv3x3_s2_and_n2_match_naive ... ok
+test conv::tests::conv3x3_s2_p1_halves_spatial ... ok
+test conv::tests::conv3x3_wide_matches_naive ... ok
+test conv::tests::gemm_conv_matches_naive_3x3 ... ok
+test conv::tests::implicit_i8_1x1_s2_tracks_fakequant_float ... ok
+test conv::tests::implicit_i8_1x1_tracks_fakequant_float ... ok
+test conv::tests::implicit_i8_3x3_oc_split_matches_serial ... ok
+test conv::tests::implicit_i8_3x3_s2_tracks_fakequant_float ... ok
+test conv::tests::implicit_i8_3x3_to_i8_intra_matches_serial ... ok
+test conv::tests::implicit_i8_3x3_tracks_fakequant_float ... ok
+test conv::tests::implicit_i8_3x3_wide_row_tracks_fakequant_float ... ok
+test conv::tests::seeded_try_conv_matches_quantize ... ok
+test conv_i8::quantize_matches_scalar_round_clip ... ok
+test conv_i8::sdot_signed_ones ... ok
+test conv_i8::strided2_tests::copy_strided2_matches_scalar ... ok
+test gemm::tests::gemm_add_blocked_matches_naive ... ok
+test gemm::tests::gemm_add_lstm_shape_matches_naive ... ok
+test gemm::tests::gemm_bias_matches_naive ... ok
+test gemm::tests::gemm_bias_row_tiled_matches_naive_wide ... ok
+test gemm::tests::gemm_bias_wide_matches_naive ... ok
+test gemm::tests::saxpy_and_dot_basic ... ok
+test gemm::tests::transpose_roundtrip_shape ... ok
+test lstm::tests::apply_gates_vec_close_to_scalar ... ok
+test lstm::tests::gemm_lstm_matches_naive ... ok
+test lstm::tests::gemm_lstm_matches_naive_h8 ... ok
+test lstm::tests::log_softmax_sums_to_one ... ok
+test lstm::tests::neon_gates_within_a_few_ulp_of_scalar ... ok
+test lstm::tests::sigmoid_bounds ... ok
+test onnx_init::tests::dequant_conv370_matches_reference ... ok
+test onnx_init::tests::dequant_lstm784_matches_reference ... ok
+test onnx_init::tests::int8_raw_data_is_mmap_backed ... ok
+test powerset::tests::batch_matches_sequential ... ok
+test powerset::tests::bench_powerset_10s ... ignored, manual timing
+test powerset::tests::int8_logits_track_fp32 ... ok
+test powerset::tests::int8_matches_ort_dumped_window ... ok
+test powerset::tests::int8_stage_vs_ort ... ok
+test powerset::tests::loads_and_runs_short_window ... ok
+test qlinear::tests::dyn_quant_includes_zero ... ok
+test resnet34::tests::batch_matches_sequential_mixed_lengths ... ok
+test resnet34::tests::bench_embed_layers ... ignored, manual timing
+test resnet34::tests::bench_embed_typical_t ... ignored, manual timing
+test resnet34::tests::bnns_graph_tracks_layer_path ... ok
+test resnet34::tests::embed_intra_matches_serial_long_t ... ok
+test resnet34::tests::loads_shipping_onnx_and_embeds ... ok
+test resnet34::tests::rejects_wrong_mel_count ... ok
+test resnet34::tests::stats_pool_tracks_scalar_rows ... ok
+test scratch::tests::extra_puts_are_dropped ... ok
+test scratch::tests::pool_keeps_one_slot_and_shrinks ... ok
+test seq1d::tests::conv1d_ic1_dot ... ok
+test seq1d::tests::conv1d_valid_length ... ok
+test seq1d::tests::instance_norm_zero_mean_unit_scale ... ok
+test seq1d::tests::max_pool_valid ... ok
+test tensor::tests::add_relu_quantize_matches_two_step ... ok
+test tensor::tests::relu_quantize_matches_two_step ... ok
+
+test result: ok. 53 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 1.06s
+
+   Doc-tests polyvoice_kernels
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

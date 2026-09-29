@@ -1,0 +1,852 @@
+{
+  "date": "2026-09-29T11:15:10.917608+00:00",
+  "host": "Darwin MacBook-Pro.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:41 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T6000 arm64",
+  "hardware": "machdep.cpu.brand_string: Apple M1 Pro\nhw.ncpu: 10\nhw.memsize: 17179869184",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+  "power_settings": "Battery Power:\n Sleep On Power Button 1\n lowpowermode         1\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 0\n networkoversleep     0\n sleep                1\n lessbright           1\n tcpkeepalive         1\n disksleep            10\nAC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         180\n womp                 1\n networkoversleep     0\n sleep                1\n tcpkeepalive         1\n disksleep            10",
+  "model_hashes": {
+    "powerset_int8": "175896d26f639933cd86906d2dd3e6796eddb23c1f719925a3949052da76183b",
+    "resnet34_int8": "24b58559fefb2af624a5d371c43ebae891a9a8ca363b2f9e7c31fd8e440a36b3",
+    "vbx_plda_lda": "e20c9b012bebd1aabda5a38a127e63a43cf35debdc502715fc143e2fb6bc3c4b",
+    "vbx_plda_mean1": "e424c0c352182aa8e0f555dec1f3b30e29a20b9ed6b25d339f112af92e51e36f",
+    "vbx_plda_mean2": "6f6fb708a2037197b5b84ffeaa8f140cb878088fbecd6ab042ad26a7691bd2cf",
+    "vbx_plda_mu": "d286d48acf99bbc1ed1502fed0a3e361ae5626ce1870c8be9f7397c5e47886c6",
+    "vbx_plda_phi_computed": "6ef7cf2f5a23a45b66f440f9a996a4cf5c047b369829af695d50ef18aa0a35e3",
+    "vbx_plda_transform": "90261469714415743f4b8a86ee6b89466db858bde3c5944367cccfb7abd34f14"
+  },
+  "model_bytes": 8414314,
+  "manifest_sha256": "bf19918126423fc4e0f07694f3b5962f37324a56f06a6ea4b99829e364ff36dd",
+  "variants": {
+    "product": {
+      "revision": "0ed55f75df9fe2ba504c5e4c5ab1877de4e90f39",
+      "binary": "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+      "binary_sha256": "72453404a6361055ff2faa1a054efb2ea851780286d560269c2078d8b3ab1396",
+      "cwd": "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison",
+      "features": "cli",
+      "build_command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--no-default-features",
+        "--features",
+        "cli",
+        "--bin",
+        "polyvoice-bench"
+      ]
+    },
+    "before": {
+      "revision": "0ed55f75df9fe2ba504c5e4c5ab1877de4e90f39",
+      "binary": "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+      "binary_sha256": "8b0efded8c21bc99b92436220331286237867e76f0e20ee85a957debfb60d8d6",
+      "cwd": "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison",
+      "features": "cli,experimental-darwin-rust",
+      "build_command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--no-default-features",
+        "--features",
+        "cli,experimental-darwin-rust",
+        "--bin",
+        "polyvoice-bench"
+      ]
+    },
+    "after": {
+      "revision": "d9852269857e701da0f98333f7cac1506c861193",
+      "binary": "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/target/release/polyvoice-bench",
+      "binary_sha256": "c1279501d72328ad1757374d76b4475e18d4924f4db60370f38884ee5a618b6a",
+      "cwd": "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment",
+      "features": "cli,experimental-darwin-rust",
+      "build_command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--no-default-features",
+        "--features",
+        "cli,experimental-darwin-rust",
+        "--bin",
+        "polyvoice-bench"
+      ]
+    }
+  },
+  "environment": {
+    "HOME": "/Users/ekhodzitsky",
+    "USER": "ekhodzitsky",
+    "PATH": "/Users/ekhodzitsky/.cargo/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    "POLYVOICE_VBX_PLDA_DIR": "/Users/ekhodzitsky/Library/Caches/polyvoice/models"
+  },
+  "initial_state": {
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "cpu": "CPU usage: 9.24% user, 12.87% sys, 77.88% idle \nCPU usage: 14.70% user, 14.33% sys, 70.96% idle "
+  },
+  "runs": [
+    {
+      "name": "product-warmup",
+      "started_at": "2026-09-29T11:15:15.134719+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/product-warmup.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 9.58% user, 15.1% sys, 75.39% idle \nCPU usage: 9.93% user, 5.74% sys, 84.32% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.108843537414966,
+        "der_no_collar_macro": 7.388943723772969,
+        "rt_factor_avg": 166.28661978904458,
+        "model_bytes": 8414314,
+        "rss_mib": 451.484375
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "before-warmup",
+      "started_at": "2026-09-29T11:15:22.479328+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/before-warmup.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 9.90% user, 11.82% sys, 78.27% idle \nCPU usage: 14.72% user, 13.73% sys, 71.54% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 114.0330811166255,
+        "model_bytes": 8414314,
+        "rss_mib": 444.09375
+      },
+      "floor_verdict": "RTFx below locked floor"
+    },
+    {
+      "name": "after-warmup",
+      "started_at": "2026-09-29T11:15:30.772650+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/after-warmup.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 10.6% user, 11.94% sys, 77.98% idle \nCPU usage: 11.85% user, 5.5% sys, 83.8% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 121.04842585819553,
+        "model_bytes": 8414314,
+        "rss_mib": 442.65625
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "product-1",
+      "started_at": "2026-09-29T11:15:39.728495+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/product-1.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 17.40% user, 14.55% sys, 68.3% idle \nCPU usage: 13.38% user, 8.43% sys, 78.17% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.108843537414966,
+        "der_no_collar_macro": 7.388943723772969,
+        "rt_factor_avg": 162.11911323107648,
+        "model_bytes": 8414314,
+        "rss_mib": 439.859375
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "before-1",
+      "started_at": "2026-09-29T11:15:47.085643+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/before-1.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 10.15% user, 12.6% sys, 77.77% idle \nCPU usage: 10.94% user, 10.12% sys, 78.93% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 120.42437732337959,
+        "model_bytes": 8414314,
+        "rss_mib": 445.390625
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "after-1",
+      "started_at": "2026-09-29T11:15:55.565415+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/after-1.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 9.6% user, 12.18% sys, 78.75% idle \nCPU usage: 10.52% user, 5.57% sys, 83.90% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 129.52481818972313,
+        "model_bytes": 8414314,
+        "rss_mib": 456.578125
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "product-2",
+      "started_at": "2026-09-29T11:16:03.090636+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/product-2.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 15.96% user, 13.55% sys, 70.48% idle \nCPU usage: 19.15% user, 15.35% sys, 65.49% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.108843537414966,
+        "der_no_collar_macro": 7.388943723772969,
+        "rt_factor_avg": 153.80114516933298,
+        "model_bytes": 8414314,
+        "rss_mib": 435.46875
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "after-2",
+      "started_at": "2026-09-29T11:16:10.855812+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/after-2.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 27.5% user, 16.41% sys, 56.53% idle \nCPU usage: 9.92% user, 7.90% sys, 82.17% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 130.90176162356312,
+        "model_bytes": 8414314,
+        "rss_mib": 444.71875
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "before-2",
+      "started_at": "2026-09-29T11:16:18.410389+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/before-2.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 22.72% user, 37.70% sys, 39.57% idle \nCPU usage: 20.50% user, 7.40% sys, 72.8% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 113.16172595206007,
+        "model_bytes": 8414314,
+        "rss_mib": 444.453125
+      },
+      "floor_verdict": "RTFx below locked floor"
+    },
+    {
+      "name": "before-3",
+      "started_at": "2026-09-29T11:16:26.134818+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/before-3.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 8.86% user, 11.39% sys, 79.74% idle \nCPU usage: 11.11% user, 6.45% sys, 82.42% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 112.07238653778867,
+        "model_bytes": 8414314,
+        "rss_mib": 446.53125
+      },
+      "floor_verdict": "RTFx below locked floor"
+    },
+    {
+      "name": "product-3",
+      "started_at": "2026-09-29T11:16:34.711858+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/product-3.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 15.33% user, 12.46% sys, 72.20% idle \nCPU usage: 10.64% user, 6.92% sys, 82.42% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.108843537414966,
+        "der_no_collar_macro": 7.388943723772969,
+        "rt_factor_avg": 161.6431905725508,
+        "model_bytes": 8414314,
+        "rss_mib": 443.640625
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "after-3",
+      "started_at": "2026-09-29T11:16:42.099407+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/after-3.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 11.25% user, 13.12% sys, 75.62% idle \nCPU usage: 11.48% user, 10.34% sys, 78.17% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 124.3810010351176,
+        "model_bytes": 8414314,
+        "rss_mib": 444.1875
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "before-4",
+      "started_at": "2026-09-29T11:16:50.434964+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/before-4.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 9.71% user, 11.91% sys, 78.36% idle \nCPU usage: 9.40% user, 5.52% sys, 85.7% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 118.35165322039188,
+        "model_bytes": 8414314,
+        "rss_mib": 442.765625
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "after-4",
+      "started_at": "2026-09-29T11:16:58.011917+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/after-4.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 8.88% user, 13.1% sys, 78.9% idle \nCPU usage: 18.48% user, 15.77% sys, 65.73% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 120.68728773995112,
+        "model_bytes": 8414314,
+        "rss_mib": 444.921875
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "product-4",
+      "started_at": "2026-09-29T11:17:06.100418+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/product-4.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 9.90% user, 11.50% sys, 78.59% idle \nCPU usage: 11.28% user, 6.33% sys, 82.37% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.108843537414966,
+        "der_no_collar_macro": 7.388943723772969,
+        "rt_factor_avg": 164.41125728891805,
+        "model_bytes": 8414314,
+        "rss_mib": 446.1875
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "after-5",
+      "started_at": "2026-09-29T11:17:13.521225+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/after-5.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 22.79% user, 36.78% sys, 40.41% idle \nCPU usage: 16.77% user, 7.0% sys, 76.22% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 128.41290702731916,
+        "model_bytes": 8414314,
+        "rss_mib": 437.765625
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "product-5",
+      "started_at": "2026-09-29T11:17:21.096357+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/product-5.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 9.23% user, 12.61% sys, 78.15% idle \nCPU usage: 9.98% user, 5.33% sys, 84.68% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.108843537414966,
+        "der_no_collar_macro": 7.388943723772969,
+        "rt_factor_avg": 158.24316930701374,
+        "model_bytes": 8414314,
+        "rss_mib": 445.0
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "before-5",
+      "started_at": "2026-09-29T11:17:28.526007+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/before-5.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 23.45% user, 37.19% sys, 39.35% idle \nCPU usage: 20.19% user, 7.54% sys, 72.26% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 114.07241871365426,
+        "model_bytes": 8414314,
+        "rss_mib": 434.625
+      },
+      "floor_verdict": "RTFx below locked floor"
+    },
+    {
+      "name": "after-6",
+      "started_at": "2026-09-29T11:17:36.194411+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/after-6.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 9.74% user, 12.26% sys, 77.98% idle \nCPU usage: 10.62% user, 5.69% sys, 83.67% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 119.7182242172374,
+        "model_bytes": 8414314,
+        "rss_mib": 441.09375
+      },
+      "floor_verdict": "all floors pass"
+    },
+    {
+      "name": "before-6",
+      "started_at": "2026-09-29T11:17:44.720580+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/rust-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/before-6.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 15.80% user, 12.25% sys, 71.93% idle \nCPU usage: 9.85% user, 6.71% sys, 83.43% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.006802721088436,
+        "der_no_collar_macro": 7.329480109646168,
+        "rt_factor_avg": 116.29419228234927,
+        "model_bytes": 8414314,
+        "rss_mib": 445.9375
+      },
+      "floor_verdict": "RTFx below locked floor"
+    },
+    {
+      "name": "product-6",
+      "started_at": "2026-09-29T11:17:52.314769+00:00",
+      "command": [
+        "/Users/ekhodzitsky/src/polyvoice-darwin-rust-comparison/bench-results/darwin-rust-comparison/product-target/release/polyvoice-bench",
+        "tests/data/native-vox3",
+        "--profile",
+        "balanced",
+        "--pipeline",
+        "v2",
+        "--clusterer",
+        "vbx",
+        "--execution-provider",
+        "cpu",
+        "--collar",
+        "0",
+        "--jobs",
+        "1",
+        "--output",
+        "/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/bench-results/fused-packing/comparison/product-6.json"
+      ],
+      "before": {
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+        "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+        "cpu": "CPU usage: 9.71% user, 11.59% sys, 78.68% idle \nCPU usage: 14.76% user, 14.22% sys, 71.1% idle "
+      },
+      "metrics": {
+        "der_no_collar_micro": 7.108843537414966,
+        "der_no_collar_macro": 7.388943723772969,
+        "rt_factor_avg": 161.24072610714086,
+        "model_bytes": 8414314,
+        "rss_mib": 440.25
+      },
+      "floor_verdict": "all floors pass"
+    }
+  ],
+  "final_state": {
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=25952355)\t100%; charged; 0:00 remaining present: true",
+    "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "cpu": "CPU usage: 10.33% user, 12.33% sys, 77.33% idle \nCPU usage: 11.75% user, 7.55% sys, 80.68% idle "
+  },
+  "measurement_conditions": "User authorized measurement with current background load; AC power, low-power mode off, fixed existing release binaries, no profiling/compilation/transfers during measured series. Not an isolated-host release certification.",
+  "candidate_source": "d9852269857e701da0f98333f7cac1506c861193",
+  "microbenchmark": {
+    "source": "d9852269857e701da0f98333f7cac1506c861193",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--release",
+      "-p",
+      "polyvoice-kernels",
+      "--features",
+      "experimental-darwin-rust",
+      "--lib",
+      "bench_direct_packing_shapes",
+      "--",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "repeats": 6,
+    "iterations_per_measurement": 5,
+    "reference": "test-only thread-local reference packer in the same optimized binary; alternating order and warm-up per measurement"
+  }
+}
