@@ -1,0 +1,25 @@
+euqef	 DER=5.503%	 miss=4.434%	 fa=1.069%	 conf=0.000%	 rt=185.7x	 spk=1	 turns=3
+fuzfh	 DER=11.377%	 miss=3.295%	 fa=4.355%	 conf=3.727%	 rt=139.3x	 spk=3	 turns=3
+msbyq	 DER=5.287%	 miss=1.389%	 fa=1.308%	 conf=2.590%	 rt=160.6x	 spk=3	 turns=7
+
+=== Aggregate DER over 3 files (collar=0.00s) ===
+  der_collar    : macro=7.39%  micro=7.11%
+  der_no_collar : macro=7.39%  micro=7.11%
+        0.84 real         3.26 user         0.11 sys
+           459063296  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               28830  page reclaims
+                 108  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  18  voluntary context switches
+                1718  involuntary context switches
+         35784932853  instructions retired
+          9366270804  cycles elapsed
+           445122624  peak memory footprint

@@ -1,0 +1,3170 @@
+[
+  {
+    "profile": "product-1",
+    "raw_xml_sha256": "8f3ad875fe8cc40e819ccbf166cd6eb8ca8c3d0fd9ec0f1abe9b2794777081c7",
+    "stacks_sha256": "bbfac769e59f19626f8caad37790c65ca4342a6e4d03b22180cb52774e5c5d2c",
+    "rows": 3502,
+    "missing_stack_rows": 9,
+    "unknown_leaf_rows": 1893,
+    "sample_weights_ns": {
+      "1000000": 3502
+    },
+    "total_sample_weight_ms": 3502.0,
+    "missing_stack_weight_ms": 9.0,
+    "embedding_sample_weight_ms": 837.0,
+    "bnns_sample_weight_ms": 854.0,
+    "bnns_without_embedding_root_ms": 223.0,
+    "top_leaves": [
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e6bb4>",
+        "sample_weight_ms": 559.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 545.0
+      },
+      {
+        "symbol": "polyvoice_kernels::qlinear::matmul_integer",
+        "sample_weight_ms": 504.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e3e04>",
+        "sample_weight_ms": 202.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e38ac>",
+        "sample_weight_ms": 145.0
+      },
+      {
+        "symbol": "polyvoice_kernels::lstm::neon_gates::apply_gates_vec",
+        "sample_weight_ms": 106.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 95.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_ic1::{closure#0}::{closure#0}",
+        "sample_weight_ms": 84.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_k5::{closure#0}::{closure#0}",
+        "sample_weight_ms": 62.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 57.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 49.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 49.0
+      },
+      {
+        "symbol": "<>::split_at_mut_checked",
+        "sample_weight_ms": 48.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::max_pool1d",
+        "sample_weight_ms": 47.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 42.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 42.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 35.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e6f68>",
+        "sample_weight_ms": 33.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 31.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa7386c>",
+        "sample_weight_ms": 31.0
+      },
+      {
+        "symbol": "<u32>::wrapping_add",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "BLASStateRelease",
+        "sample_weight_ms": 27.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vbslq_f32",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "sha2::sha256::soft::sha256_digest_round_x2",
+        "sample_weight_ms": 24.0
+      }
+    ],
+    "embedding_leaves": [
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 413.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 57.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 36.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 33.0
+      },
+      {
+        "symbol": "<>::split_at_mut_checked",
+        "sample_weight_ms": 32.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa7386c>",
+        "sample_weight_ms": 31.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 25.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 24.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40fb40>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408204>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c7d4>",
+        "sample_weight_ms": 14.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv::fake_quant_tensor",
+        "sample_weight_ms": 14.0
+      },
+      {
+        "symbol": "<core::iter::adapters::zip::Zip<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>> as core::iter::adapters::zip::ZipImpl<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>>>::next",
+        "sample_weight_ms": 10.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 10.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x404120>",
+        "sample_weight_ms": 9.0
+      },
+      {
+        "symbol": "<f32 as core::ops::arith::Mul>::mul",
+        "sample_weight_ms": 9.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c514>",
+        "sample_weight_ms": 8.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_relu_quantize",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40cbec>",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x407db0>",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x406628>",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "logf",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4176cc>",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4134e4>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "__workq_kernreturn",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vmulq_f32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "__ulock_wait",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "mach_vm_reclaim_update_kernel_accounting_trap",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "rustfft::neon::neon_radix4::butterfly_4::<f32, f32>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<usize as core::cmp::PartialOrd>::lt",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::f32::math::round",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<polyvoice::features::FbankExtractor>::extract",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vaddq_f32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x411d20>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4096ac>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vdivq_f32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_square",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "xzm_segment_group_alloc_chunk",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "___chkstk_darwin",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4fc0b4>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_call_custom_dispose_helper",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<usize>::unchecked_add",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "mach_absolute_time",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::ptr::non_null::NonNull<num_complex::Complex<f32>> as core::cmp::PartialEq>::eq",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "stat",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::slice::iter::Iter<f32> as core::iter::traits::iterator::Iterator>::fold::<f32, <f32 as core::iter::traits::accum::Sum<&f32>>::sum<core::slice::iter::Iter<f32>>::{closure#0}>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<hashbrown::raw::RawTable<(polyvoice_kernels::bnns::Key, alloc::vec::Vec<polyvoice_kernels::bnns::Filter>)>>::remove_entry::<hashbrown::map::equivalent_key<polyvoice_kernels::bnns::Key, polyvoice_kernels::bnns::Key, alloc::vec::Vec<polyvoice_kernels::bnns::Filter>>::{closure#0}>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "xzm_reclaim_mark_free_locked",
+        "sample_weight_ms": 1.0
+      }
+    ],
+    "embedding_inclusive": [
+      {
+        "symbol": "_pthread_start",
+        "sample_weight_ms": 837.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::embed_fbank",
+        "sample_weight_ms": 825.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_layers",
+        "sample_weight_ms": 790.0
+      },
+      {
+        "symbol": "polyvoice_kernels::bnns::try_conv2d",
+        "sample_weight_ms": 631.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4fbabc>",
+        "sample_weight_ms": 599.0
+      },
+      {
+        "symbol": "BNNSFilterApplyBatch",
+        "sample_weight_ms": 599.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4fc0b4>",
+        "sample_weight_ms": 570.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x404120>",
+        "sample_weight_ms": 506.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x406628>",
+        "sample_weight_ms": 477.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_block",
+        "sample_weight_ms": 436.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 413.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x500db0>",
+        "sample_weight_ms": 218.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x405434>",
+        "sample_weight_ms": 38.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 36.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa05088>",
+        "sample_weight_ms": 32.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa02740>",
+        "sample_weight_ms": 32.0
+      },
+      {
+        "symbol": "pv_bnns_conv_create",
+        "sample_weight_ms": 32.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f9a14>",
+        "sample_weight_ms": 32.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x839f18>",
+        "sample_weight_ms": 31.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa7386c>",
+        "sample_weight_ms": 31.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 25.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 24.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::gemm_out",
+        "sample_weight_ms": 16.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40fb40>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408204>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c7d4>",
+        "sample_weight_ms": 14.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c514>",
+        "sample_weight_ms": 8.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40cbec>",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x407db0>",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f887c>",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4176cc>",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4134e4>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "_pthread_workqueue_addthreads",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x411d20>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4096ac>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_square",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40f0d8>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::bnns_graph::try_forward",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::bnns_graph::resolve_path",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<hashbrown::raw::RawTable<(polyvoice_kernels::bnns::Key, alloc::vec::Vec<polyvoice_kernels::bnns::Filter>)>>::remove_entry::<hashbrown::map::equivalent_key<polyvoice_kernels::bnns::Key, polyvoice_kernels::bnns::Key, alloc::vec::Vec<polyvoice_kernels::bnns::Filter>>::{closure#0}>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x41267c>",
+        "sample_weight_ms": 1.0
+      }
+    ]
+  },
+  {
+    "profile": "product-2",
+    "raw_xml_sha256": "eae24a74783af499cc59637468b6158cbfa9c890b743eaf8ee43196e21b21e2e",
+    "stacks_sha256": "c3b303e3c6efad1ee239a71ba1c2d050096652bcd08e78ec695ed2d0204d9cc3",
+    "rows": 3473,
+    "missing_stack_rows": 10,
+    "unknown_leaf_rows": 1871,
+    "sample_weights_ns": {
+      "1000000": 3473
+    },
+    "total_sample_weight_ms": 3473.0,
+    "missing_stack_weight_ms": 10.0,
+    "embedding_sample_weight_ms": 796.0,
+    "bnns_sample_weight_ms": 779.0,
+    "bnns_without_embedding_root_ms": 204.0,
+    "top_leaves": [
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e6bb4>",
+        "sample_weight_ms": 577.0
+      },
+      {
+        "symbol": "polyvoice_kernels::qlinear::matmul_integer",
+        "sample_weight_ms": 520.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 500.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e3e04>",
+        "sample_weight_ms": 188.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e38ac>",
+        "sample_weight_ms": 156.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_ic1::{closure#0}::{closure#0}",
+        "sample_weight_ms": 101.0
+      },
+      {
+        "symbol": "polyvoice_kernels::lstm::neon_gates::apply_gates_vec",
+        "sample_weight_ms": 79.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 66.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_k5::{closure#0}::{closure#0}",
+        "sample_weight_ms": 66.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 62.0
+      },
+      {
+        "symbol": "<>::split_at_mut_checked",
+        "sample_weight_ms": 53.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 47.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::max_pool1d",
+        "sample_weight_ms": 45.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 42.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e6f68>",
+        "sample_weight_ms": 37.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 34.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 34.0
+      },
+      {
+        "symbol": "sha2::sha256::soft::sha256_digest_round_x2",
+        "sample_weight_ms": 33.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 31.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 30.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vbslq_f32",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c7d4>",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 25.0
+      },
+      {
+        "symbol": "<u32>::wrapping_add",
+        "sample_weight_ms": 24.0
+      }
+    ],
+    "embedding_leaves": [
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 368.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 62.0
+      },
+      {
+        "symbol": "<>::split_at_mut_checked",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 28.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 24.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv::fake_quant_tensor",
+        "sample_weight_ms": 20.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa7386c>",
+        "sample_weight_ms": 18.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c7d4>",
+        "sample_weight_ms": 16.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40cbec>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40fb40>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<core::iter::adapters::zip::Zip<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>> as core::iter::adapters::zip::ZipImpl<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>>>::next",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408204>",
+        "sample_weight_ms": 12.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_relu_quantize",
+        "sample_weight_ms": 10.0
+      },
+      {
+        "symbol": "<f32 as core::ops::arith::Mul>::mul",
+        "sample_weight_ms": 10.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 9.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c514>",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x406628>",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vmulq_f32",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "core::f32::math::round",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x404120>",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "_xzm_xzone_malloc_tiny",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x407db0>",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40bfb8>",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<usize as core::slice::index::SliceIndex<>>::index",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vreinterpretq_u32_f32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "___chkstk_darwin",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4112c0>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x405434>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "__psynch_mutexdrop",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<core::slice::iter::IterMut<num_complex::Complex<f32>> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::slice::iter::Iter<f32> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "__psynch_mutexwait",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4176cc>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408890>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vtrn1q_f64",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "DYLD-STUB$$logf",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f9a14>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x41267c>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<polyvoice::features::FbankExtractor>::extract",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "__mfm_free_block",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40f0d8>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x411d20>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vdivq_f32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40b26c>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "__ulock_wait",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "mach_absolute_time",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "xzm_segment_group_alloc_chunk",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f7648>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "BLASStateRetain",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::stats_pool_q",
+        "sample_weight_ms": 1.0
+      }
+    ],
+    "embedding_inclusive": [
+      {
+        "symbol": "_pthread_start",
+        "sample_weight_ms": 796.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::embed_fbank",
+        "sample_weight_ms": 785.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_layers",
+        "sample_weight_ms": 749.0
+      },
+      {
+        "symbol": "polyvoice_kernels::bnns::try_conv2d",
+        "sample_weight_ms": 575.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4fbabc>",
+        "sample_weight_ms": 549.0
+      },
+      {
+        "symbol": "BNNSFilterApplyBatch",
+        "sample_weight_ms": 549.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4fc0b4>",
+        "sample_weight_ms": 523.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x404120>",
+        "sample_weight_ms": 463.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x406628>",
+        "sample_weight_ms": 437.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_block",
+        "sample_weight_ms": 428.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 369.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x500db0>",
+        "sample_weight_ms": 204.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x405434>",
+        "sample_weight_ms": 35.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa05088>",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa02740>",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "pv_bnns_conv_create",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f9a14>",
+        "sample_weight_ms": 25.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 24.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x839f18>",
+        "sample_weight_ms": 19.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::gemm_out",
+        "sample_weight_ms": 19.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa7386c>",
+        "sample_weight_ms": 18.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c7d4>",
+        "sample_weight_ms": 16.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40cbec>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40fb40>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408204>",
+        "sample_weight_ms": 12.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 9.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c514>",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f887c>",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x799df0>",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x407db0>",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40bfb8>",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4112c0>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "_pthread_mutex_firstfit_unlock_slow",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "_pthread_mutex_firstfit_wake",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<alloc::vec::Vec<polyvoice_kernels::bnns::Filter>>::push_mut",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<alloc::vec::Vec<polyvoice_kernels::bnns::Filter>>::push",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_pthread_mutex_firstfit_lock_wait",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_pthread_mutex_firstfit_lock_slow",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4176cc>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408890>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x41267c>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40f0d8>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x411d20>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40b26c>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x610010>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f7648>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::stats_pool_q",
+        "sample_weight_ms": 1.0
+      }
+    ]
+  },
+  {
+    "profile": "product-3",
+    "raw_xml_sha256": "6b3c428190afbd2c6e07242bd304966102108718df232cf18e52bf3a05b2bd12",
+    "stacks_sha256": "06c7e01bda56bab3c69c9c87eef223cfdf10f72d5f8a3ae21a7a5abcde8d5cb2",
+    "rows": 3519,
+    "missing_stack_rows": 7,
+    "unknown_leaf_rows": 1913,
+    "sample_weights_ns": {
+      "1000000": 3519
+    },
+    "total_sample_weight_ms": 3519.0,
+    "missing_stack_weight_ms": 7.0,
+    "embedding_sample_weight_ms": 806.0,
+    "bnns_sample_weight_ms": 818.0,
+    "bnns_without_embedding_root_ms": 225.0,
+    "top_leaves": [
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e6bb4>",
+        "sample_weight_ms": 593.0
+      },
+      {
+        "symbol": "polyvoice_kernels::qlinear::matmul_integer",
+        "sample_weight_ms": 537.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 533.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e3e04>",
+        "sample_weight_ms": 209.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e38ac>",
+        "sample_weight_ms": 131.0
+      },
+      {
+        "symbol": "polyvoice_kernels::lstm::neon_gates::apply_gates_vec",
+        "sample_weight_ms": 108.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_ic1::{closure#0}::{closure#0}",
+        "sample_weight_ms": 85.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 75.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_k5::{closure#0}::{closure#0}",
+        "sample_weight_ms": 68.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 64.0
+      },
+      {
+        "symbol": "<>::split_at_mut_checked",
+        "sample_weight_ms": 51.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 48.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::max_pool1d",
+        "sample_weight_ms": 44.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 44.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 40.0
+      },
+      {
+        "symbol": "<unresolved libBLAS.dylib+0x4e6f68>",
+        "sample_weight_ms": 40.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 40.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 30.0
+      },
+      {
+        "symbol": "<u32>::wrapping_add",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vbslq_f32",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c514>",
+        "sample_weight_ms": 24.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408204>",
+        "sample_weight_ms": 22.0
+      },
+      {
+        "symbol": "sha2::sha256::soft::sha256_digest_round_x2",
+        "sample_weight_ms": 19.0
+      }
+    ],
+    "embedding_leaves": [
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 376.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 64.0
+      },
+      {
+        "symbol": "<>::split_at_mut_checked",
+        "sample_weight_ms": 31.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 28.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 27.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408204>",
+        "sample_weight_ms": 22.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c514>",
+        "sample_weight_ms": 19.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40cbec>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa7386c>",
+        "sample_weight_ms": 14.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv::fake_quant_tensor",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c7d4>",
+        "sample_weight_ms": 12.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x404120>",
+        "sample_weight_ms": 9.0
+      },
+      {
+        "symbol": "<core::iter::adapters::zip::Zip<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>> as core::iter::adapters::zip::ZipImpl<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<f32>>>::next",
+        "sample_weight_ms": 8.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_relu_quantize",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<f32 as core::ops::arith::Mul>::mul",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40fb40>",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x407db0>",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x406628>",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vmulq_f32",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "core::f32::math::round",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4176cc>",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<usize>::unchecked_add",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x411d20>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x405434>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vaddq_f32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "BLASStateRetain",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40bfb8>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<core::slice::iter::IterMut<num_complex::Complex<f32>> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::iter::adapters::zip::Zip<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<num_complex::Complex<f32>>> as core::iter::adapters::zip::ZipImpl<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<num_complex::Complex<f32>>>>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "mfm_alloc",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "__ulock_wait",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x488eb4>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<f32 as core::ops::arith::Add>::add",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<polyvoice::features::FbankExtractor>::extract",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_xzm_xzone_malloc_freelist_outlined",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<realfft::RealToComplexEven<f32> as realfft::RealToComplex<f32>>::process_with_scratch",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "rustfft::array_utils::reverse_bits::<4: usize>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_dispatch_apply_invoke3",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4096ac>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f7648>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x79b82c>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_free",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "mach_absolute_time",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408ca4>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::slice::iter::Iter<f32> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::ptr::non_null::NonNull<num_complex::Complex<f32>> as core::cmp::PartialEq>::eq",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<usize as core::slice::index::SliceIndex<>>::index",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::veorq_u32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40f0d8>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "__workq_kernreturn",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "mach_vm_reclaim_update_kernel_accounting_trap",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4134e4>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_square",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::stats_pool_q",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "___chkstk_darwin",
+        "sample_weight_ms": 1.0
+      }
+    ],
+    "embedding_inclusive": [
+      {
+        "symbol": "_pthread_start",
+        "sample_weight_ms": 806.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::embed_fbank",
+        "sample_weight_ms": 793.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_layers",
+        "sample_weight_ms": 758.0
+      },
+      {
+        "symbol": "polyvoice_kernels::bnns::try_conv2d",
+        "sample_weight_ms": 593.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4fbabc>",
+        "sample_weight_ms": 574.0
+      },
+      {
+        "symbol": "BNNSFilterApplyBatch",
+        "sample_weight_ms": 574.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4fc0b4>",
+        "sample_weight_ms": 544.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x404120>",
+        "sample_weight_ms": 471.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x406628>",
+        "sample_weight_ms": 434.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_block",
+        "sample_weight_ms": 433.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40d978>",
+        "sample_weight_ms": 376.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x500db0>",
+        "sample_weight_ms": 226.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x405434>",
+        "sample_weight_ms": 36.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40e588>",
+        "sample_weight_ms": 29.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f6794>",
+        "sample_weight_ms": 27.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4169b4>",
+        "sample_weight_ms": 26.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408204>",
+        "sample_weight_ms": 22.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c514>",
+        "sample_weight_ms": 19.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa05088>",
+        "sample_weight_ms": 19.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa02740>",
+        "sample_weight_ms": 19.0
+      },
+      {
+        "symbol": "pv_bnns_conv_create",
+        "sample_weight_ms": 19.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::gemm_out",
+        "sample_weight_ms": 18.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f9a14>",
+        "sample_weight_ms": 16.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x839f18>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40cbec>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0xa7386c>",
+        "sample_weight_ms": 14.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40c7d4>",
+        "sample_weight_ms": 12.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40fb40>",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x407db0>",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4176cc>",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x411d20>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40bfb8>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x488eb4>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4096ac>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f7648>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x79b82c>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x408ca4>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x40f0d8>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_pthread_workqueue_addthreads",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4f887c>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<unresolved libBNNS.dylib+0x4134e4>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_square",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::stats_pool_q",
+        "sample_weight_ms": 1.0
+      }
+    ]
+  },
+  {
+    "profile": "rust-1",
+    "raw_xml_sha256": "962d918465948c82283dbf450a8ba3dc4aa376abda13583f11205cd9b9f3edf9",
+    "stacks_sha256": "fcae6c54a0be98fe677652774a1c7b3f9f1dcbb26f98668755d8b9b2668a0d34",
+    "rows": 3956,
+    "missing_stack_rows": 11,
+    "unknown_leaf_rows": 1,
+    "sample_weights_ns": {
+      "1000000": 3956
+    },
+    "total_sample_weight_ms": 3956.0,
+    "missing_stack_weight_ms": 11.0,
+    "embedding_sample_weight_ms": 1804.0,
+    "bnns_sample_weight_ms": 0.0,
+    "bnns_without_embedding_root_ms": 0.0,
+    "top_leaves": [
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 664.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 484.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 335.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 202.0
+      },
+      {
+        "symbol": "<rten_gemm::kernels::aarch64::NeonNativeDotProd as rten_gemm::kernels::Int8DotProduct>::indexed_dot_product::dot_product::<3: u32>",
+        "sample_weight_ms": 193.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 159.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::iter::range::RangeIteratorImpl>::spec_next",
+        "sample_weight_ms": 118.0
+      },
+      {
+        "symbol": "rten_gemm::kernels::simd_generic::simd_gemm_broadcast_lane::<rten_simd::arch::aarch64::ArmNeonIsa, 4: usize, 4: usize, 4: usize>",
+        "sample_weight_ms": 97.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 85.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_ic1::{closure#0}::{closure#0}",
+        "sample_weight_ms": 76.0
+      },
+      {
+        "symbol": "polyvoice_kernels::lstm::neon_gates::apply_gates_vec",
+        "sample_weight_ms": 64.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 62.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_k5::{closure#0}::{closure#0}",
+        "sample_weight_ms": 61.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 57.0
+      },
+      {
+        "symbol": "<usize as core::cmp::PartialOrd>::lt",
+        "sample_weight_ms": 55.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 53.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 52.0
+      },
+      {
+        "symbol": "<usize>::checked_sub",
+        "sample_weight_ms": 51.0
+      },
+      {
+        "symbol": "polyvoice_kernels::rten_matmul::dequant_acc_neon",
+        "sample_weight_ms": 50.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::max_pool1d",
+        "sample_weight_ms": 49.0
+      },
+      {
+        "symbol": "DYLD-STUB$$memcpy",
+        "sample_weight_ms": 46.0
+      },
+      {
+        "symbol": "<rten_gemm::kernels::aarch64::NeonNativeDotProd as rten_gemm::kernels::Int8DotProduct>::indexed_dot_product::dot_product::<1: u32>",
+        "sample_weight_ms": 39.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 38.0
+      },
+      {
+        "symbol": "<u32>::wrapping_add",
+        "sample_weight_ms": 35.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 33.0
+      }
+    ],
+    "embedding_leaves": [
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 664.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 202.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 200.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 159.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 62.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 57.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 52.0
+      },
+      {
+        "symbol": "<usize>::checked_sub",
+        "sample_weight_ms": 47.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 38.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 33.0
+      },
+      {
+        "symbol": "DYLD-STUB$$memcpy",
+        "sample_weight_ms": 33.0
+      },
+      {
+        "symbol": "core::ptr::copy_nonoverlapping::<i8>",
+        "sample_weight_ms": 33.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan_row_zip",
+        "sample_weight_ms": 21.0
+      },
+      {
+        "symbol": "<usize as core::cmp::PartialOrd>::lt",
+        "sample_weight_ms": 18.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<0: i32>",
+        "sample_weight_ms": 16.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "<f32 as core::ops::arith::Mul>::mul",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_kn_zip16",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vzip2q_s8",
+        "sample_weight_ms": 9.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 8.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_relu_quantize",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vcvtq_s32_f32",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<usize as core::slice::index::SliceIndex<>>::index",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vaddq_f32",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "<core::ops::range::RangeFrom<usize> as core::slice::index::SliceIndex<>>::index_mut",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::copy_strided2",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<u32>>",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vdivq_f32",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vcombine_s16",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vget_lane_s32::<0: i32>",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::dot_i8_sdot",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::slice::index::SliceIndex<[i8]>>::index",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "logf",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "_xzm_xzone_malloc_tiny",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::iter::range::RangeIteratorImpl>::spec_next",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vqmovn_s32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vzip1q_s8",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vsubq_f32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<alloc::vec::Vec<f32>>::push_mut",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<alloc::raw_vec::RawVecInner>::capacity",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::gemm_rowbias_blocked",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vmaxq_f32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_dotprod",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_one_from_rows",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vqmovn_s16",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vaddvq_s32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<core::slice::iter::Iter<f32> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<core::iter::adapters::zip::Zip<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<num_complex::Complex<f32>>> as core::iter::adapters::zip::ZipImpl<core::slice::iter::IterMut<f32>, core::slice::iter::Iter<num_complex::Complex<f32>>>>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::neon_rowbias_4x8",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_xzm_free",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vrndaq_f32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<usize>::unchecked_add",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vzip2q_s16",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::embed_fbank",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_platform_memset",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_pad_row",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s2_scan_row_zip",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::write_out_sl",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<deduplicated_symbol>",
+        "sample_weight_ms": 1.0
+      }
+    ],
+    "embedding_inclusive": [
+      {
+        "symbol": "_pthread_start",
+        "sample_weight_ms": 1804.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::embed_fbank",
+        "sample_weight_ms": 1790.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_layers",
+        "sample_weight_ms": 1748.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv3x3_s1_rows::{closure#2}::{closure#0}::{closure#0}",
+        "sample_weight_ms": 1581.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan",
+        "sample_weight_ms": 1581.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan_row_zip",
+        "sample_weight_ms": 1563.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_conv_to_i8::{closure#0}",
+        "sample_weight_ms": 724.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_from_i8",
+        "sample_weight_ms": 706.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 664.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_conv::{closure#0}",
+        "sample_weight_ms": 259.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 202.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 159.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_block",
+        "sample_weight_ms": 109.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv3x3_s2_rows::{closure#1}::{closure#0}::{closure#0}",
+        "sample_weight_ms": 81.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s2_scan_row_zip",
+        "sample_weight_ms": 81.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 62.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::try_i8_identity::{closure#0}::{closure#0}",
+        "sample_weight_ms": 51.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 38.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::gemm_out",
+        "sample_weight_ms": 21.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<0: i32>",
+        "sample_weight_ms": 16.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv1x1_row_zip",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_kn_zip16",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 8.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::copy_strided2",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::dot_i8_sdot",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::gemm_rowbias_blocked",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_dotprod",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_one_from_rows",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::neon_rowbias_4x8",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_pad_row",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::write_out_sl",
+        "sample_weight_ms": 1.0
+      }
+    ]
+  },
+  {
+    "profile": "rust-2",
+    "raw_xml_sha256": "8850ebda80b84c5129b3540d9f71e591849058d01e7c4e601feca1e59b92c38b",
+    "stacks_sha256": "2d1daa6b093e82778e3012caf21b903dfa1273e7941473c7c01c986c482709a3",
+    "rows": 4052,
+    "missing_stack_rows": 10,
+    "unknown_leaf_rows": 1,
+    "sample_weights_ns": {
+      "1000000": 4052
+    },
+    "total_sample_weight_ms": 4052.0,
+    "missing_stack_weight_ms": 10.0,
+    "embedding_sample_weight_ms": 1912.0,
+    "bnns_sample_weight_ms": 0.0,
+    "bnns_without_embedding_root_ms": 0.0,
+    "top_leaves": [
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 726.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 473.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 350.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 212.0
+      },
+      {
+        "symbol": "<rten_gemm::kernels::aarch64::NeonNativeDotProd as rten_gemm::kernels::Int8DotProduct>::indexed_dot_product::dot_product::<3: u32>",
+        "sample_weight_ms": 198.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 124.0
+      },
+      {
+        "symbol": "rten_gemm::kernels::simd_generic::simd_gemm_broadcast_lane::<rten_simd::arch::aarch64::ArmNeonIsa, 4: usize, 4: usize, 4: usize>",
+        "sample_weight_ms": 114.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::iter::range::RangeIteratorImpl>::spec_next",
+        "sample_weight_ms": 105.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 92.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_ic1::{closure#0}::{closure#0}",
+        "sample_weight_ms": 84.0
+      },
+      {
+        "symbol": "<usize>::checked_sub",
+        "sample_weight_ms": 76.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 66.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 66.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_k5::{closure#0}::{closure#0}",
+        "sample_weight_ms": 63.0
+      },
+      {
+        "symbol": "polyvoice_kernels::lstm::neon_gates::apply_gates_vec",
+        "sample_weight_ms": 58.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 56.0
+      },
+      {
+        "symbol": "<usize as core::cmp::PartialOrd>::lt",
+        "sample_weight_ms": 51.0
+      },
+      {
+        "symbol": "DYLD-STUB$$memcpy",
+        "sample_weight_ms": 48.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 48.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::max_pool1d",
+        "sample_weight_ms": 47.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 43.0
+      },
+      {
+        "symbol": "<rten_gemm::kernels::aarch64::NeonNativeDotProd as rten_gemm::kernels::Int8DotProduct>::indexed_dot_product::dot_product::<1: u32>",
+        "sample_weight_ms": 41.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 40.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 36.0
+      },
+      {
+        "symbol": "sha2::sha256::soft::sha256_digest_round_x2",
+        "sample_weight_ms": 32.0
+      }
+    ],
+    "embedding_leaves": [
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 726.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 219.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 212.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 124.0
+      },
+      {
+        "symbol": "<usize>::checked_sub",
+        "sample_weight_ms": 70.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 66.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 66.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 56.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 48.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 40.0
+      },
+      {
+        "symbol": "DYLD-STUB$$memcpy",
+        "sample_weight_ms": 31.0
+      },
+      {
+        "symbol": "core::ptr::copy_nonoverlapping::<i8>",
+        "sample_weight_ms": 24.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 21.0
+      },
+      {
+        "symbol": "<usize as core::slice::index::SliceIndex<>>::index",
+        "sample_weight_ms": 18.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan_row_zip",
+        "sample_weight_ms": 17.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_kn_zip16",
+        "sample_weight_ms": 16.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<0: i32>",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<u32>>",
+        "sample_weight_ms": 12.0
+      },
+      {
+        "symbol": "<usize as core::cmp::PartialOrd>::lt",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_relu_quantize",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vzip2q_s8",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "<f32 as core::ops::arith::Mul>::mul",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vaddq_f32",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_s2",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::iter::range::RangeIteratorImpl>::spec_next",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vmaxq_f32",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_pad_row",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "logf",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vdivq_f32",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::slice::index::SliceIndex<[i8]>>::index",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vcvtq_s32_f32",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::dot_i8_sdot",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<polyvoice::features::FbankExtractor>::extract",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::copy_strided2",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::quantize_neon",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::slice::index::get_offset_len_noubcheck::<i8>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<core::ops::range::RangeFrom<usize> as core::slice::index::SliceIndex<>>::index_mut",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vcvtq_f32_s32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vcombine_s16",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vzip2q_s16",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_dotprod",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_one_from_rows",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "__bsdthread_create",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vreinterpretq_s16_s8",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<usize as core::cmp::Ord>::min",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::slice::iter::IterMut<num_complex::Complex<f32>> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vtrn1q_f32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<realfft::RealToComplexEven<f32> as realfft::RealToComplex<f32>>::process_with_scratch",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::option::Option<alloc::vec::into_iter::IntoIter<f32>>>::as_mut",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::core_arch::arm_shared::neon::float32x4_t>::splat",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vaddvq_s32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::write_out_sl",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "madvise",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s2_scan_row_zip",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vget_lane_s32::<0: i32>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::iter::adapters::zip::Zip<core::slice::iter::Iter<f32>, core::slice::iter::Iter<f32>> as core::iter::adapters::zip::ZipImpl<core::slice::iter::Iter<f32>, core::slice::iter::Iter<f32>>>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::slice::iter::Iter<f32> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::neon_rowbias_4x8",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::stats_pool_q",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::ops::range::RangeFrom<usize> as core::slice::index::SliceIndex<>>::index",
+        "sample_weight_ms": 1.0
+      }
+    ],
+    "embedding_inclusive": [
+      {
+        "symbol": "_pthread_start",
+        "sample_weight_ms": 1911.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::embed_fbank",
+        "sample_weight_ms": 1898.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_layers",
+        "sample_weight_ms": 1858.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv3x3_s1_rows::{closure#2}::{closure#0}::{closure#0}",
+        "sample_weight_ms": 1683.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan",
+        "sample_weight_ms": 1683.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan_row_zip",
+        "sample_weight_ms": 1645.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_conv_to_i8::{closure#0}",
+        "sample_weight_ms": 762.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_from_i8",
+        "sample_weight_ms": 761.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 726.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_conv::{closure#0}",
+        "sample_weight_ms": 274.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 212.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 124.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_block",
+        "sample_weight_ms": 119.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv3x3_s2_rows::{closure#1}::{closure#0}::{closure#0}",
+        "sample_weight_ms": 86.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s2_scan_row_zip",
+        "sample_weight_ms": 86.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 66.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::try_i8_identity::{closure#0}::{closure#0}",
+        "sample_weight_ms": 48.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 40.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::gemm_out",
+        "sample_weight_ms": 21.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_kn_zip16",
+        "sample_weight_ms": 16.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv1x1_row_zip",
+        "sample_weight_ms": 15.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<0: i32>",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_s2",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_pad_row",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::dot_i8_sdot",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::copy_strided2",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::quantize_neon",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_dotprod",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_one_from_rows",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "_pthread_create",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::write_out_sl",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::neon_rowbias_4x8",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::stats_pool_q",
+        "sample_weight_ms": 1.0
+      }
+    ]
+  },
+  {
+    "profile": "rust-3",
+    "raw_xml_sha256": "0eaf1867d940bf2b7ec7fbbe7bc4d18e4cb66a1daa164da2877d29efd7705996",
+    "stacks_sha256": "238bbcde12d40cdea209ff7a0fb8ca8688c29a4bf253ee134fe43f0d91b5e63f",
+    "rows": 3883,
+    "missing_stack_rows": 9,
+    "unknown_leaf_rows": 1,
+    "sample_weights_ns": {
+      "1000000": 3883
+    },
+    "total_sample_weight_ms": 3883.0,
+    "missing_stack_weight_ms": 9.0,
+    "embedding_sample_weight_ms": 1800.0,
+    "bnns_sample_weight_ms": 0.0,
+    "bnns_without_embedding_root_ms": 0.0,
+    "top_leaves": [
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 613.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 499.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 359.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 203.0
+      },
+      {
+        "symbol": "<rten_gemm::kernels::aarch64::NeonNativeDotProd as rten_gemm::kernels::Int8DotProduct>::indexed_dot_product::dot_product::<3: u32>",
+        "sample_weight_ms": 180.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 154.0
+      },
+      {
+        "symbol": "rten_gemm::kernels::simd_generic::simd_gemm_broadcast_lane::<rten_simd::arch::aarch64::ArmNeonIsa, 4: usize, 4: usize, 4: usize>",
+        "sample_weight_ms": 106.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::iter::range::RangeIteratorImpl>::spec_next",
+        "sample_weight_ms": 93.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_ic1::{closure#0}::{closure#0}",
+        "sample_weight_ms": 82.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::conv1d_k5::{closure#0}::{closure#0}",
+        "sample_weight_ms": 71.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 63.0
+      },
+      {
+        "symbol": "<usize>::checked_sub",
+        "sample_weight_ms": 59.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 57.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 56.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 54.0
+      },
+      {
+        "symbol": "polyvoice_kernels::lstm::neon_gates::apply_gates_vec",
+        "sample_weight_ms": 53.0
+      },
+      {
+        "symbol": "DYLD-STUB$$memcpy",
+        "sample_weight_ms": 50.0
+      },
+      {
+        "symbol": "<usize as core::cmp::PartialOrd>::lt",
+        "sample_weight_ms": 48.0
+      },
+      {
+        "symbol": "<rten_gemm::kernels::aarch64::NeonNativeDotProd as rten_gemm::kernels::Int8DotProduct>::indexed_dot_product::dot_product::<1: u32>",
+        "sample_weight_ms": 47.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 45.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 45.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 42.0
+      },
+      {
+        "symbol": "polyvoice_kernels::seq1d::max_pool1d",
+        "sample_weight_ms": 39.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 35.0
+      },
+      {
+        "symbol": "polyvoice_kernels::rten_matmul::dequant_acc_neon",
+        "sample_weight_ms": 34.0
+      }
+    ],
+    "embedding_leaves": [
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 613.0
+      },
+      {
+        "symbol": "_platform_memmove",
+        "sample_weight_ms": 233.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 203.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 154.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 63.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_add_relu_quantize",
+        "sample_weight_ms": 56.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 54.0
+      },
+      {
+        "symbol": "<usize>::checked_sub",
+        "sample_weight_ms": 53.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::int8x16_t>>",
+        "sample_weight_ms": 45.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 35.0
+      },
+      {
+        "symbol": "core::ptr::copy_nonoverlapping::<i8>",
+        "sample_weight_ms": 32.0
+      },
+      {
+        "symbol": "DYLD-STUB$$memcpy",
+        "sample_weight_ms": 32.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 22.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<0: i32>",
+        "sample_weight_ms": 17.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan_row_zip",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "<f32 as core::ops::arith::Mul>::mul",
+        "sample_weight_ms": 13.0
+      },
+      {
+        "symbol": "<usize as core::cmp::PartialOrd>::lt",
+        "sample_weight_ms": 12.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vzip2q_s8",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_kn_zip16",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "<usize as core::slice::index::SliceIndex<>>::index",
+        "sample_weight_ms": 9.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "polyvoice_kernels::tensor::neon_relu_quantize",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::slice::index::SliceIndex<[i8]>>::index",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "core::ptr::write::<core::ptr::Packed<u32>>",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::dot_i8_sdot",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vcvtq_s32_f32",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vaddq_f32",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vqmovn_s16",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vfmaq_f32",
+        "sample_weight_ms": 5.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vmaxq_f32",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "<core::ops::range::RangeFrom<usize> as core::slice::index::SliceIndex<>>::index_mut",
+        "sample_weight_ms": 4.0
+      },
+      {
+        "symbol": "<realfft::RealToComplexEven<f32> as realfft::RealToComplex<f32>>::process_with_scratch",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::neon_rowbias_4x8",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vqmovn_s32",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "<core::ops::range::Range<usize> as core::iter::range::RangeIteratorImpl>::spec_next",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::copy_strided2",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_s2",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "__bzero",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::ptr::read::<core::ptr::Packed<core::core_arch::arm_shared::neon::float32x4_t>>",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::quantize_neon",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s2_scan_row_zip",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<f32>::clamp",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<polyvoice::features::FbankExtractor>::extract",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vdivq_f32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vminq_f32",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<core::slice::iter::Iter<f32> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_one_from_rows",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "<alloc::vec::into_iter::IntoIter<f32> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vsubq_f32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "__findenv_locked",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv1x1_row_zip",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "std::sys::env::unix::env_read_lock",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::slice::iter::IterMut<num_complex::Complex<f32>> as core::iter::traits::iterator::Iterator>::next",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::gemm_rowbias_blocked",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "xzm_malloc_zone_size",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<core::core_arch::arm_shared::neon::float32x4_t>::splat",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::write_out_sl",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::arm_shared::neon::generated::vget_lane_s32::<0: i32>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<usize as core::cmp::Ord>::min",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::stats_pool_q",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vaddvq_s32",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_platform_memset",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "rustfft::neon::neon_radix4::butterfly_4::<f32, f32>",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "<alloc::vec::Vec<f32>>::push_mut",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::core_arch::aarch64::neon::generated::vzip1q_s8",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_square",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "core::f32::math::round",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "_xzm_xzone_malloc_small_freelist",
+        "sample_weight_ms": 1.0
+      }
+    ],
+    "embedding_inclusive": [
+      {
+        "symbol": "_pthread_start",
+        "sample_weight_ms": 1800.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::embed_fbank",
+        "sample_weight_ms": 1787.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_layers",
+        "sample_weight_ms": 1743.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv3x3_s1_rows::{closure#2}::{closure#0}::{closure#0}",
+        "sample_weight_ms": 1572.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan",
+        "sample_weight_ms": 1572.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s1_scan_row_zip",
+        "sample_weight_ms": 1551.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_conv_to_i8::{closure#0}",
+        "sample_weight_ms": 722.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_from_i8",
+        "sample_weight_ms": 705.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::kernel_4x16_zip_store",
+        "sample_weight_ms": 613.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::try_conv::{closure#0}",
+        "sample_weight_ms": 257.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<1: i32>",
+        "sample_weight_ms": 203.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<2: i32>",
+        "sample_weight_ms": 154.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::run_block",
+        "sample_weight_ms": 110.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv3x3_s2_rows::{closure#1}::{closure#0}::{closure#0}",
+        "sample_weight_ms": 83.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s2_scan_row_zip",
+        "sample_weight_ms": 80.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<3: i32>",
+        "sample_weight_ms": 63.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::try_i8_identity::{closure#0}::{closure#0}",
+        "sample_weight_ms": 52.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_from_rows",
+        "sample_weight_ms": 35.0
+      },
+      {
+        "symbol": "<polyvoice_kernels::resnet34::ResNet34>::gemm_out",
+        "sample_weight_ms": 20.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::sdot_lane::<0: i32>",
+        "sample_weight_ms": 17.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv1x1_row_zip",
+        "sample_weight_ms": 14.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::pack_kn_zip16",
+        "sample_weight_ms": 11.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::gemm_sub",
+        "sample_weight_ms": 7.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::dot_i8_sdot",
+        "sample_weight_ms": 6.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::neon_rowbias_4x8",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::copy_strided2",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_kn_s2",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::s2_scan",
+        "sample_weight_ms": 3.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::quantize_neon",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::conv3x3_s1_rows",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::gather_one_from_rows",
+        "sample_weight_ms": 2.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_scalar",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::gemm::gemm_rowbias_blocked",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::conv_i8::write_out_sl",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::stats_pool_q",
+        "sample_weight_ms": 1.0
+      },
+      {
+        "symbol": "polyvoice_kernels::resnet34::fq_square",
+        "sample_weight_ms": 1.0
+      }
+    ]
+  }
+]

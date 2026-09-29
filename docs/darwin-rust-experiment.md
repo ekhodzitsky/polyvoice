@@ -91,10 +91,18 @@ maximum for the Rust kernels or an isolated-host release certification.
 Stage timings point to embedding as the next profiling target: median
 embedding time was 0.638 s for Rust versus 0.337 s for the product;
 segmentation was 0.267 s versus 0.307 s. These are coarse pipeline timings,
-not proof of a particular kernel bottleneck. Keep the backend experimental
-and all limits unchanged. The smallest next step is to profile the Rust
-embedding path and repeat the comparison on a quiescent host before proposing
-any optimization or default change. No dependencies were added.
+not proof of a particular kernel bottleneck. They motivated the subsequent
+profiling below. Keep the backend experimental and all limits unchanged;
+promotion still requires a quiescent-host comparison. No dependencies were added.
+
+The subsequent [CPU profiling report](../benchmarks/results/darwin-embedding-profile-2026-09-29/README.md)
+locates 86.0–86.6% of sampled Rust embedding CPU weight under stride-one
+INT8 convolution. SDOT kernel/lane leaf samples account for 58.3–61.1%,
+and memory copies for 11.1–12.9%. A separate five-pair release repetition
+still misses 117× in three Rust runs; background activity remains a stated
+limitation. The next bounded experiment is to investigate fewer intermediate
+KN-to-zip copies while retaining exact integer results. This profiling work
+does not change kernels, threads, dependencies or the default backend.
 
 ## Required comparison before any promotion
 
