@@ -1,0 +1,26 @@
+   Compiling crossbeam-utils v0.8.21
+   Compiling crossbeam-epoch v0.9.20
+   Compiling rayon-core v1.13.0
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+    Checking either v1.16.0
+   Compiling typeid v1.0.3
+   Compiling find-msvc-tools v0.1.9
+   Compiling libc v0.2.186
+    Checking rten-base v0.25.0
+   Compiling shlex v2.0.1
+   Compiling thiserror v2.0.18
+    Checking smallvec v1.15.2
+   Compiling cc v1.2.64
+    Checking rten-simd v0.25.0
+   Compiling polyvoice-kernels v0.1.3 (/Users/ekhodzitsky/src/polyvoice-fused-packing-experiment/polyvoice-kernels)
+    Checking crossbeam-deque v0.8.6
+    Checking rayon v1.12.0
+   Compiling syn v2.0.117
+    Checking memmap2 v0.9.11
+    Checking rten-parallel v0.25.0
+   Compiling thiserror-impl v2.0.18
+    Checking rten-tensor v0.25.0
+    Checking rten-gemm v0.25.0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.84s

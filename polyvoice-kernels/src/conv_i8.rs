@@ -967,8 +967,17 @@ fn s1_scan_shared_oc(
         let dest = &mut zip[(oy - oy0) * row_bytes..(oy - oy0) * row_bytes + acc];
         for t in 0..ntiles {
             let pn = pns[t];
-            gather_kn_from_rows(conv, rows, plane, wp, oy, oxs[t], pn, kn);
-            pack_kn_zip16(kn, &mut dest[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
+            gather_zip_from_rows(
+                conv,
+                rows,
+                plane,
+                wp,
+                oy,
+                oxs[t],
+                pn,
+                kn,
+                &mut dest[zoff[t]..zoff[t] + k_pad * pn],
+            );
         }
         let mut x = tail_ox;
         while x < ow {
@@ -1117,8 +1126,17 @@ fn s1_scan_row_zip(
             if ow >= NR16 && ox < ow && zip.len() >= k_pad * NR16 {
                 let ox0 = ow - NR16;
                 let pn = NR16;
-                gather_kn_from_rows(conv, rows, plane, wp, oy, ox0, pn, kn);
-                pack_kn_zip16(kn, &mut zip[..k_pad * pn], k_pad, pn);
+                gather_zip_from_rows(
+                    conv,
+                    rows,
+                    plane,
+                    wp,
+                    oy,
+                    ox0,
+                    pn,
+                    kn,
+                    &mut zip[..k_pad * pn],
+                );
                 let z = &zip[..k_pad * pn];
                 let mut mo = oc0;
                 while mo < oc1 {
@@ -1193,8 +1211,17 @@ fn s1_scan_row_zip(
         if tile_outer {
             for t in 0..ntiles {
                 let pn = pns[t];
-                gather_kn_from_rows(conv, rows, plane, wp, oy, oxs[t], pn, kn);
-                pack_kn_zip16(kn, &mut zip[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
+                gather_zip_from_rows(
+                    conv,
+                    rows,
+                    plane,
+                    wp,
+                    oy,
+                    oxs[t],
+                    pn,
+                    kn,
+                    &mut zip[zoff[t]..zoff[t] + k_pad * pn],
+                );
                 let ox0 = oxs[t];
                 let z = &zip[zoff[t]..zoff[t] + k_pad * pn];
                 let mut mo = oc0;
@@ -1254,8 +1281,17 @@ fn s1_scan_row_zip(
         } else {
             for t in 0..ntiles {
                 let pn = pns[t];
-                gather_kn_from_rows(conv, rows, plane, wp, oy, oxs[t], pn, kn);
-                pack_kn_zip16(kn, &mut zip[zoff[t]..zoff[t] + k_pad * pn], k_pad, pn);
+                gather_zip_from_rows(
+                    conv,
+                    rows,
+                    plane,
+                    wp,
+                    oy,
+                    oxs[t],
+                    pn,
+                    kn,
+                    &mut zip[zoff[t]..zoff[t] + k_pad * pn],
+                );
             }
             let mut mo = oc0;
             while mo < oc1 {
@@ -1372,6 +1408,103 @@ fn gather_one_from_rows(
             let rs = row_slot(oy, kh) * plane + c * wp + ox;
             for kw in 0..3 {
                 tile[c * 9 + kh * 3 + kw] = rows[rs + kw];
+            }
+        }
+    }
+}
+
+#[cfg(all(
+    test,
+    target_arch = "aarch64",
+    target_vendor = "apple",
+    not(apple_accelerate)
+))]
+thread_local! {
+    static REFERENCE_PACK: Cell<bool> = const { Cell::new(false) };
+}
+
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+fn gather_zip_from_rows(
+    conv: &Conv2d,
+    rows: &[i8],
+    plane: usize,
+    wp: usize,
+    oy: usize,
+    ox: usize,
+    pn: usize,
+    kn: &mut [i8],
+    zip: &mut [i8],
+) {
+    #[cfg(all(
+        test,
+        target_arch = "aarch64",
+        target_vendor = "apple",
+        not(apple_accelerate)
+    ))]
+    if REFERENCE_PACK.with(Cell::get) {
+        gather_kn_from_rows(conv, rows, plane, wp, oy, ox, pn, kn);
+        pack_kn_zip16(kn, zip, conv.k_pad, pn);
+        return;
+    }
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_vendor = "apple",
+        not(apple_accelerate)
+    ))]
+    {
+        let _ = kn;
+        gather_zip_direct(conv, rows, plane, wp, oy, ox, pn, zip);
+    }
+    #[cfg(not(all(
+        target_arch = "aarch64",
+        target_vendor = "apple",
+        not(apple_accelerate)
+    )))]
+    {
+        gather_kn_from_rows(conv, rows, plane, wp, oy, ox, pn, kn);
+        pack_kn_zip16(kn, zip, conv.k_pad, pn);
+    }
+}
+
+// Load four input taps directly into the SDOT panel layout, avoiding the
+// intermediate K-by-N copy. Keep the established packer on other backends.
+#[cfg(all(
+    target_arch = "aarch64",
+    target_vendor = "apple",
+    not(apple_accelerate)
+))]
+fn gather_zip_direct(
+    conv: &Conv2d,
+    rows: &[i8],
+    plane: usize,
+    wp: usize,
+    oy: usize,
+    ox: usize,
+    pn: usize,
+    zip: &mut [i8],
+) {
+    use std::arch::aarch64::{int8x16x4_t, vdupq_n_s8, vld1q_s8, vst4q_s8};
+    assert!(pn > 0 && pn.is_multiple_of(16));
+    let zip = &mut zip[..conv.k_pad * pn];
+    for (group, block) in zip.chunks_exact_mut(4 * pn).enumerate() {
+        let taps: [Option<&[i8]>; 4] = std::array::from_fn(|lane| {
+            let k = group * 4 + lane;
+            if k >= conv.ic * 9 {
+                return None;
+            }
+            let (c, kh, kw) = (k / 9, k % 9 / 3, k % 3);
+            let base = row_slot(oy, kh) * plane + c * wp + ox + kw;
+            Some(&rows[base..base + pn])
+        });
+        for (tile, dst) in block.chunks_exact_mut(64).enumerate() {
+            // Each present tap is pn bytes and tile*16+16 <= pn. Each
+            // destination chunk is exactly 64 bytes, the size of four vectors.
+            unsafe {
+                let v = taps.map(|tap| match tap {
+                    Some(src) => vld1q_s8(src.as_ptr().add(tile * 16)),
+                    None => vdupq_n_s8(0),
+                });
+                vst4q_s8(dst.as_mut_ptr(), int8x16x4_t(v[0], v[1], v[2], v[3]));
             }
         }
     }
@@ -3505,6 +3638,179 @@ mod strided2_tests {
                 want[i] = src[2 * i];
             }
             assert_eq!(got, want, "n={n}");
+        }
+    }
+}
+
+#[cfg(all(
+    test,
+    target_arch = "aarch64",
+    target_vendor = "apple",
+    not(apple_accelerate)
+))]
+mod fused_pack_tests {
+    use super::*;
+
+    fn test_conv(ic: usize, oc: usize, zp: i8) -> Conv2d {
+        let weights = (0..oc * ic * 9)
+            .map(|i| (i as i8).wrapping_mul(17))
+            .collect();
+        Conv2d::quantized(oc, ic, 3, 1, weights, vec![0.003; oc], vec![0.07; oc])
+            .with_input_quant(0.04, zp)
+    }
+
+    #[test]
+    fn direct_packing_convolution_matches_reference_bits() {
+        force_i8(true);
+        for (ic, oc) in [(1, 4), (3, 7), (32, 32), (128, 128)] {
+            for w in [15usize, 16, 17, 31, 32, 33, 50] {
+                for zp in [-128i8, -17, 0, 127] {
+                    let conv = test_conv(ic, oc, zp);
+                    let mut input = Tensor::zeros(2, ic, 3, w);
+                    for (i, value) in input.data.iter_mut().enumerate() {
+                        *value = ((i % 101) as f32 - 50.0) * 0.031;
+                    }
+                    REFERENCE_PACK.with(|v| v.set(true));
+                    let want = conv.forward(&input);
+                    REFERENCE_PACK.with(|v| v.set(false));
+                    let got = conv.forward(&input);
+                    assert!(
+                        got.data
+                            .iter()
+                            .zip(&want.data)
+                            .all(|(a, b)| a.to_bits() == b.to_bits()),
+                        "ic={ic} oc={oc} w={w} zp={zp}"
+                    );
+                }
+            }
+        }
+        force_i8(false);
+    }
+
+    #[test]
+    #[ignore = "manual paired convolution timing"]
+    fn bench_direct_packing_shapes() {
+        use std::{hint::black_box, time::Instant};
+        force_i8(true);
+        for (ic, oc, h, w) in [
+            (32, 32, 80, 400),
+            (64, 64, 40, 200),
+            (128, 128, 20, 100),
+            (256, 256, 10, 50),
+        ] {
+            let conv = test_conv(ic, oc, -128);
+            let mut input = Tensor::zeros(1, ic, h, w);
+            for (i, value) in input.data.iter_mut().enumerate() {
+                *value = ((i % 101) as f32 - 50.0) * 0.031;
+            }
+            for repeat in 0..6 {
+                let order = if repeat % 2 == 0 {
+                    [true, false]
+                } else {
+                    [false, true]
+                };
+                for reference in order {
+                    REFERENCE_PACK.with(|v| v.set(reference));
+                    black_box(conv.forward(black_box(&input)));
+                    let start = Instant::now();
+                    for _ in 0..5 {
+                        black_box(conv.forward(black_box(&input)));
+                    }
+                    println!(
+                        "packing_shape ic={ic} oc={oc} h={h} w={w} repeat={repeat} reference={reference} ms={:.6}",
+                        start.elapsed().as_secs_f64() * 200.0
+                    );
+                }
+            }
+        }
+        REFERENCE_PACK.with(|v| v.set(false));
+        force_i8(false);
+    }
+
+    #[test]
+    fn direct_zip_matches_scalar_layout_and_reference() {
+        for ic in [1usize, 2, 3, 4, 7, 16, 32, 128] {
+            for zp in [-128i8, -17, 0, 127] {
+                let conv =
+                    Conv2d::quantized(4, ic, 3, 1, vec![1; 4 * ic * 9], vec![0.1; 4], vec![0.0; 4])
+                        .with_input_quant(0.04, zp);
+                for w in [16usize, 17, 31, 32, 33, 100] {
+                    let h = 5;
+                    let wp = w + 2;
+                    let plane = ic * wp;
+                    let input: Vec<i8> = (0..ic * h * w)
+                        .map(|i| (i as i8).wrapping_mul(37))
+                        .collect();
+                    for oy in 0..h {
+                        let mut rows = vec![zp; 3 * plane];
+                        for kh in 0..3 {
+                            let iy = (oy + kh).checked_sub(1).unwrap_or(h);
+                            let slot = row_slot(oy, kh);
+                            pack_pad_row(
+                                &input,
+                                ic,
+                                h,
+                                w,
+                                wp,
+                                zp,
+                                iy,
+                                &mut rows[slot * plane..(slot + 1) * plane],
+                            );
+                        }
+                        for pn in [16usize, 32] {
+                            if pn > w {
+                                continue;
+                            }
+                            for ox in [0, w - pn] {
+                                let len = conv.k_pad * pn;
+                                let mut got = vec![73; len + 16];
+                                gather_zip_direct(
+                                    &conv,
+                                    &rows,
+                                    plane,
+                                    wp,
+                                    oy,
+                                    ox,
+                                    pn,
+                                    &mut got[..len],
+                                );
+                                let mut kn = vec![91; len];
+                                let mut reference = vec![0; len];
+                                gather_kn_from_rows(&conv, &rows, plane, wp, oy, ox, pn, &mut kn);
+                                pack_kn_zip16(&kn, &mut reference, conv.k_pad, pn);
+                                assert_eq!(
+                                    &got[..len],
+                                    reference,
+                                    "ic={ic} zp={zp} w={w} oy={oy} ox={ox} pn={pn}"
+                                );
+                                assert_eq!(&got[len..], &[73; 16]);
+                                for k in 0..conv.k_pad {
+                                    for n in 0..pn {
+                                        let expected = if k >= ic * 9 {
+                                            0
+                                        } else {
+                                            let (c, kh, kw) = (k / 9, k % 9 / 3, k % 3);
+                                            match (
+                                                (oy + kh).checked_sub(1),
+                                                (ox + n + kw).checked_sub(1),
+                                            ) {
+                                                (Some(y), Some(x)) if y < h && x < w => {
+                                                    input[(c * h + y) * w + x]
+                                                }
+                                                _ => zp,
+                                            }
+                                        };
+                                        let index = ((k / 4) * (pn / 16) + n / 16) * 64
+                                            + (n % 16) * 4
+                                            + k % 4;
+                                        assert_eq!(got[index], expected, "k={k} n={n}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
