@@ -1,12 +1,13 @@
 # Production readiness and the 1.0 contract
 
-**Development version: 0.22.0 (unreleased). Updated: 2026-09-24.**
+**Development version: 0.22.0 (unreleased). Updated: 2026-09-30.**
 **1.0 status: NOT GO.** The contract below defines the intended release;
-it does not certify the current revision or start the RC window.
+it does not certify the current revision or qualify a release candidate.
 
 The [2026-09-29 pre-candidate review](docs/release-readiness-review.md) records
 the reviewed revision, evidence gaps and the order of completion. Its verdict
-is **NO-GO**; the RC stability window has not started.
+is **NO-GO**. The current RC policy has no calendar waiting period; candidate
+qualification remains required.
 
 ## Supported product scope
 
@@ -160,8 +161,9 @@ All boxes require linked evidence before the release is declared GO.
 - [ ] **Repository release checks pass.** Formatting, clippy, tests,
       compatibility, dependency/security checks and documentation checks pass
       for the release candidate; unresolved failures are not waived by this document.
-- [ ] **RC stability window completed.** At least two published candidates
-      and 14 consecutive days under the [RC policy](docs/semver.md#release-candidate-window),
+- [ ] **Release candidates qualified.** At least two published candidates
+      under the [RC policy](docs/semver.md#release-candidate-window),
+      with no minimum calendar waiting period,
       with consumer evidence and no unresolved release-blocking regressions.
 - [ ] **Readiness reviewed for the exact release.** Link the evidence and
       remaining limitations here, then explicitly change the release verdict.
