@@ -19,6 +19,11 @@ spec.loader.exec_module(smoke)
 
 
 class GateTests(unittest.TestCase):
+    def test_required_offline_cannot_pass_with_only_proxies(self):
+        with patch.object(smoke.platform, 'system', return_value='Windows'), \
+             self.assertRaisesRegex(ValueError, 'network isolation'):
+            smoke.offline_prefix(Path('.'), {}, {}, required=True)
+
     def test_rejection_requires_nonzero_exit_and_expected_stderr(self):
         for code, stderr in [(0, 'audio too long'), (1, 'unrelated failure')]:
             with patch.object(smoke.subprocess, 'run', return_value=SimpleNamespace(

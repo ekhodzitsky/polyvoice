@@ -102,7 +102,11 @@ and wheel installation happen outside that restriction.
 Windows currently records **network isolation not enforced**: unavailable
 HTTP proxies are still configured, but they are not an OS network sandbox.
 Windows scenario success must not be described as proof of enforced offline
-operation. That qualification gap remains open. Network isolation here is
+operation. That qualification gap remains open. The `--require-offline` option
+fails on a platform without enforced isolation. Registry-backed/tag workflows
+require it, so Windows currently blocks publication even if its other scenarios
+pass. Staged PR/manual checks retain the explicit limitation instead.
+Network isolation here is
 independent of the exclusive-host requirement for Darwin performance timing.
 
 ## Published dependency prerequisite

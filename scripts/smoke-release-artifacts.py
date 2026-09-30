@@ -104,7 +104,7 @@ def scenario_fixtures(work, speech):
     return cases
 
 
-def offline_prefix(work, env, report):
+def offline_prefix(work, env, report, required=False):
     system = platform.system()
     if system == 'Linux':
         launcher = work / 'offline'
@@ -115,6 +115,8 @@ def offline_prefix(work, env, report):
         prefix = ['/usr/bin/sandbox-exec', '-p', '(version 1)(allow default)(deny network*)']
         method = 'Darwin sandbox; network operations denied'
     else:
+        if required:
+            raise ValueError('OS network isolation is required but not implemented on this platform')
         report['network_isolation'] = 'not enforced; unavailable HTTP proxies only'
         return []
     # A closed port/network outage is not an isolation success: require an OS
@@ -345,7 +347,7 @@ def smoke(args):
         env.update(POLYVOICE_VBX_PLDA_DIR=str(models), XDG_CACHE_HOME=str(work / "empty-cache"),
                    LOCALAPPDATA=str(work / "empty-cache"), HF_HOME=str(work / "empty-cache"),
                    HTTP_PROXY="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9", NO_PROXY="")
-        prefix = offline_prefix(work, env, report)
+        prefix = offline_prefix(work, env, report, required=getattr(args, 'require_offline', False))
         if args.cli:
             cli = work / args.cli.name
             shutil.copyfile(args.cli, cli)
@@ -412,6 +414,8 @@ def main():
     for name in ("cli", "ffi", "wheel", "crate", "staged-kernel", "assets-dir", "cargo-target-dir"):
         parser.add_argument("--" + name, type=lambda p: Path(p).resolve())
     parser.add_argument("--report", required=True, type=lambda p: Path(p).resolve())
+    parser.add_argument("--require-offline", action="store_true",
+                        help="fail unless OS network isolation is enforced and probed")
     args = parser.parse_args()
     if not any((args.cli, args.ffi, args.wheel, args.crate)) or (args.staged_kernel and not args.crate):
         parser.error("provide an artifact; --staged-kernel requires --crate")
