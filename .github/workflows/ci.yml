@@ -351,6 +351,8 @@ jobs:
           tool: cargo-semver-checks
       - run: bash scripts/check-semver.sh
       - run: bash scripts/check-semver.sh --probe
+      - name: Check kernel compatibility with the published crate
+        run: cargo semver-checks check-release -p polyvoice-kernels --baseline-version 0.1.2 --default-features --release-type minor
 
   audit:
     runs-on: ubuntu-latest
@@ -379,6 +381,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
+      - name: Check both Apple kernel APIs against the published crate
+        run: |
+          cargo semver-checks check-release -p polyvoice-kernels --baseline-version 0.1.2 --default-features --release-type minor
+          cargo semver-checks check-release -p polyvoice-kernels --baseline-version 0.1.2 --default-features --current-features experimental-darwin-rust --release-type minor
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

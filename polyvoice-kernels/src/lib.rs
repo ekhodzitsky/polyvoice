@@ -37,7 +37,7 @@ pub use bnns::prof as bnns_prof;
 pub use conv_i8::{file_parallelism, set_file_parallelism, set_intra_threads};
 pub use error::KernelError;
 pub use gemm::gemm_bias_row;
-pub use powerset::{N_CLASSES, Powerset};
+pub use powerset::{MIN_SAMPLES as POWERSET_MIN_SAMPLES, N_CLASSES, Powerset};
 pub use resnet34::{EMBED_DIM, N_MELS, ResNet34};
 pub use scratch::reclaim as reclaim_scratch;
 

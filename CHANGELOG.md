@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve the published `polyvoice-kernels::POWERSET_MIN_SAMPLES` export and
+  include the MIT license notice in the kernel crate archive.
+
 - Reject BYO audio exceeding its duration limit by even one sample. Duration
   validation no longer rounds an over-limit one-hour input down through `f32`.
 
