@@ -13,7 +13,12 @@ Subsequent preparation adds the [packaged consumer scenario suite](release-artif
 including duration boundaries and OS-enforced offline execution on Linux and
 Darwin, plus application-scoped Windows network filters. The table below remains
 the dated audit snapshot, not a claim about later candidates. Exact-candidate
-qualification and the published RC window remain open.
+qualification and published RC qualification remain open.
+
+**Policy update, 2026-09-30:** the mandatory 14-day waiting period is removed.
+The historical stability-window row below is superseded by the current
+[RC policy](semver.md#release-candidate-window). At least two published
+candidates and all technical gates remain required; elapsed time is not a gate.
 
 ## Evidence and gaps
 
@@ -71,10 +76,10 @@ minute, so it cannot establish the one-hour case.
    A local Linux collection alone does not satisfy the trusted tag gate.
 4. Review the concrete artifacts and evidence before requesting publication
    authorization. Publish the first qualifying RC only after authorization;
-   record its revision and publication date as the window start.
-5. Publish at least one further RC, rerun affected gates for compatible fixes,
-   and complete 14 consecutive days without a compatibility break. A break
-   requires migration notes, a new candidate and a restarted window.
+   record its revision and publication date.
+5. Publish at least one further RC and rerun affected gates for compatible
+   fixes. A compatibility break requires migration notes and a new candidate.
+   No calendar waiting period is required.
 6. Reassess the exact artifact being promoted, link the passing evidence in
    the readiness checklist and make an explicit release decision.
 
@@ -100,5 +105,5 @@ Any failed gate stops promotion. Reproduce against the recorded artifact and
 inputs, fix or revert the regression, publish a replacement candidate only
 with authorization, and retain both failing and passing evidence. Never lower
 the five Darwin limits to accept a speed/memory trade-off. Compatibility
-regressions reset the stability clock; compatible fixes still require a new
-candidate and fresh applicable evidence.
+regressions require migration notes and a replacement candidate; compatible
+fixes still require a new candidate and fresh applicable evidence.

@@ -104,26 +104,24 @@ removal. CI runs the gate and the probe on every push.
 
 ## Release-candidate window
 
-Require at least **two published 1.0 release candidates** and **14 consecutive
-calendar days without an advertised-surface break after the final breaking
-change**. Start the clock only when the API boundary is finalized, the first
-qualifying candidate is published, and the non-window readiness gates have
-evidence.
-Record candidate revisions, publication dates, window start/end, consumer
-results and resolved regressions in the release evidence. No RC window is
-claimed merely because this policy exists.
+Require at least **two published 1.0 release candidates**. There is **no
+minimum calendar waiting period**: promotion depends on verified evidence,
+not elapsed time. Publish the first qualifying candidate only when the API
+boundary is finalized and the other readiness gates have evidence.
+Record candidate revisions, publication dates, consumer results and resolved
+regressions in the release evidence.
 
-An API/ABI/CLI/JSON compatibility break resets the clock and requires a new
-candidate. Compatible fixes require a new candidate and rerunning affected
-gates; final artifact checks must use the exact candidate being promoted.
-At window end, all gates in [readiness](../PRODUCTION-READINESS.md) must pass
-and no release-blocking regression may remain open. Experimental MCP/tract
-and companion ASR do not expand the frozen batch-product scope.
+An API/ABI/CLI/JSON compatibility break requires migration notes and a new
+candidate. Compatible fixes also require a new candidate and rerunning
+affected gates; final artifact checks must use the exact candidate being
+promoted. At promotion, all gates in [readiness](../PRODUCTION-READINESS.md)
+must pass and no release-blocking regression may remain open. Experimental
+MCP/tract and companion ASR do not expand the frozen batch-product scope.
 
 ## Bumps while 0.x
 
 Cargo treats 0.x minor releases as potentially breaking. Before and during
-the final RC window we do **not** break the advertised surface silently:
+release-candidate qualification we do **not** break the advertised surface silently:
 
 | Change | Version |
 |--------|---------|

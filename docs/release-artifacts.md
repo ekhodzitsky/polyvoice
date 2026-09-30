@@ -165,8 +165,8 @@ Before a separately authorized publication:
    on the chosen core revision with `require_registry=true`. Retain all four
    platform reports; staged archive reports cannot substitute for this check.
 
-Kernel publication alone does not qualify core 1.0, start the RC stability
-window, or replace the deferred isolated M1 Pro quality/performance run.
+Kernel publication alone does not qualify core 1.0 or its release candidates,
+or replace the deferred isolated M1 Pro quality/performance run.
 
 To check that prerequisite without publishing, dispatch Release artifacts
 with `require_registry=true`. To test staged packages, leave it false.
