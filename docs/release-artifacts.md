@@ -99,15 +99,20 @@ Both modes require a child probe to observe OS permission errors for IPv4/IPv6
 TCP and UDP before any inference is accepted. Setup downloads, Cargo builds
 and wheel installation happen outside that restriction.
 
-Windows currently records **network isolation not enforced**: unavailable
-HTTP proxies are still configured, but they are not an OS network sandbox.
-Windows scenario success must not be described as proof of enforced offline
-operation. That qualification gap remains open. The `--require-offline` option
-fails on a platform without enforced isolation. Registry-backed/tag workflows
-require it, so Windows currently blocks publication even if its other scenarios
-pass. Staged PR/manual checks retain the explicit limitation instead.
-Network isolation here is
-independent of the exclusive-host requirement for Darwin performance timing.
+Windows uses application-scoped Windows Filtering Platform filters for the
+consumer executable and the base Python interpreter (used by venv redirectors).
+IPv4/IPv6 bind and connect operations are denied. The runner account needs WFP
+administration rights; unavailable rights fail the check. Filters belong to a
+[dynamic WFP session](https://learn.microsoft.com/en-us/windows/win32/api/fwpmu/nf-fwpmu-fwpmengineopen0)
+and disappear when its launcher exits, including on termination. A kill-on-close
+job also prevents a timed-out launcher leaving its consumer running. Loopback
+controls before and after the denial probe check that connectivity outside the
+launcher still works; the installed wheel interpreter gets an additional probe.
+These filters cover the named executables, not arbitrary unrelated child tools.
+
+All supported platforms require enforced isolation; there is no proxy-only
+success fallback. Network isolation here is independent of the exclusive-host
+requirement for Darwin performance timing.
 
 ## Published dependency prerequisite
 

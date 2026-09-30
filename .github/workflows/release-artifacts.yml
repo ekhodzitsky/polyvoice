@@ -127,8 +127,6 @@ jobs:
           kernels = list(p('packages').glob('polyvoice-kernels-*.crate'))
           if kernels:
               command += ['--staged-kernel', str(kernels[0])]
-          if '${{ inputs.require_registry }}' == 'true':
-              command += ['--require-offline']
           subprocess.run(command, check=True)
       - uses: actions/upload-artifact@v4
         with:

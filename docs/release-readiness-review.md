@@ -11,9 +11,9 @@ publication is authorized by this review.
 
 Subsequent preparation adds the [packaged consumer scenario suite](release-artifacts.md#consumer-scenarios),
 including duration boundaries and OS-enforced offline execution on Linux and
-Darwin. The table below remains the dated audit snapshot, not a claim about
-later candidates. Windows network isolation, exact-candidate qualification and
-the published RC window remain open.
+Darwin, plus application-scoped Windows network filters. The table below remains
+the dated audit snapshot, not a claim about later candidates. Exact-candidate
+qualification and the published RC window remain open.
 
 ## Evidence and gaps
 

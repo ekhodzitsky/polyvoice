@@ -104,7 +104,7 @@ def scenario_fixtures(work, speech):
     return cases
 
 
-def offline_prefix(work, env, report, required=False):
+def offline_prefix(work, env, report):
     system = platform.system()
     if system == 'Linux':
         launcher = work / 'offline'
@@ -114,11 +114,14 @@ def offline_prefix(work, env, report, required=False):
     elif system == 'Darwin':
         prefix = ['/usr/bin/sandbox-exec', '-p', '(version 1)(allow default)(deny network*)']
         method = 'Darwin sandbox; network operations denied'
+    elif system == 'Windows':
+        launcher = work / 'offline.exe'
+        run(['cl', '/nologo', '/W4', '/WX', '/D_CRT_SECURE_NO_WARNINGS',
+             CONSUMERS / 'offline-windows.c', 'fwpuclnt.lib', '/Fe:' + str(launcher)], work, env)
+        prefix = [launcher, sys.executable]
+        method = 'Windows WFP dynamic application filters; IPv4/IPv6 bind and connect denied'
     else:
-        if required:
-            raise ValueError('OS network isolation is required but not implemented on this platform')
-        report['network_isolation'] = 'not enforced; unavailable HTTP proxies only'
-        return []
+        raise ValueError('OS network isolation is not implemented on this platform')
     # A closed port/network outage is not an isolation success: require an OS
     # permission error for IPv4/IPv6 TCP and UDP in an actual child process.
     probe = """import errno,socket
@@ -137,7 +140,19 @@ for family, address in ((socket.AF_INET,('127.0.0.1',9)), (socket.AF_INET6,('::1
             raise AssertionError('offline filter allowed networking')
 print('IPv4/IPv6 TCP/UDP denied')
 """
+    control = """import socket
+for family, address in ((socket.AF_INET,('127.0.0.1',0)), (socket.AF_INET6,('::1',0))):
+    with socket.socket(family) as server:
+        server.bind(address)
+        server.listen()
+        with socket.socket(family) as client:
+            client.settimeout(2)
+            client.connect(server.getsockname())
+print('loopback available outside isolation')
+"""
+    run([sys.executable, '-c', control], work, env)
     report['network_isolation'] = {'method': method, 'probe': run([*prefix, sys.executable, '-c', probe], work, env).strip()}
+    report['network_isolation']['cleanup_probe'] = run([sys.executable, '-c', control], work, env).strip()
     return prefix
 
 
@@ -347,7 +362,7 @@ def smoke(args):
         env.update(POLYVOICE_VBX_PLDA_DIR=str(models), XDG_CACHE_HOME=str(work / "empty-cache"),
                    LOCALAPPDATA=str(work / "empty-cache"), HF_HOME=str(work / "empty-cache"),
                    HTTP_PROXY="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9", NO_PROXY="")
-        prefix = offline_prefix(work, env, report, required=getattr(args, 'require_offline', False))
+        prefix = offline_prefix(work, env, report)
         if args.cli:
             cli = work / args.cli.name
             shutil.copyfile(args.cli, cli)
@@ -387,6 +402,9 @@ def smoke(args):
             venv.EnvBuilder(with_pip=True).create(work / "venv")
             python = work / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             run([python, "-I", "-m", "pip", "install", "--no-index", "--no-deps", args.wheel], work, env)
+            if platform.system() == 'Windows':
+                probe = 'import socket,errno; s=socket.socket();\ntry: s.connect(("127.0.0.1",9))\nexcept OSError as e: assert e.errno==errno.EACCES, e\nelse: raise AssertionError("wheel interpreter escaped offline filter")'
+                report['network_isolation']['wheel_probe'] = run([*prefix, python, '-I', '-c', probe], work, env).strip() or 'permission denied'
             consumer = work / 'wheel-consumer.py'
             shutil.copyfile(CONSUMERS / 'wheel.py', consumer)
             report['surfaces']['wheel'] = exercise('wheel',
@@ -414,8 +432,6 @@ def main():
     for name in ("cli", "ffi", "wheel", "crate", "staged-kernel", "assets-dir", "cargo-target-dir"):
         parser.add_argument("--" + name, type=lambda p: Path(p).resolve())
     parser.add_argument("--report", required=True, type=lambda p: Path(p).resolve())
-    parser.add_argument("--require-offline", action="store_true",
-                        help="fail unless OS network isolation is enforced and probed")
     args = parser.parse_args()
     if not any((args.cli, args.ffi, args.wheel, args.crate)) or (args.staged_kernel and not args.crate):
         parser.error("provide an artifact; --staged-kernel requires --crate")
