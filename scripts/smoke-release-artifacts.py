@@ -360,7 +360,7 @@ def smoke(args):
             malformed.write_bytes(b'not a WAVE file')
             for name, argv, expected in [
                 ('malformed', [cli, 'diarize', malformed, '--models-cache', models, '--json'], 'not a WAVE container'),
-                ('invalid-config', [cli, 'diarize', cases['speech']['wav'], '--profile', 'invalid'], 'invalid value')]:
+                ('invalid-config', [cli, 'diarize', cases['speech']['wav'], '--profile', 'invalid'], 'unknown profile')]:
                 run([*prefix, *argv], work, env, reject=expected)
                 report['scenarios']['cli'][name] = {'error': name}
                 report['commands']['cli'][name] = [str(a) for a in [*prefix, *argv]]
