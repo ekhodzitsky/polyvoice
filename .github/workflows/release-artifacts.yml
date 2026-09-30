@@ -95,6 +95,16 @@ jobs:
           name: rust-packages
           path: packages
       # Both Linux targets use Rust kernels; system-openblas stays disabled.
+      - name: Verify Windows network isolation before building
+        if: runner.os == 'Windows'
+        shell: python
+        run: |
+          import json, pathlib, runpy, tempfile
+          gate = runpy.run_path('scripts/smoke-release-artifacts.py')
+          report = {}
+          with tempfile.TemporaryDirectory(prefix='polyvoice-preflight-') as work:
+              gate['offline_prefix'](pathlib.Path(work), gate['compiler_env'](), report)
+          print(json.dumps(report, indent=2))
       - run: cargo build --locked --release --features cli,ffi --bin polyvoice --lib --target ${{ matrix.target }}
       - run: python -m pip install 'maturin>=1.15,<2'
       - run: maturin build --manifest-path python/Cargo.toml --locked --release --interpreter python --compatibility pypi --auditwheel check --out wheels

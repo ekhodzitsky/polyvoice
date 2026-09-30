@@ -130,6 +130,7 @@ for family, address in ((socket.AF_INET,('127.0.0.1',9)), (socket.AF_INET6,('::1
         try:
             with socket.socket(family,kind) as connection:
                 connection.settimeout(2)
+                connection.bind((address[0],0))
                 if kind == socket.SOCK_STREAM:
                     connection.connect(address)
                 else:
@@ -142,13 +143,21 @@ print('IPv4/IPv6 TCP/UDP denied')
 """
     control = """import socket
 for family, address in ((socket.AF_INET,('127.0.0.1',0)), (socket.AF_INET6,('::1',0))):
-    with socket.socket(family) as server:
-        server.bind(address)
-        server.listen()
-        with socket.socket(family) as client:
-            client.settimeout(2)
-            client.connect(server.getsockname())
-print('loopback available outside isolation')
+    for kind in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
+        with socket.socket(family,kind) as server:
+            server.bind(address)
+            server.settimeout(2)
+            if kind == socket.SOCK_STREAM:
+                server.listen()
+            with socket.socket(family,kind) as client:
+                client.settimeout(2)
+                client.bind(address)
+                if kind == socket.SOCK_STREAM:
+                    client.connect(server.getsockname())
+                else:
+                    client.sendto(b'probe',server.getsockname())
+                    assert server.recv(5) == b'probe'
+print('IPv4/IPv6 TCP/UDP available outside isolation')
 """
     run([sys.executable, '-c', control], work, env)
     report['network_isolation'] = {'method': method, 'probe': run([*prefix, sys.executable, '-c', probe], work, env).strip()}
