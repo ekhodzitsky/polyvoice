@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject BYO audio exceeding its duration limit by even one sample. Duration
+  validation no longer rounds an over-limit one-hour input down through `f32`.
+
 - Invalidate thread-local packed GEMM weights when a native model is dropped,
   preventing stale weights when subsequent models reuse allocation addresses.
 

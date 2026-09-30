@@ -60,6 +60,60 @@ that were tested. Rust publication re-packages the same clean checkout with
 before invoking `cargo publish --locked`. Reports are retained with release
 artifacts. This is a functional packaging gate, not a DER/performance gate.
 
+## Consumer scenarios
+
+The gate additionally runs deterministic scenarios through CLI, C, installed
+wheel and both external native Rust consumers. Reports retain input hashes,
+commands and per-scenario results. All native front doors must agree on the
+shared inputs:
+
+- Real speech and a mixture of the two halves of that recording. The mixture
+  checks handling of simultaneous input signals; it is not a labeled overlap
+  accuracy benchmark and does not replace the corpus gates.
+- Empty audio and 100 samples at 16 kHz: the native segmenter rejects inputs
+  below 100 ms. Rust checks the segmentation error, Python checks `OSError`,
+  and the current C ABI returns `POLYVOICE_ERR_INFERENCE`. CLI must fail with
+  the short-audio diagnostic. One second of silence must return zero speakers.
+- Exactly one hour at 16 kHz, with the real-speech fixture at both ends and
+  silence between them. Results must contain speech in both the first and last
+  minute. This exercises the inclusive duration boundary, not the memory cost
+  of an hour of uninterrupted dense speech. One additional sample must fail.
+- Invalid sample rate for sample-array APIs; malformed WAV and invalid profile
+  for CLI; missing and corrupt local models for the downloader-free Rust path.
+  Errors are checked by variant/status/exception or a specific stderr diagnostic,
+  not merely by whether the process failed.
+
+The external BYO consumers now run `LegacyPipeline` with a caller-provided
+constant embedder. They cover empty/short/silent input, invalid VAD settings,
+speech, mixed tones, the hour boundary and over-limit rejection. BYO accepts
+empty input, unlike the native segmenter; its mocked speaker output does not
+establish native-model accuracy. Local Rust resolution also rejects the
+downloader/TLS dependency graph.
+
+On Linux, inference runs inside an unprivileged seccomp launcher that denies
+socket creation and outbound network calls, inherited by descendants. This
+test-only C helper uses the compiler already required by the C consumer; it
+is excluded from the published Rust crate and adds no product dependency.
+On Darwin, inference uses the OS sandbox with network operations denied.
+Both modes require a child probe to observe OS permission errors for IPv4/IPv6
+TCP and UDP before any inference is accepted. Setup downloads, Cargo builds
+and wheel installation happen outside that restriction.
+
+Windows uses application-scoped Windows Filtering Platform filters for the
+consumer executable and the base Python interpreter (used by venv redirectors).
+IPv4/IPv6 bind and connect operations are denied. The runner account needs WFP
+administration rights; unavailable rights fail the check. Filters belong to a
+[dynamic WFP session](https://learn.microsoft.com/en-us/windows/win32/api/fwpmu/nf-fwpmu-fwpmengineopen0)
+and disappear when its launcher exits, including on termination. A kill-on-close
+job also prevents a timed-out launcher leaving its consumer running. Loopback
+controls before and after the denial probe check that connectivity outside the
+launcher still works; the installed wheel interpreter gets an additional probe.
+These filters cover the named executables, not arbitrary unrelated child tools.
+
+All supported platforms require enforced isolation; there is no proxy-only
+success fallback. Network isolation here is independent of the exclusive-host
+requirement for Darwin performance timing.
+
 ## Published dependency prerequisite
 
 The changed native kernels are prepared as **0.1.3**; core requires at least
