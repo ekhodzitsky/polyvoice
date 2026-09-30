@@ -221,10 +221,10 @@ impl LegacyPipeline {
         extractor: &E,
         vad: &mut V,
     ) -> Result<(Vec<Vec<f32>>, Vec<TimeRange>), LegacyPipelineError> {
-        let actual_secs = samples.len() as f32 / self.config.window.sample_rate.get() as f32;
-        if actual_secs > self.config.max_duration_secs {
+        let actual_secs = samples.len() as f64 / self.config.window.sample_rate.get() as f64;
+        if actual_secs > f64::from(self.config.max_duration_secs) {
             return Err(LegacyPipelineError::AudioTooLong {
-                actual_secs,
+                actual_secs: actual_secs as f32,
                 max_secs: self.config.max_duration_secs,
             });
         }
@@ -379,6 +379,25 @@ mod tests {
         // LegacyPipeline exists; basic sanity check via debug print would require
         // accessing private fields, so we just verify construction succeeds.
         assert!(std::mem::size_of_val(&pipeline) > 0);
+    }
+
+    #[test]
+    fn hour_limit_rejects_one_extra_sample() {
+        let config = DiarizationConfig::default();
+        let vad_config = VadConfig::default();
+        let pipeline = LegacyPipeline::new(config, vad_config);
+        let samples = vec![0.0; 16_000 * 3600 + 1];
+        let extractor = crate::embedder::DummyExtractor::new(256);
+        let mut vad = crate::vad::EnergyVad::new(-40.0, 16000, 512);
+        assert!(matches!(
+            pipeline.run(&samples, &extractor, &mut vad),
+            Err(LegacyPipelineError::AudioTooLong { .. })
+        ));
+        assert!(
+            pipeline
+                .run(&samples[..samples.len() - 1], &extractor, &mut vad)
+                .is_ok()
+        );
     }
 
     #[test]

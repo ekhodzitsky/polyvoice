@@ -3,7 +3,10 @@
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import socket
+import sys
 import tarfile
 import tempfile
 from types import SimpleNamespace
@@ -16,6 +19,45 @@ spec.loader.exec_module(smoke)
 
 
 class GateTests(unittest.TestCase):
+    def test_rejection_requires_nonzero_exit_and_expected_stderr(self):
+        for code, stderr in [(0, 'audio too long'), (1, 'unrelated failure')]:
+            with patch.object(smoke.subprocess, 'run', return_value=SimpleNamespace(
+                    returncode=code, stdout='', stderr=stderr)), self.assertRaises(ValueError):
+                smoke.run(['audio too long'], '.', reject='audio too long')
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux seccomp launcher')
+    def test_offline_child_denies_network_without_affecting_parent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = {}
+            prefix = smoke.offline_prefix(Path(directory), os.environ.copy(), report)
+            self.assertIn('IPv4/IPv6 TCP/UDP denied', report['network_isolation']['probe'])
+            with self.assertRaisesRegex(RuntimeError, 'Operation not permitted'):
+                smoke.run([*prefix, sys.executable, '-c', 'import socket; socket.socket()'], directory)
+            with socket.socket():
+                pass
+
+    def test_silence_accepts_only_an_empty_result(self):
+        self.assertEqual(smoke.validate_result({'num_speakers': 0, 'turns': []}, 1, speech=False),
+                         {'num_speakers': 0, 'turns': []})
+        with self.assertRaises(ValueError):
+            smoke.validate_result({'num_speakers': 1, 'turns': []}, 1, speech=False)
+
+    def test_hour_fixture_cannot_pass_with_only_its_beginning_processed(self):
+        result = {'num_speakers': 1, 'turns': [{'speaker': 0, 'time': {'start': 1, 'end': 2}}]}
+        with self.assertRaisesRegex(ValueError, 'end of'):
+            smoke.validate_result(result, 3600, require_tail=True)
+
+    def test_generated_fixtures_have_real_duration_and_end_speech(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cases = smoke.scenario_fixtures(Path(directory), b'\x01\x00' * 16000)
+            hour = cases['hour']
+            import wave
+            with wave.open(str(hour['wav'])) as audio:
+                self.assertEqual(audio.getnframes(), 16000 * 3600)
+                audio.setpos(16000 * 3600 - 1)
+                self.assertEqual(audio.readframes(1), b'\x01\x00')
+            self.assertEqual(cases['too-long']['pcm'].stat().st_size, (16000 * 3600 + 1) * 4)
+
     def test_windows_tool_uses_compiler_environment_path(self):
         env = {"PATH": "C:/MSVC/bin"}
         with patch.object(smoke.os, 'name', 'nt'), \

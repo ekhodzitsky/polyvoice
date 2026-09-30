@@ -9,6 +9,12 @@ The [product scope](../PRODUCTION-READINESS.md) remains batch native CPU
 diarization through Rust, CLI, Python and C ABI v3. No release, tag or package
 publication is authorized by this review.
 
+Subsequent preparation adds the [packaged consumer scenario suite](release-artifacts.md#consumer-scenarios),
+including duration boundaries and OS-enforced offline execution on Linux and
+Darwin. The table below remains the dated audit snapshot, not a claim about
+later candidates. Windows network isolation, exact-candidate qualification and
+the published RC window remain open.
+
 ## Evidence and gaps
 
 | Requirement | Observed evidence | Remaining release blocker |
