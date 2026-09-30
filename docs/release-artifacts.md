@@ -132,6 +132,42 @@ publishers. The kernel release must therefore be reviewed and published
 separately before tagging the core release. Nothing in the smoke workflow
 publishes kernels automatically or silently weakens this prerequisite.
 
+### Kernel publication preparation
+
+The 0.1.3 package audit found and restored the public
+`POWERSET_MIN_SAMPLES` export from 0.1.2. CI compares against the published
+0.1.2 API on Linux and on both Apple backends. The kernel archive includes
+the MIT copyright/license notice and a backend/dependency README. This work
+does not change numerical kernels or select a new default backend.
+
+Local preparation on 2026-09-30 verified the locked publish dry-run,
+196 Linux API compatibility checks, and a consumer outside the workspace
+using the unpacked archive on stable Rust and MSRV 1.94.0. The consumer checks
+public constants, GEMM results, missing-model errors, parallelism controls
+and scratch reclamation. The workspace advisory, license, ban and source
+checks pass. The default Linux kernel graph contains 24 external packages
+including build/proc-macro dependencies; this is not a zero-dependency crate.
+The audit adds no dependency. Packaged full-inference scenarios remain
+covered by the four-platform artifact workflow.
+
+Before a separately authorized publication:
+
+1. Choose a clean, reviewed commit with successful CI, including kernel API
+   checks and staged artifact consumers. Record its SHA and archive SHA-256.
+2. Run `cargo publish --dry-run --locked -p polyvoice-kernels` from that commit.
+   Inspect `target/package/polyvoice-kernels-0.1.3.crate`, including its
+   `.cargo_vcs_info.json`, manifest, README, license and source files. A dry-run
+   verifies packaging/building; it does not upload or prove registry availability.
+3. Obtain explicit publication approval for that version and commit. Only then
+   run `cargo publish --locked -p polyvoice-kernels`. Do not use a core release
+   tag to publish this dependency.
+4. Verify the registry version and checksum, then dispatch Release artifacts
+   on the chosen core revision with `require_registry=true`. Retain all four
+   platform reports; staged archive reports cannot substitute for this check.
+
+Kernel publication alone does not qualify core 1.0, start the RC stability
+window, or replace the deferred isolated M1 Pro quality/performance run.
+
 To check that prerequisite without publishing, dispatch Release artifacts
 with `require_registry=true`. To test staged packages, leave it false.
 Locally, package both crates and run the harness with their archive paths:
