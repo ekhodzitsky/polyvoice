@@ -60,7 +60,7 @@ cargo run -p polyvoice-asr --features cli --bin polyvoice-transcribe -- \
 Prebuilt export — MatMul weights int8 `MatMulNBits` (128-wide blocks), Conv
 weights per-output-channel int8, activations and decoder FP32. Word-loss
 neutral vs the FP32 export (2 / 13 312 boundary words; protocol and numbers
-in [docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/main/docs/BENCHMARKS.md)):
+in [docs/BENCHMARKS.md](https://github.com/ekhodzitsky/polyvoice/blob/master/docs/BENCHMARKS.md)):
 
 ```bash
 mkdir -p models/parakeet-tdt-w8 && cd models/parakeet-tdt-w8
