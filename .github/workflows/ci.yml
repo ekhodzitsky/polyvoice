@@ -20,45 +20,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            flags: --all-targets --features cli
-          - os: ubuntu-latest
-            flags: --all-targets --all-features
-          - os: macos-latest
-            flags: --all-targets --features cli
-          - os: windows-latest
-            flags: --all-targets --features cli
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install optional OpenBLAS backend
-        if: runner.os == 'Linux' && contains(matrix.flags, '--all-features')
-        run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
-      # Pin a complete, present Xcode on macOS: the floating `macos-latest`
-      # image intermittently leaves a default selection whose clang runtime
-      # (`libclang_rt.osx.a`) is missing, breaking the link with
-      # `ld: library 'clang_rt.osx' not found`. Selecting latest-stable makes
-      # the clang resource dir deterministic.
-      - if: runner.os == 'macOS'
-        id: xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          # Key the cache to the Xcode version: build-script outputs embed
-          # absolute toolchain paths, so a cache built under another Xcode
-          # poisons the link line (dead -L search paths, missing clang_rt).
-          key: xcode-${{ steps.xcode.outputs.version }}
-      - run: cargo check ${{ matrix.flags }} --locked
-
   standalone-lockfiles:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     # python/, fuzz/, and polyvoice-asr-sherpa/ build outside the workspace with
     # their own lockfiles — prove none of them drifted out of sync with its
     # manifest (a version bump or feature edit in the core crate invalidates
@@ -74,6 +38,8 @@ jobs:
       - run: bash scripts/check-standalone-lockfiles.sh
 
   fmt:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +48,11 @@ jobs:
           components: rustfmt
       - run: cargo fmt --check
 
+  # Clippy also compiles these exact platform/feature/target combinations;
+  # a separate cargo check matrix would repeat that compiler work.
   clippy:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -101,7 +71,7 @@ jobs:
       - name: Install optional OpenBLAS backend
         if: runner.os == 'Linux' && contains(matrix.flags, '--all-features')
         run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
-      # See the `check` job: deterministic Xcode so macOS linking is stable.
+      # Pin a complete Xcode toolchain so native linking is reproducible.
       - if: runner.os == 'macOS'
         id: xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -118,7 +88,7 @@ jobs:
           key: clippy-xcode-${{ steps.xcode.outputs.version }}-${{ matrix.os }}-${{ matrix.flags }}-${{ hashFiles('Cargo.toml', '**/Cargo.toml', '**/Cargo.lock') }}
           cache-on-failure: false
       - shell: bash
-        run: cargo clippy ${{ matrix.flags }} -- -D warnings 2>&1 | tee clippy.log
+        run: cargo clippy ${{ matrix.flags }} --locked -- -D warnings 2>&1 | tee clippy.log
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -126,6 +96,8 @@ jobs:
           path: clippy.log
 
   test:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -144,7 +116,7 @@ jobs:
       - name: Install optional OpenBLAS backend
         if: runner.os == 'Linux' && contains(matrix.flags, '--all-features')
         run: sudo apt-get update -qq && sudo apt-get install -y libopenblas-dev pkg-config
-      # See the `check` job: deterministic Xcode so macOS linking is stable.
+      # Pin a complete Xcode toolchain so native linking is reproducible.
       - if: runner.os == 'macOS'
         id: xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -165,6 +137,8 @@ jobs:
   # Locked Darwin Vox-3 floors (DER + INT8 pair size). RTF/RSS still need an
   # isolated release host; they skip here because GHA macOS is not that host.
   native-scoreboard:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -192,6 +166,8 @@ jobs:
         run: cargo test --release --features cli --test native_scoreboard --locked -- --nocapture
 
   asr-companion:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     # Opt-in ASR companion (polyvoice-asr). One ort version in the lockfile
     # (Parakeet). Transcribe diarizes with kernels (`--features cli`).
     runs-on: ubuntu-latest
@@ -220,6 +196,7 @@ jobs:
       - run: cargo test -p polyvoice-asr --locked
 
   doc:
+    needs: docs-links
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -232,12 +209,12 @@ jobs:
           RUSTDOCFLAGS: "-D warnings"
 
   coverage:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
-    # Two instrumented nextest passes (cli-native + all-features). The native
-    # pass runs full diarization e2e plus Vox-3 in debug + llvm-cov; on a slow
-    # runner that alone can exceed 45 min if those children share the CPUs.
-    # Heavy tests are exclusive via nextest profile `coverage`. Cold instrumented
-    # builds have measured 85+ min, so the cap carries headroom for slow runners.
+    # Retain both instrumented feature graphs and the 90% line floor. Test
+    # profiles optimize kernel math dependencies, not the covered application.
+    # Heavy model tests remain exclusive in the coverage nextest profile.
     timeout-minutes: 150
     permissions:
       contents: read
@@ -297,6 +274,8 @@ jobs:
   # under miri, so a UB regression in them fails the PR. Broader/experimental
   # miri coverage belongs in a separate non-blocking lane, not here.
   miri:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -313,6 +292,8 @@ jobs:
           MIRIFLAGS: "-Zmiri-disable-isolation"
 
   valgrind:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -327,6 +308,8 @@ jobs:
             "$BIN" ffi_create_invalid_profile_returns_invalid_arg ffi_create_null_out_handle_returns_error
 
   loom:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -341,6 +324,8 @@ jobs:
   # The probe run hides frozen entry points in a scratch copy and requires
   # the gate to report them.
   semver-checks:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -357,6 +342,8 @@ jobs:
         run: cargo semver-checks check-release -p polyvoice-kernels --baseline-version 0.1.2 --default-features --release-type minor
 
   audit:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -368,6 +355,8 @@ jobs:
       - run: cargo audit
 
   deny:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -378,6 +367,8 @@ jobs:
       - run: cargo deny check advisories licenses bans sources
 
   darwin-rust-kernels:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: macos-14
     timeout-minutes: 30
     steps:
@@ -412,21 +403,51 @@ jobs:
           if-no-files-found: error
 
   corpus-protocol:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/test-notsofar-eval.py
       - run: python3 scripts/test-release-quality.py
 
-  # Relative markdown links under README/docs/python/examples (no network).
+  # Relative links across all tracked Markdown files (no network).
   docs-links:
     runs-on: ubuntu-latest
+    outputs:
+      full_ci: ${{ steps.scope.outputs.full_ci }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Select checks from the actual diff
+        id: scope
+        shell: python
+        run: |
+          import json, os, subprocess
+          event = json.load(open(os.environ['GITHUB_EVENT_PATH']))
+          kind, ref = os.environ['GITHUB_EVENT_NAME'], os.environ['GITHUB_REF']
+          base = None
+          if kind == 'pull_request':
+              base = 'HEAD^1'  # checkout's tested merge against the PR base
+          elif kind == 'push' and ref.startswith('refs/heads/'):
+              base = event.get('before')
+          full = True  # tags, schedules, manual runs and unknown diffs run everything
+          if base and base != '0' * 40:
+              diff = subprocess.run(['git', 'diff', '--no-renames', '--name-only', '-z', base, 'HEAD'],
+                                    capture_output=True)
+              if diff.returncode == 0:
+                  full = any(not path.endswith(b'.md') for path in diff.stdout.split(b'\0') if path)
+          value = str(full).lower()
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'full_ci={value}\n')
+          print(f'Full CI: {value}')
       - name: Check internal markdown links
         run: bash scripts/check-docs-links.sh
 
   hack:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -443,6 +464,8 @@ jobs:
       - run: cargo hack check --feature-powerset --depth 2 --lib --bins --exclude-features cli-bin,infer
 
   msrv:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -455,6 +478,8 @@ jobs:
       - run: cargo check --lib --features cli
 
   machete:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -464,22 +489,9 @@ jobs:
           tool: cargo-machete
       - run: cargo machete
 
-  kani:
-    runs-on: ubuntu-latest
-    # Skip (green) until a Kani release bundles rustc >= 1.94. The crate
-    # MSRV (rten-gemm) is 1.94; Kani 0.67.0 ships nightly-2025-11-21 (1.93),
-    # which cargo rejects. `continue-on-error` still paints a red X on the
-    # job. Upstream: https://github.com/model-checking/kani/issues/4603
-    # Restore `model-checking/kani-github-action@v1` with `args: --lib`
-    # when a Kani release includes rustc >= 1.94.
-    steps:
-      - name: Skip until Kani ships rustc >= 1.94
-        run: |
-          echo "Kani 0.67.0 bundles rustc 1.93; polyvoice MSRV is 1.94."
-          echo "Re-enable cargo kani --lib when a Kani release includes rustc >= 1.94."
-          echo "https://github.com/model-checking/kani/issues/4603"
-
   cross-aarch64-linux:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     env:
       CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
@@ -501,6 +513,8 @@ jobs:
   # graph. This job proves the crate builds/tests standalone AND that the
   # core tree stays sherpa-free.
   asr-sherpa:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -529,6 +543,8 @@ jobs:
   # no-native-dylib builds. Fail the PR if a feature regression reintroduces
   # dep:ort. Also check + test the default-free lib surface.
   ort-free-core:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -559,6 +575,8 @@ jobs:
       - run: cargo clippy --no-default-features --features cli-native --all-targets --locked -- -D warnings
 
   wasm32-smoke:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -569,6 +587,8 @@ jobs:
       - run: cargo check --target wasm32-unknown-unknown --no-default-features --lib
 
   docker-smoke:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -586,6 +606,8 @@ jobs:
           test -s out.rttm
 
   sign-manifest-dry-run:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -594,6 +616,8 @@ jobs:
       - run: ./scripts/sign-models.sh --dry-run
 
   linux-blas:
+    needs: docs-links
+    if: needs.docs-links.outputs.full_ci == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

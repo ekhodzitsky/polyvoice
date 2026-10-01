@@ -3,6 +3,7 @@ name: Fuzz
 on:
   pull_request:
     branches: [master, main]
+    paths-ignore: ['**/*.md']
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:

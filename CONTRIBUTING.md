@@ -85,6 +85,23 @@ pytest tests/ -v
 
 Ignored tests that need models or network are intentional; release DER gates live in CI.
 
+### CI scope and runtime
+
+Markdown-only PRs and single-commit branch pushes run link checks and rustdoc.
+Code, manifests, workflows, unknown diffs, tags, schedules and manual CI runs
+keep the full matrix. Clippy performs the former check matrix's compilation
+with the same targets/features and locked dependencies. The unavailable Kani
+placeholder is not counted as a check; its proofs remain in the source for a
+compatible toolchain.
+
+All model tests remain enabled on their existing platforms. The test profile
+optimizes kernel/GEMM dependencies while keeping application code, debug
+assertions and overflow checks unchanged. Coverage still instruments both
+native and all-features graphs and enforces the same 90% floor. Integration
+tests use the binary built by their own Cargo invocation, never a leftover
+release executable. Release profiles, packaged consumers, exact-revision
+corpus gates and isolated Darwin resource floors are unchanged.
+
 ## Areas for contribution
 
 Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues). Local work

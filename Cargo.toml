@@ -299,3 +299,17 @@ unwrap_used = "deny"
 lto = true
 codegen-units = 1
 strip = true
+
+# Keep application debug assertions and coverage intact while avoiding scalar
+# debug inference in test subprocesses. Release profiles are unchanged.
+[profile.test.package.polyvoice-kernels]
+opt-level = 2
+
+[profile.test.package.rten-gemm]
+opt-level = 2
+
+[profile.test.package.rten-tensor]
+opt-level = 2
+
+[profile.test.package.rten-simd]
+opt-level = 2

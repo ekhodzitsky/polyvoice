@@ -24,9 +24,15 @@ on:
       - 'scripts/artifact-consumers/**'
       - '.github/workflows/release*.yml'
       - '.github/workflows/python-wheels.yml'
+      - '!**/*.md'
 
 permissions:
   contents: read
+
+# Superseded PR builds are disposable; qualified/manual release runs are not.
+concurrency:
+  group: release-artifacts-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   packages:
