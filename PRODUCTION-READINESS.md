@@ -1,6 +1,6 @@
 # Production readiness and the 1.0 contract
 
-**Development version: 0.22.0 (unreleased). Updated: 2026-09-30.**
+**Development version: 1.0.0-rc.1 (unreleased). Updated: 2026-10-01.**
 **1.0 status: NOT GO.** The contract below defines the intended release;
 it does not certify the current revision or qualify a release candidate.
 

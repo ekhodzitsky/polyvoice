@@ -1,6 +1,6 @@
 # Documentation index
 
-Development version: **0.22.0 (unreleased)** ([CHANGELOG](../CHANGELOG.md)). Production profiles
+Development version: **1.0.0-rc.1 (unreleased)** ([CHANGELOG](../CHANGELOG.md)). Production profiles
 use **INT8** models only. CLI / FFI / MCP default is **kernels**
 (`pipeline-native`), not ONNX Runtime. Canonical accuracy protocol:
 [BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:

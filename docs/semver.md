@@ -1,8 +1,8 @@
 # Semver and API freeze
 
-Development version is **0.22.0** (unreleased). This is not `1.0.0`. The GO checklist in
+Development version is **1.0.0-rc.1** (unreleased). This is not `1.0.0`. The GO checklist in
 [`PRODUCTION-READINESS.md`](../PRODUCTION-READINESS.md) stays open until a
-freeze window has held and the other 1.0 boxes are true.
+release-candidate qualification and the other 1.0 boxes are complete.
 
 This document is the advertised-surface contract. Breaking the frozen
 surface without a CHANGELOG **Breaking** entry is a bug.
@@ -92,8 +92,9 @@ per feature set:
 
 Every run passes `--release-type minor`, so the 0.x compatibility lints are
 evaluated instead of being waived by the version bump. A detected break is
-accepted only when the crate's minor version is above the baseline's **and**
-`CHANGELOG.md` has a `### Breaking` section under `## [Unreleased]`;
+accepted only when the crate's major or minor version is above the baseline's **and**
+`CHANGELOG.md` has a `### Breaking` section under `## [Unreleased]` or
+the current version heading;
 otherwise the job fails and names what is missing. A set whose features do
 not exist at the baseline is skipped: a feature introduced after the last
 release has no contract until that release is tagged.
