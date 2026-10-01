@@ -5,7 +5,8 @@
 Polyvoice positions itself as a **Rust-native, CPU-first, MIT-licensed, ungated**
 speaker diarization engine (ort-free library core; product CLI/FFI/MCP is
 hand-written INT8 kernels; no ONNX Runtime in the core crate)
-with first-class streaming and a small (~8.4 MB INT8) footprint. The list below
+with a separate BYO streaming API and a small (~8.4 MB INT8 neural pair) footprint.
+The stable native product is batch; model size excludes PLDA and process memory. The list below
 compares the main open-source alternatives and what polyvoice can learn from them.
 
 ## Polyvoice baseline
@@ -13,12 +14,12 @@ compares the main open-source alternatives and what polyvoice can learn from the
 | Property | Value |
 |---|---|
 | Repository | https://github.com/ekhodzitsky/polyvoice |
-| Language | Rust (pure-Rust core; product CLI is kernels; ONNX via `ort` is opt-in) |
-| License | MIT (code and shipped models) |
+| Language | Rust (pure-Rust core; product CLI is kernels; ONNX-file adapters use experimental tract; no core `ort`) |
+| License | MIT code/neural pair; CC-BY-4.0 VBx PLDA |
 | Deployment | CPU-first, ~8.4 MB INT8, no Python runtime, no `libonnxruntime` on the product CLI |
 | Bindings | Rust library, Python (maturin), C FFI, CLI, MCP server |
 | Streaming | First-class `streaming::StreamingPipeline` |
-| DER benchmark | 15.33% on VoxConverse-test (collar 0, overlap-scored; v2+VBx kernels, 2026-09-08; H2H 2026-08 vs speakrs 11.08%) |
+| DER benchmark | 13.34% Linux / 13.33% Darwin in 1.0.0 (collar 0, micro, overlap-scored); historical H2H rows below use older builds |
 
 ## Competitor comparison
 
@@ -74,8 +75,8 @@ compares the main open-source alternatives and what polyvoice can learn from the
 **Should polyvoice continue? Yes.**
 
 Polyvoice owns a defensible niche that the Python/C++ incumbents do not serve
-well: a **Rust-native, CPU-first, MIT-licensed, ungated, streaming diarization
-engine** that embeds into apps without a PyTorch stack. The product CLI is
+well: a **Rust-native, CPU-first, MIT-licensed, ungated batch diarization
+engine with a separate BYO streaming API** that embeds into apps without a PyTorch stack. The product CLI is
 hand-written INT8 kernels (no `libonnxruntime`), including the Python wheel.
 ONNX Runtime is not in the core crate (`polyvoice-asr` still pins `ort` for
 Parakeet). Competitors are stronger on accuracy,

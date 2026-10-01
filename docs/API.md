@@ -48,7 +48,9 @@ let mut pipeline = StreamingPipeline::with_latency_preset(
 Turns may carry `stable: false` while a speaker is still provisional; once
 `stable: true`, that speaker ID is immutable for the session. See
 `docs/BENCHMARKS.md` (latency + RTF + DER reported separately) and the
-`streaming` module rustdoc. CLI: `--latency-preset realtime|balanced|accurate`.
+`streaming` module rustdoc. The CLI also accepts
+`--latency-preset realtime|balanced|accurate` to configure window geometry;
+it still processes complete files and does not expose this streaming API.
 
 ## Core Types
 
@@ -83,6 +85,12 @@ symphonia and any rate is resampled to 16 kHz; `.wav` still uses `ryf`.
 `WavError::Read` is a message string (not a decoder crate's error type).
 
 ### `DiarizationResult`
+
+Selected fields below; this is not the complete struct definition. The type
+is `#[non_exhaustive]`: use `DiarizationResult::new(segments, turns, count)`
+and its builders instead of an external struct literal. Metadata includes
+`schema_version`, `audio`, `provenance`, `speakers` and `exclusive_turns`.
+
 ```rust
 pub struct DiarizationResult {
     pub segments: Vec<Segment>,
@@ -207,7 +215,7 @@ CLI-parity default. `cli` is `pipeline-native` + `vbx`.
 | `embed_window_secs` | `None` | `Some(w)` = dense windows inside segments |
 | `as_norm` | `None` | **AHC only** — AS-norm z-scores vs imposter cohort |
 | `domain` | `None` | **AHC only** — calibrated profile (`voxconverse` / `ami` / `callhome`) |
-| `execution_provider` | `auto()` | CoreML / XNNPACK when compiled in; else CPU |
+| `execution_provider` | `auto()` | Native product accepts `auto` or CPU; other providers are rejected before model loading |
 
 `run` rejects sample rates other than the config rate and audio longer than
 `MAX_AUDIO_SAMPLES` (~1 hour @ 16 kHz) with `PipelineError::AudioTooLong`.
@@ -216,7 +224,7 @@ CLI-parity default. `cli` is `pipeline-native` + `vbx`.
 
 Optional **AHC** scoring upgrades (ignored when `clusterer` is VBx / NME-SC):
 
-- **`as_norm: Some(AsNormConfig { top_n, cohort })`** — pairwise cosine scores
+- **`as_norm: Some(AsNormConfig::new(cohort, top_n))`** — pairwise cosine scores
   are z-normalized against an imposter cohort before AHC merge. Threshold is a
   **z-score** (calibrated domains use roughly z = 4–5), not raw cosine.
   Cohort: explicit path, or registry model id / `POLYVOICE_ASNORM_COHORT`.
@@ -232,10 +240,10 @@ use polyvoice::pipeline_v2::ClustererKind;
 // ...
 cfg.clusterer = ClustererKind::Ahc { threshold: 0.45 }; // ignored if domain set
 cfg.domain = Some(polyvoice::clusterer::domain::AMI);
-cfg.as_norm = Some(AsNormConfig {
-    top_n: 50,
-    cohort: CohortSource::ModelId("asnorm_cohort".into()),
-});
+cfg.as_norm = Some(AsNormConfig::new(
+    CohortSource::ModelId("asnorm_cohort".into()),
+    50,
+));
 ```
 
 ### CLI flags (feature `cli`)
@@ -265,7 +273,7 @@ let pipeline = Pipeline::builder()
     .config(cfg)
     .with_models_from(ModelRegistry::default()?)
     .build()?;
-let sr = SampleRate::new(16000).unwrap();
+let sr = SampleRate::new(16000).ok_or("invalid sample rate")?;
 let result = pipeline.run(&samples, sr)?;
 ```
 
@@ -323,13 +331,13 @@ ort-free graph on every PR.
 ## WebAssembly
 
 The algorithmic core compiles for `wasm32-unknown-unknown` with **empty
-default features** (ort-free). Production ONNX is not the default feature set:
+default features** (ort-free). This checks the BYO/algorithm subset:
 
 ```bash
 cargo check --target wasm32-unknown-unknown --no-default-features --lib
 ```
 
-ONNX-based profiles need an execution provider for the target. CI job
+The complete native model pipeline is not qualified for WebAssembly. CI job
 `wasm32-smoke` verifies the ort-free build on every push.
 
 ## Performance Tuning

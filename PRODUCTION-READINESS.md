@@ -1,30 +1,30 @@
 # Production readiness and the 1.0 contract
 
-**Release version: 1.0.0. Updated: 2026-10-01.**
-**Decision: GO for gated promotion from the first qualified candidate.**
-This authorizes publication only after the exact stable revision passes all
-requirements below. A failed or pending gate blocks publication; changing the
-version does not certify the source tree.
+**Released: 1.0.0 on 2026-10-01. Verdict: GO for the native CPU batch product.**
+The qualified release revision is `80bf4b1f95f8ca43b8f9351d717eddd72ac5f9cb`.
+Later documentation or CI changes on `master` do not redefine that immutable
+release or inherit its exact-revision qualification.
 
-The first candidate is `348c370f619f710cd419d2c90ef28aab995b4eee`:
+- [crates.io](https://crates.io/crates/polyvoice/1.0.0),
+  [PyPI](https://pypi.org/project/polyvoice/1.0.0/) and
+  [GitHub Release](https://github.com/ekhodzitsky/polyvoice/releases/tag/v1.0.0).
+- [Source CI](https://github.com/ekhodzitsky/polyvoice/actions/runs/36872127154)
+  and [candidate PR checks](https://github.com/ekhodzitsky/polyvoice/pull/114/checks).
+- [Trusted Linux and isolated Darwin measurements](https://github.com/ekhodzitsky/polyvoice/actions/runs/36872147600).
+- [Registry-backed consumers on four platforms](https://github.com/ekhodzitsky/polyvoice/actions/runs/36872152458).
+- [Tag release workflow](https://github.com/ekhodzitsky/polyvoice/actions/runs/36895132997):
+  release gate, four-platform consumers and both registry publishers passed.
+  The GitHub asset uploader failed on report metadata; the draft was completed
+  manually after checking all 13 product asset hashes and all four wheel hashes.
+  The complete platform-separated reports are retained in the release's
+  `polyvoice-1.0.0-quality-evidence.tar.gz` attachment. The failed publishing job
+  is not presented as a successful CI run.
 
-- [Repository CI](https://github.com/ekhodzitsky/polyvoice/actions/runs/36853027859)
-  passed all checks for the candidate preparation.
-- [Trusted quality evidence](https://github.com/ekhodzitsky/polyvoice/actions/runs/36854738660)
-  qualifies that exact candidate on Linux and isolated Darwin, including all
-  five locked scoreboard limits.
-- [Registry-backed packaged consumers](https://github.com/ekhodzitsky/polyvoice/actions/runs/36854742784)
-  passed on Linux x86_64/ARM64, macOS ARM64 and Windows x86_64.
-- [Candidate publication](https://github.com/ekhodzitsky/polyvoice/actions/runs/36866577813)
-  records the tag gate, tested artifacts and each publisher's outcome. It must
-  finish successfully before stable publication.
-
-These candidate results do not replace fresh checks for the stable commit.
-The successful `v1.0.0` Release workflow and its retained reports are the final
-release verdict. Its GitHub release attaches the revision-bound measurements
-and packaged-consumer reports. No second RC or calendar waiting period is
-mandatory. The [pre-candidate review](docs/release-readiness-review.md) remains
-a historical account of the earlier gaps.
+[RC1](https://github.com/ekhodzitsky/polyvoice/releases/tag/v1.0.0-rc.1) was
+published and qualified before promotion. A second RC or calendar delay is
+not mandatory; every technical gate remains required. The
+[pre-candidate review](docs/release-readiness-review.md) is a dated historical
+NO-GO, superseded for 1.0.0 by the evidence above.
 
 ## Supported product scope
 
@@ -78,7 +78,7 @@ and feature/platform matrix.
 
 ## Platforms and required release evidence
 
-The intended native target set follows the current CLI release matrix:
+The qualified 1.0.0 native target set is:
 
 | Platform | Rust target | Required 1.0 evidence |
 |----------|-------------|-----------------------|
@@ -87,8 +87,7 @@ The intended native target set follows the current CLI release matrix:
 | macOS ARM64 | `aarch64-apple-darwin` | Same checks plus the locked Darwin scoreboard |
 | Windows x86_64 | `x86_64-pc-windows-msvc` | Same checks with the shipped DLL/header and executable |
 
-This table is an acceptance requirement, not a claim that every check is
-already automated. Release metadata must record supported OS baselines,
+All four rows passed the published artifact gate for 1.0.0. Release metadata must record supported OS baselines,
 CPU requirements, system libraries and compiler versions. macOS Intel and
 other targets are not in this release matrix. wasm32 checks cover the
 algorithm/BYO subset, not complete native diarization.
@@ -161,9 +160,8 @@ its applicability; changed model or inference code requires fresh runs.
 
 ## 1.0 GO checklist
 
-Every requirement below must have passing evidence before publication.
-Candidate evidence is linked above; the final tagged workflow must retain the
-corresponding evidence for its own exact revision.
+The 1.0.0 evidence is linked above. These requirements remain mandatory for
+future releases; a successful earlier version does not qualify a new commit.
 
 - **API boundary finalized.** Advertised Rust features, CLI, Python,
       C ABI and JSON contracts have compatibility checks. Publicly reachable
@@ -188,7 +186,8 @@ corresponding evidence for its own exact revision.
       with the tagged release evidence; the supported scope and limitations
       in this document remain part of that decision.
 
-The release decision is conditional on this checklist and the successful
-final tagged workflow. Experimental tract performance,
+Future release decisions require this checklist and successful publication
+workflows. The completed 1.0.0 publication and its GitHub upload recovery are
+recorded above. Experimental tract performance,
 Parakeet runtime upgrades and removal of every external Rust crate are
 tracked separately and must not be substituted for these batch-product gates.

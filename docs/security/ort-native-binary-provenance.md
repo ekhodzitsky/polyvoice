@@ -5,6 +5,10 @@ Status: current as of ort 2.0.0-rc.12 (verified 2026-07-13 against the
 "unpinned native binary" concern in `audit-2026-05-08.md` for this ort
 version.
 
+The native 1.0 core does not depend on ONNX Runtime. This provenance applies
+to the separate Parakeet ASR companion and all-feature workspace checks, not
+the shipped diarization CLI or Python wheel.
+
 ## What `download-binaries` actually does in rc.12
 
 The earlier audit assumed the feature fetches an **unpinned** native ONNX
@@ -43,11 +47,11 @@ proxy cannot substitute a binary without failing the build.
    remove this and is not currently justified.
 2. **Availability**: `cdn.pyke.io` must be reachable on a cold build. CI now
    caches the verified binary (`ort.pyke.io` cache directory, keyed by
-   `Cargo.lock`) in the release workflow, so publishes do not depend on the
-   CDN being up and any cold fetch is visible as a cache miss in the log.
-3. **Release-candidate track**: ort is still `2.0.0-rc.12`. Graduating to
-   stable `ort 2.0` is already a hard precondition of the `1.0.0` milestone
-   (see the versioning policy); until then we track rc bumps deliberately —
+   `Cargo.lock`) in the release workflow, so a warm cache avoids another CDN fetch. A cold cache still requires
+   CDN availability; cache misses remain visible in the log.
+3. **Release-candidate track**: ort is still `2.0.0-rc.12`. The companion tracks upgrades independently;
+   stable `ort 2.0` is not a prerequisite for the no-ORT core 1.0 release.
+   Track companion rc bumps deliberately —
    each bump changes `dist.txt` and therefore re-pins the native binary,
    reviewed like any dependency update.
 
@@ -56,5 +60,5 @@ proxy cannot substitute a binary without failing the build.
 - `dist.txt` still pins our three release targets with SHA-256 over https.
 - The build script still hard-fails on hash mismatch (no downgrade to a
   warning).
-- `scripts/check-ort-version.sh` still holds polyvoice and polyvoice-asr to
-  one ort version (single native runtime in every artifact).
+- `scripts/check-ort-version.sh` still enforces the intentional companion ORT pin without
+  reintroducing ORT into the core diarization graph.

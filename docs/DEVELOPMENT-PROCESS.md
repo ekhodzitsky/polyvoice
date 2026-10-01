@@ -1,7 +1,7 @@
 # Development process for polyvoice
 
 > Formerly `PIPELINE.md` (that filename collided with the **runtime**
-> architecture doc). For who-calls-whom, BYO vs production ONNX, and
+> architecture doc). For who-calls-whom, BYO vs native production, and
 > CLI/FFI/Python defaults, see [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md).
 
 ## 1. Specification

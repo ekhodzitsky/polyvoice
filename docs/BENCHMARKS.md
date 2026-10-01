@@ -15,7 +15,21 @@ The `benchmarks/` runners are wired to re-measure them like-for-like once their
 (often gated) stacks are installed; until then, compare only within a matched
 collar.
 
-### Source of truth (VoxConverse-test, v2+VBx INT8 default, collar 0 micro)
+## Stable 1.0.0 qualification
+
+For release `80bf4b1`, the [complete measurement bundle](https://github.com/ekhodzitsky/polyvoice/releases/tag/v1.0.0)
+reports Linux VoxConverse/AMI DER₀ micro **13.34% / 24.19%** and Darwin
+**13.33% / 23.61%**. Recorded Linux RTFx is **85.7× / 103.1×** and Darwin
+**192.8× / 229.2×**. The locked Mac Vox-3 run is **163.3×**, **454.9 MiB RSS**,
+**7.11% micro / 7.39% macro DER₀**, with the **8,414,314-byte** neural pair.
+
+The sections below retain historical experiments and competitor publications.
+Read dates, engines, hosts and protocols together; historical ORT/CoreML rows
+are not measurements of the current kernel product, and a faster older run
+does not replace the timing recorded for 1.0.0. BYO streaming results do not
+qualify native powerset streaming.
+
+### Historical source map (VoxConverse-test, collar 0 micro)
 
 | Figure | Role | Artifact |
 |------|------|----------|
@@ -29,7 +43,7 @@ collar.
 on every profile. **Cite 13.34 % for the Linux kernel CLI** (VBx AHC seed 0.6).
 Cite **14.94 %** only as the historical Linux ort comparison (powerset micro-batch N=8, EP=cpu; core crate no longer links `ort`).
 The Python wheel matches the kernel CLI (cite **13.34 %**).
-Cite **15.02 %** for Mac CoreML (N=1 clamp). Reproduce Linux kernels:
+Cite **15.02 %** only for historical Mac ORT/CoreML (N=1 clamp). Reproduce Linux kernels:
 
 ```bash
 DOCKER=1 bash scripts/linux-cpu-native-der-gate.sh
@@ -42,11 +56,11 @@ DOCKER=1 bash scripts/linux-cpu-native-der-gate.sh
 |--|--|--|--|--|
 | **VoxConverse-test DER** | **13.3 %** ¹ | **11.3 %** ¹ | 11.3 % (= pyannote) | not published |
 | **Model size** | **~8.4 MB** (+ PLDA for VBx) | ~32.5 MB | ~32.5 MB + Whisper | 123 M params |
-| **Runtime** | **Kernels ~125–200× Darwin / ~110× Linux x86_64; ort ~80–95× Linux** | CPU/GPU (PyTorch) | GPU recommended | GPU |
-| **Weights** | **MIT, ungated** | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
-| **Dependencies** | **Rust kernels by default; ONNX Runtime opt-in; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
+| **Runtime** | Native 1.0.0: 193–229× Darwin / 86–103× Linux x86_64 (full splits) | CPU/GPU (PyTorch) | GPU recommended | GPU |
+| **Weights** | MIT neural pair; CC-BY-4.0 PLDA, ungated | MIT code, **gated** (HF token) | gated (pyannote) | **CC-BY-NC** (non-commercial) |
+| **Dependencies** | **Rust kernels; no ONNX Runtime in core; no PyTorch** | PyTorch | PyTorch + Whisper | PyTorch / NeMo |
 | **Bindings** | **Rust / Python / C / CLI** | Python | Python | Python |
-| **Streaming** | **Yes** | No | No | No |
+| **Streaming** | BYO Rust API; native product is batch | No | No | No |
 
 ¹ VoxConverse-test, **no forgiveness collar (collar 0), overlap scored** — the
 strict protocol pyannote 3.1 reports against, so these two are collar-matched.
@@ -74,7 +88,7 @@ pyannote we use polyvoice's **no-collar** number.
 | **speakrs CoreML (warm)** | **11.08** | 3.35 | 4.10 | 3.63 | 0 | this repo H2H ⁸ |
 | VBx (offline baseline) | 11.1 | 4.6 | 3.1 | 3.4 | 0 | diart paper ³ |
 | 3D-Speaker toolkit | 11.75 | — | — | — | unstated | repo ⁴ |
-| **polyvoice (v2+VBx, INT8 default)** | **15.02** | 3.54 | 3.95 | 7.62 | 0 | this repo ⁵ |
+| **polyvoice (historical ORT v2+VBx INT8)** | **15.02** | 3.54 | 3.95 | 7.62 | 0 | this repo ⁵ |
 | polyvoice (v2+VBx, FP32 historical) | 15.24 | 2.14 | 1.73 | 7.16 | 0 | hop-2.0 ⁵ |
 | diart (online, 5 s latency) | 16.8 | 4.9 | 3.8 | 8.2 | 0 | diart paper ³ |
 | polyvoice (legacy, `--legacy`) | 18.54 | 4.49 | 3.19 | 4.99 | 0 | this repo ⁵ |
@@ -125,7 +139,7 @@ dominates, and speaker mis-counting drives confusion.
 | pyannote 3.1 (SDM) | 22.4 | 11.2 | 3.8 | 7.5 | array1-ch1 | model card ² |
 | polyvoice (v2+VBx, FP32 historical) | 23.42 | 7.44 | 1.75 | 6.05 | Mix-Headset | hop-2.0 ⁵ |
 | VBx (offline baseline) | 24.1 | 17.2 | 3.1 | 3.8 | — | diart paper ³ |
-| **polyvoice (v2+VBx, INT8 default)** | **24.50** | 11.17 | 3.62 | 8.80 | Mix-Headset | this repo ⁵ |
+| **polyvoice (historical ORT v2+VBx INT8)** | **24.50** | 11.17 | 3.62 | 8.80 | Mix-Headset | this repo ⁵ |
 | diart (online, 5 s) | 27.5 | 10.0 | 5.0 | 12.4 | headset | diart paper ³ |
 | polyvoice (legacy, `--legacy`) | 32.87 | 17.09 | 2.44 | 5.21 | Mix-Headset | this repo ⁵ |
 
@@ -339,8 +353,8 @@ Same-host ort 14.74 % / 24.23 % is the previous AHC-seed-0.5 protocol.
 
 | Engine | RTF | Notes |
 |---|---|---|
-| **polyvoice (INT8 default, CoreML N=1)** | **~0.008–0.009** (~111–130×) | Rust + ONNX Runtime; full-split 2026-08-10 |
-| polyvoice (INT8 default, CPU N=8) | **~0.007–0.008** (~121–137×) | powerset micro-batch; 2026-08-10 |
+| **polyvoice (historical ORT INT8, CoreML N=1)** | **~0.008–0.009** (~111–130×) | Rust + ONNX Runtime; full-split 2026-08-10 |
+| polyvoice (historical ORT INT8, CPU N=8) | **~0.007–0.008** (~121–137×) | powerset micro-batch; 2026-08-10 |
 | polyvoice (FP32 historical, CPU) | 0.015–0.019 (53–68×) | pre-0.17 default models |
 | pyannote 3.1 | not published | PyTorch; GPU recommended for throughput |
 | WhisperX | > 1 on CPU | Whisper + pyannote; GPU recommended |
@@ -540,7 +554,7 @@ replace `polyvoice-asr`'s ONNX Runtime.** Notes:
 
 | Engine | Deployable size | License | Gated weights? | Runtime |
 |---|---|---|---|---|
-| **polyvoice** | **~8.4 MB** INT8 production pair (+ PLDA for VBx) | **MIT** | **No** | Rust kernels (default CLI); ONNX Runtime opt-in |
+| **polyvoice** | **~8.4 MB** INT8 production pair (+ PLDA for VBx) | MIT neural pair; CC-BY-4.0 PLDA | **No** | Rust kernels (default CLI); no ORT in core |
 | pyannote 3.1 | ~32.5 MB (seg 5.9 + embed 26.6) | MIT code | **Yes** (HF token + accept) | PyTorch, CPU/GPU |
 | WhisperX | ~32.5 MB + Whisper model | BSD code | Yes (pyannote) | PyTorch, GPU |
 | sherpa-onnx | seg ~5.9 MB + embed (int8 avail.) | Apache-2.0 | No | ONNX, CPU |

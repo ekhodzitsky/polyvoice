@@ -7,16 +7,13 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
 python3 - <<'PY'
-import re, sys
+import re, sys, subprocess
 from pathlib import Path
 
 root = Path(".").resolve()
-globs = ["*.md", "docs/**/*.md", "python/*.md", "examples/*.md"]
-files: list[Path] = []
-for g in globs:
-    files.extend(root.glob(g))
-# de-dupe
-files = sorted({f.resolve() for f in files if f.is_file()})
+# Audit the tracked documentation set, including companion crates and archives.
+files = [root / name for name in subprocess.check_output(
+    ["git", "ls-files", "*.md"], text=True).splitlines()]
 
 link_re = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 broken: list[tuple[str, str, str]] = []

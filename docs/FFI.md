@@ -15,12 +15,12 @@ polyvoice exposes a small C API for embedding the **production pipeline v2**
 # Shared library + install header on the search path you choose
 cargo build --release --features ffi
 
-# Example (debug)
+# Example linked against the release library
 cc -I include examples/ffi_usage.c \
-  -L target/debug -lpolyvoice \
+  -L target/release -lpolyvoice \
   -o ffi_usage
-# macOS: DYLD_LIBRARY_PATH=target/debug ./ffi_usage
-# Linux:  LD_LIBRARY_PATH=target/debug ./ffi_usage
+# macOS: DYLD_LIBRARY_PATH=target/release ./ffi_usage
+# Linux:  LD_LIBRARY_PATH=target/release ./ffi_usage
 ```
 
 ## Lifecycle
@@ -37,7 +37,7 @@ cc -I include examples/ffi_usage.c \
 
 | Enum | Meaning |
 |------|---------|
-| `POLYVOICE_PROFILE_MOBILE` | Smaller / mobile-oriented model pair |
+| `POLYVOICE_PROFILE_MOBILE` | Mobile profile; currently the same INT8 pair as balanced |
 | `POLYVOICE_PROFILE_BALANCED` | Default production pair (CLI “balanced”) |
 
 `models_cache_dir` may be `NULL` (default cache). Paths containing `..`
@@ -87,7 +87,7 @@ returned by the current v2 implementation.
 
 FFI builds **VBx** the same way as the CLI default (PLDA via registry or
 `POLYVOICE_VBX_PLDA_DIR`). There is no C flag for AHC/AS-norm; use the Rust or
-Python API for those knobs.
+Python API for clusterer selection; AS-norm configuration is exposed by Rust.
 
 ## Related
 

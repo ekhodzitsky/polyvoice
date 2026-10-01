@@ -1,6 +1,6 @@
 # Contributing to polyvoice
 
-Thanks for your interest. This guide matches the **0.19** tree.
+Thanks for your interest. This guide matches the **1.0** product and the current development workflows.
 
 ## Setup
 
@@ -22,7 +22,7 @@ cargo build --features cli
 
 # Download profile models (~8.4 MB INT8 balanced; signed in release)
 cargo run --features cli --bin polyvoice -- download-models --profile balanced
-# or: bash scripts/download-models.sh
+# ONNX research/test assets use scripts/download-models.sh separately.
 ```
 
 
@@ -35,7 +35,6 @@ cargo run --features cli --bin polyvoice -- download-models --profile balanced
 | Tract ONNX-file library | `pipeline-tract` + `vbx` |
 | CLI / FFI / MCP | `cli` / `ffi` / `mcp` (kernels, no ort) |
 | Tract ONNX-file CLI | `cli-tract` |
-| CLI with tract | `cli-tract` |
 | Native ResNet34 embedder | `embedder-native` (`ResNet34Native`, no ONNX runtime) |
 | Native powerset segmenter | `segmenter-native` (`PowersetNative`, N>1 LSTM) |
 | WAVE ingest (always on) | `ryf` via `wav::read_wav` / `wav::load_audio` (16 kHz WAV without extra features) |
@@ -88,13 +87,15 @@ Ignored tests that need models or network are intentional; release DER gates liv
 
 ## Areas for contribution
 
-Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues) and the local `roadmap/` tracker. High-impact directions (as of 0.19):
+Check [open issues](https://github.com/ekhodzitsky/polyvoice/issues). Local work
+tracking uses Backlog.md (`backlog/`, gitignored); run `backlog instructions
+overview` before starting a tracked change. Current directions include:
 
-- **Cross-corpus DER** — CALLHOME / DIHARD-style gates beyond VoxConverse + AMI
-- **Linux native RTF** — kernels hold AMI DER within the ort ceiling; RTF still trails Linux ort
-- **Python kernels path** — pip still ships ONNX Runtime; CLI / FFI / MCP are native
-- **Streaming productization** — powerset-quality online path (batch v2 is production)
-- **Docs / DX** — keep README feature recipes and readiness version truth current
+- **Dependency reduction** — preserve the no-ORT core and downloader-free local mode.
+- **Darwin Rust kernels** — improve the experimental path without weakening the locked resource floors.
+- **Quality** — extend the existing VoxConverse, AMI and held-out NOTSOFAR evidence.
+- **Streaming** — develop native powerset streaming separately from the stable batch product.
+- **Documentation and packaging** — keep published artifacts and support claims aligned.
 
 Already shipped (not open scaffolding): spectral/NME-SC clusterer, RTTM I/O, VoxConverse/AMI bench harness, AS-norm domain profiles, attribution join.
 

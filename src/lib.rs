@@ -14,15 +14,16 @@
 //! `backend-tract`).
 //!
 //! Designed to be embedded into any Rust application that needs to answer
-//! the question **"who spoke when?"**. Freeze window and bump rules:
+//! the question **"who spoke when?"**. Stable API boundary and versioning rules:
 //! `docs/semver.md`.
 //!
 //! ## Quick start
 //!
 //! **Product path (CLI / FFI / MCP):** crate-root `Pipeline` via
 //! `pipeline-native` (`cli`) — hand-written INT8 kernels, no
-//! `libonnxruntime`. Tract is `cli-tract`. The v2 gate is `download` +
-//! stage features plus an engine (`pipeline-native` or `backend-tract`).
+//! `libonnxruntime`. Downloader-free native inference uses `pipeline-local`.
+//! Experimental tract is `cli-tract`; model access and stage features are
+//! selected by the pipeline feature, not required by BYO consumers.
 //! With the gate off there is deliberately no crate-root `Pipeline` —
 //! inference-free builds use [`pipeline::LegacyPipeline`].
 //!
@@ -42,9 +43,9 @@
 //!   `docs/PIPELINE-ARCHITECTURE.md`.
 //! - **BYO ([`pipeline::LegacyPipeline`] + `StreamingPipeline`):**
 //!   inject [`Embedder`] + [`VoiceActivityDetector`]. Product CLI does not
-//!   run `--legacy` (no Silero runtime in this crate).
+//!   run `--legacy`; Silero is an optional tract adapter for BYO callers.
 //! - **Shared math:** `ahc`, `kmeans`, `spectral`, `features`, `der`, `utils`.
-//! - **Online centroids:** production streaming uses
+//! - **Online centroids:** BYO streaming uses
 //!   [`streaming::ArrivalOrderSpeakerCache`].
 
 pub mod ahc;
@@ -209,7 +210,7 @@ pub mod silero_vad;
 pub use silero_vad::SileroVad;
 
 /// Optional pure-Rust earshot VAD. Opt-in via `--features vad-earshot`.
-/// Silero remains the production default; see `benchmarks/results/earshot-vad-notes.md`.
+/// Native batch diarization uses powerset segmentation; this is a BYO option.
 #[cfg(feature = "vad-earshot")]
 pub mod earshot_vad;
 #[cfg(feature = "vad-earshot")]

@@ -70,6 +70,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: python3 scripts/test-dependency-checks.py
       - run: python3 scripts/test-bump-version.py
+      - run: python3 scripts/test-release-assets.py
       - run: bash scripts/check-standalone-lockfiles.sh
 
   fmt:

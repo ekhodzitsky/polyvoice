@@ -14,7 +14,7 @@ version = "1.0.0"
 edition = "2024"
 # MSRV: rten-gemm / rten-simd (Linux INT8 GEMM) need 1.94.
 rust-version = "1.94.0"
-description = "Speaker diarization for Rust — who spoke when. Product CLI is hand-written INT8 kernels (no libonnxruntime). Default features are empty (ort-free BYO core); enable pipeline-native as needed."
+description = "CPU speaker diarization with native INT8 kernels. Rust, CLI, Python and C interfaces; no ONNX Runtime in the core."
 license = "MIT"
 repository = "https://github.com/ekhodzitsky/polyvoice"
 keywords = ["diarization", "speaker", "clustering", "onnx", "streaming"]

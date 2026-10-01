@@ -99,8 +99,10 @@ It is never triggered by pull requests or untrusted fork code.
 The tag gate locates a successful dispatch of this specific workflow on master
 with the exact tag commit SHA. It downloads both platform artifacts, validates
 them before compilation, and retains the bundle as `release-quality-evidence`.
-The existing GitHub release job attaches that bundle along with the release
-artifacts. Artifacts are retained for 90 days; if unavailable, rerun measurement
+The GitHub release job archives that directory as `release-quality-evidence.tar.gz`
+before upload, preserving Linux and Darwin subdirectories. Uploading individual
+report files would flatten identical basenames and lose platform evidence.
+The 1.0.0 recovery archive is named `polyvoice-1.0.0-quality-evidence.tar.gz`. Artifacts are retained for 90 days; if unavailable, rerun measurement
 on the same commit before retrying release. No fallback to committed historical
 reports exists. Local bundles trust the operator; tag bundles additionally rely
 on trusted workflow execution and runner administration, not self-signed JSON.

@@ -1,6 +1,7 @@
 # Semver and API freeze
 
-Release version is **1.0.0**. Publication requires the exact-revision gates in
+The first stable release is **1.0.0**. Each subsequent release requires the
+exact-revision gates in
 [`PRODUCTION-READINESS.md`](../PRODUCTION-READINESS.md); version metadata alone
 does not certify a release.
 

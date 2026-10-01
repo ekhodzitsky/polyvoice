@@ -1,0 +1,58 @@
+name: Complete GitHub release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run:
+        description: Original Release workflow run with successful gates and registry publishers
+        required: true
+      tag:
+        description: Existing immutable release tag
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: github-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_RUN: ${{ inputs.release_run }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify original gates and immutable tag
+        shell: python
+        run: |
+          import json, os, re, subprocess
+          run_id, tag = os.environ['RELEASE_RUN'], os.environ['RELEASE_TAG']
+          assert run_id.isdigit() and re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?', tag)
+          run = json.loads(subprocess.check_output(['gh', 'run', 'view', run_id, '--json',
+              'headSha,headBranch,event,workflowName,jobs']))
+          revision = subprocess.check_output(['git', 'rev-parse', tag + '^{commit}'], text=True).strip()
+          assert run['headSha'] == revision and run['headBranch'] == tag
+          assert run['event'] == 'push' and run['workflowName'] == 'Release'
+          jobs = {job['name']: job['conclusion'] for job in run['jobs']}
+          required = {'gate', 'artifacts / packages', 'crates-io', 'pypi-publish'}
+          consumers = {name for name in jobs if name.startswith('artifacts / consumers (')}
+          assert len(consumers) == 4 and all(jobs.get(name) == 'success' for name in required | consumers)
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          run-id: ${{ inputs.release_run }}
+          github-token: ${{ github.token }}
+          path: artifacts
+      - run: bash scripts/prepare-release-assets.sh artifacts
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          prerelease: ${{ contains(inputs.tag, '-') }}
+          files: artifacts/**/*
