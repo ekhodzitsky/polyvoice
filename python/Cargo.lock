@@ -329,7 +329,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "polyvoice"
-version = "1.0.0-rc.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "polyvoice-python"
-version = "1.0.0-rc.1"
+version = "1.0.0"
 dependencies = [
  "polyvoice",
  "pyo3",

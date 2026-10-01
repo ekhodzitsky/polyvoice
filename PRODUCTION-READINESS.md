@@ -1,13 +1,30 @@
 # Production readiness and the 1.0 contract
 
-**Development version: 1.0.0-rc.1 (unreleased). Updated: 2026-10-01.**
-**1.0 status: NOT GO.** The contract below defines the intended release;
-it does not certify the current revision or qualify a release candidate.
+**Release version: 1.0.0. Updated: 2026-10-01.**
+**Decision: GO for gated promotion from the first qualified candidate.**
+This authorizes publication only after the exact stable revision passes all
+requirements below. A failed or pending gate blocks publication; changing the
+version does not certify the source tree.
 
-The [2026-09-29 pre-candidate review](docs/release-readiness-review.md) records
-the reviewed revision, evidence gaps and the order of completion. Its verdict
-is **NO-GO**. The current RC policy has no calendar waiting period; candidate
-qualification remains required.
+The first candidate is `348c370f619f710cd419d2c90ef28aab995b4eee`:
+
+- [Repository CI](https://github.com/ekhodzitsky/polyvoice/actions/runs/36853027859)
+  passed all checks for the candidate preparation.
+- [Trusted quality evidence](https://github.com/ekhodzitsky/polyvoice/actions/runs/36854738660)
+  qualifies that exact candidate on Linux and isolated Darwin, including all
+  five locked scoreboard limits.
+- [Registry-backed packaged consumers](https://github.com/ekhodzitsky/polyvoice/actions/runs/36854742784)
+  passed on Linux x86_64/ARM64, macOS ARM64 and Windows x86_64.
+- [Candidate publication](https://github.com/ekhodzitsky/polyvoice/actions/runs/36866577813)
+  records the tag gate, tested artifacts and each publisher's outcome. It must
+  finish successfully before stable publication.
+
+These candidate results do not replace fresh checks for the stable commit.
+The successful `v1.0.0` Release workflow and its retained reports are the final
+release verdict. Its GitHub release attaches the revision-bound measurements
+and packaged-consumer reports. No second RC or calendar waiting period is
+mandatory. The [pre-candidate review](docs/release-readiness-review.md) remains
+a historical account of the earlier gaps.
 
 ## Supported product scope
 
@@ -144,30 +161,34 @@ its applicability; changed model or inference code requires fresh runs.
 
 ## 1.0 GO checklist
 
-All boxes require linked evidence before the release is declared GO.
+Every requirement below must have passing evidence before publication.
+Candidate evidence is linked above; the final tagged workflow must retain the
+corresponding evidence for its own exact revision.
 
-- [ ] **API boundary finalized.** Advertised Rust features, CLI, Python,
+- **API boundary finalized.** Advertised Rust features, CLI, Python,
       C ABI and JSON contracts have compatibility checks. Publicly reachable
       implementation details are resolved before the final freeze.
-- [ ] **Dependency/build contract enforced.** No ONNX Runtime in core product
+- **Dependency/build contract enforced.** No ONNX Runtime in core product
       graphs; downloader-free local mode; explicit Linux BLAS selection;
       locked release inputs and disclosed native/system dependencies.
-- [ ] **Quality and resource gates enforced.** Revision-bound full-split
+- **Quality and resource gates enforced.** Revision-bound full-split
       Vox/AMI, an additional corpus, platform quality checks, and all five
       Darwin scoreboard limits pass without lowering floors.
-- [ ] **Packaged consumers pass.** Actual Rust packages, CLI assets, Python
+- **Packaged consumers pass.** Actual Rust packages, CLI assets, Python
       wheels and C artifacts pass the target/surface matrix above; supported
       OS, CPU and Python combinations are published.
-- [ ] **Repository release checks pass.** Formatting, clippy, tests,
+- **Repository release checks pass.** Formatting, clippy, tests,
       compatibility, dependency/security checks and documentation checks pass
       for the release candidate; unresolved failures are not waived by this document.
-- [ ] **Release candidates qualified.** At least two published candidates
+- **Release candidate qualified.** At least one published, qualified candidate
       under the [RC policy](docs/semver.md#release-candidate-window),
       with no minimum calendar waiting period,
       with consumer evidence and no unresolved release-blocking regressions.
-- [ ] **Readiness reviewed for the exact release.** Link the evidence and
-      remaining limitations here, then explicitly change the release verdict.
+- **Readiness reviewed for the exact release.** Record the final verdict
+      with the tagged release evidence; the supported scope and limitations
+      in this document remain part of that decision.
 
-The open checklist is the release decision. Experimental tract performance,
+The release decision is conditional on this checklist and the successful
+final tagged workflow. Experimental tract performance,
 Parakeet runtime upgrades and removal of every external Rust crate are
 tracked separately and must not be substituted for these batch-product gates.
