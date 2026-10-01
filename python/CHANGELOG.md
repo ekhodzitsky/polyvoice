@@ -2,10 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-01
+
+- Stable native CPU batch release, aligned with Rust `1.0.0`.
+- No Python API or inference changes from `1.0.0rc1`.
+
 ## [1.0.0rc1] - Unreleased
 
-- First release candidate, aligned with Rust `1.0.0-rc.1`. Publication and
-  exact-candidate qualification are pending.
+- First release candidate, aligned with Rust `1.0.0-rc.1`. See the root
+  readiness document for qualification evidence.
 
 ### Changed
 

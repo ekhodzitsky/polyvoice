@@ -7,10 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-01
+
+### Changed
+
+- Promote the native CPU batch product to the stable Rust, CLI, Python,
+  C ABI v3 and JSON contracts documented in `docs/semver.md`.
+- Permit promotion after one qualified release candidate, with no mandatory
+  second candidate or calendar delay. Exact-revision CI, packaged consumers,
+  full-corpus quality and all locked resource limits remain release gates.
+- No inference, model, dependency or API changes from `1.0.0-rc.1`.
+
+### Migration
+
+Upgrading from `0.21.0` requires the Rust configuration and exhaustive-match
+changes in the `1.0.0-rc.1` Breaking section below. Migration from RC1 requires
+only the version update. Pure Rust on Darwin and removal of all external
+crates remain separate work; the default Apple backend still uses Accelerate.
+
+
 ## [1.0.0-rc.1] - Unreleased
 
-First candidate for the supported native CPU batch product. Publication and
-exact-candidate qualification are pending; this is not the final 1.0 release.
+First candidate for the supported native CPU batch product. Its exact-revision
+quality and packaged-consumer qualification is recorded in
+`PRODUCTION-READINESS.md`. This candidate is not the final 1.0 release.
 
 ### Fixed
 

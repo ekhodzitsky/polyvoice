@@ -15,10 +15,11 @@ Darwin, plus application-scoped Windows network filters. The table below remains
 the dated audit snapshot, not a claim about later candidates. Exact-candidate
 qualification and published RC qualification remain open.
 
-**Policy update, 2026-09-30:** the mandatory 14-day waiting period is removed.
+**Policy update, 2026-10-01:** neither a mandatory 14-day waiting period nor
+a second release candidate is required.
 The historical stability-window row below is superseded by the current
-[RC policy](semver.md#release-candidate-window). At least two published
-candidates and all technical gates remain required; elapsed time is not a gate.
+[RC policy](semver.md#release-candidate-window). One published, qualified
+candidate and all technical gates remain required; elapsed time is not a gate.
 
 ## Evidence and gaps
 
@@ -77,9 +78,9 @@ minute, so it cannot establish the one-hour case.
 4. Review the concrete artifacts and evidence before requesting publication
    authorization. Publish the first qualifying RC only after authorization;
    record its revision and publication date.
-5. Publish at least one further RC and rerun affected gates for compatible
-   fixes. A compatibility break requires migration notes and a new candidate.
-   No calendar waiting period is required.
+5. A further RC is required when candidate fixes need requalification, not
+   merely to advance a counter. A compatibility break requires migration
+   notes and a new candidate. No calendar waiting period is required.
 6. Reassess the exact artifact being promoted, link the passing evidence in
    the readiness checklist and make an explicit release decision.
 

@@ -175,7 +175,7 @@ Locally, package both crates and run the harness with their archive paths:
 ```bash
 cargo package --locked --no-verify -p polyvoice-kernels -p polyvoice
 python scripts/smoke-release-artifacts.py \
-  --crate target/package/polyvoice-1.0.0-rc.1.crate \
+  --crate target/package/polyvoice-1.0.0.crate \
   --staged-kernel target/package/polyvoice-kernels-0.1.3.crate \
   --report /tmp/polyvoice-package-report.json
 ```

@@ -1,8 +1,8 @@
 # Semver and API freeze
 
-Development version is **1.0.0-rc.1** (unreleased). This is not `1.0.0`. The GO checklist in
-[`PRODUCTION-READINESS.md`](../PRODUCTION-READINESS.md) stays open until a
-release-candidate qualification and the other 1.0 boxes are complete.
+Release version is **1.0.0**. Publication requires the exact-revision gates in
+[`PRODUCTION-READINESS.md`](../PRODUCTION-READINESS.md); version metadata alone
+does not certify a release.
 
 This document is the advertised-surface contract. Breaking the frozen
 surface without a CHANGELOG **Breaking** entry is a bug.
@@ -12,7 +12,7 @@ CI: `scripts/check-semver.sh` (job `semver-checks` in
 see [the gate](#semver-gate) below. CLI help snapshots, the FFI header, and
 `schema/diarization-result-v1.json` cover the other doors.
 
-## Advertised surfaces (final RC window not started)
+## Advertised surfaces
 
 The frozen Rust surface is **every `pub` item that is not `#[doc(hidden)]`
 and is reachable in one of the four checked feature sets** below. The
@@ -105,10 +105,10 @@ removal. CI runs the gate and the probe on every push.
 
 ## Release-candidate window
 
-Require at least **two published 1.0 release candidates**. There is **no
-minimum calendar waiting period**: promotion depends on verified evidence,
-not elapsed time. Publish the first qualifying candidate only when the API
-boundary is finalized and the other readiness gates have evidence.
+Require at least **one published, qualified 1.0 release candidate**. A second
+candidate and a minimum calendar waiting period are **not mandatory**:
+promotion depends on verified evidence. Publish the first qualifying candidate
+only when the API boundary is finalized and the other readiness gates have evidence.
 Record candidate revisions, publication dates, consumer results and resolved
 regressions in the release evidence.
 
