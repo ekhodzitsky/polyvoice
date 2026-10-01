@@ -22,12 +22,12 @@ sed -i.bak "s/^version = \".*\"/version = \"${VERSION}\"/" python/pyproject.toml
 rm python/pyproject.toml.bak
 
 # 4. tests/cli_smoke_test.rs
-sed -i.bak "s/polyvoice [0-9]\+\.[0-9]\+\.[0-9]\+/polyvoice ${VERSION}/" tests/cli_smoke_test.rs
+sed -E -i.bak "s/polyvoice [0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?/polyvoice ${VERSION}/" tests/cli_smoke_test.rs
 rm tests/cli_smoke_test.rs.bak
 
 # 4b. tests/der_baseline.json — der_baseline_test asserts crate_version matches
 # the crate version.
-sed -i.bak "s/\"crate_version\": \"[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\"/\"crate_version\": \"${VERSION}\"/" tests/der_baseline.json
+sed -E -i.bak "s/\"crate_version\": \"[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\"/\"crate_version\": \"${VERSION}\"/" tests/der_baseline.json
 rm tests/der_baseline.json.bak
 
 # 5. Lockfiles — every lockfile that pins the path dependency on the core crate

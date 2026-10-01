@@ -5,8 +5,8 @@
 # SEMVER_BASELINE=<git rev>) using cargo-semver-checks, once per advertised
 # feature set, always assuming a *minor* release so the 0.x compatibility
 # lints run instead of being waived by the version bump. A detected break is
-# accepted only when the crate's minor version is above the baseline's and
-# CHANGELOG.md has a "### Breaking" section under "## [Unreleased]".
+# accepted only when the crate's major or minor version is above the baseline's and
+# CHANGELOG.md has a "### Breaking" section under Unreleased or this version.
 #
 #   scripts/check-semver.sh          # gate (CI)
 #   scripts/check-semver.sh --probe  # prove the gate sees a deliberate break
@@ -148,13 +148,13 @@ if [ "$cur_major" -gt "$base_major" ] || { [ "$cur_major" -eq "$base_major" ] &&
     bumped=1
 fi
 declared=0
-if awk '/^## \[Unreleased\]/{f=1; next} /^## \[/{f=0} f && /^### Breaking/{found=1} END{exit !found}' CHANGELOG.md; then
+if awk -v version="$current_version" '/^## \[/{f=($2=="[Unreleased]" || $2=="[" version "]"); next} f && /^### Breaking/{found=1} END{exit !found}' CHANGELOG.md; then
     declared=1
 fi
 if [ "$bumped" -eq 1 ] && [ "$declared" -eq 1 ]; then
-    echo "break is declared: version $baseline_version -> $current_version and CHANGELOG Unreleased has '### Breaking'"
+    echo "break is declared: version $baseline_version -> $current_version and CHANGELOG Unreleased or $current_version has '### Breaking'"
     exit 0
 fi
 [ "$bumped" -eq 1 ] || echo "  missing: bump the minor version (docs/semver.md: 0.x+1.0 for a frozen-surface break); have $current_version vs baseline $baseline_version" >&2
-[ "$declared" -eq 1 ] || echo "  missing: a '### Breaking' section under '## [Unreleased]' in CHANGELOG.md" >&2
+[ "$declared" -eq 1 ] || echo "  missing: a '### Breaking' section under Unreleased or $current_version in CHANGELOG.md" >&2
 exit 1

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.0.0rc1] - Unreleased
+
+- First release candidate, aligned with Rust `1.0.0-rc.1`. Publication and
+  exact-candidate qualification are pending.
+
 ### Changed
 
 - The wheel uses hand-written INT8 kernels (`pipeline-native`), matching the

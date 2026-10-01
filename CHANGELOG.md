@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] - Unreleased
+
+First candidate for the supported native CPU batch product. Publication and
+exact-candidate qualification are pending; this is not the final 1.0 release.
+
 ### Fixed
+
+- Handle consecutive release-candidate version bumps and recognize candidate
+  breaking notes in the compatibility gate. GitHub candidate releases are
+  explicitly marked as prereleases.
 
 - Preserve the published `polyvoice-kernels::POWERSET_MIN_SAMPLES` export and
   include the MIT license notice in the kernel crate archive.
