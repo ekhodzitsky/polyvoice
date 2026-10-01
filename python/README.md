@@ -1,6 +1,6 @@
 # polyvoice
 
-[![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg?branch=master&event=push)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
+[![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/polyvoice)](https://pypi.org/project/polyvoice)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/ekhodzitsky/polyvoice/blob/master/LICENSE)
 
