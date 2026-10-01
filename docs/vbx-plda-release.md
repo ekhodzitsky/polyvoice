@@ -1,14 +1,15 @@
 # Shipping the VBx PLDA weights
 
-The `vbx` clusterer (PLDA + VB-HMM) is the most accurate v2 path for
-overlap-heavy / meeting audio. Measured (collar 0.25, macro DER, same code path):
+The `vbx` clusterer (PLDA + VB-HMM) is the native batch default. The small-split
+comparison below is historical (collar 0.25, macro DER), not the 1.0 release
+qualification; current full-split evidence is in [readiness](../PRODUCTION-READINESS.md).
 
 | set | legacy | v2 + AHC | v2 + VBx |
 |-----|--------|----------|----------|
 | VoxConverse-30 | 13.5% | 16.4% | 15.1% |
 | AMI-4 (overlap) | 35.5% | 32.8% | **27.8%** |
 
-VBx beats cosine AHC everywhere (VoxConverse −1.3pp, AMI −5pp, lower confusion)
+VBx beat cosine AHC on these two splits (VoxConverse −1.3pp, AMI −5pp, lower confusion)
 and makes v2+VBx the best option for meetings (AMI −7.8pp vs legacy). On clean
 conversational audio legacy is still best. VBx is ~2–3× slower than AHC.
 
@@ -43,7 +44,8 @@ Host URLs point at the commit-pinned fixtures under
 `https://raw.githubusercontent.com/ekhodzitsky/polyvoice/0623ae0b6773db7731f0fb3e75d8950347be94db/fixtures/vbx-plda/`.
 Integrity is SHA-256 plus a minisign signature from the release key (the six
 `[models.vbx_plda_*]` entries carry `signature` fields). Profile resolution
-never pulls these entries, so release builds do not require them.
+does not itself pull these entries, but building a VBx pipeline resolves them
+separately unless local PLDA parameters are supplied. Release VBx checks require them.
 
 ## Rebuilding the weights (reproducible)
 

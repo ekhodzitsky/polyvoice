@@ -5,7 +5,7 @@
 **Artifact:** [`benchmarks/results/cam-pp-2026-09-20/`](../benchmarks/results/cam-pp-2026-09-20/)
 
 WeSpeaker CAM++ is already in the model manifest (512-d). Published VoxCeleb1-O
-EER is slightly better than ResNet34, and the forward pass is ~8× cheaper
+EER is slightly better than ResNet34, and the quoted forward-pass operation count is ~4× lower
 (1.15 vs 4.55 GFLOPs). Switching the default without a short-seg + DER
 measurement would repeat the ERes2NetV2 mistake (paper EER 0.61% vs short-seg
 20.09%).

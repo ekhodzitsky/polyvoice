@@ -24,6 +24,26 @@ The manual Python Wheels workflow also runs installed-wheel inference before
 uploading its artifacts. It does not publish. Its manylinux build environment
 may produce a different tag; its report identifies the exact tested wheel.
 
+## Published 1.0.0 artifacts
+
+The [stable release](https://github.com/ekhodzitsky/polyvoice/releases/tag/v1.0.0)
+contains CLI binaries, C library/header archives and CPython 3.12 wheels for
+all four platforms above. Wheel tags are `manylinux_2_34_x86_64`,
+`manylinux_2_34_aarch64`, `macosx_11_0_arm64` and `win_amd64` (all `cp312`).
+These ABI tags do not extend the tested-host matrix or imply Python 3.9 wheels.
+
+## Recover a GitHub-only upload failure
+
+If registry publication succeeded but GitHub asset upload failed, preserve the
+release tag and the immutable registry packages. `Complete GitHub release`
+(`release-github.yml`) accepts the original Release run ID and tag. It checks
+that the run's commit matches the tag and that the release gate, four consumer
+jobs and both registry publishers succeeded. It reuses those tested artifacts,
+bundles platform quality reports and uploads only to GitHub. It does not rerun
+`cargo publish`, republish wheels, move tags or waive failed technical checks.
+A successful recovery run documents recovery; the original failed attempt
+remains visible in workflow history.
+
 ## What the gate executes
 
 `scripts/smoke-release-artifacts.py` uses only Python's standard library plus

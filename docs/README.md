@@ -1,17 +1,18 @@
 # Documentation index
 
-Release version: **1.0.0** ([CHANGELOG](../CHANGELOG.md)). Production profiles
-use **INT8** models only. CLI / FFI / MCP default is **kernels**
-(`pipeline-native`), not ONNX Runtime. Canonical accuracy protocol:
-[BENCHMARKS.md](BENCHMARKS.md). Deployment GO/NO-GO:
-- [Held-out NOTSOFAR evaluation](notsofar-eval.md): frozen corpus, scoring protocol and regression gate.
-[PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md). API freeze:
-[semver.md](semver.md).
+Stable release: **1.0.0** ([CHANGELOG](../CHANGELOG.md)). The native CPU batch
+product ships as Rust, CLI, Python and C ABI v3. All use the INT8 kernel engine;
+ONNX Runtime is not a core dependency. MCP and tract are experimental.
+
+- [Release status and evidence](../PRODUCTION-READINESS.md)
+- [API stability contract](semver.md)
+- [Benchmark protocols and history](BENCHMARKS.md)
+- [Held-out NOTSOFAR evaluation](notsofar-eval.md)
 
 ## By audience
 
 ### CLI user
-- [../README.md](../README.md) — install, 60-second diarize, headline DER
+- [../README.md](../README.md) — installation, first diarization, headline DER
 - [BENCHMARKS.md](BENCHMARKS.md) — full protocol, RTF, competitor orientation
 
 ### Rust library (kernels / production)
@@ -41,7 +42,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 - [../schema/diarization-result-v1.json](../schema/diarization-result-v1.json)
 
 ### Security / ops
-- [Experimental Apple Rust kernels](darwin-rust-experiment.md) — build/link audit and pending M1 Pro comparison.
+- [Experimental Apple Rust kernels](darwin-rust-experiment.md) — build/link audit and measured M1 Pro comparison; experimental path not promoted.
 - [Release quality evidence](release-quality.md) — exact-revision full-corpus and Darwin resource gates.
 - [../PRODUCTION-READINESS.md](../PRODUCTION-READINESS.md)
 - [security/ort-native-binary-provenance.md](security/ort-native-binary-provenance.md)
@@ -53,7 +54,7 @@ use **INT8** models only. CLI / FFI / MCP default is **kernels**
 
 ### Contributors
 - [release-artifacts.md](release-artifacts.md) — packaged consumers, release matrix and publication prerequisites
-- [../CONTRIBUTING.md](../CONTRIBUTING.md) — feature recipes, deprecations toward 1.0
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) — feature recipes and development checks
 - [DEVELOPMENT-PROCESS.md](DEVELOPMENT-PROCESS.md) — **development process** (not runtime architecture)
 - [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md) — **runtime** architecture
 - [GLOSSARY.md](GLOSSARY.md) · [FORMALISM.md](FORMALISM.md) · [SEVERITY.md](SEVERITY.md)

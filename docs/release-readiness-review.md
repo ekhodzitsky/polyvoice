@@ -1,6 +1,9 @@
 # Pre-candidate readiness review
 
-**Reviewed 2026-09-29. Verdict: NO-GO for 1.0.**
+**Historical review: 2026-09-29. Verdict at that revision: NO-GO.**
+
+**Superseded for the published 1.0.0:** see the [final readiness evidence](../PRODUCTION-READINESS.md).
+The table and measurements below describe the earlier revision, not current release status.
 
 The reviewed development revision is
 `391deca1961221fba531ac89507fcdd5c919904f`, version **0.22.0**, with
@@ -13,7 +16,7 @@ Subsequent preparation adds the [packaged consumer scenario suite](release-artif
 including duration boundaries and OS-enforced offline execution on Linux and
 Darwin, plus application-scoped Windows network filters. The table below remains
 the dated audit snapshot, not a claim about later candidates. Exact-candidate
-qualification and published RC qualification remain open.
+qualification and published RC qualification were open at review time.
 
 **Policy update, 2026-10-01:** neither a mandatory 14-day waiting period nor
 a second release candidate is required.

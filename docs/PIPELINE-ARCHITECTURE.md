@@ -30,11 +30,11 @@ For the **development process** checklist (spec → types → verify), see
 | CLI `polyvoice` | **v2 + VBx kernels** (`--features cli`); `--legacy` is rejected; BYO offline is a Rust API |
 | FFI | v2 kernels only (`ffi` = `pipeline-native`) |
 | Python | **v2 + VBx kernels** (same engine as CLI / FFI / MCP); `clusterer="ahc"` opt-out |
-| MCP `polyvoice-mcp` | v2 + VBx kernels (`clusterer=ahc` opt-out) |
+| Experimental MCP `polyvoice-mcp` | v2 + VBx kernels (`clusterer=ahc` opt-out) |
 | `polyvoice-bench` | **v2 + VBx** default (kernels when built with `cli`); `--jobs N` runs files in parallel on one shared pipeline and adds `rt_factor_wall` to the report; `--pipeline legacy` for comparison |
 | Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |
 | Library kernels | `features = ["pipeline-native", "vbx"]` → crate-root `Pipeline` |
-| Library tract | `features = ["pipeline-tract", "vbx"]` → crate-root `Pipeline` |
+| Experimental library tract | `features = ["pipeline-tract", "vbx"]` → crate-root `Pipeline` |
 
 **Library vs front doors:** `PipelineConfig::default()` is **VBx** when the
 `vbx` feature is on (same as CLI / Python / FFI / MCP). Without `vbx` it
@@ -61,7 +61,7 @@ samples → segment_speech(VAD) → WindowIter → Embedder::embed
        → ahc::agglomerative_cluster → merge_segments → DiarizationResult
 ```
 
-### Production v2 (`src/pipeline_v2`) — kernels or tract
+### Pipeline v2 (`src/pipeline_v2`) — native product, experimental tract
 
 ```
 samples → Segmenter::segment

@@ -1,30 +1,46 @@
 # polyvoice
 
-[![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
+[![CI](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ekhodzitsky/polyvoice/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/polyvoice)](https://pypi.org/project/polyvoice)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/ekhodzitsky/polyvoice/blob/master/LICENSE)
 
 **Speaker diarization for Python — who spoke when.**
 
-Rust-powered speaker diarization that runs on CPU, fits in ~8.4 MB INT8, and
-requires zero Python runtime overhead. The wheel uses the same hand-written
+CPU speaker diarization implemented in Rust, with a neural INT8 model pair of
+~8.4 MB (plus VBx PLDA parameters). Python remains the host interpreter. The wheel uses the same hand-written
 INT8 kernels as the Rust CLI — no ONNX Runtime. Pipeline v2 with VBx
 clustering and overlap detection.
 
 ## Install
 
 ```bash
-pip install polyvoice
+python -m pip install polyvoice==1.0.0
 ```
 
-Requires Python 3.9+.
+Published **1.0.0 wheels require CPython 3.12**. Linux x86_64/ARM64 wheels
+use the `manylinux_2_34` ABI (glibc 2.34+); macOS ARM64 wheels target macOS
+11+; Windows wheels target x86_64. The source metadata allows Python 3.9+,
+but that does not provide a wheel for every interpreter. Build other
+combinations from source with Rust and maturin; see the repository
+[contributor guide](https://github.com/ekhodzitsky/polyvoice/blob/master/CONTRIBUTING.md#python-bindings).
 
 ## Quick start
 
 ```python
+import wave
+from array import array
+import sys
 import polyvoice
 
-# Models auto-download on first run (~8.4 MB INT8)
+# Example input: uncompressed mono PCM16 WAV at 16 kHz.
+with wave.open("meeting.wav", "rb") as wav:
+    assert (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) == (1, 2, 16000)
+    pcm = array("h", wav.readframes(wav.getnframes()))
+if sys.byteorder != "little":
+    pcm.byteswap()
+samples = [sample / 32768.0 for sample in pcm]
+
+# Models auto-download on first run (~8.4 MB INT8 pair plus PLDA)
 pipeline = polyvoice.Pipeline.balanced()
 
 result = pipeline.run(samples, sample_rate=16000)
@@ -37,7 +53,7 @@ for turn in result["turns"]:
 ## API
 
 - `polyvoice.Pipeline.balanced(models_cache=None, clusterer=None, vbx_plda_dir=None)` — balanced accuracy / speed.
-- `polyvoice.Pipeline.mobile(models_cache=None, clusterer=None, vbx_plda_dir=None)` — smaller, faster model.
+- `polyvoice.Pipeline.mobile(models_cache=None, clusterer=None, vbx_plda_dir=None)` — mobile profile; currently resolves the same INT8 model pair.
   `clusterer` is `"vbx"` (default, matching the CLI) or `"ahc"`. VBx resolves
   its PLDA params via `vbx_plda_dir`, then the `POLYVOICE_VBX_PLDA_DIR` env
   var, then a registry download.
@@ -59,4 +75,4 @@ See the [full repository](https://github.com/ekhodzitsky/polyvoice) for Rust / C
 
 Release wheels are qualified on CPython 3.12 for Linux x86_64/ARM64, macOS
 ARM64 and Windows x86_64. Other source-build interpreters are not an implied
-wheel support promise. See the [artifact matrix and checks](../docs/release-artifacts.md).
+wheel support promise. See the [artifact matrix and checks](https://github.com/ekhodzitsky/polyvoice/blob/master/docs/release-artifacts.md).

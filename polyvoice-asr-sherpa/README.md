@@ -7,8 +7,8 @@ word→speaker join, all in the core crate) works unchanged.
 
 ## The trade-off, up front
 
-sherpa-onnx ships a **second C++ ONNX Runtime** that does not share the core
-crate's `ort`. That is why this crate:
+sherpa-onnx ships its own **C++ ONNX Runtime**, separate from the Parakeet
+companion runtime. The core diarization crate has no ONNX Runtime. That is why this crate:
 
 - is strictly **opt-in** and deliberately **outside the polyvoice workspace**
   (own lockfile, own build) — it can never leak into the core dependency
@@ -20,7 +20,7 @@ crate's `ort`. That is why this crate:
 | | `polyvoice-asr` (Parakeet TDT) | `polyvoice-asr-sherpa` (this crate) |
 |---|---|---|
 | Languages | ~25 European (en, de, fr, …) | zh, en, ja, ko, yue (SenseVoice); zh (Paraformer) |
-| Runtime | shared core `ort` (one ONNX runtime) | second C++ runtime (sherpa-onnx) |
+| Runtime | companion-local `ort`; no runtime in the core | second C++ runtime (sherpa-onnx) |
 | Timestamps | native word-level | token starts → words (see below) |
 | Confidence | per-word | not exposed by sherpa (`1.0` reported) |
 

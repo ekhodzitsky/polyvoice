@@ -54,8 +54,8 @@ Never mix the two.
 polyvoice is driven through its shipped **CLI**, which cold-loads the model on
 every file, so the harness RTF includes per-file process spawn + model load and is
 a **lower bound on speed** (a conservative, worst-case number). polyvoice's
-steady-state, in-process realtime factor (~10× realtime on CPU) is measured
-separately by the Rust harness and reported in `docs/BENCHMARKS.md`. Competitor
+steady-state, in-process timing is measured separately by the Rust harness;
+see the release-specific results in [docs/BENCHMARKS.md](../docs/BENCHMARKS.md). Competitor
 RTFs, when run, are measured the same end-to-end way for fairness.
 
 ### Failure handling
@@ -80,12 +80,17 @@ audio is **not** redistributed (download with `../scripts/download-*.sh`). See
 cd benchmarks
 python make_manifests.py                 # (re)build manifests from data/
 # polyvoice only (no extra installs needed):
-python benchmark.py --dataset voxconverse_test --runners polyvoice,polyvoice-v2
-# everything the host has installed:
-python benchmark.py --dataset voxconverse_test --runners all
+python benchmark.py --dataset voxconverse_test --runners polyvoice
+# selected competitors (unavailable installations are skipped):
+python benchmark.py --dataset voxconverse_test --runners polyvoice,pyannote,whisperx,diart,sherpa-onnx
 # score an arbitrary hypothesis RTTM against a reference, directly:
 python der.py ../data/voxconverse-test/rttm hyp_dir --collar 0
 ```
+
+`polyvoice` and `polyvoice-v2` select the same current native pipeline.
+The historical `polyvoice-legacy` runner requires an older binary: core 1.x
+rejects `--legacy`. Avoid `--runners all` for current-product comparisons,
+because it includes that historical runner.
 
 Enabling competitors (each skips until satisfied):
 

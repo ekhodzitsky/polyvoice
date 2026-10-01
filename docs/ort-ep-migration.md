@@ -1,5 +1,11 @@
 # ort execution-provider migration plan
 
+> **Historical ORT migration notes.** The core 1.0 product no longer uses
+> `ort`, `ort-sys` or these execution-provider features. The tables below
+> describe the former core integration. Current ORT work belongs to the
+> separate [Parakeet companion](../polyvoice-asr/README.md); the native core
+> accepts CPU/auto only. Do not apply the old feature recipes to core 1.x.
+
 Status: plan only — **do not bump ort past `2.0.0-rc.12` without executing the
 checklist below**. Pin enforced by `scripts/check-ort-version.sh`.
 

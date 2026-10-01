@@ -5,6 +5,9 @@ downloads for accuracy experiments on short segments and CJK audio.
 
 ## Enable
 
+Enable `backend-tract,embedder,download` for this experimental ONNX-file
+adapter and registry access. It is outside the stable native product contract.
+
 ```rust
 // After ModelRegistry::ensure("eres2netv2")
 use polyvoice::embedder::{ERes2NetV2Extractor, Embedder};
@@ -22,8 +25,9 @@ Adapter registry names (built-ins):
 | `eres2netv2` / `eres2net-v2` | `eres2netv2` | 192 | Short-utterance ERes2NetV2 |
 | `cam++-zh` / `campplus-zh` | `cam_pp_zh` | 192 | CAM++ zh-cn common |
 
-Default embedder remains WeSpeaker ResNet34 / CAM++ advanced as already configured
-in profiles — these keys are never profile-resolved automatically.
+All shipping profiles currently resolve the ResNet34 INT8 embedder and
+powerset INT8 segmenter. The experimental keys above are never selected
+automatically by those profiles.
 
 ## License
 

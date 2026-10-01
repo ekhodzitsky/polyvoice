@@ -1,7 +1,6 @@
 # Migrating from polyvoice 0.5 → 0.6 (archival)
 
-> **Archival guide.** This is **not** a migration to product 1.0 (crate is
-> still pre-1.0; current line is **0.20.x**). It documents the **0.5 → 0.6**
+> **Archival guide.** This is **not** a migration to product 1.0. It documents the **0.5 → 0.6**
 > API break. For what ships **today**, use [README](../README.md),
 > [PIPELINE-ARCHITECTURE.md](PIPELINE-ARCHITECTURE.md), and
 > [CHANGELOG.md](../CHANGELOG.md).
@@ -14,9 +13,9 @@ from 0.5.
 > have since been removed (`HybridPipeline`, `OnlineDiarizer`,
 > `OnnxEmbeddingExtractor`, FFI ABI v2). Today the CLI, FFI and MCP default is
 > the **kernels pipeline (`pipeline-native`) + VBx** with no ONNX Runtime;
-> Python defaults to **`pipeline_v2` (ort) + VBx**; the ort-free BYO library
-> surface is `pipeline::LegacyPipeline` (also the CLI `--legacy` escape hatch,
-> available only in `pipeline-full` builds).
+> Python uses the same native engine. The BYO Rust surface is
+> `pipeline::LegacyPipeline`; the product CLI rejects `--legacy`. All code
+> examples below remain historical, not recipes for the 1.0 API.
 
 ## Rust API
 

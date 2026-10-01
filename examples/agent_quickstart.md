@@ -26,7 +26,7 @@ The JSON contract is versioned and printable:
 polyvoice schema > diarization-result-v1.schema.json
 ```
 
-## 2. MCP server (Claude Code, other MCP clients)
+## 2. Experimental MCP server (Claude Code, other MCP clients)
 
 ```json
 {
@@ -42,7 +42,7 @@ diarization as tools over stdio; results follow the same v1 schema.
 ## 3. Python: typed result with projections
 
 ```sh
-pip install polyvoice
+python -m pip install polyvoice==1.0.0   # CPython 3.12 release wheels
 ```
 
 ```python

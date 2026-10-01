@@ -89,13 +89,8 @@ fn jobs3_matches_jobs1_bitwise() {
         eprintln!("skip: Vox-3 smoke dataset missing");
         return;
     };
-    let release_bench =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("target/release/polyvoice-bench");
-    let bench = if release_bench.is_file() {
-        release_bench
-    } else {
-        assert_cmd::cargo::cargo_bin("polyvoice-bench")
-    };
+    // Use this build's binary, including coverage instrumentation and target suffix.
+    let bench = assert_cmd::cargo::cargo_bin("polyvoice-bench");
     let one = run_bench(&bench, &dataset, 1);
     let three = run_bench(&bench, &dataset, 3);
 
