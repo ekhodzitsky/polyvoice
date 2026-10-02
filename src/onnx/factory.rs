@@ -14,7 +14,7 @@ const BACKEND_AUTO: u8 = 0;
 const BACKEND_TRACT: u8 = 2;
 
 // Thread-local override for tests / programmatic selection.
-// BACKEND_AUTO means "read env / default to ort".
+// BACKEND_AUTO means "read env, else the compiled default backend".
 // Thread-local so parallel tests cannot race each other.
 thread_local! {
     static BACKEND_FORCE: Cell<u8> = const { Cell::new(BACKEND_AUTO) };
@@ -22,8 +22,7 @@ thread_local! {
 
 /// Which concrete inference backend to construct.
 ///
-/// EP (`ExecutionProvider`) remains ort-only configuration. tract ignores EP
-/// and always runs on pure-Rust CPU.
+/// Tract ignores [`ExecutionProvider`] and always runs on pure-Rust CPU.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InferenceBackend {
     /// Pure-Rust tract (requires the `backend-tract` cargo feature).
@@ -34,8 +33,7 @@ pub enum InferenceBackend {
 impl InferenceBackend {
     /// Backend used when env / force do not pick one.
     ///
-    /// Ort when `onnx` is on (default for ONNX builds, not the product CLI).
-    /// Tract when the build is tract-only (`backend-tract` without `onnx`).
+    /// This module compiles only with `backend-tract`, so the default is tract.
     pub fn default_backend() -> Self {
         #[cfg(feature = "backend-tract")]
         {
@@ -106,7 +104,7 @@ impl InferenceBackend {
     }
 }
 
-/// Concrete session holding either ort or (optionally) tract.
+/// Concrete tract session.
 ///
 /// Stages store this type and only call [`InferenceRuntime`] methods so they
 /// do not branch on the concrete engine.
@@ -119,8 +117,8 @@ pub enum RuntimeSession {
 impl RuntimeSession {
     /// Build a session for `model_path` using the resolved [`InferenceBackend`].
     ///
-    /// Validates the ONNX header before the backend parses the file (both
-    /// paths). `ep` and `intra_threads` apply to ort; tract ignores EP.
+    /// Validates the ONNX header before tract parses the file. Tract ignores
+    /// `ep`; `intra_threads` is accepted and ignored.
     pub fn from_path(
         model_path: &Path,
         #[allow(unused_variables)] ep: ExecutionProvider,

@@ -5,6 +5,19 @@
 
 mod confidence;
 mod config;
+#[cfg(any(
+    feature = "infer",
+    all(
+        feature = "segmenter-native",
+        feature = "embedder-native",
+        feature = "local-models",
+        feature = "segmentation",
+        feature = "embedder",
+        feature = "clusterer",
+        feature = "resegmentation",
+    ),
+))]
+pub(crate) mod execution_provider;
 mod ids;
 mod measures;
 mod profile;

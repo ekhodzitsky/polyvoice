@@ -4,13 +4,23 @@
 //! cargo run --features "cli,vad-earshot" --bin polyvoice-measure -- streaming \
 //!   --dataset data/voxconverse-test --max-files 30 --output benchmarks/results/streaming-latency-measured.json
 //! ```
+//!
+//! `streaming` and `vad-parity` always fail: those paths needed ONNX Runtime.
+//! `embedder-short` runs only with native ResNet34 plus tract CAM++; the helpers
+//! below stay in the binary so that build can use them.
 
-#![cfg_attr(not(any()), allow(dead_code, unused_imports))]
+#![cfg_attr(
+    not(all(
+        feature = "embedder-native",
+        feature = "backend-tract",
+        feature = "embedder"
+    )),
+    allow(dead_code, unused_imports)
+)]
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use polyvoice::cli_common;
-use polyvoice::der::compute_der;
 use polyvoice::embedder::Embedder;
 #[cfg(all(
     feature = "embedder-native",
@@ -19,16 +29,9 @@ use polyvoice::embedder::Embedder;
 ))]
 use polyvoice::embedder::{CamPlusPlusExtractor, ResNet34Native};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline::LegacyPipeline;
-use polyvoice::streaming::{LatencyPreset, StreamingPipeline};
-use polyvoice::types::SpeakerTurn;
-use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
-#[cfg(any())]
-use polyvoice::{FbankOnnxExtractor, SileroVad};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -92,59 +95,6 @@ struct Hardware {
     cpu: String,
     arch: String,
     cores: usize,
-}
-
-#[derive(Serialize)]
-struct StreamingPresetRow {
-    preset: String,
-    window_secs: f32,
-    hop_secs: f32,
-    right_context_secs: f32,
-    cache_cap: usize,
-    input_buffer_latency_secs: f32,
-    mean_rtf: f64,
-    macro_der_collar_0: f64,
-    macro_der_collar_025: f64,
-    files: usize,
-    total_audio_secs: f64,
-    total_wall_secs: f64,
-}
-
-#[derive(Serialize)]
-struct StreamingReport {
-    schema: String,
-    hardware: Hardware,
-    chunk_samples: usize,
-    max_files: usize,
-    dataset: String,
-    rows: Vec<StreamingPresetRow>,
-}
-
-#[cfg(feature = "vad-earshot")]
-#[derive(Serialize)]
-struct VadArm {
-    name: String,
-    frame_size: usize,
-    macro_der_collar_0: f64,
-    macro_der_collar_025: f64,
-    mean_rtf: f64,
-    files: usize,
-}
-
-#[cfg(feature = "vad-earshot")]
-#[derive(Serialize)]
-struct VadParityReport {
-    schema: String,
-    hardware: Hardware,
-    max_files: usize,
-    dataset: String,
-    silero: VadArm,
-    earshot: VadArm,
-    delta_der_collar_0_pp: f64,
-    delta_der_collar_025_pp: f64,
-    parity_gate_abs_pp: f64,
-    parity_pass_collar_0: bool,
-    parity_pass_collar_025: bool,
 }
 
 #[derive(Serialize)]
@@ -213,298 +163,6 @@ fn hardware() -> Hardware {
         cpu: cpu_brand(),
         arch: std::env::consts::ARCH.into(),
         cores,
-    }
-}
-
-fn macro_der(pairs: &[(f64, f64)]) -> (f64, f64) {
-    if pairs.is_empty() {
-        return (0.0, 0.0);
-    }
-    let n = pairs.len() as f64;
-    let c0 = pairs.iter().map(|p| p.0).sum::<f64>() / n;
-    let c025 = pairs.iter().map(|p| p.1).sum::<f64>() / n;
-    (c0, c025)
-}
-
-fn der_pair(ref_t: &[SpeakerTurn], hyp: &[SpeakerTurn]) -> (f64, f64) {
-    let d0 = compute_der(ref_t, hyp, 0.0);
-    let d25 = compute_der(ref_t, hyp, 0.25);
-    (d0.der * 100.0, d25.der * 100.0)
-}
-
-#[cfg(not(any()))]
-fn run_streaming(
-    _dataset: PathBuf,
-    _max_files: usize,
-    _chunk_samples: usize,
-    _output: Option<PathBuf>,
-) -> Result<()> {
-    cli_common::require_onnx("polyvoice-measure streaming")
-}
-
-#[cfg(any())]
-fn run_streaming(
-    dataset: PathBuf,
-    max_files: usize,
-    chunk_samples: usize,
-    output: Option<PathBuf>,
-) -> Result<()> {
-    let registry = ModelRegistry::default()?;
-    let emb_path = registry.ensure("wespeaker_resnet34")?;
-    let vad_path = registry.ensure("silero_vad")?;
-    let wavs = cli_common::list_wavs(&dataset, Some(max_files))?;
-    let rttm_dir = dataset.join("rttm");
-    let presets = [
-        LatencyPreset::Realtime,
-        LatencyPreset::Balanced,
-        LatencyPreset::Accurate,
-    ];
-    let mut rows = Vec::new();
-
-    for preset in presets {
-        let mut ders = Vec::new();
-        let mut audio_secs = 0.0_f64;
-        let mut wall_secs = 0.0_f64;
-        let mut n_ok = 0_usize;
-        let params = preset.params();
-        let input_lat = preset.input_buffer_latency_secs(16_000, 512);
-
-        for wav in &wavs {
-            let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let rttm = rttm_dir.join(format!("{stem}.rttm"));
-            if !rttm.is_file() {
-                continue;
-            }
-            let (samples, sr_hz) = read_wav(wav)?;
-            if sr_hz != 16_000 {
-                eprintln!("[SKIP] {stem}: sample rate {sr_hz}");
-                continue;
-            }
-            let ref_t = cli_common::load_ref_turns(&rttm_dir, stem)?;
-            let extractor = FbankOnnxExtractor::new(
-                &emb_path,
-                256,
-                1,
-                polyvoice::onnx::ExecutionProvider::Cpu,
-            )?;
-            let vad = SileroVad::new(&vad_path, 512)?;
-            let vad_config = VadConfig {
-                frame_size: 512,
-                threshold: 0.5,
-                ..VadConfig::default()
-            };
-            let mut stream =
-                StreamingPipeline::with_latency_preset(vad, extractor, preset, vad_config)?;
-
-            let t0 = Instant::now();
-            let mut off = 0;
-            while off < samples.len() {
-                let end = (off + chunk_samples).min(samples.len());
-                let _ = stream.feed(&samples[off..end])?;
-                off = end;
-            }
-            let _ = stream.flush()?;
-            let wall = t0.elapsed().as_secs_f64();
-            let audio = samples.len() as f64 / sr_hz as f64;
-            let hyp = stream.turns().to_vec();
-            ders.push(der_pair(&ref_t, &hyp));
-            audio_secs += audio;
-            wall_secs += wall;
-            n_ok += 1;
-            eprint!(".");
-        }
-        eprintln!();
-        let (c0, c025) = macro_der(&ders);
-        let rtf = if audio_secs > 0.0 {
-            wall_secs / audio_secs
-        } else {
-            0.0
-        };
-        rows.push(StreamingPresetRow {
-            preset: match preset {
-                LatencyPreset::Realtime => "realtime",
-                LatencyPreset::Balanced => "balanced",
-                LatencyPreset::Accurate => "accurate",
-                _ => "other",
-            }
-            .into(),
-            window_secs: params.window_secs,
-            hop_secs: params.hop_secs,
-            right_context_secs: params.right_context_secs,
-            cache_cap: params.speaker_cache_cap,
-            input_buffer_latency_secs: input_lat,
-            mean_rtf: rtf,
-            macro_der_collar_0: c0,
-            macro_der_collar_025: c025,
-            files: n_ok,
-            total_audio_secs: audio_secs,
-            total_wall_secs: wall_secs,
-        });
-        let preset = rows.last().map(|r| r.preset.as_str()).unwrap_or("unknown");
-        eprintln!(
-            "[{preset}] files={n_ok} RTF={rtf:.4} DER0={c0:.2}% DER0.25={c025:.2}% lat={input_lat:.3}s"
-        );
-    }
-
-    let report = StreamingReport {
-        schema: "polyvoice-streaming-latency-v1".into(),
-        hardware: hardware(),
-        chunk_samples,
-        max_files,
-        dataset: dataset.display().to_string(),
-        rows,
-    };
-    let json = serde_json::to_string_pretty(&report)?;
-    if let Some(path) = output {
-        std::fs::write(&path, &json)?;
-        eprintln!("wrote {}", path.display());
-    } else {
-        println!("{json}");
-    }
-    Ok(())
-}
-
-/// One legacy-pipeline VAD arm over the dataset. The embedder session and the
-/// VAD are built once by the caller and reused across files: sessions are
-/// file-independent and `LegacyPipeline::run` resets the VAD state at the
-/// start of every run, so reuse is numerically identical to per-file
-/// construction.
-#[cfg(feature = "vad-earshot")]
-#[cfg(any())]
-fn run_legacy_arm<V: polyvoice::vad::VoiceActivityDetector>(
-    name: &str,
-    frame_size: usize,
-    wavs: &[PathBuf],
-    rttm_dir: &Path,
-    extractor: &FbankOnnxExtractor,
-    mut vad: V,
-) -> Result<VadArm> {
-    let pipeline = LegacyPipeline::new(
-        cli_common::legacy_diarization_config(polyvoice::DEFAULT_AHC_THRESHOLD),
-        VadConfig {
-            frame_size,
-            threshold: 0.5,
-            ..VadConfig::default()
-        },
-    );
-    let mut ders = Vec::new();
-    let mut audio_secs = 0.0_f64;
-    let mut wall_secs = 0.0_f64;
-    let mut n_ok = 0_usize;
-
-    for wav in wavs {
-        let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        if !rttm_dir.join(format!("{stem}.rttm")).is_file() {
-            continue;
-        }
-        let (samples, sr_hz) = read_wav(wav)?;
-        if sr_hz != 16_000 {
-            eprintln!("[SKIP] {stem}: sample rate {sr_hz}");
-            continue;
-        }
-        let ref_t = cli_common::load_ref_turns(rttm_dir, stem)?;
-        let t0 = Instant::now();
-        let result = pipeline.run(&samples, extractor, &mut vad)?;
-        let wall = t0.elapsed().as_secs_f64();
-        let audio = samples.len() as f64 / sr_hz as f64;
-        ders.push(der_pair(&ref_t, &result.turns));
-        audio_secs += audio;
-        wall_secs += wall;
-        n_ok += 1;
-        eprint!(".");
-    }
-    eprintln!();
-    let (c0, c025) = macro_der(&ders);
-    let rtf = if audio_secs > 0.0 {
-        wall_secs / audio_secs
-    } else {
-        0.0
-    };
-    Ok(VadArm {
-        name: name.into(),
-        frame_size,
-        macro_der_collar_0: c0,
-        macro_der_collar_025: c025,
-        mean_rtf: rtf,
-        files: n_ok,
-    })
-}
-
-#[cfg(not(any()))]
-fn run_vad_parity(_dataset: PathBuf, _max_files: usize, _output: Option<PathBuf>) -> Result<()> {
-    cli_common::require_onnx("polyvoice-measure vad-parity")
-}
-
-#[cfg(any())]
-fn run_vad_parity(dataset: PathBuf, max_files: usize, output: Option<PathBuf>) -> Result<()> {
-    #[cfg(not(feature = "vad-earshot"))]
-    {
-        let _ = (dataset, max_files, output);
-        anyhow::bail!("rebuild with --features vad-earshot");
-    }
-    #[cfg(feature = "vad-earshot")]
-    {
-        let registry = ModelRegistry::default()?;
-        let emb_path = registry.ensure("wespeaker_resnet34")?;
-        let vad_path = registry.ensure("silero_vad")?;
-        let wavs = cli_common::list_wavs(&dataset, Some(max_files))?;
-        let rttm_dir = dataset.join("rttm");
-        // One embedder session shared by both arms (file-independent).
-        let extractor =
-            FbankOnnxExtractor::new(&emb_path, 256, 1, polyvoice::onnx::ExecutionProvider::Cpu)?;
-
-        eprintln!("Silero arm…");
-        let silero = run_legacy_arm(
-            "silero",
-            512,
-            &wavs,
-            &rttm_dir,
-            &extractor,
-            SileroVad::new(&vad_path, 512)?,
-        )?;
-        eprintln!(
-            "silero DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
-            silero.macro_der_collar_0, silero.macro_der_collar_025, silero.mean_rtf
-        );
-
-        eprintln!("Earshot arm…");
-        let earshot = run_legacy_arm(
-            "earshot",
-            polyvoice::EARSHOT_FRAME_SIZE,
-            &wavs,
-            &rttm_dir,
-            &extractor,
-            polyvoice::EarshotVad::new(),
-        )?;
-        eprintln!(
-            "earshot DER0={:.2}% DER0.25={:.2}% RTF={:.4}",
-            earshot.macro_der_collar_0, earshot.macro_der_collar_025, earshot.mean_rtf
-        );
-
-        let d0 = earshot.macro_der_collar_0 - silero.macro_der_collar_0;
-        let d25 = earshot.macro_der_collar_025 - silero.macro_der_collar_025;
-        let gate = 0.3_f64;
-        let report = VadParityReport {
-            schema: "polyvoice-vad-parity-v1".into(),
-            hardware: hardware(),
-            max_files,
-            dataset: dataset.display().to_string(),
-            silero,
-            earshot,
-            delta_der_collar_0_pp: d0,
-            delta_der_collar_025_pp: d25,
-            parity_gate_abs_pp: gate,
-            parity_pass_collar_0: d0.abs() <= gate,
-            parity_pass_collar_025: d25.abs() <= gate,
-        };
-        let json = serde_json::to_string_pretty(&report)?;
-        if let Some(path) = output {
-            std::fs::write(&path, &json)?;
-            eprintln!("wrote {}", path.display());
-        } else {
-            println!("{json}");
-        }
-        Ok(())
     }
 }
 
@@ -822,77 +480,14 @@ fn score_arm(emb: &dyn Embedder, pairs: &[MemPair], durs: &[f32]) -> Result<Vec<
 }
 
 /// Macro DER at collar 0 and 0.25 for each embedder, plus the scored file count.
+///
+/// The shipping subcommand passes `None`. Tests construct the struct to check
+/// that the report fields round-trip.
+#[cfg_attr(not(test), allow(dead_code))]
 struct DerComparison {
     default_der: (f64, f64),
     eres_der: (f64, f64),
     files: usize,
-}
-
-/// DER of both embedders over a diarization dataset via the legacy pipeline.
-/// All ONNX sessions (both embedders, one VAD) and the pipeline are built once
-/// and reused across files: sessions are file-independent and
-/// `LegacyPipeline::run` resets the VAD state at the start of every run, so
-/// reuse is numerically identical to per-file construction.
-#[cfg(any())]
-fn run_der_comparison(
-    registry: &ModelRegistry,
-    dataset: &Path,
-    max_files: usize,
-    default_path: &Path,
-    eres_path: &Path,
-) -> Result<DerComparison> {
-    let wavs = cli_common::list_wavs(dataset, Some(max_files))?;
-    let rttm_dir = dataset.join("rttm");
-    let vad_path = registry.ensure("silero_vad")?;
-    let pipeline = LegacyPipeline::new(
-        cli_common::legacy_diarization_config(polyvoice::DEFAULT_AHC_THRESHOLD),
-        VadConfig {
-            frame_size: 512,
-            threshold: 0.5,
-            ..VadConfig::default()
-        },
-    );
-    let mut vad = SileroVad::new(&vad_path, 512)?;
-    let ext_d = FbankOnnxExtractor::new(
-        default_path,
-        256,
-        1,
-        polyvoice::onnx::ExecutionProvider::Cpu,
-    )?;
-    // ERes2Net uses same fbank front-end path via FbankOnnxExtractor with dim 192
-    let ext_e =
-        FbankOnnxExtractor::new(eres_path, 192, 1, polyvoice::onnx::ExecutionProvider::Cpu)?;
-    let mut d_pairs = Vec::new();
-    let mut e_pairs = Vec::new();
-    let mut n = 0_usize;
-    for wav in &wavs {
-        let stem = wav.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        if !rttm_dir.join(format!("{stem}.rttm")).is_file() {
-            continue;
-        }
-        let (samples, sr_hz) = read_wav(wav)?;
-        if sr_hz != 16_000 {
-            eprintln!("[SKIP] {stem}: sample rate {sr_hz}");
-            continue;
-        }
-        let ref_t = cli_common::load_ref_turns(&rttm_dir, stem)?;
-        let res_d = pipeline.run(&samples, &ext_d, &mut vad)?;
-        d_pairs.push(der_pair(&ref_t, &res_d.turns));
-        let res_e = pipeline.run(&samples, &ext_e, &mut vad)?;
-        e_pairs.push(der_pair(&ref_t, &res_e.turns));
-        n += 1;
-        eprint!(".");
-    }
-    eprintln!();
-    let (d0, d25) = macro_der(&d_pairs);
-    let (e0, e25) = macro_der(&e_pairs);
-    eprintln!("DER default ResNet34: 0={d0:.2}% 0.25={d25:.2}% files={n}");
-    eprintln!("DER ERes2NetV2:       0={e0:.2}% 0.25={e25:.2}% files={n}");
-    Ok(DerComparison {
-        default_der: (d0, d25),
-        eres_der: (e0, e25),
-        files: n,
-    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1011,23 +606,8 @@ fn main() -> Result<()> {
     cli_common::limit_malloc_arenas();
     let args = Args::parse();
     match args.cmd {
-        Cmd::Streaming {
-            dataset,
-            max_files,
-            chunk_samples,
-            output,
-        } => {
-            cli_common::require_onnx("polyvoice-measure streaming")?;
-            run_streaming(dataset, max_files, chunk_samples, output)
-        }
-        Cmd::VadParity {
-            dataset,
-            max_files,
-            output,
-        } => {
-            cli_common::require_onnx("polyvoice-measure vad-parity")?;
-            run_vad_parity(dataset, max_files, output)
-        }
+        Cmd::Streaming { .. } => cli_common::require_onnx("polyvoice-measure streaming"),
+        Cmd::VadParity { .. } => cli_common::require_onnx("polyvoice-measure vad-parity"),
         Cmd::EmbedderShort {
             veri_list,
             wav_root,

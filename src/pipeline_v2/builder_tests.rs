@@ -13,162 +13,6 @@ fn repo_file(rel: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel)
 }
 
-/// Product-profile builds assume the ort default (shipping ONNX). Tract-only
-/// graphs remap to `powerset_fp32_tract`, which these fixtures do not ship.
-fn pin_ort_or_skip() -> Option<OrtPin> {
-    #[cfg(any())]
-    {
-        crate::onnx::InferenceBackend::force(Some(crate::onnx::InferenceBackend::Ort));
-        Some(OrtPin)
-    }
-    #[cfg(not(any()))]
-    {
-        None
-    }
-}
-
-struct OrtPin;
-
-#[cfg(any())]
-impl Drop for OrtPin {
-    fn drop(&mut self) {
-        crate::onnx::InferenceBackend::force(None);
-    }
-}
-
-/// Every shipping profile resolves to the local FP32 model pair checked
-/// into `models/`, so profile builds serve registry cache hits and never
-/// touch the network.
-const LOCAL_PROFILE_MANIFEST: &str = r#"
-    schema = "polyvoice-models-v2"
-    [profiles.mobile]
-    segmenter = "local_powerset"
-    embedder  = "local_resnet34"
-    [profiles.balanced]
-    segmenter = "local_powerset"
-    embedder  = "local_resnet34"
-    [profiles.fast]
-    segmenter = "local_powerset"
-    embedder  = "local_resnet34"
-    [models.local_powerset]
-    url      = "https://example.invalid/powerset_fp32.onnx"
-    sha256   = "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
-    size     = 5992913
-    filename = "powerset_fp32.onnx"
-    [models.local_resnet34]
-    url      = "https://example.invalid/wespeaker_resnet34.onnx"
-    sha256   = "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
-    size     = 26534127
-    filename = "wespeaker_resnet34.onnx"
-"#;
-
-/// Bytes that hash-match a manifest entry but are not a loadable ONNX model.
-const GARBAGE_BYTES: &[u8] = b"not an onnx model, just garbage bytes";
-
-/// Manifest whose balanced profile can be pointed at the garbage segmenter
-/// or embedder to drive the `ConfigError::Load` paths offline.
-const GARBAGE_SEGMENTER_MANIFEST: &str = r#"
-    schema = "polyvoice-models-v2"
-    [profiles.balanced]
-    segmenter = "garbage"
-    embedder  = "local_resnet34"
-    [models.garbage]
-    url      = "https://example.invalid/garbage.onnx"
-    sha256   = "018eb9afb44b357df9c828ffe49f87b2e023768ce4585f41cb26835be5a148ec"
-    size     = 37
-    filename = "garbage.onnx"
-    [models.local_resnet34]
-    url      = "https://example.invalid/wespeaker_resnet34.onnx"
-    sha256   = "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
-    size     = 26534127
-    filename = "wespeaker_resnet34.onnx"
-"#;
-
-const GARBAGE_EMBEDDER_MANIFEST: &str = r#"
-    schema = "polyvoice-models-v2"
-    [profiles.balanced]
-    segmenter = "local_powerset"
-    embedder  = "garbage"
-    [models.local_powerset]
-    url      = "https://example.invalid/powerset_fp32.onnx"
-    sha256   = "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
-    size     = 5992913
-    filename = "powerset_fp32.onnx"
-    [models.garbage]
-    url      = "https://example.invalid/garbage.onnx"
-    sha256   = "018eb9afb44b357df9c828ffe49f87b2e023768ce4585f41cb26835be5a148ec"
-    size     = 37
-    filename = "garbage.onnx"
-"#;
-
-/// Same local FP32 pair plus the six VBx PLDA artifacts (hashes of the
-/// checked-in `fixtures/vbx-plda/*.npy`), so the registry fallback for the
-/// VBx clusterer resolves offline.
-#[cfg(feature = "vbx")]
-const LOCAL_VBX_MANIFEST: &str = r#"
-    schema = "polyvoice-models-v2"
-    [profiles.balanced]
-    segmenter = "local_powerset"
-    embedder  = "local_resnet34"
-    [models.local_powerset]
-    url      = "https://example.invalid/powerset_fp32.onnx"
-    sha256   = "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
-    size     = 5992913
-    filename = "powerset_fp32.onnx"
-    [models.local_resnet34]
-    url      = "https://example.invalid/wespeaker_resnet34.onnx"
-    sha256   = "9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1"
-    size     = 26534127
-    filename = "wespeaker_resnet34.onnx"
-    [models.vbx_plda_transform]
-    url      = "https://example.invalid/plda_transform.npy"
-    sha256   = "90261469714415743f4b8a86ee6b89466db858bde3c5944367cccfb7abd34f14"
-    size     = 131200
-    filename = "plda_transform.npy"
-    [models.vbx_plda_phi_computed]
-    url      = "https://example.invalid/plda_phi_computed.npy"
-    sha256   = "6ef7cf2f5a23a45b66f440f9a996a4cf5c047b369829af695d50ef18aa0a35e3"
-    size     = 1152
-    filename = "plda_phi_computed.npy"
-    [models.vbx_plda_mean1]
-    url      = "https://example.invalid/plda_mean1.npy"
-    sha256   = "e424c0c352182aa8e0f555dec1f3b30e29a20b9ed6b25d339f112af92e51e36f"
-    size     = 2176
-    filename = "plda_mean1.npy"
-    [models.vbx_plda_mean2]
-    url      = "https://example.invalid/plda_mean2.npy"
-    sha256   = "6f6fb708a2037197b5b84ffeaa8f140cb878088fbecd6ab042ad26a7691bd2cf"
-    size     = 640
-    filename = "plda_mean2.npy"
-    [models.vbx_plda_lda]
-    url      = "https://example.invalid/plda_lda.npy"
-    sha256   = "e20c9b012bebd1aabda5a38a127e63a43cf35debdc502715fc143e2fb6bc3c4b"
-    size     = 131200
-    filename = "plda_lda.npy"
-    [models.vbx_plda_mu]
-    url      = "https://example.invalid/plda_mu.npy"
-    sha256   = "d286d48acf99bbc1ed1502fed0a3e361ae5626ce1870c8be9f7397c5e47886c6"
-    size     = 1152
-    filename = "plda_mu.npy"
-"#;
-
-/// `None` (test skips) when the gitignored model blobs are not present
-/// locally — they exist only after a local model download.
-fn registry_with_local_models() -> Option<(tempfile::TempDir, ModelRegistry)> {
-    let tmp = tempfile::TempDir::new().expect("temp dir");
-    for f in ["powerset_fp32.onnx", "wespeaker_resnet34.onnx"] {
-        let src = repo_file(&format!("models/{f}"));
-        if !src.exists() {
-            eprintln!("skip: models/{f} missing");
-            return None;
-        }
-        std::fs::copy(src, tmp.path().join(f)).expect("copy local model into cache");
-    }
-    let manifest = Manifest::from_toml_str(LOCAL_PROFILE_MANIFEST).expect("local manifest parses");
-    let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
-    Some((tmp, registry))
-}
-
 #[test]
 fn execution_provider_setter_overrides_config() {
     let b = fresh().execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu);
@@ -534,25 +378,7 @@ fn build_balanced_without_registry_errors() {
     ));
 }
 
-#[test]
-fn build_balanced_with_local_models_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let p = fresh()
-        .profile(Profile::Balanced)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("balanced profile builds from cached local models");
-    assert_eq!(p.config().profile, Profile::Balanced);
-}
-
-#[cfg(all(feature = "segmenter-native", feature = "embedder-native", not(any())))]
+#[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
 #[test]
 fn build_native_unknown_embedder_model_errors() {
     let models = repo_file("models");
@@ -582,7 +408,7 @@ fn build_native_unknown_embedder_model_errors() {
     }
 }
 
-#[cfg(all(feature = "segmenter-native", feature = "embedder-native", not(any())))]
+#[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
 #[test]
 fn build_native_with_local_models_succeeds() {
     let models = repo_file("models");
@@ -607,7 +433,7 @@ fn build_native_with_local_models_succeeds() {
     assert_eq!(p.config().profile, Profile::Balanced);
 }
 
-#[cfg(all(feature = "segmenter-native", feature = "embedder-native", not(any())))]
+#[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
 #[test]
 fn native_pipeline_runs_short_sine() {
     let models = repo_file("models");
@@ -643,156 +469,6 @@ fn native_pipeline_runs_short_sine() {
 }
 
 #[test]
-fn build_mobile_with_local_models_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let p = fresh()
-        .profile(Profile::Mobile)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("mobile profile builds from cached local models");
-    assert_eq!(p.config().profile, Profile::Mobile);
-}
-
-#[test]
-fn build_fast_with_local_models_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let p = fresh()
-        .profile(Profile::Fast)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("fast profile resolves through the same local pair");
-    assert_eq!(p.config().profile, Profile::Fast);
-}
-
-#[test]
-#[cfg(feature = "spectral")]
-fn build_with_nme_sc_clusterer_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let cfg = PipelineConfig {
-        clusterer: ClustererKind::NmeSc,
-        ..PipelineConfig::default()
-    };
-    let p = fresh()
-        .config(cfg)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("NME-SC clusterer selection builds");
-    assert!(matches!(p.config().clusterer, ClustererKind::NmeSc));
-}
-
-#[test]
-fn build_with_min_cluster_size_pruning_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let cfg = PipelineConfig {
-        clusterer: ClustererKind::Ahc {
-            threshold: crate::types::DEFAULT_AHC_THRESHOLD,
-        },
-        min_cluster_size: 4,
-        ..PipelineConfig::default()
-    };
-    let p = fresh()
-        .config(cfg)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("min-cluster-size pruning wraps the AHC clusterer");
-    assert_eq!(p.config().min_cluster_size, 4);
-}
-
-#[test]
-fn build_garbage_segmenter_reports_load_error() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let embedder_src = repo_file("models/wespeaker_resnet34.onnx");
-    if !embedder_src.exists() {
-        eprintln!("skip: models/wespeaker_resnet34.onnx missing");
-        return;
-    }
-    let tmp = tempfile::TempDir::new().expect("temp dir");
-    std::fs::write(tmp.path().join("garbage.onnx"), GARBAGE_BYTES).expect("write garbage");
-    std::fs::copy(embedder_src, tmp.path().join("wespeaker_resnet34.onnx"))
-        .expect("copy embedder model");
-    let manifest = Manifest::from_toml_str(GARBAGE_SEGMENTER_MANIFEST).expect("manifest parses");
-    let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
-    let err = fresh()
-        .profile(Profile::Balanced)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .err()
-        .expect("build must fail");
-    assert!(matches!(
-        err,
-        ConfigError::Load {
-            model_id: "powerset",
-            ..
-        }
-    ));
-}
-
-#[test]
-fn build_garbage_embedder_reports_load_error() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let segmenter_src = repo_file("models/powerset_fp32.onnx");
-    if !segmenter_src.exists() {
-        eprintln!("skip: models/powerset_fp32.onnx missing");
-        return;
-    }
-    let tmp = tempfile::TempDir::new().expect("temp dir");
-    std::fs::write(tmp.path().join("garbage.onnx"), GARBAGE_BYTES).expect("write garbage");
-    std::fs::copy(segmenter_src, tmp.path().join("powerset_fp32.onnx"))
-        .expect("copy segmenter model");
-    let manifest = Manifest::from_toml_str(GARBAGE_EMBEDDER_MANIFEST).expect("manifest parses");
-    let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
-    let err = fresh()
-        .profile(Profile::Balanced)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .err()
-        .expect("build must fail");
-    assert!(matches!(
-        err,
-        ConfigError::Load {
-            model_id: "resnet34",
-            ..
-        }
-    ));
-}
-
-#[test]
 fn build_manifest_without_profile_reports_registry_error() {
     let tmp = tempfile::TempDir::new().expect("temp dir");
     // A manifest with no [profiles.balanced] entry: profile resolution
@@ -815,151 +491,14 @@ fn build_manifest_without_profile_reports_registry_error() {
         .build()
         .err()
         .expect("build must fail");
-    // Native kernels (including `cli` + `backend-tract` measurement builds)
-    // never resolve profiles: the INT8 pair is profile-independent, so the
-    // missing `powerset_int8` entry is the error.
-    #[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
-    {
-        let ConfigError::Load { source, .. } = &err else {
-            panic!("expected stage-load failure, got {err:?}");
-        };
-        assert!(matches!(
-            source.downcast_ref::<RegistryError>(),
-            Some(RegistryError::ModelNotFound { .. })
-        ));
-    }
-    // Tract-only builds resolve the profile before consulting any model file.
-    #[cfg(not(all(feature = "segmenter-native", feature = "embedder-native")))]
+    // Kernels ask for `powerset_int8`; tract asks for `powerset_fp32_tract`.
+    // Neither id is in this manifest, so resolution fails before a file read.
+    let ConfigError::Load { source, .. } = &err else {
+        panic!("expected stage-load failure, got {err:?}");
+    };
     assert!(matches!(
-        err,
-        ConfigError::Registry(RegistryError::ProfileNotFound { .. })
-    ));
-}
-
-#[cfg(feature = "vbx")]
-#[test]
-fn build_vbx_from_explicit_plda_dir_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let cfg = PipelineConfig {
-        clusterer: ClustererKind::Vbx,
-        vbx_plda_dir: Some(repo_file("fixtures/vbx-plda")),
-        // Windowed mode forces the GMM-VBx variant; min_cluster_size must
-        // not wrap VBx (it prunes its own clusters).
-        embed_window_secs: Some(2.0),
-        min_cluster_size: 4,
-        ..PipelineConfig::default()
-    };
-    let p = fresh()
-        .config(cfg)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("VBx builds from an explicit PLDA dir");
-    assert!(matches!(p.config().clusterer, ClustererKind::Vbx));
-}
-
-#[cfg(feature = "vbx")]
-#[test]
-fn build_vbx_from_env_plda_dir_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let cfg = PipelineConfig {
-        clusterer: ClustererKind::Vbx,
-        ..PipelineConfig::default()
-    };
-    // The builder is the library's single env-resolution point; the shared
-    // guard serialises env mutation and restores the caller's value.
-    let mut env = crate::test_env::lock();
-    env.set("POLYVOICE_VBX_PLDA_DIR", repo_file("fixtures/vbx-plda"));
-    fresh()
-        .config(cfg)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("VBx builds from the PLDA dir named by the env var");
-}
-
-#[cfg(feature = "vbx")]
-#[test]
-fn build_vbx_from_registry_cache_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let tmp = tempfile::TempDir::new().expect("temp dir");
-    for f in ["powerset_fp32.onnx", "wespeaker_resnet34.onnx"] {
-        let src = repo_file(&format!("models/{f}"));
-        if !src.exists() {
-            eprintln!("skip: models/{f} missing");
-            return;
-        }
-        std::fs::copy(src, tmp.path().join(f)).expect("copy local model into cache");
-    }
-    for entry in std::fs::read_dir(repo_file("fixtures/vbx-plda")).expect("fixture dir") {
-        let entry = entry.expect("dir entry");
-        let name = entry.file_name();
-        if name.to_string_lossy().ends_with(".npy") {
-            std::fs::copy(entry.path(), tmp.path().join(&name)).expect("copy PLDA artifact");
-        }
-    }
-    let manifest = Manifest::from_toml_str(LOCAL_VBX_MANIFEST).expect("vbx manifest parses");
-    let registry = ModelRegistry::with_manifest(manifest, tmp.path()).expect("registry");
-    let cfg = PipelineConfig {
-        clusterer: ClustererKind::Vbx,
-        ..PipelineConfig::default()
-    };
-    // Only the registry may satisfy this build: hold the env lock and clear
-    // the PLDA-dir override for the duration.
-    let mut env = crate::test_env::lock();
-    env.remove("POLYVOICE_VBX_PLDA_DIR");
-    let p = fresh()
-        .config(cfg)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("VBx falls back to the registry PLDA artifacts");
-    assert!(matches!(p.config().clusterer, ClustererKind::Vbx));
-}
-
-#[cfg(feature = "vbx")]
-#[test]
-fn build_vbx_missing_plda_dir_reports_load_error() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let cfg = PipelineConfig {
-        clusterer: ClustererKind::Vbx,
-        vbx_plda_dir: Some(repo_file("fixtures/does-not-exist")),
-        ..PipelineConfig::default()
-    };
-    let err = fresh()
-        .config(cfg)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .err()
-        .expect("build must fail");
-    assert!(matches!(
-        err,
-        ConfigError::Load {
-            model_id: "vbx",
-            ..
-        }
+        source.downcast_ref::<RegistryError>(),
+        Some(RegistryError::ModelNotFound { .. })
     ));
 }
 
@@ -1221,44 +760,6 @@ fn load_as_norm_cohort_bad_file_reports_load_error() {
 }
 
 #[test]
-fn build_ahc_with_as_norm_cohort_path_succeeds() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let cohort_tmp = tempfile::TempDir::new().expect("temp dir");
-    let (_, cohort_rows) = as_norm_discriminating_scene();
-    let cohort_path = write_test_cohort(cohort_tmp.path(), &cohort_rows);
-    let cfg = PipelineConfig {
-        clusterer: ClustererKind::Ahc { threshold: 0.5 },
-        as_norm: Some(crate::clusterer::AsNormConfig {
-            top_n: 10,
-            cohort: crate::clusterer::CohortSource::Path(cohort_path),
-        }),
-        domain: Some(crate::clusterer::domain::AMI),
-        ..PipelineConfig::default()
-    };
-    let p = fresh()
-        .config(cfg)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("AHC + AS-norm + domain profile builds");
-    // config() reports the EFFECTIVE threshold: the AMI profile's
-    // z-threshold replaced the configured 0.5 at build time.
-    match p.config().clusterer {
-        ClustererKind::Ahc { threshold } => assert_eq!(
-            threshold,
-            crate::clusterer::domain::AMI.as_norm_threshold.unwrap()
-        ),
-        other => panic!("expected Ahc, got {other:?}"),
-    }
-}
-
-#[test]
 fn local_dir_and_registry_agree_on_the_same_artifacts() {
     let models = repo_file("models/int8");
     let plda = repo_file("fixtures/vbx-plda");
@@ -1303,35 +804,4 @@ fn local_dir_and_registry_agree_on_the_same_artifacts() {
     assert_eq!(turns(&a), turns(&a2), "local path must be deterministic");
     let b = run(cache);
     assert_eq!(turns(&a), turns(&b));
-}
-
-#[cfg(feature = "vbx")]
-#[test]
-fn build_vbx_never_touches_as_norm_config() {
-    let Some(_ort) = pin_ort_or_skip() else {
-        eprintln!("skip: product builder tests require feature onnx");
-        return;
-    };
-    let Some((_tmp, registry)) = registry_with_local_models() else {
-        return;
-    };
-    let cfg = PipelineConfig {
-        clusterer: ClustererKind::Vbx,
-        vbx_plda_dir: Some(repo_file("fixtures/vbx-plda")),
-        // A cohort source that would fail if the VBx path resolved it:
-        // success below proves AS-norm decorates AHC only.
-        as_norm: Some(crate::clusterer::AsNormConfig {
-            top_n: 10,
-            cohort: crate::clusterer::CohortSource::ModelId("absent_cohort".to_owned()),
-        }),
-        domain: Some(crate::clusterer::domain::AMI),
-        ..PipelineConfig::default()
-    };
-    let p = fresh()
-        .config(cfg)
-        .with_models_from(registry)
-        .execution_provider(crate::pipeline_v2::ExecutionProvider::Cpu)
-        .build()
-        .expect("VBx path ignores AS-norm and domain config");
-    assert!(matches!(p.config().clusterer, ClustererKind::Vbx));
 }

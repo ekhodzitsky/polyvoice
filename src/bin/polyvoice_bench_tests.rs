@@ -203,41 +203,6 @@ fn check_model_sha256_missing_file_errors() {
     assert!(format!("{e:#}").contains("read model"));
 }
 
-#[cfg(any())]
-#[test]
-fn verify_model_integrity_accepts_shipped_pair() {
-    // Balanced profile embedder is resnet34_int8 (0.17+); VAD is still silero.
-    if !has_model("int8/resnet34_int8.onnx") || !has_model("silero_vad.onnx") {
-        return;
-    }
-    let registry = ModelRegistry::default().unwrap();
-    verify_model_integrity(
-        &registry,
-        Profile::Balanced,
-        &repo_model("int8/resnet34_int8.onnx"),
-        &repo_model("silero_vad.onnx"),
-    )
-    .unwrap();
-}
-
-#[cfg(any())]
-#[test]
-fn verify_model_integrity_rejects_swapped_vad() {
-    if !has_model("int8/resnet34_int8.onnx") {
-        return;
-    }
-    let registry = ModelRegistry::default().unwrap();
-    // The embedder file standing in as the VAD fails the sha256 gate.
-    let e = verify_model_integrity(
-        &registry,
-        Profile::Balanced,
-        &repo_model("int8/resnet34_int8.onnx"),
-        &repo_model("int8/resnet34_int8.onnx"),
-    )
-    .unwrap_err();
-    assert!(format!("{e:#}").contains("integrity FAIL"));
-}
-
 #[test]
 fn accum_record_buckets_speaker_count_accuracy() {
     let mut acc = Accum::default();

@@ -560,47 +560,4 @@ mod tests {
         assert_eq!(meta.window_secs, Some(10.0));
         assert_eq!(meta.source, Some(MetaSource::Manifest));
     }
-
-    #[cfg(any())]
-    #[test]
-    fn load_reads_geometry_from_onnx_props() {
-        let powerset = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32.onnx");
-        if !powerset.exists() {
-            eprintln!("skip: models/powerset_fp32.onnx missing");
-            return;
-        }
-        let meta = load_model_config(Some(&powerset), None, &ModelConfigMeta::default());
-        assert_eq!(meta.source, Some(MetaSource::OnnxProps));
-        assert_eq!(meta.sample_rate, Some(16000));
-        assert_eq!(
-            meta.model_type.as_deref(),
-            Some("pyannote-segmentation-3.0")
-        );
-        assert_eq!(meta.num_speakers, Some(3));
-    }
-
-    #[cfg(any())]
-    #[test]
-    fn load_mixing_onnx_manifest_and_defaults_is_marked_mixed() {
-        let m = Manifest::from_toml_str(ENTRY_TOML).unwrap();
-        let entry = m.model("powerset_fp32").unwrap();
-        let powerset = Path::new(env!("CARGO_MANIFEST_DIR")).join("models/powerset_fp32.onnx");
-        // The bundled powerset props carry sample_rate/model_type but no hop
-        // or adapter_type, so the manifest fills those; a remaining gap is
-        // closed by caller defaults.
-        let defaults = ModelConfigMeta {
-            embedding_dim: Some(256),
-            ..ModelConfigMeta::default()
-        };
-        let meta = load_model_config(Some(&powerset), Some(entry), &defaults);
-        assert_eq!(meta.source, Some(MetaSource::Mixed));
-        assert_eq!(meta.sample_rate, Some(16000), "identity from onnx props");
-        assert_eq!(meta.hop_secs, Some(1.0), "hop only present in manifest");
-        assert_eq!(
-            meta.adapter_type.as_deref(),
-            Some("powerset-v1"),
-            "adapter_type only present in manifest"
-        );
-        assert_eq!(meta.embedding_dim, Some(256), "gap closed by defaults");
-    }
 }

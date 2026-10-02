@@ -302,38 +302,6 @@ fn e2e_v2_vbx_rttm_on_real_speech() {
         .stdout(predicate::str::contains("SPEAKER fuzfh 1"));
 }
 
-// --legacy runs the Silero-based legacy pipeline, which native/tract builds
-// reject by design (see legacy_is_rejected in cli_native_smoke.rs).
-#[cfg(any())]
-#[test]
-fn e2e_legacy_writes_output_file_and_keeps_stdout_clean() {
-    let Some(cache) = seeded_models_cache() else {
-        return;
-    };
-    let wav = smoke_wav();
-    if !common::require_wav(&wav) {
-        return;
-    }
-    let dir = tempfile::tempdir().unwrap();
-    let out = dir.path().join("out.rttm");
-    let assert = polyvoice_cmd()
-        .args([
-            "diarize",
-            wav.to_str().unwrap(),
-            "--models-cache",
-            cache.path().to_str().unwrap(),
-            "--legacy",
-            "--output",
-            out.to_str().unwrap(),
-        ])
-        .assert()
-        .success();
-    // STDOUT discipline: with --output, nothing goes to stdout.
-    assert!(assert.get_output().stdout.is_empty());
-    let rttm = std::fs::read_to_string(&out).unwrap();
-    assert!(rttm.contains("SPEAKER fuzfh 1"), "unexpected RTTM:\n{rttm}");
-}
-
 #[test]
 fn e2e_machine_mode_json_flag() {
     let Some(cache) = seeded_models_cache() else {

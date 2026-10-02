@@ -160,39 +160,7 @@ pub enum ClustererKind {
     Vbx,
 }
 
-// Tract owns the live EP type (session construction). Kernel-only builds
-// (`pipeline-native`) have no `onnx` module — same variants, never executed.
-#[cfg(feature = "infer")]
-pub use crate::onnx::ExecutionProvider;
-
-/// Where a session would run. Product kernels execute on the CPU only:
-/// [`ExecutionProvider::Cpu`] and [`ExecutionProvider::auto`] (which resolves
-/// to CPU) are the only values [`PipelineBuilder::validate`] accepts. The
-/// other variants exist for tract builds and are rejected, never silently
-/// downgraded. `#[non_exhaustive]`: match with a wildcard arm.
-///
-/// [`PipelineBuilder::validate`]: crate::pipeline_v2::PipelineBuilder::validate
-#[cfg(not(feature = "infer"))]
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum ExecutionProvider {
-    Cpu,
-    CoreMl,
-    Nnapi,
-    Cuda,
-    XnnPack,
-}
-
-#[cfg(not(feature = "infer"))]
-impl ExecutionProvider {
-    pub fn auto() -> Self {
-        Self::Cpu
-    }
-
-    pub fn is_available(self) -> bool {
-        matches!(self, Self::Cpu)
-    }
-}
+pub use crate::types::execution_provider::ExecutionProvider;
 
 fn default_clusterer() -> ClustererKind {
     #[cfg(feature = "vbx")]

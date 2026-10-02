@@ -1,8 +1,8 @@
 //! polyvoice-bench — DER on a {audio,rttm} dataset directory.
 //!
-//! Default pipeline matches the shipped CLI (**v2 + VBx** since 0.11). Pass
-//! `--pipeline legacy` for the pre-0.11 Silero + AHC path, or `--clusterer ahc`
-//! to keep v2 segmentation with fixed-threshold AHC.
+//! Default pipeline matches the shipped CLI (**v2 + VBx** since 0.11).
+//! `--pipeline legacy` is rejected (this crate has no ONNX Runtime). Pass
+//! `--clusterer ahc` to keep v2 segmentation with fixed-threshold AHC.
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -12,12 +12,8 @@ use polyvoice::der::{
     compute_der_with_uem, parse_uem,
 };
 use polyvoice::models::ModelRegistry;
-#[cfg(any())]
-use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::pipeline_v2::{Pipeline as V2Pipeline, PipelineConfig, StageTimings};
 use polyvoice::types::{DiarizationResult, Profile, SampleRate, TimeRange};
-#[cfg(any())]
-use polyvoice::vad::VadConfig;
 use polyvoice::wav::read_wav;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -263,24 +259,6 @@ fn model_hashes(
     out
 }
 
-/// Hard-fail unless the on-disk embedder + VAD match the manifest sha256, so a DER
-/// number can never be silently attributed to a swapped/corrupted/non-FP32 model.
-#[cfg(any())]
-fn verify_model_integrity(
-    registry: &ModelRegistry,
-    profile: Profile,
-    embedder_path: &Path,
-    vad_path: &Path,
-) -> Result<()> {
-    let manifest = registry.manifest();
-    let prof = manifest
-        .profile(profile.manifest_id())
-        .ok_or_else(|| anyhow::anyhow!("profile {} not in manifest", profile.manifest_id()))?;
-    check_model_sha256(registry, &prof.embedder, embedder_path)?;
-    check_model_sha256(registry, "silero_vad", vad_path)?;
-    Ok(())
-}
-
 fn check_model_sha256(registry: &ModelRegistry, model_id: &str, path: &Path) -> Result<()> {
     let manifest = registry.manifest();
     let entry = manifest
@@ -306,46 +284,9 @@ fn hex_lower(bytes: &[u8]) -> String {
     s
 }
 
-/// Legacy pipeline + its ONNX sessions (Silero VAD + sliding-window embedder).
-#[cfg(any())]
-struct LegacyRunner {
-    pipeline: LegacyPipeline,
-    stack: cli_common::LegacyStack,
-}
-
-/// The pipeline under benchmark. Both arms produce a `DiarizationResult` so all
-/// downstream DER / speaker-count reporting is shared. Both payloads are boxed
-/// so the variants are the same (pointer) size.
-enum Runner {
-    #[cfg(any())]
-    Legacy(Box<LegacyRunner>),
-    V2(Box<V2Pipeline>),
-}
-
-impl Runner {
-    fn run(
-        &mut self,
-        samples: &[f32],
-        sr: SampleRate,
-    ) -> Result<(DiarizationResult, Option<StageTimings>)> {
-        match self {
-            #[cfg(any())]
-            Runner::Legacy(l) => Ok((
-                l.pipeline
-                    .run(samples, &l.stack.extractor, &mut l.stack.vad)?,
-                None,
-            )),
-            Runner::V2(p) => {
-                let (result, timings) = p.run_with_timings(samples, sr)?;
-                Ok((result, Some(timings)))
-            }
-        }
-    }
-}
-
-/// The runner plus everything the report needs that is file-independent.
+/// The pipeline plus everything the report needs that is file-independent.
 struct BenchRunner {
-    runner: Runner,
+    pipeline: V2Pipeline,
     segmenter_id: String,
     resolved_ep: polyvoice::pipeline_v2::ExecutionProvider,
     profile: Profile,
@@ -355,11 +296,10 @@ struct BenchRunner {
 /// Build the requested pipeline. Each arm verifies the integrity of exactly
 /// the models it loads and yields the segmenter id for the report.
 fn build_runner(args: &Args) -> Result<BenchRunner> {
-    if args.pipeline == "legacy" {
-        cli_common::require_onnx("--pipeline legacy")?;
-        if args.embedder.is_some() {
-            anyhow::bail!("--embedder applies to --pipeline v2 only");
-        }
+    match args.pipeline.as_str() {
+        "legacy" => cli_common::require_onnx("--pipeline legacy")?,
+        "v2" => {}
+        other => anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')"),
     }
     let profile: Profile = args.profile.parse()?;
     let registry = ModelRegistry::default().context("registry")?;
@@ -367,135 +307,89 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
         .ensure_for_profile(profile)
         .context("ensure models")?;
 
-    // Resolve the execution provider: an explicit flag applies to the selected
-    // pipeline; omitted keeps each pipeline's shipped default (legacy embedder
-    // cpu, v2 auto) so committed DER baselines stay reproducible.
+    // An explicit flag wins. Omitted stays `auto` (CPU) so committed DER
+    // baselines stay reproducible.
     let explicit_ep = args
         .execution_provider
         .as_deref()
         .map(cli_common::parse_execution_provider)
         .transpose()?;
-    let resolved_ep = match args.pipeline.as_str() {
-        "v2" => explicit_ep.unwrap_or_else(polyvoice::pipeline_v2::ExecutionProvider::auto),
-        _ => explicit_ep.unwrap_or(polyvoice::pipeline_v2::ExecutionProvider::Cpu),
-    };
+    let resolved_ep = explicit_ep.unwrap_or_else(polyvoice::pipeline_v2::ExecutionProvider::auto);
 
-    let (runner, segmenter_id): (Runner, String) = match args.pipeline.as_str() {
-        "v2" => {
-            if let Some(id) = args.embedder.as_deref() {
-                if !matches!(id, "cam_pp_int8" | "cam_pp_fp32") {
-                    anyhow::bail!(
-                        "unknown --embedder '{id}' (expected cam_pp_int8 or cam_pp_fp32)"
-                    );
-                }
-                if !cfg!(feature = "backend-tract") {
-                    anyhow::bail!(
-                        "--embedder requires `--features cli,backend-tract` (native powerset + tract CAM++)"
-                    );
-                }
-            }
-            let (clusterer, as_norm, domain) = cli_common::resolve_clusterer_flags(
-                &args.clusterer,
-                args.threshold,
-                args.as_norm,
-                args.cohort.clone(),
-                args.domain_profile.as_deref(),
-            )?;
-            let binarization = if args.binarize_onset.is_some()
-                || args.binarize_offset.is_some()
-                || args.binarize_min_on.is_some()
-                || args.binarize_min_off.is_some()
-            {
-                let d = polyvoice::segmentation::BinarizationConfig::default();
-                Some(polyvoice::segmentation::BinarizationConfig {
-                    onset: args.binarize_onset.unwrap_or(d.onset),
-                    offset: args.binarize_offset.unwrap_or(d.offset),
-                    min_duration_on: args.binarize_min_on.unwrap_or(d.min_duration_on),
-                    min_duration_off: args.binarize_min_off.unwrap_or(d.min_duration_off),
-                })
-            } else {
-                None
-            };
-            let mut cfg = PipelineConfig::default();
-            cfg.profile = profile;
-            cfg.clusterer = clusterer;
-            cfg.embed_window_secs = args.embed_window;
-            cfg.execution_provider = resolved_ep;
-            cfg.as_norm = as_norm;
-            cfg.domain = domain;
-            cfg.experimental.binarization = binarization;
-            cfg.experimental.embedder_model = args.embedder.clone();
-            cfg.experimental.reconstruct = args.reconstruct;
-            if let Some(mcs) = args.min_cluster_size {
-                cfg.min_cluster_size = mcs;
-            }
-            // v2 segments with the profile's powerset model — verify it + embedder.
-            let seg_id = registry
+    if let Some(id) = args.embedder.as_deref() {
+        if !matches!(id, "cam_pp_int8" | "cam_pp_fp32") {
+            anyhow::bail!("unknown --embedder '{id}' (expected cam_pp_int8 or cam_pp_fp32)");
+        }
+        if !cfg!(feature = "backend-tract") {
+            anyhow::bail!(
+                "--embedder requires `--features cli,backend-tract` (native powerset + tract CAM++)"
+            );
+        }
+    }
+    let (clusterer, as_norm, domain) = cli_common::resolve_clusterer_flags(
+        &args.clusterer,
+        args.threshold,
+        args.as_norm,
+        args.cohort.clone(),
+        args.domain_profile.as_deref(),
+    )?;
+    let binarization = if args.binarize_onset.is_some()
+        || args.binarize_offset.is_some()
+        || args.binarize_min_on.is_some()
+        || args.binarize_min_off.is_some()
+    {
+        let d = polyvoice::segmentation::BinarizationConfig::default();
+        Some(polyvoice::segmentation::BinarizationConfig {
+            onset: args.binarize_onset.unwrap_or(d.onset),
+            offset: args.binarize_offset.unwrap_or(d.offset),
+            min_duration_on: args.binarize_min_on.unwrap_or(d.min_duration_on),
+            min_duration_off: args.binarize_min_off.unwrap_or(d.min_duration_off),
+        })
+    } else {
+        None
+    };
+    let mut cfg = PipelineConfig::default();
+    cfg.profile = profile;
+    cfg.clusterer = clusterer;
+    cfg.embed_window_secs = args.embed_window;
+    cfg.execution_provider = resolved_ep;
+    cfg.as_norm = as_norm;
+    cfg.domain = domain;
+    cfg.experimental.binarization = binarization;
+    cfg.experimental.embedder_model = args.embedder.clone();
+    cfg.experimental.reconstruct = args.reconstruct;
+    if let Some(mcs) = args.min_cluster_size {
+        cfg.min_cluster_size = mcs;
+    }
+    // v2 segments with the profile's powerset model — verify it + embedder.
+    let seg_id = registry
+        .manifest()
+        .profile(profile.manifest_id())
+        .map(|p| p.segmenter.clone())
+        .unwrap_or_else(|| "powerset_fp32".to_owned());
+    let emb_id = args
+        .embedder
+        .clone()
+        .or_else(|| {
+            registry
                 .manifest()
                 .profile(profile.manifest_id())
-                .map(|p| p.segmenter.clone())
-                .unwrap_or_else(|| "powerset_fp32".to_owned());
-            let emb_id = args
-                .embedder
-                .clone()
-                .or_else(|| {
-                    registry
-                        .manifest()
-                        .profile(profile.manifest_id())
-                        .map(|p| p.embedder.clone())
-                })
-                .unwrap_or_default();
-            let emb_path = if args.embedder.is_some() {
-                registry
-                    .ensure(&emb_id)
-                    .with_context(|| format!("ensure embedder {emb_id}"))?
-            } else {
-                models.embedder_path.clone()
-            };
-            check_model_sha256(&registry, &seg_id, &models.segmenter_path)?;
-            check_model_sha256(&registry, &emb_id, &emb_path)?;
-            let pipeline = cli_common::build_v2_pipeline(cfg, registry.clone())?;
-            (Runner::V2(Box::new(pipeline)), seg_id)
-        }
-        other => {
-            if other != "legacy" {
-                anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')");
-            }
-            if args.as_norm || args.cohort.is_some() || args.domain_profile.is_some() {
-                anyhow::bail!("--as-norm/--cohort/--domain-profile apply to --pipeline v2 only");
-            }
-            #[cfg(not(any()))]
-            {
-                let _ = (models, resolved_ep, registry, profile);
-                unreachable!("require_onnx rejected --pipeline legacy");
-            }
-            #[cfg(any())]
-            {
-                let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
-                let stack = cli_common::load_legacy_stack(
-                    &models.embedder_path,
-                    profile.embedding_dim(),
-                    resolved_ep,
-                    &vad_path,
-                    512,
-                )?;
-                verify_model_integrity(&registry, profile, &models.embedder_path, &vad_path)?;
-                let mut config = cli_common::legacy_diarization_config(
-                    args.threshold.unwrap_or(polyvoice::DEFAULT_AHC_THRESHOLD),
-                );
-                config.cluster.min_cluster_size = args.min_cluster_size.unwrap_or(1);
-                config.cluster.min_cluster_secs = args.min_cluster_secs.unwrap_or(0.0);
-                let pipeline = LegacyPipeline::new(config, VadConfig::default());
-                (
-                    Runner::Legacy(Box::new(LegacyRunner { pipeline, stack })),
-                    "silero_vad".to_owned(),
-                )
-            }
-        }
+                .map(|p| p.embedder.clone())
+        })
+        .unwrap_or_default();
+    let emb_path = if args.embedder.is_some() {
+        registry
+            .ensure(&emb_id)
+            .with_context(|| format!("ensure embedder {emb_id}"))?
+    } else {
+        models.embedder_path.clone()
     };
+    check_model_sha256(&registry, &seg_id, &models.segmenter_path)?;
+    check_model_sha256(&registry, &emb_id, &emb_path)?;
+    let pipeline = cli_common::build_v2_pipeline(cfg, registry.clone())?;
     Ok(BenchRunner {
-        runner,
-        segmenter_id,
+        pipeline,
+        segmenter_id: seg_id,
         resolved_ep,
         profile,
         registry,
@@ -514,9 +408,8 @@ struct FileOutcome {
 
 /// Process `wavs` serially (`jobs == 1`) or with file-level parallelism. The
 /// v2 pipeline is shared by all workers (every stage is `&self` and the
-/// traits are `Send + Sync`), so `jobs > 1` costs no extra model memory; the
-/// legacy path needs `&mut` state and keeps one runner per worker. Internal
-/// fan-out (windows, embed pool) is divided by `jobs` via the kernels
+/// traits are `Send + Sync`), so `jobs > 1` costs no extra model memory.
+/// Internal fan-out (windows, embed pool) is divided by `jobs` via the kernels
 /// file-parallelism hint.
 fn run_all_files(
     args: &Args,
@@ -531,7 +424,10 @@ fn run_all_files(
     if jobs == 1 {
         let wall = Instant::now();
         let mut acc = Accum::default();
-        let mut run = |s: &[f32], sr: SampleRate| first.runner.run(s, sr);
+        let mut run = |s: &[f32], sr: SampleRate| {
+            let (result, timings) = first.pipeline.run_with_timings(s, sr)?;
+            Ok((result, Some(timings)))
+        };
         for wav in wavs {
             match run_file(&mut run, wav, rttm_dir, uem_map, args)? {
                 Some(outcome) => acc.record(outcome),
@@ -542,11 +438,7 @@ fn run_all_files(
         return Ok(acc);
     }
 
-    match &mut first.runner {
-        Runner::V2(p) => run_v2_shared(p, args, wavs, rttm_dir, uem_map, jobs),
-        #[cfg(any())]
-        Runner::Legacy(_) => run_legacy_parallel(first, args, wavs, rttm_dir, uem_map, jobs),
-    }
+    run_v2_shared(&first.pipeline, args, wavs, rttm_dir, uem_map, jobs)
 }
 
 /// v2 file fan-out on one shared pipeline: workers pull paths off a queue,
@@ -612,94 +504,6 @@ fn run_v2_shared(
     std::thread::scope(|s| {
         for _ in 0..jobs {
             s.spawn(drain_ref);
-        }
-    });
-    let wall_secs = wall.elapsed().as_secs_f64();
-
-    if let Some(msg) = err
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .take()
-    {
-        anyhow::bail!("{msg}");
-    }
-
-    let mut rows = collected
-        .into_inner()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    rows.sort_by(|a, b| a.row.filename.cmp(&b.row.filename));
-    let mut acc = Accum {
-        files_skipped: skipped.load(Ordering::Relaxed),
-        wall_secs,
-        ..Accum::default()
-    };
-    for outcome in rows {
-        acc.record(outcome);
-    }
-    Ok(acc)
-}
-
-/// Legacy file fan-out: `LegacyPipeline::run` needs `&mut` (VAD state), so
-/// each worker builds its own runner — models are loaded `jobs` times.
-#[cfg(any())]
-fn run_legacy_parallel(
-    first: &mut BenchRunner,
-    args: &Args,
-    wavs: &[PathBuf],
-    rttm_dir: &Path,
-    uem_map: Option<&HashMap<String, Vec<TimeRange>>>,
-    jobs: usize,
-) -> Result<Accum> {
-    eprintln!("file-parallel jobs={jobs} (legacy: one pipeline per worker)");
-    let mut extra: Vec<BenchRunner> = Vec::with_capacity(jobs.saturating_sub(1));
-    for _ in 1..jobs {
-        extra.push(build_runner(args)?);
-    }
-
-    let queue = Mutex::new(wavs.iter().cloned().collect::<VecDeque<_>>());
-    let collected = Mutex::new(Vec::new());
-    let skipped = AtomicUsize::new(0);
-    let err = Mutex::new(None::<String>);
-
-    let drain = |runner: &mut Runner| {
-        let mut run = |s: &[f32], sr: SampleRate| runner.run(s, sr);
-        loop {
-            if err
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_some()
-            {
-                return;
-            }
-            let next = queue
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .pop_front();
-            let Some(wav) = next else {
-                return;
-            };
-            match run_file(&mut run, &wav, rttm_dir, uem_map, args) {
-                Ok(Some(outcome)) => collected
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(outcome),
-                Ok(None) => {
-                    skipped.fetch_add(1, Ordering::Relaxed);
-                }
-                Err(e) => {
-                    *err.lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(e.to_string());
-                    return;
-                }
-            }
-        }
-    };
-
-    let wall = Instant::now();
-    std::thread::scope(|s| {
-        s.spawn(|| drain(&mut first.runner));
-        for br in &mut extra {
-            s.spawn(|| drain(&mut br.runner));
         }
     });
     let wall_secs = wall.elapsed().as_secs_f64();

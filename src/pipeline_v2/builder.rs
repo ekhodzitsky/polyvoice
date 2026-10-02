@@ -10,6 +10,10 @@ use crate::resegmentation::Resegmenter;
 use crate::segmentation::Segmenter;
 use crate::types::Profile;
 
+mod native_stages;
+#[cfg(feature = "infer")]
+mod tract_stages;
+
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ConfigError {
@@ -286,12 +290,12 @@ type StagePair = (Box<dyn Segmenter>, Box<dyn Embedder>);
 /// `backend-tract` may also be on (measurement builds that swap in CAM++);
 /// native still wins so the product segmenter stays bit-identical. Tract-only
 /// builds (`cli-tract`) do not enable the native features, so they keep the
-/// ONNX/tract stage loader.
+/// tract stage loader.
 fn use_native_kernels() -> bool {
     cfg!(all(
         feature = "segmenter-native",
         feature = "embedder-native"
-    )) && !cfg!(any())
+    ))
 }
 
 fn load_profile_stages(
@@ -299,199 +303,17 @@ fn load_profile_stages(
     #[cfg_attr(not(feature = "infer"), allow(unused_variables))] config: &PipelineConfig,
 ) -> Result<StagePair, ConfigError> {
     if use_native_kernels() {
-        build_native_stages(registry, config)
+        native_stages::build_native_stages(registry, config)
     } else {
         #[cfg(feature = "infer")]
         {
-            build_onnx_stages(registry, config)
+            tract_stages::build_onnx_stages(registry, config)
         }
         #[cfg(not(feature = "infer"))]
         {
             unreachable!("pipeline_v2 without infer always uses native kernels")
         }
     }
-}
-
-#[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
-fn build_native_stages(
-    registry: &ModelRegistry,
-    config: &PipelineConfig,
-) -> Result<StagePair, ConfigError> {
-    tracing::info!("native kernels: powerset_int8 + resnet34_int8");
-    let seg_path = registry
-        .ensure("powerset_int8")
-        .map_err(|e| ConfigError::Load {
-            model_id: "powerset_int8",
-            source: Box::new(e),
-        })?;
-    let segmenter: Box<dyn Segmenter> = Box::new(
-        crate::segmentation::PowersetNative::from_onnx_path(&seg_path).map_err(|e| {
-            ConfigError::Load {
-                model_id: "powerset_int8",
-                source: Box::new(e),
-            }
-        })?,
-    );
-    if let Some(id) = config.experimental.embedder_model.as_deref() {
-        let embedder = load_native_embedder_override(registry, config, id)?;
-        return Ok((segmenter, embedder));
-    }
-    let emb_path = registry
-        .ensure("resnet34_int8")
-        .map_err(|e| ConfigError::Load {
-            model_id: "resnet34_int8",
-            source: Box::new(e),
-        })?;
-    let embedder: Box<dyn Embedder> = Box::new(
-        crate::embedder::ResNet34Native::from_onnx_path(&emb_path).map_err(|e| {
-            ConfigError::Load {
-                model_id: "resnet34_int8",
-                source: Box::new(e),
-            }
-        })?,
-    );
-    Ok((segmenter, embedder))
-}
-
-#[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
-fn load_native_embedder_override(
-    #[cfg_attr(
-        not(all(feature = "backend-tract", feature = "embedder")),
-        allow(unused_variables)
-    )]
-    registry: &ModelRegistry,
-    #[cfg_attr(
-        not(all(feature = "backend-tract", feature = "embedder")),
-        allow(unused_variables)
-    )]
-    config: &PipelineConfig,
-    id: &str,
-) -> Result<Box<dyn Embedder>, ConfigError> {
-    let (model_id, dim): (&'static str, usize) = match id {
-        "cam_pp_int8" => ("cam_pp_int8", 512),
-        "cam_pp_fp32" => ("cam_pp_fp32", 512),
-        other => {
-            return Err(ConfigError::UnknownModel {
-                model_id: other.to_string(),
-            });
-        }
-    };
-    #[cfg(all(feature = "backend-tract", feature = "embedder"))]
-    {
-        tracing::info!("native powerset + tract embedder override {model_id} ({dim}-d)");
-        let path = registry.ensure(model_id).map_err(|e| ConfigError::Load {
-            model_id,
-            source: Box::new(e),
-        })?;
-        let embedder = crate::embedder::CamPlusPlusExtractor::new(
-            &path,
-            dim,
-            config.embedder_pool_size.max(1),
-            config.execution_provider,
-        )
-        .map_err(|e| ConfigError::Load {
-            model_id,
-            source: Box::new(e),
-        })?;
-        Ok(Box::new(embedder))
-    }
-    #[cfg(not(all(feature = "backend-tract", feature = "embedder")))]
-    {
-        let _ = dim;
-        Err(ConfigError::Load {
-            model_id,
-            source: Box::new(std::io::Error::other(
-                "CAM++ embedder override requires --features cli,backend-tract",
-            )),
-        })
-    }
-}
-
-#[cfg(not(all(feature = "segmenter-native", feature = "embedder-native")))]
-fn build_native_stages(
-    _registry: &ModelRegistry,
-    _config: &PipelineConfig,
-) -> Result<StagePair, ConfigError> {
-    unreachable!("native stage loader compiled out")
-}
-
-#[cfg(feature = "infer")]
-fn build_onnx_stages(
-    registry: &ModelRegistry,
-    config: &PipelineConfig,
-) -> Result<StagePair, ConfigError> {
-    let profile_models = registry.ensure_for_profile(config.profile)?;
-    let ep = config.execution_provider;
-    let use_tract = {
-        #[cfg(feature = "backend-tract")]
-        {
-            matches!(
-                crate::onnx::InferenceBackend::resolve(),
-                crate::onnx::InferenceBackend::Tract
-            )
-        }
-        #[cfg(not(feature = "backend-tract"))]
-        {
-            false
-        }
-    };
-    let pool = if matches!(ep, crate::pipeline_v2::ExecutionProvider::CoreMl) {
-        1
-    } else {
-        config.embedder_pool_size
-    };
-    let mut seg_cfg = crate::segmentation::PowersetConfig::default();
-    seg_cfg.aggregation.binarization = config.experimental.binarization;
-    seg_cfg.pool_size = pool;
-    let segmenter_path = if use_tract {
-        tracing::info!(
-            "tract backend: loading powerset_fp32_tract (shipping powerset unsupported)"
-        );
-        registry
-            .ensure("powerset_fp32_tract")
-            .map_err(|e| ConfigError::Load {
-                model_id: "powerset_fp32_tract",
-                source: Box::new(e),
-            })?
-    } else {
-        profile_models.segmenter_path
-    };
-    let segmenter: Box<dyn Segmenter> = Box::new(
-        crate::segmentation::PowersetSegmenter::with_config(&segmenter_path, seg_cfg, ep).map_err(
-            |e| ConfigError::Load {
-                model_id: if use_tract {
-                    "powerset_fp32_tract"
-                } else {
-                    "powerset"
-                },
-                source: Box::new(e),
-            },
-        )?,
-    );
-    let embedder_path = if use_tract {
-        tracing::info!("tract backend: loading FP32 wespeaker_resnet34 (INT8 unsafe under tract)");
-        registry
-            .ensure("wespeaker_resnet34")
-            .map_err(|e| ConfigError::Load {
-                model_id: "wespeaker_resnet34",
-                source: Box::new(e),
-            })?
-    } else {
-        profile_models.embedder_path
-    };
-    let embedder: Box<dyn Embedder> = Box::new(
-        crate::embedder::ResNet34Adapter::new(&embedder_path, pool, ep).map_err(|e| {
-            ConfigError::Load {
-                model_id: if use_tract {
-                    "wespeaker_resnet34"
-                } else {
-                    "resnet34"
-                },
-                source: Box::new(e),
-            }
-        })?,
-    );
-    Ok((segmenter, embedder))
 }
 
 #[allow(clippy::unwrap_used)]

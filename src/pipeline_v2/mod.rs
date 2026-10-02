@@ -1,5 +1,5 @@
 //! `polyvoice::pipeline_v2` — trait-wired production diarization pipeline
-//! (kernels, ONNX Runtime, or tract).
+//! (hand-written kernels, or tract when that feature is on).
 
 #[cfg(not(all(
     any(

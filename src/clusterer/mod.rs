@@ -10,6 +10,8 @@
 pub mod plda;
 #[cfg(feature = "vbx")]
 pub mod vbx;
+#[cfg(feature = "vbx")]
+mod vbx_env;
 
 pub mod asnorm;
 #[doc(hidden)]

@@ -22,13 +22,9 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use polyvoice::cli_common;
 use polyvoice::format::{write_srt, write_txt, write_vtt};
 use polyvoice::models::ModelRegistry;
-#[cfg(any())]
-use polyvoice::pipeline::LegacyPipeline;
 use polyvoice::pipeline_v2::PipelineConfig;
 use polyvoice::rttm::write_rttm;
 use polyvoice::types::{DiarizationResult, Profile, SampleRate};
-#[cfg(any())]
-use polyvoice::vad::VadConfig;
 use polyvoice::wav::load_audio;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -218,10 +214,10 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         exclusive,
         latency_preset,
     } = args;
-    // v2 is the default; --legacy opts into the pre-0.11 Silero+AHC path.
     // `--v2` remains accepted (hidden) for script compatibility.
-    let use_legacy = legacy;
-    if use_legacy {
+    // `--legacy` is parsed so old invocations fail here instead of
+    // disappearing from the flag set.
+    if legacy {
         cli_common::require_onnx("--legacy")?;
     }
 
@@ -269,47 +265,23 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
         ),
     };
 
-    let mut result = if use_legacy {
-        if as_norm || cohort.is_some() || domain_profile.is_some() {
-            anyhow::bail!(
-                "--as-norm/--cohort/--domain-profile apply to the default v2 pipeline only"
-            );
-        }
-        #[cfg(any())]
-        {
-            run_legacy_pipeline(
-                &wav,
-                profile,
-                &registry,
-                threshold,
-                max_clusters,
-                latency,
-                quiet,
-            )?
-        }
-        #[cfg(not(any()))]
-        {
-            unreachable!("require_onnx rejected --legacy");
-        }
-    } else {
-        run_v2_pipeline(
-            &wav,
-            profile,
-            &registry,
-            threshold,
-            max_clusters,
-            &clusterer,
-            vbx_plda_dir,
-            as_norm,
-            cohort,
-            domain_profile,
-            // Streaming latency presets map onto v2 dense embed windows when the
-            // user did not pass an explicit --embed-window.
-            embed_window.or_else(|| latency.map(|p| p.params().window_secs)),
-            &execution_provider,
-            quiet,
-        )?
-    };
+    let mut result = run_v2_pipeline(
+        &wav,
+        profile,
+        &registry,
+        threshold,
+        max_clusters,
+        &clusterer,
+        vbx_plda_dir,
+        as_norm,
+        cohort,
+        domain_profile,
+        // Streaming latency presets map onto v2 dense embed windows when the
+        // user did not pass an explicit --embed-window.
+        embed_window.or_else(|| latency.map(|p| p.params().window_secs)),
+        &execution_provider,
+        quiet,
+    )?;
 
     if exclusive {
         result = result.with_exclusive();
@@ -374,8 +346,6 @@ fn inference_backend_label() -> &'static str {
     #[cfg(feature = "infer")]
     {
         match polyvoice::onnx::InferenceBackend::resolve() {
-            #[cfg(any())]
-            polyvoice::onnx::InferenceBackend::Ort => "ort",
             #[cfg(feature = "backend-tract")]
             polyvoice::onnx::InferenceBackend::Tract => "tract",
         }
@@ -384,74 +354,6 @@ fn inference_backend_label() -> &'static str {
     {
         "native"
     }
-}
-
-#[cfg(any())]
-fn run_legacy_pipeline(
-    wav: &Path,
-    profile: Profile,
-    registry: &ModelRegistry,
-    threshold: Option<f32>,
-    max_clusters: Option<usize>,
-    latency: Option<polyvoice::streaming::LatencyPreset>,
-    quiet: bool,
-) -> Result<DiarizationResult> {
-    let models = registry
-        .ensure_for_profile(profile)
-        .context("ensure models")?;
-    let vad_path = registry.ensure("silero_vad").context("silero_vad model")?;
-    let mut stack = cli_common::load_legacy_stack(
-        &models.embedder_path,
-        profile.embedding_dim(),
-        polyvoice::onnx::ExecutionProvider::Cpu,
-        &vad_path,
-        512,
-    )?;
-
-    let mut config = cli_common::legacy_diarization_config(
-        threshold.unwrap_or(polyvoice::DEFAULT_AHC_THRESHOLD),
-    );
-    if let Some(n) = max_clusters {
-        config.cluster.max_speakers = n;
-    }
-    if let Some(preset) = latency {
-        // Apply window/hop/cap from the streaming latency preset; keep the
-        // CLI --threshold / --max-speakers overrides when the user set them.
-        let saved_threshold = config.cluster.threshold;
-        let saved_max = max_clusters;
-        preset.apply(&mut config);
-        config.cluster.threshold = saved_threshold;
-        if let Some(n) = saved_max {
-            config.cluster.max_speakers = n;
-        }
-    }
-    let pipeline = LegacyPipeline::new(config, VadConfig::default());
-
-    if !quiet {
-        eprintln!("Reading {}...", wav.display());
-    }
-    let (samples, sr_hz) =
-        load_audio(wav).with_context(|| format!("load audio {}", wav.display()))?;
-    let _sr = SampleRate::new(sr_hz).with_context(|| format!("invalid sample rate {sr_hz} Hz"))?;
-
-    if !quiet {
-        eprintln!(
-            "Running diarization on {} samples ({} Hz)...",
-            samples.len(),
-            sr_hz
-        );
-    }
-    let result = pipeline
-        .run(&samples, &stack.extractor, &mut stack.vad)
-        .context("pipeline.run failed")?;
-    if !quiet {
-        eprintln!(
-            "Done — {} turns, {} speakers",
-            result.turns.len(),
-            result.num_speakers
-        );
-    }
-    Ok(result)
 }
 
 #[allow(clippy::too_many_arguments)]

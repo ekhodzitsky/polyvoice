@@ -1,14 +1,13 @@
-//! ONNX-based speaker embedding extractor with a session pool.
+//! ONNX-file inference through tract, with a session pool.
 //!
 //! # Runtime boundary
 //!
-//! All `ort::` imports live in the private `ort_session` module. The optional
-//! tract backend lives in private `tract_session` (feature `backend-tract`).
+//! The tract backend lives in private `tract_session` (feature `backend-tract`).
 //! Neural stages outside this module must depend only on [`InferenceRuntime`] /
-//! [`RuntimeSession`] and must **not** import `ort::` or `tract_onnx` directly.
+//! [`RuntimeSession`] and must **not** import `tract_onnx` directly.
 //!
-//! Inference here is tract (`backend-tract`). The product CLI does not
-//! enable this module. Select tract with env
+//! This module compiles only with `infer`, which requires `backend-tract`.
+//! The product CLI does not enable it. Select tract with env
 //! `POLYVOICE_INFERENCE_BACKEND=tract` or [`InferenceBackend::force`].
 
 use std::path::Path;
@@ -26,70 +25,19 @@ pub use runtime::{InferenceError, InferenceRuntime, InferenceTensor, NamedTensor
 #[cfg(feature = "backend-tract")]
 pub use tract_session::TractSession;
 
+pub use crate::types::execution_provider::ExecutionProvider;
+
 /// Minimum plausible size for an ONNX file (header only).
 pub const ONNX_MIN_HEADER_BYTES: usize = 64;
 
-/// Which ONNX Runtime execution provider to request for a session.
+/// Build an inference session for `model_path`.
 ///
-/// Canonical home is here (the module that owns session creation) so the
-/// low-level constructors can name it without depending on `pipeline_v2`;
-/// `pipeline_v2` re-exports it, so existing imports keep compiling.
+/// This is the one place embedding and segmentation sessions are constructed:
+/// it validates the ONNX header before tract parses the file. Tract always
+/// runs on CPU and ignores [`ExecutionProvider`]. `intra_threads` is accepted
+/// for call-site parity and ignored by tract.
 ///
-/// EP is **ort-specific config** — it is not part of [`InferenceRuntime`].
-/// Stages pass it only at session construction via [`build_session_with_ep`].
-///
-/// EP values are accepted for API compatibility with `PipelineConfig` but
-/// tract always runs on CPU. Unwired names never fail the build.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum ExecutionProvider {
-    /// Always available. No EP registration; ort uses its built-in CPU path.
-    Cpu,
-    /// CoreML on macOS aarch64 when the `coreml` feature is enabled; else CPU + warn.
-    CoreMl,
-    /// Reserved for Android NNAPI — **not wired yet** (CPU + warn).
-    Nnapi,
-    /// Reserved for NVIDIA CUDA — **not wired yet** (CPU + warn).
-    Cuda,
-    /// XNNPACK when the `xnnpack` feature is enabled; else CPU + warn.
-    XnnPack,
-}
-
-impl ExecutionProvider {
-    /// Best default for the current target: CoreML on Apple Silicon, XNNPACK on
-    /// aarch64 Linux, plain CPU elsewhere. Unwired / uncompiled providers fall
-    /// back to CPU with a warning at session-build time.
-    pub fn auto() -> Self {
-        Self::Cpu
-    }
-
-    /// Tract always runs on CPU. Named EPs other than `Cpu` are not available.
-    pub fn is_available(self) -> bool {
-        matches!(self, Self::Cpu)
-    }
-}
-
-/// Build an inference session for `model_path` with the requested execution
-/// provider. This is the ONE place embedding/segmentation sessions are
-/// constructed: it validates the ONNX header BEFORE the backend ever parses
-/// the file (the validate-before-build invariant), then registers the EP.
-///
-/// Returns [`RuntimeSession`] — ort by default, or tract when the
-/// `backend-tract` feature is enabled and selected via
-/// [`InferenceBackend`] / `POLYVOICE_INFERENCE_BACKEND=tract`. Callers must
-/// depend only on [`InferenceRuntime`], not on underlying `ort` / tract types.
-///
-/// `intra_threads`: `Some(n)` pins the session's intra-op thread count for ort.
-/// On the pure CPU EP this also sets inter-op threads to 1 so app-level
-/// session pools do not oversubscribe; CoreML/XNNPACK keep their own
-/// parallelism. Ignored by tract.
-///
-/// EP behavior (ort only): `Cpu` registers nothing. `CoreMl` / `XnnPack`
-/// register when their cargo features (and CoreML target) match, else warn
-/// and run on CPU. `Nnapi` / `Cuda` are not wired yet — they warn and run on
-/// CPU. EP registration failure is deliberately not an error: ort's built-in
-/// CPU fallback keeps inference correct. tract always uses pure-Rust CPU and
-/// ignores EP.
+/// Callers must depend only on [`InferenceRuntime`], not on tract types.
 pub fn build_session_with_ep(
     model_path: &Path,
     ep: ExecutionProvider,
@@ -322,47 +270,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any())]
-    #[cfg_attr(miri, ignore)]
-    fn build_session_with_ep_cpu_and_unwired_ep_build_ok() {
-        let path = std::path::Path::new("models/silero_vad.onnx");
-        if !path.exists() {
-            // Skip if the model is missing (e.g. CI without models).
-            return;
-        }
-        // Pin ort: silero does not load on tract today, and env/force must not
-        // flip this smoke test off the default backend.
-        InferenceBackend::force(Some(InferenceBackend::Ort));
-        let built = build_session_with_ep(path, ExecutionProvider::Cpu, None);
-        assert!(
-            built.is_ok(),
-            "ort session build failed: {:?}",
-            built.err().map(|e| e.to_string())
-        );
-        assert!(build_session_with_ep(path, ExecutionProvider::Cpu, Some(1)).is_ok());
-        // Unwired providers warn and fall back to CPU — never panic or error.
-        assert!(build_session_with_ep(path, ExecutionProvider::Cuda, None).is_ok());
-        assert!(build_session_with_ep(path, ExecutionProvider::Nnapi, None).is_ok());
-        assert!(build_session_with_ep(path, ExecutionProvider::auto(), None).is_ok());
-        InferenceBackend::force(None);
-    }
-
-    #[test]
-    #[cfg(any())]
-    #[cfg_attr(miri, ignore)]
-    fn build_session_with_ep_optional_providers_build_ok() {
-        let path = std::path::Path::new("models/silero_vad.onnx");
-        if !path.exists() {
-            return;
-        }
-        InferenceBackend::force(Some(InferenceBackend::Ort));
-        // Register when compiled in on a supported target, else warn + CPU.
-        assert!(build_session_with_ep(path, ExecutionProvider::CoreMl, None).is_ok());
-        assert!(build_session_with_ep(path, ExecutionProvider::XnnPack, None).is_ok());
-        InferenceBackend::force(None);
-    }
-
-    #[test]
     fn resolve_session_pool_size_is_at_least_one() {
         // Ambient POLYVOICE_SESSION_POOL_SIZE may be set; still never zero.
         assert!(resolve_session_pool_size(0) >= 1);
@@ -376,18 +283,9 @@ mod tests {
     }
 
     #[test]
-    fn execution_provider_auto_matches_platform() {
+    fn execution_provider_auto_is_cpu() {
         let auto = ExecutionProvider::auto();
-        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-        assert_eq!(auto, ExecutionProvider::CoreMl);
-        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-        assert_eq!(auto, ExecutionProvider::XnnPack);
-        #[cfg(not(any(
-            all(target_os = "macos", target_arch = "aarch64"),
-            all(target_os = "linux", target_arch = "aarch64"),
-        )))]
         assert_eq!(auto, ExecutionProvider::Cpu);
-        // Copy / Clone / Debug derives.
         let copied = auto;
         assert_eq!(copied, auto);
         assert!(!format!("{auto:?}").is_empty());

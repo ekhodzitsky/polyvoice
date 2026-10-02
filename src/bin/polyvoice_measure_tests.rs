@@ -1,14 +1,4 @@
 use super::*;
-use polyvoice::types::{SpeakerId, TimeRange};
-
-fn turn(start: f64, end: f64, speaker: u32) -> SpeakerTurn {
-    SpeakerTurn {
-        time: TimeRange { start, end },
-        speaker: SpeakerId(speaker),
-        text: None,
-        stable: true,
-    }
-}
 
 /// `secs` seconds of a 300 Hz sine at 16 kHz, amplitude 0.3.
 fn sine_pcm(secs: f32) -> Vec<f32> {
@@ -40,34 +30,6 @@ fn make_rttm_dataset() -> tempfile::TempDir {
     )
     .unwrap();
     dir
-}
-
-#[test]
-fn macro_der_empty_is_zero() {
-    assert_eq!(macro_der(&[]), (0.0, 0.0));
-}
-
-#[test]
-fn macro_der_averages_both_collars() {
-    let (c0, c025) = macro_der(&[(10.0, 20.0), (30.0, 40.0), (20.0, 0.0)]);
-    assert!((c0 - 20.0).abs() < 1e-9);
-    assert!((c025 - 20.0).abs() < 1e-9);
-}
-
-#[test]
-fn der_pair_identical_turns_is_zero() {
-    let turns = vec![turn(0.0, 1.0, 0), turn(1.5, 3.0, 1)];
-    let (d0, d25) = der_pair(&turns, &turns.clone());
-    assert_eq!(d0, 0.0);
-    assert_eq!(d25, 0.0);
-}
-
-#[test]
-fn der_pair_empty_hypothesis_is_full_miss() {
-    let ref_t = vec![turn(0.0, 2.0, 0)];
-    let (d0, d25) = der_pair(&ref_t, &[]);
-    assert!((d0 - 100.0).abs() < 1e-9);
-    assert!((d25 - 100.0).abs() < 1e-9);
 }
 
 #[test]
@@ -354,69 +316,6 @@ fn embedder_report_serializes_expected_schema() {
     assert_eq!(v["resnet34"]["model_id"], "resnet34_int8");
     assert_eq!(v["cam_pp"]["model_id"], "cam_pp_int8");
     assert!(v["hardware"]["cores"].as_u64().unwrap() >= 1);
-}
-
-#[test]
-fn streaming_report_serializes_expected_schema() {
-    let report = StreamingReport {
-        schema: "polyvoice-streaming-latency-v1".into(),
-        hardware: hardware(),
-        chunk_samples: 3200,
-        max_files: 30,
-        dataset: "data/x".into(),
-        rows: vec![StreamingPresetRow {
-            preset: "balanced".into(),
-            window_secs: 5.0,
-            hop_secs: 0.5,
-            right_context_secs: 1.0,
-            cache_cap: 200,
-            input_buffer_latency_secs: 0.2,
-            mean_rtf: 0.1,
-            macro_der_collar_0: 12.0,
-            macro_der_collar_025: 10.0,
-            files: 3,
-            total_audio_secs: 30.0,
-            total_wall_secs: 3.0,
-        }],
-    };
-    let v: serde_json::Value =
-        serde_json::from_str(&serde_json::to_string(&report).unwrap()).unwrap();
-    assert_eq!(v["schema"], "polyvoice-streaming-latency-v1");
-    assert_eq!(v["rows"][0]["preset"], "balanced");
-    assert_eq!(v["rows"][0]["files"], 3);
-    assert_eq!(v["chunk_samples"], 3200);
-}
-
-#[cfg(feature = "vad-earshot")]
-#[test]
-fn vad_parity_report_serializes_expected_schema() {
-    let arm = |name: &str| VadArm {
-        name: name.into(),
-        frame_size: 512,
-        macro_der_collar_0: 10.0,
-        macro_der_collar_025: 8.0,
-        mean_rtf: 0.05,
-        files: 2,
-    };
-    let report = VadParityReport {
-        schema: "polyvoice-vad-parity-v1".into(),
-        hardware: hardware(),
-        max_files: 30,
-        dataset: "data/x".into(),
-        silero: arm("silero"),
-        earshot: arm("earshot"),
-        delta_der_collar_0_pp: 0.1,
-        delta_der_collar_025_pp: -0.2,
-        parity_gate_abs_pp: 0.3,
-        parity_pass_collar_0: true,
-        parity_pass_collar_025: true,
-    };
-    let v: serde_json::Value =
-        serde_json::from_str(&serde_json::to_string(&report).unwrap()).unwrap();
-    assert_eq!(v["schema"], "polyvoice-vad-parity-v1");
-    assert_eq!(v["silero"]["name"], "silero");
-    assert_eq!(v["earshot"]["frame_size"], 512);
-    assert_eq!(v["parity_pass_collar_0"], true);
 }
 
 #[test]

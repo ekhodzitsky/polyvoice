@@ -9,7 +9,6 @@
 #[cfg(all(
     feature = "cli-bin",
     not(any(
-        any(),
         feature = "backend-tract",
         all(feature = "segmenter-native", feature = "embedder-native")
     ))
@@ -43,8 +42,6 @@ use crate::models::ModelRegistry;
 use crate::pipeline_v2::{ClustererKind, ExecutionProvider, Pipeline, PipelineConfig};
 use crate::rttm::{RttmSegment, group_by_file, parse_rttm_file, to_speaker_turns};
 use crate::types::{ClusterConfig, DiarizationConfig, SpeakerTurn};
-#[cfg(any())]
-use crate::{FbankOnnxExtractor, SileroVad};
 
 /// Parse a `--clusterer`-style selector into the v2 clusterer kind. `threshold`
 /// is used only for `ahc`.
@@ -179,25 +176,16 @@ pub fn resolve_clusterer_flags(
     Ok((kind, as_norm_config, domain))
 }
 
-/// Reject Silero / legacy paths on a tract-only build.
+/// Reject a CLI path that used to load Silero or another ONNX Runtime session.
 ///
-/// Silero ONNX does not load on tract. Call this before constructing a
-/// `LegacyStack` or a Silero VAD session so the user sees a feature hint
-/// instead of a session-build dump.
+/// The flag or subcommand is still parsed so old invocations fail with this
+/// message. The core crate has no ONNX Runtime.
 pub fn require_onnx(what: &str) -> Result<()> {
-    #[cfg(any())]
-    {
-        let _ = what;
-        Ok(())
-    }
-    #[cfg(not(any()))]
-    {
-        anyhow::bail!(
-            "{what} is not available in this build (no ONNX Runtime in the core crate). \
-             Product CLI is `--features cli` (kernels). Tract is `--features cli-tract`. \
-             Drop --legacy / --pipeline legacy."
-        )
-    }
+    anyhow::bail!(
+        "{what} is not available in this build (no ONNX Runtime in the core crate). \
+         Product CLI is `--features cli` (kernels). Tract is `--features cli-tract`. \
+         Drop --legacy / --pipeline legacy."
+    )
 }
 
 /// Parse an `--execution-provider`-style selector. `auto` resolves to the best
@@ -237,33 +225,6 @@ pub fn legacy_diarization_config(threshold: f32) -> DiarizationConfig {
         },
         ..DiarizationConfig::default()
     }
-}
-
-/// ONNX sessions for the legacy (v1) pipeline: the profile embedder plus a
-/// Silero VAD. Sessions are file-independent, so callers processing many files
-/// build one stack and reuse it — `LegacyPipeline::run` resets the VAD state
-/// at the start of every run, keeping reused sessions numerically identical
-/// to per-file construction.
-#[cfg(any())]
-pub struct LegacyStack {
-    pub extractor: FbankOnnxExtractor,
-    pub vad: SileroVad,
-}
-
-/// Load the legacy-pipeline ONNX sessions: embedder (on `embedder_ep`) and
-/// Silero VAD (always CPU, its validated configuration).
-#[cfg(any())]
-pub fn load_legacy_stack(
-    embedder_path: &Path,
-    embedding_dim: usize,
-    embedder_ep: ExecutionProvider,
-    vad_path: &Path,
-    vad_frame_size: usize,
-) -> Result<LegacyStack> {
-    let extractor = FbankOnnxExtractor::new(embedder_path, embedding_dim, 1, embedder_ep)
-        .context("load embedder")?;
-    let vad = SileroVad::new(vad_path, vad_frame_size).context("load vad")?;
-    Ok(LegacyStack { extractor, vad })
 }
 
 /// Build the v2 pipeline from a model registry. When the VBx clusterer is
@@ -609,127 +570,5 @@ mod tests {
     fn legacy_config_applies_threshold() {
         let cfg = legacy_diarization_config(0.42);
         assert_eq!(cfg.cluster.threshold, 0.42);
-    }
-
-    #[test]
-    #[cfg(any())]
-    fn load_legacy_stack_rejects_missing_embedder() {
-        let err = load_legacy_stack(
-            Path::new("/nonexistent/embedder.onnx"),
-            192,
-            ExecutionProvider::Cpu,
-            Path::new("/nonexistent/vad.onnx"),
-            512,
-        )
-        .err()
-        .unwrap();
-        assert!(format!("{err:#}").contains("load embedder"));
-    }
-
-    /// Registry rooted at the checked-in model files (SHA-256-verified cache
-    /// hits, no network). `None` when the local models are absent.
-    #[cfg(any())]
-    fn local_models_registry() -> Option<ModelRegistry> {
-        // Prefer models/int8 (checked-in quant outputs); fall back to models/.
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
-        let int8 = root.join("int8");
-        let dir = if int8.join("powerset_int8.onnx").is_file() {
-            int8
-        } else {
-            root.clone()
-        };
-        for f in ["powerset_int8.onnx", "resnet34_int8.onnx"] {
-            if !dir.join(f).is_file() {
-                eprintln!(
-                    "{} not found — skipping model-backed test",
-                    dir.join(f).display()
-                );
-                return None;
-            }
-        }
-        ModelRegistry::with_cache_dir(&dir).ok()
-    }
-
-    #[test]
-    #[cfg(any())]
-    fn load_legacy_stack_loads_sessions_from_local_models() {
-        let models = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
-        let embedder = [
-            models.join("int8/resnet34_int8.onnx"),
-            models.join("resnet34_int8.onnx"),
-            models.join("wespeaker_resnet34.onnx"),
-        ]
-        .into_iter()
-        .find(|p| p.is_file());
-        let vad = models.join("silero_vad.onnx");
-        let Some(embedder) = embedder else {
-            eprintln!("local embedder ONNX not found — skipping");
-            return;
-        };
-        if !vad.is_file() {
-            eprintln!("local ONNX models not found — skipping");
-            return;
-        }
-        load_legacy_stack(&embedder, 256, ExecutionProvider::Cpu, &vad, 512).unwrap();
-    }
-
-    #[test]
-    #[cfg(any())]
-    fn load_legacy_stack_rejects_missing_vad() {
-        let models = Path::new(env!("CARGO_MANIFEST_DIR")).join("models");
-        let embedder = [
-            models.join("int8/resnet34_int8.onnx"),
-            models.join("resnet34_int8.onnx"),
-            models.join("wespeaker_resnet34.onnx"),
-        ]
-        .into_iter()
-        .find(|p| p.is_file());
-        let Some(embedder) = embedder else {
-            eprintln!("local embedder ONNX not found — skipping");
-            return;
-        };
-        let err = load_legacy_stack(
-            embedder.as_path(),
-            256,
-            ExecutionProvider::Cpu,
-            Path::new("/nonexistent/vad.onnx"),
-            512,
-        )
-        .err()
-        .unwrap();
-        assert!(format!("{err:#}").contains("load vad"));
-    }
-
-    #[test]
-    #[cfg(any())]
-    fn build_v2_pipeline_ahc_builds_from_local_models() {
-        let Some(registry) = local_models_registry() else {
-            return;
-        };
-        let config = PipelineConfig {
-            clusterer: ClustererKind::Ahc { threshold: 0.7 },
-            execution_provider: ExecutionProvider::Cpu,
-            ..PipelineConfig::default()
-        };
-        build_v2_pipeline(config, registry).unwrap();
-    }
-
-    #[cfg(all(feature = "vbx", any()))]
-    #[test]
-    fn build_v2_pipeline_vbx_error_names_remedies() {
-        let Some(registry) = local_models_registry() else {
-            return;
-        };
-        let empty = tempfile::tempdir().unwrap();
-        let config = PipelineConfig {
-            clusterer: ClustererKind::Vbx,
-            vbx_plda_dir: Some(empty.path().to_path_buf()),
-            execution_provider: ExecutionProvider::Cpu,
-            ..PipelineConfig::default()
-        };
-        let err = build_v2_pipeline(config, registry).err().unwrap();
-        let msg = format!("{err:#}");
-        assert!(msg.contains("vbx_plda_dir"), "{msg}");
-        assert!(msg.contains("--clusterer ahc"), "{msg}");
     }
 }
