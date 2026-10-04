@@ -218,12 +218,30 @@ pub enum PipelineError {
     Registry(#[from] RegistryError),
 }
 
+/// Segmenter and embedder registry ids the stage loader opened.
+/// Both stay empty when components were injected without a registry.
+#[derive(Default)]
+pub(crate) struct StageModelIds {
+    segmenter: String,
+    embedder: String,
+}
+
+impl StageModelIds {
+    pub(crate) fn new(segmenter: &str, embedder: &str) -> Self {
+        Self {
+            segmenter: segmenter.to_owned(),
+            embedder: embedder.to_owned(),
+        }
+    }
+}
+
 pub struct Pipeline {
     config: PipelineConfig,
     segmenter: Box<dyn Segmenter>,
     embedder: Box<dyn Embedder>,
     clusterer: Box<dyn Clusterer>,
     resegmenter: Box<dyn Resegmenter>,
+    model_ids: StageModelIds,
     /// When `Some(secs)`, overlap-mask the embedding chunk only if it has at
     /// least that much unmasked speech; otherwise embed the raw chunk.
     /// `None` always masks (production default).
@@ -257,6 +275,7 @@ impl Pipeline {
         embedder: Box<dyn Embedder>,
         clusterer: Box<dyn Clusterer>,
         resegmenter: Box<dyn Resegmenter>,
+        model_ids: StageModelIds,
     ) -> Self {
         let (clean_mask_fallback_secs, filter_clean_duration) =
             clusterer_factory::scoring_chain_mask_env();
@@ -266,6 +285,7 @@ impl Pipeline {
             embedder,
             clusterer,
             resegmenter,
+            model_ids,
             clean_mask_fallback_secs,
             filter_clean_duration,
         }
@@ -273,6 +293,23 @@ impl Pipeline {
 
     pub fn config(&self) -> &PipelineConfig {
         &self.config
+    }
+
+    /// Provenance for a finished run. `version` stays empty so
+    /// `DiarizationResult::with_provenance` keeps the version from `new`.
+    fn recorded_provenance(&self) -> crate::types::Provenance {
+        let clusterer = match self.config.clusterer {
+            ClustererKind::Vbx => "vbx",
+            ClustererKind::Ahc { .. } => "ahc",
+            ClustererKind::NmeSc => "nme-sc",
+        };
+        crate::types::Provenance {
+            profile: self.config.profile.manifest_id().to_owned(),
+            segmenter: self.model_ids.segmenter.clone(),
+            embedder: self.model_ids.embedder.clone(),
+            clusterer: clusterer.to_owned(),
+            ..Default::default()
+        }
     }
 
     pub fn run(&self, samples: &[f32], sr: SampleRate) -> Result<DiarizationResult, PipelineError> {
@@ -301,18 +338,34 @@ impl Pipeline {
 
         let t = std::time::Instant::now();
         if self.config.experimental.reconstruct {
+            // No window posteriors means reconstruct cannot run. Falling
+            // through to `segment()` would ignore the flag.
             match self.segmenter.windows(samples)? {
                 Some(windows) if !windows.is_empty() => {
                     timings.segmentation_secs = t.elapsed().as_secs_f64();
                     return self.run_reconstruct(samples, sr, windows, timings);
                 }
-                _ => {}
+                _ => {
+                    return Err(PipelineError::Segmentation(
+                        SegmentationError::InferenceFailed {
+                            window_idx: 0,
+                            detail:
+                                "reconstruct requires window posteriors; this segmenter has none"
+                                    .into(),
+                        },
+                    ));
+                }
             }
         }
         let raw_segments = self.segmenter.segment(samples)?;
         timings.segmentation_secs = t.elapsed().as_secs_f64();
         if raw_segments.is_empty() {
-            return Ok((DiarizationResult::new(Vec::new(), Vec::new(), 0), timings));
+            return Ok((
+                DiarizationResult::new(Vec::new(), Vec::new(), 0)
+                    .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
+                    .with_provenance(self.recorded_provenance()),
+                timings,
+            ));
         }
 
         let overlap_ranges = extract_overlap_time_ranges(&raw_segments);
@@ -327,7 +380,12 @@ impl Pipeline {
             self.embed_primary_segments(&primary_segments, &overlap_ranges, samples)?;
         timings.embedding_secs = t.elapsed().as_secs_f64();
         if embeddings.is_empty() {
-            return Ok((DiarizationResult::new(Vec::new(), Vec::new(), 0), timings));
+            return Ok((
+                DiarizationResult::new(Vec::new(), Vec::new(), 0)
+                    .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
+                    .with_provenance(self.recorded_provenance()),
+                timings,
+            ));
         }
 
         let t = std::time::Instant::now();
@@ -374,10 +432,7 @@ impl Pipeline {
 
         let result = DiarizationResult::new(merged_segments, merged_turns, num_speakers)
             .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
-            .with_provenance(crate::types::Provenance {
-                profile: self.config.profile.manifest_id().to_owned(),
-                ..Default::default()
-            });
+            .with_provenance(self.recorded_provenance());
         Ok((result, timings))
     }
 
@@ -401,7 +456,12 @@ impl Pipeline {
         )?;
         timings.embedding_secs = t.elapsed().as_secs_f64();
         if embeddings.is_empty() {
-            return Ok((DiarizationResult::new(Vec::new(), Vec::new(), 0), timings));
+            return Ok((
+                DiarizationResult::new(Vec::new(), Vec::new(), 0)
+                    .with_audio(samples.len() as f64 / sr.get() as f64, sr.get())
+                    .with_provenance(self.recorded_provenance()),
+                timings,
+            ));
         }
 
         let t = std::time::Instant::now();
@@ -439,17 +499,16 @@ impl Pipeline {
             .len();
         let result = DiarizationResult::new(segments, turns, num_speakers)
             .with_audio(audio_secs, sr.get())
-            .with_provenance(crate::types::Provenance {
-                profile: self.config.profile.manifest_id().to_owned(),
-                ..Default::default()
-            });
+            .with_provenance(self.recorded_provenance());
         Ok((result, timings))
     }
 
     /// Embedding stage: expand primary segments into embedding units, mask
-    /// overlap audio out of each unit, and embed. Units that are empty, below
-    /// MIN_EMBED_SECS, or yield a non-finite embedding are dropped, so the
-    /// returned source segments (parallel to the embeddings) may be fewer than
+    /// overlap audio out of each unit, and embed. Units that are empty or
+    /// below MIN_EMBED_SECS are dropped. A batch whose length does not match
+    /// the kept units, or a non-empty batch of entirely non-finite embeddings,
+    /// is an error. When some embeddings are finite, only the non-finite ones
+    /// are dropped, so the returned source segments may be fewer than
     /// `primary_segments`.
     fn embed_primary_segments(
         &self,
@@ -515,11 +574,20 @@ impl Pipeline {
         }
         // Embed all units as one batch: ONNX-backed embedders fan this out
         // across threads over their internal session pool, so units no longer
-        // serialize on a single session. `embed_batch` preserves input order,
-        // so the zip below restores the per-unit pairing deterministically and
-        // surfaces the first error in unit order, as the sequential loop did.
+        // serialize on a single session. `embed_batch` preserves input order.
+        // A short batch must not zip-truncate into a silent empty result.
         let chunk_refs: Vec<&[f32]> = masked_chunks.iter().map(Vec::as_slice).collect();
         let batch = self.embedder.embed_batch(&chunk_refs)?;
+        if batch.len() != kept.len() {
+            return Err(PipelineError::Embedding(EmbedderError::InferenceFailed {
+                detail: format!(
+                    "embed_batch returned {} embeddings for {} units",
+                    batch.len(),
+                    kept.len()
+                ),
+            }));
+        }
+        let had_units = !kept.is_empty();
         let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(batch.len());
         let mut sources: Vec<crate::segmentation::RawSegment> = Vec::with_capacity(batch.len());
         for (seg, mut emb) in kept.into_iter().zip(batch) {
@@ -537,6 +605,11 @@ impl Pipeline {
             }
             embeddings.push(emb);
             sources.push(seg);
+        }
+        if had_units && embeddings.is_empty() {
+            return Err(PipelineError::Embedding(EmbedderError::InferenceFailed {
+                detail: "every embedding was non-finite".into(),
+            }));
         }
         Ok((embeddings, sources))
     }

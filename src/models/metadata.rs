@@ -1,13 +1,17 @@
 //! Self-describing model configuration.
 //!
-//! Preference order when loading geometry / adapter metadata:
-//! 1. ONNX `metadata_props` (via ort session metadata) — authoritative
-//! 2. Manifest entry fields (schema v2) — transition fallback, `tracing::warn`
+//! Preference order inside [`load_model_config`] (production pipeline
+//! construction does not call it):
+//! 1. ONNX `metadata_props` — not a live product source. The tract reader
+//!    validates the header and returns an empty map, so this tier does not
+//!    supply geometry. There is no ORT session-metadata path.
+//! 2. Manifest entry fields (schema v2) — fallback, `tracing::warn`
 //! 3. Caller-supplied defaults — last resort, `tracing::warn`
 //!
-//! Hard-coded stage defaults (e.g. powerset 10 s / 1 s windows) remain valid
-//! fallbacks until every shipped ONNX carries the props; the injection script
-//! under `scripts/inject-model-metadata.py` writes them.
+//! Hard-coded stage defaults (e.g. powerset 10 s / 2 s windows) remain valid
+//! fallbacks. `scripts/inject-model-metadata.py` can write ONNX props, but
+//! the tract reader does not return them and production construction does
+//! not call [`load_model_config`].
 
 use super::manifest::ModelEntry;
 use std::collections::HashMap;
@@ -236,8 +240,8 @@ pub fn load_model_config(
 
 /// Read custom metadata key/value pairs from an ONNX file.
 ///
-/// With `onnx` this queries the model via a short-lived session. Tract-only
-/// builds validate the header and return empty (manifest/defaults fill in).
+/// Validates the ONNX header and returns an empty map. There is no session
+/// metadata query; manifest fields and caller defaults supply geometry.
 /// The typed [`crate::onnx::OnnxError`] lets callers distinguish an
 /// unloadable model from a metadata read failure.
 #[cfg(feature = "infer")]

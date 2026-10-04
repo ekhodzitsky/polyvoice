@@ -5,12 +5,12 @@
 //! Enabled only with `--features vad-earshot`. Core builds without this feature
 //! never reference earshot (verify with `cargo tree -e normal | rg earshot`).
 //!
-//! # Default VAD
+//! # Not the product VAD
 //!
-//! **Silero remains the production default** and the DER-parity reference.
-//! This adapter is opt-in for experimentation and embedded/no-runtime paths.
-//! A default switch is out of scope until a measured parity gate passes (see
-//! `benchmarks/results/earshot-vad-notes.md`).
+//! The CLI product segmenter is the powerset kernels, not this adapter and
+//! not Silero. Earshot stays optional (`vad-earshot`). Silero ONNX is an
+//! optional tract [`VoiceActivityDetector`](crate::vad::VoiceActivityDetector)
+//! behind `infer`, not the DER-parity reference.
 //!
 //! # Frame contract
 //!

@@ -22,16 +22,21 @@ pub(super) fn build_native_stages(
             source: Box::new(e),
         })?;
     let segmenter: Box<dyn Segmenter> = Box::new(
-        crate::segmentation::PowersetNative::from_onnx_path(&seg_path).map_err(|e| {
-            ConfigError::Load {
+        crate::segmentation::PowersetNative::from_onnx_path(&seg_path)
+            .map_err(|e| ConfigError::Load {
                 model_id: "powerset_int8",
                 source: Box::new(e),
-            }
-        })?,
+            })?
+            .with_binarization(config.experimental.binarization),
     );
     if let Some(id) = config.experimental.embedder_model.as_deref() {
-        let embedder = load_native_embedder_override(registry, config, id)?;
-        return Ok((segmenter, embedder));
+        let (embedder, embedder_id) = load_native_embedder_override(registry, config, id)?;
+        return Ok(StagePair {
+            segmenter,
+            embedder,
+            segmenter_id: "powerset_int8",
+            embedder_id,
+        });
     }
     let emb_path = registry
         .ensure("resnet34_int8")
@@ -47,7 +52,12 @@ pub(super) fn build_native_stages(
             }
         })?,
     );
-    Ok((segmenter, embedder))
+    Ok(StagePair {
+        segmenter,
+        embedder,
+        segmenter_id: "powerset_int8",
+        embedder_id: "resnet34_int8",
+    })
 }
 
 #[cfg(all(feature = "segmenter-native", feature = "embedder-native"))]
@@ -63,7 +73,7 @@ fn load_native_embedder_override(
     )]
     config: &PipelineConfig,
     id: &str,
-) -> Result<Box<dyn Embedder>, ConfigError> {
+) -> Result<(Box<dyn Embedder>, &'static str), ConfigError> {
     let (model_id, dim): (&'static str, usize) = match id {
         "cam_pp_int8" => ("cam_pp_int8", 512),
         "cam_pp_fp32" => ("cam_pp_fp32", 512),
@@ -90,7 +100,7 @@ fn load_native_embedder_override(
             model_id,
             source: Box::new(e),
         })?;
-        Ok(Box::new(embedder))
+        Ok((Box::new(embedder), model_id))
     }
     #[cfg(not(all(feature = "backend-tract", feature = "embedder")))]
     {

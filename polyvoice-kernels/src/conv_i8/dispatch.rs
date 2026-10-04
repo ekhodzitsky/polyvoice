@@ -6,8 +6,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static INTRA_THREADS: AtomicUsize = AtomicUsize::new(1);
 
-/// Intra-op workers for INT8 3x3 s1. Embedder sets this to ncpu when it
-/// runs a single ResNet so we share one activation, like MLAS.
+/// Intra-op workers for INT8 3x3 s1. A single-file embed sets this to 3 for
+/// the ResNet scope and restores 1. A multi-file caller owns the count for
+/// the whole run.
 pub fn set_intra_threads(n: usize) {
     INTRA_THREADS.store(n.max(1), Ordering::Relaxed);
 }

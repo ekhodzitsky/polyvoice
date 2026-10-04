@@ -9,7 +9,7 @@ For the **development process** checklist (spec → types → verify), see
 
 ```
                     ┌─────────────────────────────────────┐
-  no onnx / BYO     │  pipeline::LegacyPipeline           │
+  no infer / BYO    │  pipeline::LegacyPipeline           │
   + streaming       │  streaming::StreamingPipeline       │── Embedder + VAD
                     │  (always compiled, default features)│
                     └─────────────────────────────────────┘
@@ -31,7 +31,7 @@ For the **development process** checklist (spec → types → verify), see
 | FFI | v2 kernels only (`ffi` = `pipeline-native`) |
 | Python | **v2 + VBx kernels** (same engine as CLI / FFI / MCP); `clusterer="ahc"` opt-out |
 | Experimental MCP `polyvoice-mcp` | v2 + VBx kernels (`clusterer=ahc` opt-out) |
-| `polyvoice-bench` | **v2 + VBx** default (kernels when built with `cli`); `--jobs N` runs files in parallel on one shared pipeline and adds `rt_factor_wall` to the report; `--pipeline legacy` for comparison |
+| `polyvoice-bench` | **v2 + VBx** default (kernels when built with `cli`); `--jobs N` runs files in parallel on one shared pipeline and adds `rt_factor_wall` to the report. `--pipeline legacy` is parsed and rejected before model download; it does not run Silero + sliding-window + AHC |
 | Library, no features | `pipeline::LegacyPipeline` + `StreamingPipeline` only |
 | Library kernels | `features = ["pipeline-native", "vbx"]` → crate-root `Pipeline` |
 | Experimental library tract | `features = ["pipeline-tract", "vbx"]` → crate-root `Pipeline` |

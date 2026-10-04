@@ -85,27 +85,27 @@ pub fn download_with_checksum_and_signature(
     )
 }
 
-/// Default absolute ceiling for a single streamed model download (1 GiB).
-///
-/// Bounds a disk-exhaustion DoS for manifest entries that do not declare a
-/// `size`. It sits well above any real polyvoice model (the largest shipped
-/// weights are ~250 MiB), so legitimate downloads are unaffected.
-pub(crate) const DEFAULT_MAX_MODEL_BYTES: u64 = 1024 * 1024 * 1024;
+/// Same ceiling as local hashing. Defined in the parent module so
+/// `ensure_local` can apply it with the `download` feature off.
+pub(crate) use super::DEFAULT_MAX_MODEL_BYTES;
+#[cfg(test)]
+pub(crate) use super::max_download_bytes;
 
 /// Serializes fetches process-wide: the staging `.partial` path is shared
 /// per destination, so parallel downloads of the same model must not overlap.
 static DOWNLOAD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-/// Streaming size cap for one model given an optional manifest-declared size.
-///
-/// When `declared_size` is set and positive, the cap is `2 × size` (slack for
-/// upstream drift) still clamped to [`DEFAULT_MAX_MODEL_BYTES`]. Missing or
-/// zero size falls back to the global 1 GiB ceiling.
-pub(crate) fn max_download_bytes(declared_size: Option<u64>) -> u64 {
-    match declared_size {
-        Some(n) if n > 0 => n.saturating_mul(2).min(DEFAULT_MAX_MODEL_BYTES),
-        _ => DEFAULT_MAX_MODEL_BYTES,
-    }
+/// One agent for every fetch. `https_only` blocks a redirect from the https
+/// URL [`require_https`] already checked onto cleartext http.
+fn https_agent() -> &'static ureq::Agent {
+    static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
+    AGENT.get_or_init(|| {
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .https_only(true)
+            .build()
+            .into();
+        agent
+    })
 }
 
 /// Like [`download_with_checksum_and_signature`] but with an explicit streaming
@@ -317,10 +317,13 @@ fn fetch_into_partial(
     max_bytes: u64,
     verifier: &mut DownloadVerifier<'_>,
 ) -> Result<(), DownloadError> {
-    let resp = ureq::get(url).call().map_err(|e| DownloadError::Network {
-        url: url.to_owned(),
-        source: Box::new(e),
-    })?;
+    let resp = https_agent()
+        .get(url)
+        .call()
+        .map_err(|e| DownloadError::Network {
+            url: url.to_owned(),
+            source: Box::new(e),
+        })?;
     let reader = BufReader::new(resp.into_body().into_reader());
     let mut file = fs::File::create(tmp).map_err(|e| DownloadError::Io {
         path: tmp.to_path_buf(),

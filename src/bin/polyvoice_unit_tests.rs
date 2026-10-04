@@ -216,6 +216,18 @@ fn cmd_diarize_rejects_models_cache_traversal() {
 }
 
 #[test]
+fn cmd_diarize_rejects_vbx_plda_dir_traversal() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut args = base_args();
+    args.wav = Some(temp_wav_file(&dir));
+    args.vbx_plda_dir = Some(PathBuf::from("a/../../b"));
+    let err = cmd_diarize(args).err().unwrap();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("vbx_plda_dir"), "{msg}");
+    assert!(msg.contains("path traversal"), "{msg}");
+}
+
+#[test]
 fn cmd_diarize_rejects_bad_latency_preset() {
     let dir = tempfile::tempdir().unwrap();
     let mut args = base_args();

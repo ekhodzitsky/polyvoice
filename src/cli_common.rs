@@ -189,8 +189,9 @@ pub fn require_onnx(what: &str) -> Result<()> {
 }
 
 /// Parse an `--execution-provider`-style selector. `auto` resolves to the best
-/// provider for the current target; providers not compiled into the build warn
-/// and fall back to CPU at session-build time.
+/// provider for the current target. `coreml`, `nnapi`, `cuda`, and `xnnpack`
+/// are returned unchanged; `PipelineBuilder::validate` rejects them later
+/// (they are not a silent CPU fallback).
 pub fn parse_execution_provider(s: &str) -> Result<ExecutionProvider> {
     Ok(match s {
         "auto" => ExecutionProvider::auto(),
@@ -224,6 +225,37 @@ pub fn legacy_diarization_config(threshold: f32) -> DiarizationConfig {
             ..Default::default()
         },
         ..DiarizationConfig::default()
+    }
+}
+
+/// Front-door knobs shared by the CLI and MCP. The bench keeps its own
+/// assembly because it also sets experimental fields.
+pub struct ProductParts {
+    pub profile: crate::types::Profile,
+    pub clusterer: ClustererKind,
+    pub vbx_plda_dir: Option<PathBuf>,
+    pub max_speakers: Option<u8>,
+    pub embed_window_secs: Option<f32>,
+    pub execution_provider: ExecutionProvider,
+    pub as_norm: Option<crate::clusterer::AsNormConfig>,
+    pub domain: Option<crate::clusterer::DomainProfile>,
+}
+
+/// Start from [`PipelineConfig::default`] and apply [`ProductParts`].
+/// `max_speakers` and `embed_window_secs` stay at the default when `None`.
+/// Does not touch `experimental`.
+pub fn product_pipeline_config(parts: ProductParts) -> PipelineConfig {
+    let defaults = PipelineConfig::default();
+    PipelineConfig {
+        profile: parts.profile,
+        clusterer: parts.clusterer,
+        vbx_plda_dir: parts.vbx_plda_dir,
+        execution_provider: parts.execution_provider,
+        as_norm: parts.as_norm,
+        domain: parts.domain,
+        max_speakers: parts.max_speakers.unwrap_or(defaults.max_speakers),
+        embed_window_secs: parts.embed_window_secs.or(defaults.embed_window_secs),
+        ..defaults
     }
 }
 
@@ -570,5 +602,43 @@ mod tests {
     fn legacy_config_applies_threshold() {
         let cfg = legacy_diarization_config(0.42);
         assert_eq!(cfg.cluster.threshold, 0.42);
+    }
+
+    #[test]
+    fn product_pipeline_config_keeps_defaults_until_set() {
+        let base = PipelineConfig::default();
+        let cfg = product_pipeline_config(ProductParts {
+            profile: crate::types::Profile::Mobile,
+            clusterer: ClustererKind::Ahc { threshold: 0.7 },
+            vbx_plda_dir: Some(PathBuf::from("/plda")),
+            max_speakers: None,
+            embed_window_secs: None,
+            execution_provider: ExecutionProvider::Cpu,
+            as_norm: None,
+            domain: None,
+        });
+        assert_eq!(cfg.profile, crate::types::Profile::Mobile);
+        assert_eq!(cfg.clusterer, ClustererKind::Ahc { threshold: 0.7 });
+        assert_eq!(cfg.vbx_plda_dir.as_deref(), Some(Path::new("/plda")));
+        assert_eq!(cfg.max_speakers, base.max_speakers);
+        assert_eq!(cfg.embed_window_secs, base.embed_window_secs);
+        assert_eq!(cfg.execution_provider, ExecutionProvider::Cpu);
+        assert!(cfg.as_norm.is_none());
+        assert!(cfg.domain.is_none());
+        assert_eq!(cfg.experimental.reconstruct, base.experimental.reconstruct);
+
+        let cfg = product_pipeline_config(ProductParts {
+            profile: crate::types::Profile::Balanced,
+            clusterer: ClustererKind::Vbx,
+            vbx_plda_dir: None,
+            max_speakers: Some(4),
+            embed_window_secs: Some(1.5),
+            execution_provider: ExecutionProvider::auto(),
+            as_norm: None,
+            domain: None,
+        });
+        assert_eq!(cfg.max_speakers, 4);
+        assert_eq!(cfg.embed_window_secs, Some(1.5));
+        assert!(matches!(cfg.clusterer, ClustererKind::Vbx));
     }
 }

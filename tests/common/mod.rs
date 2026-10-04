@@ -95,13 +95,13 @@ pub struct DerBaseline {
     pub command_line: String,
     pub voxconverse_test: DatasetBaseline,
     pub ami_test: DatasetBaseline,
-    /// Full-split Linux CPU product gate (EP=cpu, powerset N=8).
+    /// Recorded Linux ORT CPU full split (EP=cpu, powerset micro-batch N=8).
     pub voxconverse_test_linux_cpu: DatasetBaseline,
-    /// Full-split Linux CPU product gate (EP=cpu, powerset N=8).
+    /// Recorded Linux ORT CPU full split (EP=cpu, powerset micro-batch N=8).
     pub ami_test_linux_cpu: DatasetBaseline,
-    /// Unmeasured fail-closed ceiling for Linux native Vox until filled.
+    /// Filled Linux x86_64 native row. See the row status; not an unmeasured ceiling.
     pub voxconverse_test_linux_cpu_native: DatasetBaseline,
-    /// Unmeasured fail-closed ceiling for Linux native AMI until filled.
+    /// Filled Linux x86_64 native row. See the row status; not an unmeasured ceiling.
     pub ami_test_linux_cpu_native: DatasetBaseline,
     pub voxconverse_dev: DatasetBaseline,
     pub voxconverse_test_10files: DatasetBaseline,
@@ -117,7 +117,7 @@ pub struct DerBaseline {
     pub ami_test_legacy: DatasetBaseline,
     /// Cross-corpus gate: NOTSOFAR-1 dev-set-1, single far-field channel.
     pub notsofar_dev: DatasetBaseline,
-    /// Fixed 3-meeting NOTSOFAR-1 subset used by the regression test.
+    /// Fixed 3-meeting NOTSOFAR-1 subset recorded in the baseline file.
     pub notsofar_dev_3file: DatasetBaseline,
 }
 
@@ -205,23 +205,6 @@ pub fn load_baseline(path: &Path) -> DerBaseline {
 /// Checked-in VBx PLDA fixtures used to exercise the default clusterer offline.
 pub fn vbx_plda_fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/vbx-plda")
-}
-
-/// Load the Balanced-profile ONNX embedder shared by the model-gated tests,
-/// downloading models into the registry cache on first use.
-#[cfg(all(any(), feature = "download"))]
-pub fn balanced_onnx_extractor() -> polyvoice::FbankOnnxExtractor {
-    let registry = polyvoice::models::ModelRegistry::default().expect("registry");
-    let models = registry
-        .ensure_for_profile(polyvoice::types::Profile::Balanced)
-        .expect("models");
-    polyvoice::FbankOnnxExtractor::new(
-        &models.embedder_path,
-        polyvoice::types::Profile::Balanced.embedding_dim(),
-        1,
-        polyvoice::onnx::ExecutionProvider::Cpu,
-    )
-    .expect("embedder")
 }
 
 /// Gate a measured collar-0.25 DER (a 0..1 ratio) against the dataset baseline

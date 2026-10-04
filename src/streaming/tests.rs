@@ -87,6 +87,55 @@ fn feed_rejects_vad_with_mismatched_native_frame() {
 }
 
 #[test]
+fn feed_rejects_when_accepted_samples_would_pass_one_hour_cap() {
+    // One hour at 16 kHz, same ceiling as batch Pipeline::run. Set the frame
+    // counter instead of allocating the audio.
+    let mut p = pipeline();
+    let frame = p.frame_size;
+    assert!(frame > 0);
+    p.total_frames = super::MAX_AUDIO_SAMPLES / frame;
+    let accepted = p.total_frames * frame + p.vad_buffer.len();
+    assert!(accepted <= super::MAX_AUDIO_SAMPLES);
+    let room = super::MAX_AUDIO_SAMPLES - accepted;
+    assert!(room < frame, "partial buffer must stay below one frame");
+
+    if room > 0 {
+        let fill = vec![0.0f32; room];
+        assert!(p.feed(&fill).unwrap().is_empty());
+        assert_eq!(p.vad_buffer.len(), room);
+    } else {
+        // Exactly on the cap: an empty chunk does not exceed it.
+        assert!(p.feed(&[]).unwrap().is_empty());
+        assert!(p.vad_buffer.is_empty());
+    }
+
+    let err = p.feed(&[0.0]).unwrap_err();
+    assert!(!err.is_resource_exhausted());
+    let msg = err.to_string();
+    match err {
+        StreamingError::InvalidParams { detail } => {
+            assert_eq!(
+                detail,
+                format!(
+                    "audio too long: {} samples exceeds max {}",
+                    super::MAX_AUDIO_SAMPLES + 1,
+                    super::MAX_AUDIO_SAMPLES
+                )
+            );
+            assert_eq!(msg, format!("invalid streaming params: {detail}"));
+        }
+        other => panic!("expected InvalidParams, got {other:?}"),
+    }
+    assert_eq!(
+        p.vad_buffer.len(),
+        room,
+        "rejected feed must not extend the buffer"
+    );
+    assert_eq!(p.total_frames, super::MAX_AUDIO_SAMPLES / frame);
+    assert!(p.turns().is_empty());
+}
+
+#[test]
 fn flush_after_speech_emits_remaining_turn() {
     let mut p = pipeline();
     // Feed just under one window — no turn emitted yet.

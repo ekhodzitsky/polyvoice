@@ -4,8 +4,8 @@
 //! before inference. Implements the canonical [`crate::Embedder`] trait.
 //! Model-specific wrappers live in [`crate::embedder`] (`ResNet34Adapter`,
 //! `CamPlusPlusExtractor`, `ERes2NetV2Extractor`); prefer those when the
-//! architecture is fixed. This type remains public for BYO model paths and
-//! the CLI `--legacy` stack.
+//! architecture is fixed. This type remains public as a tract BYO embedder
+//! only. The CLI does not run a `--legacy` stack.
 //!
 //! Expected ONNX I/O:
 //! - Input: `[batch, time, n_mels]` f32 (typically `n_mels = 80`)

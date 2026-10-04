@@ -27,7 +27,8 @@ pub struct PowersetConfig {
     pub pool_size: usize,
     /// How many sliding windows to pack into one ONNX `run` (`[N, 1, T]`).
     /// Shipping `powerset_int8` is not bit-identical for N>1 vs N×1, but N=8
-    /// is the product default: faster CPU path with full-split DER within
+    /// is the default for this tract/ONNX segmenter, not the kernel product:
+    /// faster CPU path with full-split DER within
     /// noise of N=1 (AMI +0.14 pp, Vox improved). `0` → 1.
     /// Override with `POLYVOICE_POWERSET_BATCH_SIZE`.
     pub batch_size: usize,
@@ -44,7 +45,8 @@ fn default_pool_size() -> usize {
 
 /// Default ONNX micro-batch size for multi-window `run`s.
 ///
-/// **8** is the product default. Production `powerset_int8` is not
+/// **8** is the default for this tract/ONNX segmenter, not the kernel
+/// product. `powerset_int8` on this path is not
 /// bit-identical for N>1 vs N×1 (dynamic activation scales), but full-split
 /// gates show N=8 is a net win: ~25% higher RTFx on CPU, Vox DER improved,
 /// AMI-16 within ~0.15 pp of N=1. Set `POLYVOICE_POWERSET_BATCH_SIZE=1` for
@@ -245,8 +247,9 @@ impl PowersetSegmenter {
     /// { true }
     /// `pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError>`
     /// { true }
-    /// Load the ONNX model from `model_path` with the target's default
-    /// execution provider (today's behavior: CoreML on Apple Silicon).
+    /// Load the ONNX model from `model_path` with
+    /// [`crate::onnx::ExecutionProvider::auto`], which resolves to CPU.
+    /// CoreML is not selected.
     pub fn new(model_path: impl AsRef<Path>) -> Result<Self, SegmentationError> {
         Self::with_config(
             model_path,

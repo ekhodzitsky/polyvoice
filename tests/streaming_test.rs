@@ -68,29 +68,3 @@ fn feed_flush_round_trip_over_small_chunks() {
 
     assert_cumulative_contract(pipeline.turns(), &expected, pipeline.num_speakers());
 }
-
-/// Same contract through the real ONNX embedder (higher fidelity, model-gated).
-#[cfg(all(any(), feature = "download"))]
-#[test]
-#[ignore = "requires downloaded models"]
-fn feed_flush_round_trip_with_real_embedder() {
-    let extractor = common::balanced_onnx_extractor();
-
-    let vad = EnergyVad::new(-40.0, 16000, 512);
-    let mut pipeline = StreamingPipeline::new(
-        vad,
-        extractor,
-        DiarizationConfig::default(),
-        VadConfig::default(),
-    )
-    .expect("streaming pipeline");
-
-    let stream = loud_samples(6.0);
-    let mut expected: Vec<SpeakerTurn> = Vec::new();
-    for chunk in stream.chunks(320) {
-        expected.extend(pipeline.feed(chunk).expect("feed"));
-    }
-    expected.extend(pipeline.flush().expect("flush"));
-
-    assert_cumulative_contract(pipeline.turns(), &expected, pipeline.num_speakers());
-}

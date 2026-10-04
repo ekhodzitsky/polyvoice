@@ -52,6 +52,19 @@ pub enum PolyvoiceFormat {
 /// filename; emit this fixed id (callers can post-process if they need another).
 const FFI_RTTM_FILE_ID: &str = "audio";
 
+/// Production default for the C front door: the caller's profile and VBx.
+/// Every other field stays at [`PipelineConfig::default`] — FFI has no
+/// embed-window, domain, AS-norm, or execution-provider knobs. The CLI and
+/// MCP share `cli_common::product_pipeline_config` instead; this stays local
+/// because `cli_common` is not built into every `ffi` configuration.
+fn ffi_pipeline_config(profile: Profile) -> PipelineConfig {
+    PipelineConfig {
+        profile,
+        clusterer: ClustererKind::Vbx,
+        ..PipelineConfig::default()
+    }
+}
+
 /// Reject path-traversal attempts (e.g. `"../../evil"`) before the path is
 /// passed to `ModelRegistry::with_cache_dir`. Absolute paths such as
 /// `/opt/polyvoice/models` are legitimate cache locations and are accepted.
@@ -138,11 +151,7 @@ polyvoice_pipeline_create(
             // Same production default as the CLI/MCP front doors: pipeline v2
             // with VBx clustering (the builder resolves the PLDA params from
             // POLYVOICE_VBX_PLDA_DIR or the registry download).
-            let config = PipelineConfig {
-                profile: prof,
-                clusterer: ClustererKind::Vbx,
-                ..PipelineConfig::default()
-            };
+            let config = ffi_pipeline_config(prof);
             let pipeline = Pipeline::builder()
                 .config(config)
                 .with_models_from(registry)
@@ -217,6 +226,9 @@ unsafe fn run_impl(
     let result = pipeline.inner.run(samples, sr).map_err(|e| match e {
         crate::pipeline_v2::PipelineError::UnsupportedSampleRate { .. } => {
             PolyvoiceStatus::InvalidArg as c_int
+        }
+        crate::pipeline_v2::PipelineError::AudioTooLong { .. } => {
+            PolyvoiceStatus::AudioTooLong as c_int
         }
         crate::pipeline_v2::PipelineError::Registry(_) => PolyvoiceStatus::Registry as c_int,
         _ => PolyvoiceStatus::Inference as c_int,

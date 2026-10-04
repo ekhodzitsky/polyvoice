@@ -91,7 +91,7 @@ pyannote we use polyvoice's **no-collar** number.
 | **polyvoice (historical ORT v2+VBx INT8)** | **15.02** | 3.54 | 3.95 | 7.62 | 0 | this repo ⁵ |
 | polyvoice (v2+VBx, FP32 historical) | 15.24 | 2.14 | 1.73 | 7.16 | 0 | hop-2.0 ⁵ |
 | diart (online, 5 s latency) | 16.8 | 4.9 | 3.8 | 8.2 | 0 | diart paper ³ |
-| polyvoice (legacy, `--legacy`) | 18.54 | 4.49 | 3.19 | 4.99 | 0 | this repo ⁵ |
+| polyvoice (legacy, historical; `--legacy` is rejected) | 18.54 | 4.49 | 3.19 | 4.99 | 0 | this repo ⁵ |
 | diart (online, 1 s latency) | 20.1 | 3.3 | 5.1 | 11.7 | 0 | diart paper ³ |
 
 ### Head-to-head: polyvoice vs speakrs (measured, same scorer)
@@ -109,14 +109,14 @@ VoxConverse-test 232, collar 0, overlap scored, `benchmarks/der.py`, Apple M1 Pr
 not miss/FA. Full protocol and RTTMs:
 [`benchmarks/results/speakrs-h2h-2026-08-03/`](../benchmarks/results/speakrs-h2h-2026-08-03/).
 
-For reference, polyvoice INT8 default at the **0.25 s collar** is **10.33 %**
+For reference, historical Mac ORT/CoreML INT8 (2026-08-10, not the kernel CLI) at the **0.25 s collar** is **10.33 %**
 micro (macro 10.67). FP32-era hop-2.0 was **10.52 %** micro. Legacy at collar
 0.25 is **12.91 %** micro. No collar-0.25 pyannote number is published, so do
 not compare that figure across systems.
 
 ## Accuracy — VoxConverse dev (216 files)
 
-| polyvoice (v2+VBx, default) | DER micro % | macro % |
+| polyvoice (v2+VBx, hop-2.0 historical) | DER micro % | macro % |
 |---|---|---|
 | collar 0 | **11.36** | 11.54 |
 | collar 0.25 | **7.70** | 8.09 |
@@ -141,7 +141,7 @@ dominates, and speaker mis-counting drives confusion.
 | VBx (offline baseline) | 24.1 | 17.2 | 3.1 | 3.8 | — | diart paper ³ |
 | **polyvoice (historical ORT v2+VBx INT8)** | **24.50** | 11.17 | 3.62 | 8.80 | Mix-Headset | this repo ⁵ |
 | diart (online, 5 s) | 27.5 | 10.0 | 5.0 | 12.4 | headset | diart paper ³ |
-| polyvoice (legacy, `--legacy`) | 32.87 | 17.09 | 2.44 | 5.21 | Mix-Headset | this repo ⁵ |
+| polyvoice (legacy, historical; `--legacy` is rejected) | 32.87 | 17.09 | 2.44 | 5.21 | Mix-Headset | this repo ⁵ |
 
 ### Head-to-head on AMI-test (measured, same scorer)
 
@@ -156,7 +156,7 @@ AMI-test 16 Mix-Headset, collar 0, `benchmarks/der.py`, Apple M1 Pro (2026-08-04
 (exact 2/16 vs speakrs 11/16). Artifact:
 [`benchmarks/results/speakrs-h2h-2026-08-03/ami-16-matched-score.json`](../benchmarks/results/speakrs-h2h-2026-08-03/ami-16-matched-score.json).
 
-polyvoice INT8 default at the 0.25 s collar: **16.82 %** micro (macro 16.26).
+Historical Mac ORT/CoreML INT8 (2026-08-10, not the kernel CLI) at the 0.25 s collar: **16.82 %** micro (macro 16.26).
 FP32-era hop-2.0: **15.71 %** micro (macro 15.24). Legacy at collar 0.25:
 **25.20 %** micro (macro 24.75).
 
@@ -179,8 +179,8 @@ converted to RTTM by `scripts/notsofar-to-rttm.py`. Download:
 Speaker count on the 36 meetings: exact 8, ±1 18, off-by-2+ 10 — the pipeline
 under-counts on 4–8-speaker far-field meetings, the same failure mode as AMI.
 Artifacts: [`benchmarks/results/notsofar-dev/`](../benchmarks/results/notsofar-dev/).
-A fixed 3-meeting subset (`MTG_30860/30861/30862`) is gated in
-`tests/der_v2_baseline_test.rs`.
+A fixed 3-meeting subset (`MTG_30860/30861/30862`) is recorded as
+`notsofar_dev_3file` in `tests/der_baseline.json`. No compiled test gates it.
 
 ## Accuracy — NOTSOFAR-1 held-out evaluation (129 meetings)
 
@@ -204,15 +204,15 @@ A low DER can hide bad speaker counting; we report it explicitly.
 
 | Split | DER (collar 0) | miss | FA | conf | spk exact | spk ±1 | spk off-by-2+ |
 |---|---|---|---|---|---|---|---|
-| VoxConverse-test (232, v2+VBx **INT8**) | **15.02 %** | 3.54 | 3.95 | 7.62 | 83 | 62 | 87 |
-| AMI-test (16, v2+VBx **INT8**) | **24.50 %** | 11.17 | 3.62 | 8.80 | 1 | 3 | 12 |
+| VoxConverse-test (232, historical Mac ORT/CoreML INT8) | **15.02 %** | 3.54 | 3.95 | 7.62 | 83 | 62 | 87 |
+| AMI-test (16, historical Mac ORT/CoreML INT8) | **24.50 %** | 11.17 | 3.62 | 8.80 | 1 | 3 | 12 |
 | VoxConverse-test (232, v2+VBx FP32 hist.) | 15.24 % | 2.14 | 1.73 | 7.16 | 84 | 67 | 81 |
 | VoxConverse-dev (216, v2+VBx FP32 hist.) | 11.36 % | 1.55 | 1.07 | 5.47 | 125 | 52 | 39 |
 | AMI-test (16, v2+VBx FP32 hist.) | 23.42 % | 7.44 | 1.75 | 6.05 | 2 | 3 | 11 |
 | VoxConverse-test (232, legacy) | 18.54 % | 4.49 | 3.19 | 4.99 | 57 | 46 | 129 |
 | AMI-test (16, legacy) | 32.87 % | 17.09 | 2.44 | 5.21 | 1 | 0 | 15 |
 
-The dominant residual error is still **speaker mis-counting** (confusion + the
+These rows are historical (Mac ORT/CoreML INT8 **15.02 % / 24.50 %**, plus earlier FP32 and legacy runs), not the current kernel CLI (Linux 2026-09-13 **13.34 % / 24.19 %**; Darwin 2026-09-22 **13.33 % / 23.61 %**). The dominant residual error in that ORT run was **speaker mis-counting** (confusion + the
 off-by-2+ tail), especially on long meetings — better than legacy but still the
 honest weak spot versus pyannote's end-to-end segmentation.
 
@@ -222,19 +222,23 @@ As of **0.11**, the CLI default is **pipeline v2 + VBx** after a hard full-split
 gate (2026-07-25): no-collar micro DER ≤ legacy on **both** VoxConverse-test
 (232) and AMI-test (16). Artifacts:
 [`benchmarks/results/full-der-2026-07-25/`](../benchmarks/results/full-der-2026-07-25/)
-(`VERDICT.md`).
+(`VERDICT.md`). Current DER for that default is the kernel CLI
+(`cargo run --features cli`), not the 0.17 ORT/CoreML remeasure.
 
 | Path | CLI | Vox no-collar micro | AMI no-collar micro |
 |---|---|---:|---:|
-| **v2 + VBx INT8 (default, 0.17+)** | `polyvoice file.wav` (+ PLDA) | **15.02** | **24.50** |
+| **v2 + VBx INT8 kernels (default)** | `cargo run --features cli -- file.wav` | **13.34** Linux (2026-09-13) / **13.33** Darwin (2026-09-22) | **24.19** Linux / **23.61** Darwin |
+| v2 + VBx INT8 ORT/CoreML (historical, 2026-08-10) | not the current CLI | 15.02 | 24.50 |
 | v2 + VBx FP32 (historical, pre-0.17) | model ids `powerset_fp32` / `wespeaker_resnet34` | 15.24 | 23.42 |
-| legacy | `polyvoice --legacy file.wav` | 18.54 | 32.87 |
+| legacy (historical; `--legacy` is rejected) | does not run | 18.54 | 32.87 |
 | v2 + AHC | `polyvoice --clusterer ahc file.wav` | (subset; see archive) | (subset) |
 
 VBx PLDA weights auto-download via the model registry; optional override
 `--vbx-plda-dir <dir>` / `POLYVOICE_VBX_PLDA_DIR` (see
-[`docs/vbx-plda-release.md`](vbx-plda-release.md)). Use `--clusterer ahc` or
-`--legacy` for non-VBx paths.
+[`docs/vbx-plda-release.md`](vbx-plda-release.md)). Use `--clusterer ahc` for
+the non-VBx path. `--legacy` and `polyvoice-bench --pipeline legacy` are
+parsed and rejected before model download; they do not run Silero +
+sliding-window + AHC. Tract comparison is `--features cli-tract`.
 
 Earlier **subset** bootstrap numbers (60-file Vox / full AMI, pre-gate) are
 retained below for history only — prefer the full-split rows above.
@@ -246,7 +250,7 @@ retained below for history only — prefer the full-split rows above.
 | legacy (full split) | 18.54 | — | 32.87 |
 | v2 + AHC (subset) | 20.4 [16.4–24.9] | 13.2 [10.5–16.1] | 35.8 [29.8–41.9] |
 | v2 + VBx (subset) | 17.0 [13.5–20.8] | 13.6 [10.6–16.9] | 37.0 [31.0–43.1] |
-| **v2 + VBx (full split, default)** | **15.83 macro / 15.37 micro** | — | **24.12 macro / 25.17 micro** |
+| v2 + VBx (full split, historical pre-kernel) | **15.83 macro / 15.37 micro** | — | **24.12 macro / 25.17 micro** |
 
 **Honest reading (historical 60-file subset era, pre–full-split gate):**
 
@@ -255,8 +259,8 @@ retained below for history only — prefer the full-split rows above.
   tables above (Vox 232 / AMI 16) and the at-a-glance section.
 - On that older subset, v2 + AHC over-clustered (high confusion); VBx cut
   confusion and became competitive with legacy on conversational audio.
-- **Superseded on AMI:** full-split AMI-test favors **v2 + VBx** (INT8
-  **24.50 %** / FP32 historical 23.42 % no-collar) over legacy (32.87 %), not
+- **Superseded on AMI:** full-split AMI-test favors **v2 + VBx** (historical Mac ORT/CoreML INT8
+  **24.50 %** / FP32 historical 23.42 % no-collar; current kernels are **24.19 %** Linux / **23.61 %** Darwin) over legacy (32.87 %), not
   the reverse. Do not treat the “legacy remains the robust default” sentence
   from early subset notes as current product policy.
 - Reproduce subset-style runs with
@@ -287,7 +291,7 @@ full-split; CI weekly is **smoke**: Vox-10 + AMI-16 with AMI assert).
 CoreML: [`int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
 Mac CPU N=8:
 [`int8-batch8-default-2026-08-10/`](../benchmarks/results/int8-batch8-default-2026-08-10/).
-CoreML forces powerset micro-batch **N=1**; **N=8 is the default on CPU**.
+CoreML forced powerset micro-batch **N=1**. **N=8** was the ORT/tract CPU micro-batch, not the kernel product default (native powerset ignores `POLYVOICE_POWERSET_BATCH_SIZE`).
 
 ### Native kernels — product CLI since 0.18
 
@@ -349,7 +353,7 @@ Same-host ort 14.74 % / 24.23 % is the previous AHC-seed-0.5 protocol.
 | v2 + VBx (fp32) | VoxConverse-dev (216) | 56.3× | 0.018 |
 | v2 + VBx (fp32) | VoxConverse-test (232) | 53.5× | 0.019 |
 | v2 + VBx INT8 single-file probe | AMI EN2002a | 83.3× | 0.012 |
-| legacy (`--legacy`, steady state) | VoxConverse subset | ~33× | ~0.03 |
+| legacy (historical `--legacy` run, steady state) | VoxConverse subset | ~33× | ~0.03 |
 
 | Engine | RTF | Notes |
 |---|---|---|
@@ -360,9 +364,9 @@ Same-host ort 14.74 % / 24.23 % is the previous AHC-seed-0.5 protocol.
 | WhisperX | > 1 on CPU | Whisper + pyannote; GPU recommended |
 | NeMo Sortformer | GPU-only | ~48 GB GPU for ~12-min recordings |
 
-**INT8 accuracy note:** full-split INT8 is **parity on VoxConverse** (−0.2 pp
-vs FP32 published) and about **+1.1 pp on AMI** vs FP32 hop-2.0. That is the
-shipping tradeoff as of 0.17.0 — not an opt-in `fast` caveat anymore.
+**INT8 accuracy note (historical ORT/CoreML, 0.17.0):** full-split INT8 was **parity on VoxConverse** (−0.2 pp
+vs FP32 published) and about **+1.1 pp on AMI** vs FP32 hop-2.0. That was the
+shipping tradeoff as of 0.17.0 — not the current kernel CLI, and not an opt-in `fast` caveat on that ORT build.
 
 The cross-engine harness measures polyvoice end-to-end through its CLI (which
 cold-loads the model per file), a conservative lower bound; the figures above
@@ -613,16 +617,17 @@ python benchmark.py --dataset voxconverse_test --runners all
 - ² pyannote 3.1 (VoxConverse, AMI, DIHARD; protocol; MIT; gated): https://huggingface.co/pyannote/speaker-diarization-3.1 — footprint: [segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) 5.91 MB + [wespeaker-resnet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM) 26.6 MB
 - ³ diart (Coria et al., ASRU 2021; collar 0, overlap scored): https://arxiv.org/abs/2109.06483
 - ⁴ 3D-Speaker toolkit (VoxConverse 11.75, AMI_SDM 21.76; collar unstated): https://github.com/modelscope/3D-Speaker
-- ⁵ polyvoice **published** tables (0.17+) use the INT8 full-split remeasure
+- ⁵ Historical polyvoice ORT/CoreML tables (0.17) use the INT8 full-split remeasure
   (**15.02 %** Vox / **24.50 %** AMI no-collar micro; CoreML N=1, M1 Pro,
-  2026-08-10). Gate + README match
-  [`tests/der_baseline.json`](../tests/der_baseline.json). Artifact:
+  2026-08-10). Artifact:
   [`benchmarks/results/int8-full-der-2026-08-10/`](../benchmarks/results/int8-full-der-2026-08-10/).
-  CPU powerset micro-batch N=8 (product default off CoreML): Vox **14.64 %** /
+  Historical ORT CPU powerset micro-batch N=8 (not the kernel default; native powerset ignores `POLYVOICE_POWERSET_BATCH_SIZE`): Vox **14.64 %** /
   AMI **24.63 %** — `int8-batch8-default-2026-08-10/`. Historical FP32 hop-2.0
   (15.24 / 23.42) remains under `powerset-hop2-2026-07-30/` and early full-split
-  under `full-der-2026-07-25/`. Default (0.11+ pipeline): v2 + VBx; models INT8
-  since 0.17; product CLI kernels since 0.18; legacy via `--legacy`
+  under `full-der-2026-07-25/`. Current default is v2 + VBx INT8 kernels
+  (`cargo run --features cli`): Linux x86_64 2026-09-13 Vox **13.34 %** / AMI **24.19 %**;
+  Darwin Apple Silicon 2026-09-22 Vox **13.33 %** / AMI **23.61 %**. `--legacy` is rejected
+  and does not run Silero + sliding-window + AHC.
 - ⁶ RTF artifact: [`benchmarks/results/voxconverse-test-10files-20260516.json`](../benchmarks/results/voxconverse-test-10files-20260516.json)
 - ⁷ pyannote official benchmark (updated 2025-09; collar 0, overlap scored; community-1 weights CC-BY-4.0 but still HF-gated): https://www.pyannote.ai/benchmark + https://huggingface.co/pyannote/speaker-diarization-community-1 — on VoxConverse community-1 ties 3.1 (11.2 vs the 11.3 model-card figure; annotation-version drift), so the README headline comparison vs 3.1 stands
 - ⁸ speakrs CoreML warm on Apple M1 Pro, full VoxConverse-test 232, scored with `benchmarks/der.py` (collar 0, overlap scored): DER 11.08% micro (miss 3.35 / FA 4.10 / conf 3.63), RTFx ~144×. Artifact `benchmarks/results/speakrs-h2h-2026-08-03/full-232-matched-score.json` (2026-08-03/04). speakrs code Apache-2.0: https://github.com/avencera/speakrs. polyvoice on the **same** scorer/split: 15.22% no-collar micro (conf 8.04) — gap **4.14 pp**, confusion-dominated. speakrs' own README quotes 11.1% / 631× on M4 Pro; do not mix hardware for RTFx.
@@ -633,13 +638,18 @@ python benchmark.py --dataset voxconverse_test --runners all
 
 ## Streaming latency presets (measured)
 
-Named presets for `polyvoice::streaming::LatencyPreset` / CLI `--latency-preset`.
+Named presets for the library `polyvoice::streaming::LatencyPreset`. This table
+is that `StreamingPipeline` measurement, not the CLI `--latency-preset` (which
+sets only the v2 embedding window to that preset's `window_secs`: realtime
+1.0 s, balanced 1.5 s, accurate 2.0 s; hop stays half that window and does not
+apply the streaming hop, right-context, or speaker-cache cap).
 
-**Protocol (2026-07-24):** VoxConverse-test **first 10 files** (sorted names),
+**Protocol (2026-07-24, historical):** VoxConverse-test **first 10 files** (sorted names),
 overlap scored, Hungarian DER, collar 0 and 0.25. `StreamingPipeline` + Silero
 VAD + WeSpeaker ResNet34, feed chunks of 3200 samples (~200 ms) @ 16 kHz.
 Release build on **Apple M1 Pro (10 cores)**. Full artifact:
 [`benchmarks/results/streaming-latency-measured.json`](../benchmarks/results/streaming-latency-measured.json).
+Silero is not the product VAD; the product segmenter is the powerset INT8 kernel.
 
 | Preset     | window | hop  | right ctx | cache | input-buffer latency¹ | RTF   | DER collar 0 | DER collar 0.25 |
 |------------|--------|------|-----------|-------|----------------------|-------|--------------|-----------------|
@@ -656,17 +666,17 @@ Release build on **Apple M1 Pro (10 cores)**. Full artifact:
 (~18.5% no-collar full test). On this 10-file slice `balanced` beats
 `realtime` by ~12 pp (collar 0); `accurate` does **not** improve further
 (right-context currently contributes to the latency budget but does not yet
-delay emission — see streaming module docs). Reproduce:
-
-```bash
-cargo run --release --features cli --bin polyvoice-measure -- streaming \
-  --dataset data/voxconverse-test --max-files 10 \
-  --output benchmarks/results/streaming-latency-measured.json
-```
+delay emission — see streaming module docs). `polyvoice-measure streaming` always fails (it hits the ONNX Runtime rejection) and is not a reproduce command for the current kernel CLI.
 
 See also `benchmarks/results/streaming-latency-methodology.md`.
 
 ## VAD parity: Silero vs earshot (measured)
+
+**Historical (2026-07-24).** Silero was the reference VAD on the legacy offline
+pipeline. It is not the product VAD: the product segmenter is the powerset
+INT8 kernel. Earshot remains an optional VAD (`vad-earshot`). Silero ONNX
+remains only as an optional tract `VoiceActivityDetector` behind `infer`, not
+the CLI/FFI/Python path.
 
 **Protocol:** same VoxConverse-test **10-file** slice, legacy offline pipeline
 (WeSpeaker ResNet34 + AHC threshold 0.45), only the VAD backend swapped.
@@ -675,20 +685,17 @@ Release build, Apple M1 Pro. Artifact:
 
 | VAD | frame | DER collar 0 | DER collar 0.25 | RTF |
 |-----|-------|--------------|-----------------|-----|
-| **Silero** (default) | 512 | **23.89%** | **15.82%** | 0.102 |
+| **Silero** (historical reference) | 512 | **23.89%** | **15.82%** | 0.102 |
 | **earshot** (`vad-earshot`) | 256 | **26.54%** | **18.68%** | 0.099 |
 | **Δ (earshot − Silero)** | — | **+2.65 pp** | **+2.86 pp** | −0.0025 |
 
 **Parity gate** (notes file): |Δ DER| ≤ **0.3 pp** absolute. **Failed** on both
-collars → keep earshot **optional only**; do **not** switch the default VAD.
+collars → earshot stayed **optional only** on that legacy pipeline. Do not
+read this table as Silero being the current default VAD.
 Vendor “40× faster / more accurate” claims remain **unverified / not supported**
-by this DER gate (RTF nearly tied; accuracy worse).
-
-```bash
-cargo run --release --features "cli,vad-earshot" --bin polyvoice-measure -- vad-parity \
-  --dataset data/voxconverse-test --max-files 10 \
-  --output benchmarks/results/vad-parity-earshot-silero.json
-```
+by this DER gate (RTF nearly tied; accuracy worse). `polyvoice-measure vad-parity`
+always fails (ONNX Runtime rejection) and is not a reproduce command for the
+current product.
 
 ## Embedder short-segment: ResNet34 vs ERes2NetV2 (measured)
 
@@ -697,7 +704,7 @@ RTTM segments** (VoxCeleb1 audio not present in this tree). Center-crop to
 0.5 / 1 / 2 / 3 s, cosine scoring, equal-error rate. **Not** the official
 VoxCeleb1 `veri_test` protocol — domain is in-the-wild multi-party English.
 
-**DER protocol:** same 10-file Vox slice, legacy pipeline, Silero VAD fixed;
+**DER protocol (historical):** same 10-file Vox slice, legacy pipeline, Silero VAD fixed;
 only the embedder ONNX swapped (ResNet34 256-d vs ERes2NetV2 192-d zh-cn
 optional download). Artifact:
 [`benchmarks/results/embedder-short-eres2net.json`](../benchmarks/results/embedder-short-eres2net.json).
@@ -711,7 +718,7 @@ optional download). Artifact:
 
 | Embedder | DER collar 0 | DER collar 0.25 |
 |----------|--------------|-----------------|
-| WeSpeaker ResNet34 (default) | **23.89%** | **15.82%** |
+| WeSpeaker ResNet34 (historical legacy reference) | **23.89%** | **15.82%** |
 | ERes2NetV2 (zh-cn common ONNX) | **53.84%** | **49.18%** |
 
 **Verdict:** the shipped **zh-cn** ERes2NetV2 optional weights are **not** a

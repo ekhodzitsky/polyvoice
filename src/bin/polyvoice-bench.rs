@@ -13,7 +13,7 @@ use polyvoice::der::{
 };
 use polyvoice::models::ModelRegistry;
 use polyvoice::pipeline_v2::{Pipeline as V2Pipeline, PipelineConfig, StageTimings};
-use polyvoice::types::{DiarizationResult, Profile, SampleRate, TimeRange};
+use polyvoice::types::{DiarizationResult, Profile, SampleRate, SpeakerTurn, TimeRange};
 use polyvoice::wav::read_wav;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -43,9 +43,8 @@ struct Args {
     max_files: Option<usize>,
     /// How many files to diarize in parallel. Default 1 keeps historical
     /// DER/RTF reports single-threaded. The v2 pipeline is shared by all
-    /// workers (jobs>1 adds no model memory); legacy builds a pipeline per
-    /// worker. Internal window/embed fan-out is divided by jobs, so jobs ×
-    /// workers stays near core count.
+    /// workers (jobs>1 adds no model memory). Internal window/embed fan-out
+    /// is divided by jobs, so jobs × workers stays near core count.
     #[arg(long, default_value_t = 1)]
     jobs: usize,
     /// AHC merge threshold on the active scorer's scale: raw cosine (default
@@ -53,26 +52,25 @@ struct Args {
     /// An explicit value wins over `--domain-profile`'s calibrated threshold.
     #[arg(long)]
     threshold: Option<f32>,
-    /// Which pipeline to benchmark: `v2` (powerset segmentation + embeddings +
-    /// clusterer + overlap resegmentation — the shipped CLI default) or
-    /// `legacy` (Silero VAD + sliding-window embeddings + AHC).
+    /// Which pipeline to benchmark. `v2` (powerset segmentation + embeddings +
+    /// clusterer + overlap resegmentation — the shipped CLI default) is the
+    /// accepted value. `legacy` is rejected before any model download.
     #[arg(long, default_value = "v2")]
     pipeline: String,
     /// Min cluster size (members): clusters smaller than this are dissolved into
-    /// the nearest large speaker. Applies to both pipelines.
+    /// the nearest large speaker. Applies to the v2 pipeline.
     #[arg(long)]
     min_cluster_size: Option<usize>,
     /// v2 clusterer: `vbx` (Variational Bayes HMM + PLDA with automatic speaker
     /// count — matches CLI default; PLDA from env/dir/registry) or `ahc`
-    /// (fixed-threshold AHC). Ignored with `--pipeline legacy`.
+    /// (fixed-threshold AHC).
     #[arg(long, default_value = "vbx")]
     clusterer: String,
     /// v2: cluster per-(window, speaker) masked embeddings and reconstruct
     /// turns instead of Hungarian-stitching windows into file-global tracks.
     #[arg(long, default_value_t = false)]
     reconstruct: bool,
-    /// Min cluster duration in seconds (length-invariant pruning). When > 0 it
-    /// takes precedence over --min-cluster-size on the legacy pipeline.
+    /// Rejected. The v2 bench does not apply duration pruning; omit this flag.
     #[arg(long)]
     min_cluster_secs: Option<f64>,
     /// Optional .uem file. Restricts DER to the scored regions per file (frames
@@ -84,10 +82,10 @@ struct Args {
     #[arg(long)]
     embed_window: Option<f32>,
     /// Execution provider: auto|cpu (product kernels are CPU-only; the
-    /// other tract names are rejected before any model download). Omitted =
-    /// each pipeline's shipped default (legacy embedder: cpu; v2: auto), so
-    /// committed DER baselines stay reproducible. The resolved provider is
-    /// recorded in the report for per-backend RTFx comparison.
+    /// other tract names are rejected before any model download). Omitted
+    /// resolves to `auto`, so committed DER baselines stay reproducible. The
+    /// resolved provider is recorded in the report for per-backend RTFx
+    /// comparison.
     #[arg(long)]
     execution_provider: Option<String>,
     /// v2 binarization: enter-speech (onset) threshold. Setting ANY
@@ -244,10 +242,9 @@ fn model_hashes(
     if manifest.profile(profile.manifest_id()).is_none() {
         return out;
     }
-    // Report exactly the models the chosen pipeline actually loads: the legacy
-    // path segments with Silero VAD, the v2 path with the profile's powerset
-    // segmenter — `segmenter_id` carries the right one. The embedder is the
-    // profile default unless `--embedder` overrode it.
+    // Report the ids the caller names (the bench passes the segmenter and
+    // embedder the active loader opens). Ids missing from the manifest are
+    // omitted.
     for model_id in [segmenter_id, embedder_id] {
         if let Some(entry) = manifest.model(model_id) {
             out.push(ModelHash {
@@ -266,7 +263,7 @@ fn check_model_sha256(registry: &ModelRegistry, model_id: &str, path: &Path) -> 
         .ok_or_else(|| anyhow::anyhow!("model {model_id} not in manifest"))?;
     let bytes = std::fs::read(path).with_context(|| format!("read model {}", path.display()))?;
     let got = hex_lower(&Sha256::digest(&bytes));
-    if !got.eq_ignore_ascii_case(&entry.sha256) {
+    if got != entry.sha256 {
         anyhow::bail!(
             "model integrity FAIL for {model_id}: on-disk sha256 {got} != manifest {}",
             entry.sha256
@@ -293,19 +290,53 @@ struct BenchRunner {
     registry: ModelRegistry,
 }
 
+/// Ids the v2 stage loader opens for this build.
+///
+/// Native kernels win when both are compiled, even if `backend-tract` is also
+/// on. Tract-only builds ignore the embedder override (CAM++ is not loaded).
+/// An override other than the two CAM++ ids stays on `resnet34_int8` here;
+/// the loader still rejects unknown overrides.
+fn loader_model_ids(embedder_override: Option<&str>) -> (&'static str, &'static str) {
+    if cfg!(all(
+        feature = "segmenter-native",
+        feature = "embedder-native"
+    )) {
+        let embedder = match embedder_override {
+            Some("cam_pp_int8") => "cam_pp_int8",
+            Some("cam_pp_fp32") => "cam_pp_fp32",
+            _ => "resnet34_int8",
+        };
+        ("powerset_int8", embedder)
+    } else {
+        ("powerset_fp32_tract", "wespeaker_resnet34")
+    }
+}
+
+/// `--collar` must be finite and >= 0. Zero is the no-collar score and stays valid.
+fn reject_invalid_collar(collar: f64) -> Result<()> {
+    if !collar.is_finite() || collar < 0.0 {
+        anyhow::bail!("--collar {collar} must be finite and >= 0");
+    }
+    Ok(())
+}
+
 /// Build the requested pipeline. Each arm verifies the integrity of exactly
 /// the models it loads and yields the segmenter id for the report.
 fn build_runner(args: &Args) -> Result<BenchRunner> {
+    // Reject before the registry walk so a set flag cannot download models.
+    reject_invalid_collar(args.collar)?;
+    if args.min_cluster_secs.is_some() {
+        anyhow::bail!(
+            "--min-cluster-secs is rejected: the v2 bench does not apply duration pruning; omit the flag"
+        );
+    }
     match args.pipeline.as_str() {
         "legacy" => cli_common::require_onnx("--pipeline legacy")?,
         "v2" => {}
-        other => anyhow::bail!("unknown --pipeline '{other}' (expected 'legacy' or 'v2')"),
+        other => anyhow::bail!("unknown --pipeline '{other}' (accepted value is 'v2')"),
     }
     let profile: Profile = args.profile.parse()?;
     let registry = ModelRegistry::default().context("registry")?;
-    let models = registry
-        .ensure_for_profile(profile)
-        .context("ensure models")?;
 
     // An explicit flag wins. Omitted stays `auto` (CPU) so committed DER
     // baselines stay reproducible.
@@ -361,35 +392,21 @@ fn build_runner(args: &Args) -> Result<BenchRunner> {
     if let Some(mcs) = args.min_cluster_size {
         cfg.min_cluster_size = mcs;
     }
-    // v2 segments with the profile's powerset model — verify it + embedder.
-    let seg_id = registry
-        .manifest()
-        .profile(profile.manifest_id())
-        .map(|p| p.segmenter.clone())
-        .unwrap_or_else(|| "powerset_fp32".to_owned());
-    let emb_id = args
-        .embedder
-        .clone()
-        .or_else(|| {
-            registry
-                .manifest()
-                .profile(profile.manifest_id())
-                .map(|p| p.embedder.clone())
-        })
-        .unwrap_or_default();
-    let emb_path = if args.embedder.is_some() {
-        registry
-            .ensure(&emb_id)
-            .with_context(|| format!("ensure embedder {emb_id}"))?
-    } else {
-        models.embedder_path.clone()
-    };
-    check_model_sha256(&registry, &seg_id, &models.segmenter_path)?;
-    check_model_sha256(&registry, &emb_id, &emb_path)?;
+    // Hash the files the loader opens, not the manifest profile pair when
+    // those ids differ.
+    let (seg_id, emb_id) = loader_model_ids(args.embedder.as_deref());
+    let seg_path = registry
+        .ensure(seg_id)
+        .with_context(|| format!("ensure segmenter {seg_id}"))?;
+    let emb_path = registry
+        .ensure(emb_id)
+        .with_context(|| format!("ensure embedder {emb_id}"))?;
+    check_model_sha256(&registry, seg_id, &seg_path)?;
+    check_model_sha256(&registry, emb_id, &emb_path)?;
     let pipeline = cli_common::build_v2_pipeline(cfg, registry.clone())?;
     Ok(BenchRunner {
         pipeline,
-        segmenter_id: seg_id,
+        segmenter_id: seg_id.to_owned(),
         resolved_ep,
         profile,
         registry,
@@ -404,6 +421,18 @@ struct FileOutcome {
     hyp_count: usize,
     audio_secs: f64,
     runtime_secs: f64,
+}
+
+/// Puts intra-op threads back to 1 after a `jobs > 1` bench run.
+/// Apple leaves the count alone; that path does not use this knob.
+#[cfg(all(feature = "segmenter-native", not(target_vendor = "apple")))]
+struct IntraThreadReset;
+
+#[cfg(all(feature = "segmenter-native", not(target_vendor = "apple")))]
+impl Drop for IntraThreadReset {
+    fn drop(&mut self) {
+        polyvoice_kernels::set_intra_threads(1);
+    }
 }
 
 /// Process `wavs` serially (`jobs == 1`) or with file-level parallelism. The
@@ -421,6 +450,14 @@ fn run_all_files(
     let jobs = args.jobs.max(1).min(wavs.len().max(1));
     #[cfg(feature = "segmenter-native")]
     polyvoice_kernels::set_file_parallelism(jobs);
+    // jobs == 1: the embedder sets intra threads itself on non-Apple targets.
+    // jobs > 1: it does not, so pin 3 here and restore 1 on every return,
+    // including errors. Apple leaves the count alone.
+    #[cfg(all(feature = "segmenter-native", not(target_vendor = "apple")))]
+    let _intra_threads = (jobs > 1).then(|| {
+        polyvoice_kernels::set_intra_threads(3);
+        IntraThreadReset
+    });
     if jobs == 1 {
         let wall = Instant::now();
         let mut acc = Accum::default();
@@ -531,6 +568,35 @@ fn run_v2_shared(
     Ok(acc)
 }
 
+/// Reference turns for `stem`. An RTTM whose file id matches neither the stem
+/// nor the dotted prefix is empty and must not be scored as DER 0.
+fn reference_turns(rttm_dir: &Path, stem: &str) -> Result<Vec<SpeakerTurn>> {
+    let turns = cli_common::load_ref_turns(rttm_dir, stem)?;
+    if turns.is_empty() {
+        anyhow::bail!("{stem}: the RTTM has no turns for that file id");
+    }
+    Ok(turns)
+}
+
+/// UEM slice for `stem`, with the AMI-style prefix fallback. `Ok(None)` means
+/// no UEM was given (score the whole file). A map that names neither the stem
+/// nor its prefix is an error — never a whole-file score.
+fn scored_uem_regions<'a>(
+    uem_map: Option<&'a HashMap<String, Vec<TimeRange>>>,
+    stem: &str,
+) -> Result<Option<&'a [TimeRange]>> {
+    let Some(map) = uem_map else {
+        return Ok(None);
+    };
+    match map
+        .get(stem)
+        .or_else(|| stem.split('.').next().and_then(|prefix| map.get(prefix)))
+    {
+        Some(regions) => Ok(Some(regions.as_slice())),
+        None => anyhow::bail!("{stem}: there is no UEM region"),
+    }
+}
+
 /// Run one wav through the pipeline and score it. `run` maps PCM to the
 /// diarization result (plus v2 stage timings); callers decide whether it
 /// borrows a shared pipeline or a per-worker runner. `Ok(None)` means the
@@ -551,6 +617,10 @@ where
         eprintln!("[SKIP] {stem}: no rttm");
         return Ok(None);
     }
+    // A mismatched file id or a missing UEM key fails before the model pass.
+    let ref_turns = reference_turns(rttm_dir, stem)?;
+    let scored = scored_uem_regions(uem_map, stem)?;
+
     let (samples, sr_hz) = read_wav(wav)?;
     let sr =
         SampleRate::new(sr_hz).ok_or_else(|| anyhow::anyhow!("invalid sample rate: {sr_hz}"))?;
@@ -560,18 +630,13 @@ where
     let (result, stage_timings) = run(&samples, sr)?;
     let runtime_secs = t0.elapsed().as_secs_f64();
 
-    let ref_turns = cli_common::load_ref_turns(rttm_dir, stem)?;
-
     // Headline collar + no-collar DER, restricted to the UEM scope when present
-    // (AMI-style id fallback like the RTTM lookup). With --skip-overlap the
-    // headline is the single-speaker-regions DER (md-eval skip-overlap
-    // semantics); that mode rejects --uem at startup. The overlap
-    // decomposition below is a diagnostic and stays over the full file.
-    let scored: Option<&[TimeRange]> = uem_map.and_then(|m| {
-        m.get(stem)
-            .or_else(|| stem.split('.').next().and_then(|s| m.get(s)))
-            .map(|v| v.as_slice())
-    });
+    // (AMI-style id fallback like the RTTM lookup). A present UEM that names
+    // neither the stem nor its dotted prefix is an error, not a whole-file
+    // score. With --skip-overlap the headline is the single-speaker-regions
+    // DER (md-eval skip-overlap semantics); that mode rejects --uem at
+    // startup. The overlap decomposition below is a diagnostic and stays over
+    // the full file.
     let (der, der_no_collar) = if args.skip_overlap {
         (
             compute_der_single_speaker_regions(&ref_turns, &result.turns, args.collar),
@@ -765,21 +830,22 @@ fn build_report(
             off_by_2_or_more: acc.speaker_off,
         },
         model_hashes: {
-            let emb_id = args.embedder.clone().or_else(|| {
-                registry
-                    .manifest()
-                    .profile(profile.manifest_id())
-                    .map(|p| p.embedder.clone())
-            });
-            model_hashes(
-                registry,
-                profile,
-                segmenter_id,
-                emb_id.as_deref().unwrap_or(""),
-            )
+            let (_, emb_id) = loader_model_ids(args.embedder.as_deref());
+            model_hashes(registry, profile, segmenter_id, emb_id)
         },
         per_file: acc.per_file,
     }
+}
+
+/// Read a UEM file and reject a parse that yields no scored regions.
+fn load_uem(path: &Path) -> Result<HashMap<String, Vec<TimeRange>>> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("read uem {}", path.display()))?;
+    let regions = parse_uem(&text);
+    if regions.is_empty() {
+        anyhow::bail!("{}: there are no scored regions", path.display());
+    }
+    Ok(regions)
 }
 
 fn main() -> Result<()> {
@@ -794,17 +860,12 @@ fn main() -> Result<()> {
     if args.skip_overlap {
         println!("skip-overlap: headline DER over single-speaker reference regions only");
     }
-    let mut b = build_runner(&args)?;
-
-    // Optional UEM scoped regions, keyed by file id.
-    let uem_map: Option<HashMap<String, Vec<TimeRange>>> = match &args.uem {
-        Some(path) => {
-            let text = std::fs::read_to_string(path)
-                .with_context(|| format!("read uem {}", path.display()))?;
-            Some(parse_uem(&text))
-        }
+    // Read before the registry walk so an empty or unreadable UEM cannot download models.
+    let uem_map = match &args.uem {
+        Some(path) => Some(load_uem(path)?),
         None => None,
     };
+    let mut b = build_runner(&args)?;
 
     let wavs = cli_common::list_wavs(&args.dataset, args.max_files)?;
     let rttm_dir = args.dataset.join("rttm");

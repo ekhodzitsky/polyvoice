@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- CLI help no longer describes `--legacy` as a mode that ignores other flags.
+  `--legacy` and `polyvoice-bench --pipeline legacy` are rejected.
+  `--latency-preset` sets the embedding window only. `polyvoice-bench
+  --min-cluster-secs` is rejected instead of being ignored.
+  `polyvoice-measure streaming` and `vad-parity` help states that those
+  commands fail.
+- `StreamingPipeline::feed` rejects a chunk that would push accepted audio
+  past one hour at 16 kHz (`16_000 * 3_600` samples). The chunk is not
+  buffered. The error is the existing `StreamingError::InvalidParams`. A
+  chunk that lands exactly on the cap is still accepted.
+- `Pipeline::run` returns an embedding error when every embedding in a
+  non-empty batch is non-finite, or when `embed_batch` returns a different
+  count than the units it was given. Those inputs used to succeed with no
+  turns.
+
+### Added
+
+- Python `Pipeline.run` keeps flat turn `start`/`end` and also returns
+  `schema_version`, `segments`, `turns[].time`, `audio`, `provenance`, and
+  `speakers`.
+
+### Changed
+
+- MCP `polyvoice.diarize` always returns `segments` and `turns`.
+  `turns[].speaker` is the numeric id. The `SPEAKER_NN` string is `label`.
+  `verbosity` is still accepted and no longer drops turns.
+
+### Fixed
+
+- `polyvoice-bench` rejects a non-finite or negative `--collar` before model
+  download. An empty `--uem` fails before download. A UEM that does not name
+  the file, and an RTTM whose file id does not match, fail the run instead of
+  reporting DER 0.
+- A successful v2 diarization records the segmenter, embedder, and clusterer
+  ids in `provenance`. A custom pipeline with no registry leaves the model
+  ids empty.
+- An empty-speech result, and a result that stays empty because every unit
+  was too short to embed, records audio duration, sample rate, and the same
+  provenance.
+- `experimental.reconstruct` fails when the segmenter has no window
+  posteriors, instead of running ordinary segmentation.
+- Hashing a local model stops at the download cap: `2 ×` the declared size
+  when that size is positive, otherwise 1 GiB, and the product is clamped to
+  1 GiB. A regular file past the cap is an I/O error and is not hashed. A
+  non-file is still missing. The checksum compare stays exact.
+- Model download uses an HTTPS-only client, so a redirect from the checked
+  `https://` URL onto cleartext HTTP is refused.
+- An NPY read stops at 8 MiB. A longer stream, including one whose reported
+  length is 0, is an I/O error.
+- A single-file embed sets the process-wide intra-op thread count to 3 and
+  restores 1. A multi-file run does not change it. On non-Apple targets the
+  bench pins 3 for the whole `jobs > 1` run and restores 1 on the way out,
+  including on error. Apple builds leave the count unchanged. A packed embed
+  failure is reported on every clip in the pack. A poisoned native
+  window-worker lock is an inference error.
+- `polyvoice-bench` hashes the segmenter and embedder ids the stage loader
+  opens. Native builds hash `powerset_int8` and `resnet34_int8`, or CAM++
+  when that override is the file the loader opens. Tract-only builds hash
+  `powerset_fp32_tract` and `wespeaker_resnet34`.
+- Native powerset stores `experimental.binarization` on its aggregator when
+  the field is set. The default stays unset.
+- Symphonia decode fails after 32 consecutive soft errors.
+- CLI `--models-cache` and `--vbx-plda-dir` reject a `..` path component
+  before the registry opens. A name such as `foo..bar` is accepted. Absolute
+  paths stay valid.
+- With `POLYVOICE_MCP_ROOT` set, a path whose nearest existing ancestor is
+  outside that root is rejected as outside the root whether or not the leaf
+  exists. A missing file inside the root is still reported as missing.
+- MCP `polyvoice.diarize` maps an unsupported sample rate to code 1, audio
+  past the length cap to code 3, and a registry failure to code 30. Other
+  pipeline failures stay code 11. The C run path maps an over-long pipeline
+  error to `AudioTooLong`.
+- The powerset tract export hint names `backend-tract` and the powerset
+  tests that exist in this tree.
+
 ## [1.0.0] - 2026-10-01
 
 ### Changed

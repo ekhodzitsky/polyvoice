@@ -1,9 +1,11 @@
 //! DER (Diarization Error Rate) evaluation.
 //!
 //! Usage:
-//!   cargo bench --bench der_ami --features onnx
+//!   cargo bench --bench der_ami
 //!
-//! Requires POLYVOICE_MODEL_DIR to be set for real model benchmarks.
+//! Synthetic DER math only: no Cargo features and no model directory.
+//! The product path is `--features cli` (hand-written kernels). There is no
+//! `onnx` feature.
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use polyvoice::der::compute_der_from_rttm;

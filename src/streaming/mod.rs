@@ -5,8 +5,8 @@
 //! `StreamingPipeline`
 //! emits [`SpeakerTurn`]s as soon as each embedding window is processed.
 //!
-//! Generic over [`crate::Embedder`] — bring-your-own encoders work without the
-//! `onnx` feature (see module example).
+//! Generic over [`crate::Embedder`] — bring-your-own encoders work without an
+//! inference feature (see module example).
 //!
 //! # Latency
 //!
@@ -79,6 +79,11 @@ use crate::embedder::{Embedder, EmbedderError};
 use crate::types::{DiarizationConfig, SpeakerTurn, TimeRange};
 use crate::vad::{VadError, VadEvent, VadStateMachine, VoiceActivityDetector};
 use crate::window::WindowBuffer;
+
+/// One hour of 16 kHz mono. Same ceiling as batch `Pipeline::run`
+/// (`pipeline_v2::MAX_AUDIO_SAMPLES`). Repeated here because this module
+/// builds without the v2 feature gate.
+const MAX_AUDIO_SAMPLES: usize = 16_000 * 3_600;
 
 /// Errors from streaming pipeline operations.
 #[derive(Debug, thiserror::Error)]
@@ -318,6 +323,12 @@ where
     ///
     /// Returned turns may have `stable: false` (provisional); see module docs.
     ///
+    /// A chunk that would push accepted audio past one hour at 16 kHz
+    /// (`16_000 * 3_600` samples, the same cap as batch `Pipeline::run`) is
+    /// rejected with [`StreamingError::InvalidParams`] and is not buffered.
+    /// Accepted length is `total_frames * frame_size` plus any partial frame
+    /// still held. A chunk that lands exactly on the cap is accepted.
+    ///
     /// # VAD frame contract
     ///
     /// The detector's native frame size must equal [`VadConfig::frame_size`],
@@ -326,6 +337,18 @@ where
     /// rejected with [`StreamingError::VadFrameMismatch`] on the first frame
     /// instead of silently shifting every derived timestamp.
     pub fn feed(&mut self, samples: &[f32]) -> Result<Vec<SpeakerTurn>, StreamingError> {
+        let projected = self
+            .total_frames
+            .checked_mul(self.frame_size)
+            .and_then(|n| n.checked_add(self.vad_buffer.len()))
+            .and_then(|n| n.checked_add(samples.len()));
+        if projected.is_none_or(|n| n > MAX_AUDIO_SAMPLES) {
+            let got = projected.map_or_else(|| "overflow".to_string(), |n| n.to_string());
+            return Err(StreamingError::InvalidParams {
+                detail: format!("audio too long: {got} samples exceeds max {MAX_AUDIO_SAMPLES}"),
+            });
+        }
+
         let mut new_turns = Vec::new();
         self.vad_buffer.extend_from_slice(samples);
 

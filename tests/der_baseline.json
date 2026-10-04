@@ -394,7 +394,7 @@
       "embedder": "wespeaker_resnet34",
       "clusterer": "vbx_plda"
     },
-    "_status": "operational — NOTSOFAR-1 dev-set-1 fixed 3-meeting subset (MTG_30860/30861/30862, first three sorted meeting ids) used by the der_v2_baseline_test gate; same measurement as the full 36-meeting run, macro-averaged over the subset.",
+    "_status": "operational — NOTSOFAR-1 dev-set-1 fixed 3-meeting subset (MTG_30860/30861/30862, first three sorted meeting ids), recorded here and not covered by a compiled regression test; same measurement as the full 36-meeting run, macro-averaged over the subset.",
     "_filled_by": "benchmarks/results/notsofar-dev/v2-vbx-3file-collar025.json"
   },
   "notsofar_eval_native": {

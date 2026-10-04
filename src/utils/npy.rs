@@ -7,6 +7,7 @@
 //! order — exactly what the offline parameter dumps emit. Pure `std`, no
 //! ONNX, wasm32-clean.
 
+use std::io::Read;
 use std::path::Path;
 
 /// Errors reading an `.npy` file.
@@ -16,25 +17,65 @@ pub(crate) enum NpyError {
     Io { path: String, detail: String },
 }
 
-/// PLDA dumps are ~265 KiB; AS-norm cohorts are a few MiB. Reject huge
-/// files before `read` so a local `--vbx-plda-dir` cannot OOM the process.
+/// PLDA dumps are ~265 KiB; AS-norm cohorts are a few MiB. A local
+/// `--vbx-plda-dir` must not be able to OOM the process.
 const MAX_NPY_BYTES: u64 = 8 * 1024 * 1024;
 
 fn read_file(path: &Path) -> Result<Vec<u8>, NpyError> {
-    let meta = std::fs::metadata(path).map_err(|e| NpyError::Io {
+    let io_err = |detail: String| NpyError::Io {
         path: path.display().to_string(),
-        detail: e.to_string(),
-    })?;
-    if meta.len() > MAX_NPY_BYTES {
-        return Err(NpyError::Io {
-            path: path.display().to_string(),
-            detail: format!("npy file is {} bytes; max is {MAX_NPY_BYTES}", meta.len()),
-        });
+        detail,
+    };
+    // Fail fast when the filesystem already reports an over-cap length.
+    // A FIFO (and some special files) report 0, so the read below is the cap
+    // that actually bounds the bytes pulled into memory.
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.len() > MAX_NPY_BYTES => {
+            return Err(io_err(format!(
+                "npy file is {} bytes; max is {MAX_NPY_BYTES}",
+                meta.len()
+            )));
+        }
+        Ok(_) => {}
+        Err(e) => return Err(io_err(e.to_string())),
     }
-    std::fs::read(path).map_err(|e| NpyError::Io {
+    let file = std::fs::File::open(path).map_err(|e| io_err(e.to_string()))?;
+    read_capped(path, file, MAX_NPY_BYTES)
+}
+
+/// Read at most `max_bytes`. One more byte is [`NpyError::Io`]; the extra
+/// byte is not kept. `std::fs::read` is not used — it would ignore the cap
+/// when `metadata.len()` is 0.
+fn read_capped(path: &Path, mut reader: impl Read, max_bytes: u64) -> Result<Vec<u8>, NpyError> {
+    let io_err = |detail: String| NpyError::Io {
         path: path.display().to_string(),
-        detail: e.to_string(),
-    })
+        detail,
+    };
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 8 * 1024];
+    loop {
+        let filled = buf.len() as u64;
+        if filled == max_bytes {
+            let mut extra = [0u8; 1];
+            let n = reader.read(&mut extra).map_err(|e| io_err(e.to_string()))?;
+            if n > 0 {
+                return Err(io_err(format!(
+                    "npy file exceeds {max_bytes} bytes; max is {max_bytes}"
+                )));
+            }
+            break;
+        }
+        let room = usize::try_from(max_bytes - filled).unwrap_or(usize::MAX);
+        let want = room.min(chunk.len());
+        let n = reader
+            .read(&mut chunk[..want])
+            .map_err(|e| io_err(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    }
+    Ok(buf)
 }
 
 /// Parse an NPY header, returning `(dtype, shape, data_offset)`.
@@ -346,6 +387,32 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("max is"), "{msg}");
         assert!(msg.contains(&MAX_NPY_BYTES.to_string()), "{msg}");
+    }
+
+    #[test]
+    fn read_capped_rejects_stream_over_cap() {
+        // No filesystem length: the cap has to come from the read itself.
+        let err = read_capped(
+            std::path::Path::new("huge.npy"),
+            std::io::Cursor::new(vec![0u8; 32]),
+            16,
+        )
+        .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("max is"), "{msg}");
+        assert!(msg.contains("16"), "{msg}");
+    }
+
+    #[test]
+    fn read_capped_accepts_stream_at_cap() {
+        let data = vec![1u8, 2, 3, 4];
+        let got = read_capped(
+            std::path::Path::new("ok.npy"),
+            std::io::Cursor::new(data.clone()),
+            4,
+        )
+        .unwrap();
+        assert_eq!(got, data);
     }
 
     #[test]

@@ -8,6 +8,13 @@
 > measurements and verdict below were taken under the old contract and are
 > kept as recorded; re-run the parity gate before citing them against the
 > current adapter.
+>
+> **Current status:** sentences below that call Silero the default VAD
+> (ONNX, feature `onnx`) are historical. There is no `onnx` Cargo feature.
+> The product segmenter is the powerset INT8 kernel. Earshot is an optional
+> VAD (`vad-earshot`). Silero ONNX remains only as an optional tract
+> `VoiceActivityDetector` behind the `infer` feature, not the CLI/FFI/Python
+> path.
 
 **Date:** 2026-07-24  
 **Branch:** `feat/earshot-vad`  

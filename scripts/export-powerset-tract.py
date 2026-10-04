@@ -186,8 +186,8 @@ def main() -> int:
         if diff > 1e-3:
             print("WARN: diff exceeds 1e-3", file=sys.stderr)
             return 2
-    print("next: cargo test --lib --features onnx,backend-tract "
-          "powerset_fp32_tract_friendly -- --nocapture")
+    print("next: cargo test --offline --lib --features backend-tract,segmentation "
+          "segmentation::powerset::")
     return 0
 
 

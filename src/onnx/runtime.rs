@@ -1,9 +1,11 @@
 //! Runtime-agnostic inference surface.
 //!
-//! Neural stages (Silero VAD, powerset segmenter, embedders) must depend only
-//! on this module — never on a concrete ONNX Runtime binding. The default
-//! implementation is ort via [`crate::onnx::RuntimeSession`]; a pure-Rust
-//! tract backend implements the same trait behind the `backend-tract` feature.
+//! Neural stages (Silero VAD, powerset segmenter, embedders) that run ONNX
+//! files must depend only on this module — never on a concrete engine crate.
+//! [`crate::onnx::RuntimeSession`] is the tract session (`backend-tract`),
+//! not an ONNX Runtime (ort) session. There is no `libonnxruntime` in this
+//! crate. The product path is hand-written kernels (`cli`) and does not
+//! enable `infer`.
 
 use std::fmt;
 

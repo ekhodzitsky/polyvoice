@@ -9,9 +9,9 @@ use polyvoice::pipeline_v2::{
     ClustererKind, Pipeline as RustPipeline, PipelineConfig, PipelineError,
 };
 use polyvoice::types::{DiarizationResult as RustDiarizationResult, Profile, SampleRate};
-use std::path::{Component, Path, PathBuf};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use std::path::{Component, Path, PathBuf};
 
 /// Reject cache paths that contain `..` components (parity with CLI/FFI).
 fn reject_path_traversal(path: &str) -> PyResult<()> {
@@ -39,9 +39,7 @@ impl DiarizationResult {
     #[staticmethod]
     fn from_json(json: &str) -> PyResult<Self> {
         let inner: RustDiarizationResult = serde_json::from_str(json).map_err(|e| {
-            pyo3::exceptions::PyValueError::new_err(format!(
-                "invalid diarization-result JSON: {e}"
-            ))
+            pyo3::exceptions::PyValueError::new_err(format!("invalid diarization-result JSON: {e}"))
         })?;
         Ok(Self { inner })
     }
@@ -195,6 +193,10 @@ impl Pipeline {
     }
 
     /// Run diarization on an iterable of f32 samples.
+    ///
+    /// The returned dict keeps flat turn `start`/`end` keys and also includes
+    /// the canonical v1 fields (`schema_version`, `segments`, `turns[].time`,
+    /// `audio`, `provenance`, `speakers`).
     fn run<'py>(
         &self,
         py: Python<'py>,
@@ -204,20 +206,71 @@ impl Pipeline {
         let result = self.run_core(py, samples, sample_rate)?;
 
         let dict = PyDict::new(py);
+        dict.set_item("schema_version", &result.schema_version)?;
         dict.set_item("num_speakers", result.num_speakers)?;
+
+        let segments: Vec<_> = result
+            .segments
+            .iter()
+            .map(|s| {
+                let time = PyDict::new(py);
+                time.set_item("start", s.time.start)?;
+                time.set_item("end", s.time.end)?;
+                let d = PyDict::new(py);
+                d.set_item("time", time)?;
+                d.set_item("speaker", s.speaker.map(|id| id.0))?;
+                d.set_item("confidence", s.confidence)?;
+                Ok(d)
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        dict.set_item("segments", segments)?;
 
         let turns: Vec<_> = result
             .turns
             .iter()
             .map(|t| {
+                let time = PyDict::new(py);
+                time.set_item("start", t.time.start)?;
+                time.set_item("end", t.time.end)?;
                 let d = PyDict::new(py);
                 d.set_item("start", t.time.start)?;
                 d.set_item("end", t.time.end)?;
                 d.set_item("speaker", t.speaker.0)?;
+                d.set_item("time", time)?;
                 Ok(d)
             })
             .collect::<PyResult<Vec<_>>>()?;
         dict.set_item("turns", turns)?;
+
+        let audio = PyDict::new(py);
+        audio.set_item("duration_secs", result.audio.duration_secs)?;
+        audio.set_item("sample_rate", result.audio.sample_rate)?;
+        dict.set_item("audio", audio)?;
+
+        let provenance = PyDict::new(py);
+        provenance.set_item("version", &result.provenance.version)?;
+        provenance.set_item("profile", &result.provenance.profile)?;
+        provenance.set_item("segmenter", &result.provenance.segmenter)?;
+        provenance.set_item("embedder", &result.provenance.embedder)?;
+        provenance.set_item("clusterer", &result.provenance.clusterer)?;
+        dict.set_item("provenance", provenance)?;
+
+        let speakers: Vec<_> = result
+            .speakers
+            .iter()
+            .map(|s| {
+                let d = PyDict::new(py);
+                d.set_item("label", &s.label)?;
+                d.set_item("id", s.id)?;
+                d.set_item("total_speech_s", s.total_speech_s)?;
+                d.set_item("turn_count", s.turn_count)?;
+                if let Some(embedding) = &s.embedding {
+                    d.set_item("embedding", embedding.as_slice())?;
+                }
+                Ok(d)
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        dict.set_item("speakers", speakers)?;
 
         Ok(dict)
     }

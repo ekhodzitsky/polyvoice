@@ -23,8 +23,7 @@ fn help_top_level() {
         .assert()
         .success()
         .stdout(predicate::str::contains("diarize"))
-        // Hidden `--legacy` must not appear as its own option. Other docs may
-        // still say "Ignored with `--legacy`".
+        // Hidden `--legacy` must not appear as its own option.
         .stdout(
             predicate::str::is_match(r"(?m)^\s+--legacy(\s|$)")
                 .unwrap()

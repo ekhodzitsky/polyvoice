@@ -4,12 +4,12 @@
 //! `Embedder` is the supported bring-your-own embedder contract for offline
 //! [`crate::pipeline::LegacyPipeline`] and online
 //! [`crate::streaming::StreamingPipeline`]. The pure-Rust trait and overlap
-//! mask are always available (no `onnx` required). ONNX-backed adapters still
+//! mask are always available (no inference feature required). ONNX-backed adapters still
 //! need `features = ["infer", "embedder"]`. The generic `EmbedderPool` is a
 //! test-only helper, not public API.
 //!
 //! Shared fbank+ONNX engine: `crate::fbank_onnx::FbankOnnxExtractor` (feature
-//! `onnx`; implements [`Embedder`] directly). The architecture adapters share
+//! `infer`; implements [`Embedder`] directly). The architecture adapters share
 //! one generic wrapper with per-model named constructors.
 
 /// Speaker embedding extractor — turns a slice of 16 kHz mono audio into a
@@ -19,7 +19,7 @@
 /// This is the **supported library injection API** for
 /// [`crate::pipeline::LegacyPipeline`] and
 /// [`crate::streaming::StreamingPipeline`]. Implement it on an external
-/// encoder (Candle, tract, custom) without enabling `onnx`:
+/// encoder (Candle, tract, custom) without enabling `infer`:
 ///
 /// ```rust
 /// use polyvoice::{Embedder, EmbedderError};

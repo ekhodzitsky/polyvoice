@@ -110,6 +110,7 @@ fn pipeline_with_segments(segs: Vec<crate::segmentation::RawSegment>) -> Pipelin
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     )
 }
 
@@ -155,6 +156,7 @@ fn configured_cap_replaces_the_default() {
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
 
     assert!(
@@ -194,6 +196,28 @@ fn pipeline_run_silence_returns_empty() {
         .unwrap();
     assert!(result.turns.is_empty());
     assert_eq!(result.num_speakers, 0);
+    assert_eq!(result.audio.duration_secs, 1.0);
+    assert_eq!(result.audio.sample_rate, 16000);
+    assert_eq!(result.provenance.profile, p.config().profile.manifest_id());
+}
+
+#[test]
+fn pipeline_run_reconstruct_without_windows_errors() {
+    let mut p = pipeline_with_segments(Vec::new());
+    p.config.experimental.reconstruct = true;
+    let err = p
+        .run(&vec![0.0_f32; 16000], SampleRate::new(16000).unwrap())
+        .unwrap_err();
+    match err {
+        PipelineError::Segmentation(SegmentationError::InferenceFailed { window_idx, detail }) => {
+            assert_eq!(window_idx, 0);
+            assert_eq!(
+                detail,
+                "reconstruct requires window posteriors; this segmenter has none"
+            );
+        }
+        other => panic!("expected missing-window reconstruct error, got {other:?}"),
+    }
 }
 
 #[test]
@@ -208,6 +232,13 @@ fn pipeline_run_two_segments_one_cluster() {
         .unwrap();
     assert_eq!(result.num_speakers, 1);
     assert!(!result.turns.is_empty());
+    assert_eq!(
+        (
+            result.provenance.segmenter.as_str(),
+            result.provenance.embedder.as_str()
+        ),
+        ("", "")
+    );
 }
 
 #[test]
@@ -241,6 +272,7 @@ fn pipeline_with_embedder(
         embedder,
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     )
 }
 
@@ -300,19 +332,25 @@ fn pipeline_skips_segments_below_min_embed_secs() {
 }
 
 #[test]
-fn pipeline_skips_non_finite_embeddings() {
-    // Two long-enough segments, but the embedder emits NaN for both, so
-    // every embedding is dropped and nothing poisons the clusterer.
+fn pipeline_run_non_finite_embeddings_is_an_error() {
+    // Two long-enough segments, but the embedder emits NaN for both.
+    // A fully non-finite batch is an inference failure, not silence.
     let segs = vec![
         raw_segment(0.0, 1.0, 0, false),
         raw_segment(2.0, 3.0, 0, false),
     ];
     let p = pipeline_with_embedder(segs, Box::new(NanEmbedder));
-    let result = p
+    let err = p
         .run(&vec![0.0_f32; 16000 * 4], SampleRate::new(16000).unwrap())
-        .unwrap();
-    assert!(result.turns.is_empty());
-    assert_eq!(result.num_speakers, 0);
+        .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            PipelineError::Embedding(EmbedderError::InferenceFailed { ref detail })
+                if detail == "every embedding was non-finite"
+        ),
+        "expected an embedding inference failure, got {err:?}"
+    );
 }
 
 /// The binary-search fast path (sorted mids) and the full-scan fallback
@@ -427,6 +465,7 @@ fn pipeline_custom(
     embedder: Box<dyn Embedder>,
     clusterer: Box<dyn Clusterer>,
     resegmenter: Box<dyn Resegmenter>,
+    model_ids: StageModelIds,
 ) -> Pipeline {
     Pipeline::from_components(
         cfg,
@@ -434,6 +473,7 @@ fn pipeline_custom(
         embedder,
         clusterer,
         resegmenter,
+        model_ids,
     )
 }
 
@@ -515,6 +555,7 @@ fn overlap_pipeline(
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer { labels: vec![0, 1] }),
         resegmenter,
+        StageModelIds::default(),
     )
 }
 
@@ -562,6 +603,7 @@ fn pipeline_run_segmentation_error_propagates() {
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
     let err = p
         .run(&vec![0.0_f32; 16000], SampleRate::new(16000).unwrap())
@@ -577,6 +619,7 @@ fn pipeline_run_embedding_error_propagates() {
         Box::new(FailingEmbedder),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
     let err = p
         .run(&vec![0.0_f32; 16000 * 2], SampleRate::new(16000).unwrap())
@@ -596,6 +639,7 @@ fn pipeline_run_clustering_error_propagates() {
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer { labels: vec![0] }),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
     let err = p
         .run(&vec![0.0_f32; 16000 * 4], SampleRate::new(16000).unwrap())
@@ -652,12 +696,23 @@ fn pipeline_run_dense_embed_window_splits_long_segments() {
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::new("powerset_int8", "resnet34_int8"),
     );
     let result = p
         .run(&vec![0.0_f32; 16000 * 3], SampleRate::new(16000).unwrap())
         .unwrap();
     assert_eq!(result.num_speakers, 1);
     assert!(!result.turns.is_empty());
+    assert_eq!(result.provenance.segmenter, "powerset_int8");
+    assert_eq!(result.provenance.embedder, "resnet34_int8");
+    let clusterer_id = match p.config().clusterer {
+        ClustererKind::Vbx => "vbx",
+        ClustererKind::Ahc { .. } => "ahc",
+        ClustererKind::NmeSc => "nme-sc",
+    };
+    assert_eq!(result.provenance.clusterer, clusterer_id);
+    assert!(!result.provenance.version.is_empty());
+    assert_eq!(result.provenance.profile, p.config().profile.manifest_id());
 }
 
 fn overlap_inputs_pipeline(embedder: Box<dyn Embedder>) -> Pipeline {
@@ -667,6 +722,7 @@ fn overlap_inputs_pipeline(embedder: Box<dyn Embedder>) -> Pipeline {
         embedder,
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     )
 }
 
@@ -852,6 +908,7 @@ fn map_local_to_global_disable_toggle_returns_empty_map() {
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
     let sources = vec![
         raw_segment(0.0, 1.0, 0, false),
@@ -871,6 +928,7 @@ fn map_local_to_global_majority_toggle_maps_by_vote() {
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
     let sources = vec![
         raw_segment(0.0, 1.0, 0, false),
@@ -921,6 +979,7 @@ fn pipeline_raw_embeddings_clusterer_receives_unnormalized_vectors() {
         Box::new(MockEmbedder { embedding: v }),
         Box::new(clusterer),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
     let _ = p
         .run(&vec![0.0_f32; 16000 * 2], SampleRate::new(16000).unwrap())

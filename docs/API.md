@@ -48,9 +48,14 @@ let mut pipeline = StreamingPipeline::with_latency_preset(
 Turns may carry `stable: false` while a speaker is still provisional; once
 `stable: true`, that speaker ID is immutable for the session. See
 `docs/BENCHMARKS.md` (latency + RTF + DER reported separately) and the
-`streaming` module rustdoc. The CLI also accepts
-`--latency-preset realtime|balanced|accurate` to configure window geometry;
-it still processes complete files and does not expose this streaming API.
+`streaming` module rustdoc. Those rows are the library `StreamingPipeline`
+presets (they set hop and a speaker-cache cap). The CLI
+`--latency-preset realtime|balanced|accurate` is separate: it sets only the
+v2 embedding window to that preset's `window_secs` (realtime 1.0 s, balanced
+1.5 s, accurate 2.0 s). Hop stays half that window. It does not apply the
+streaming hop, right-context, or speaker-cache cap. An explicit
+`--embed-window` wins. The CLI still processes complete files and does not
+expose this streaming API.
 
 ## Core Types
 

@@ -16,11 +16,11 @@ pub mod verify;
 #[doc(hidden)]
 pub use adapter::{AdapterError, AdapterFactory, AdapterRegistry, AdapterStage, BuiltinAdapter};
 #[cfg(feature = "download")]
+use download::download_with_checksum_signature_and_cap;
+#[cfg(feature = "download")]
 pub use download::{
     DownloadError, download_with_checksum, download_with_checksum_and_signature, verify_sha256,
 };
-#[cfg(feature = "download")]
-use download::{download_with_checksum_signature_and_cap, max_download_bytes};
 pub use manifest::{
     Manifest, ManifestError, ModelEntry, ProfileEntry, SCHEMA_V1, SCHEMA_V2, is_supported_schema,
 };
@@ -358,7 +358,9 @@ impl ModelRegistry {
                 model_id: model_id.to_owned(),
             });
         }
-        let actual = sha256_file(&dest)?;
+        // Same byte cap as a download (`2 ×` declared size, else 1 GiB, clamped).
+        // A regular file past that cap is not hashed.
+        let actual = sha256_file(&dest, max_download_bytes(entry.size))?;
         if actual != entry.sha256 {
             return Err(RegistryError::ChecksumMismatch {
                 path: dest,
@@ -515,25 +517,88 @@ impl ModelRegistry {
     }
 }
 
-fn sha256_file(path: &Path) -> Result<String, RegistryError> {
-    use sha2::{Digest, Sha256};
-    use std::io::Read;
-    let f = std::fs::File::open(path).map_err(|e| RegistryError::Io {
+/// Absolute ceiling for one model file (1 GiB).
+///
+/// Bounds hashing a local file, and a streamed download when the `download`
+/// feature is on, for manifest entries that do not declare a `size`. It sits
+/// well above any real polyvoice model (the largest shipped weights are
+/// ~250 MiB), so legitimate files are unaffected.
+pub(crate) const DEFAULT_MAX_MODEL_BYTES: u64 = 1024 * 1024 * 1024;
+
+/// Byte cap shared by local hashing and streamed downloads.
+///
+/// When `declared_size` is set and positive, the cap is `2 × size` (slack for
+/// upstream drift) still clamped to [`DEFAULT_MAX_MODEL_BYTES`]. Missing or
+/// zero size falls back to the global 1 GiB ceiling.
+pub(crate) fn max_download_bytes(declared_size: Option<u64>) -> u64 {
+    match declared_size {
+        Some(n) if n > 0 => n.saturating_mul(2).min(DEFAULT_MAX_MODEL_BYTES),
+        _ => DEFAULT_MAX_MODEL_BYTES,
+    }
+}
+
+fn exceeded_hash_cap(path: &Path, max_bytes: u64) -> RegistryError {
+    RegistryError::Io {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("file exceeds the {max_bytes}-byte hash cap"),
+        ),
+    }
+}
+
+fn sha256_file(path: &Path, max_bytes: u64) -> Result<String, RegistryError> {
+    let meta = std::fs::metadata(path).map_err(|e| RegistryError::Io {
         path: path.to_path_buf(),
         source: e,
     })?;
-    let mut reader = std::io::BufReader::new(f);
+    // Regular files usually report a real length. Still cap the read: a
+    // reported length of 0 must not hash the whole stream.
+    if meta.len() > max_bytes {
+        return Err(exceeded_hash_cap(path, max_bytes));
+    }
+    let file = std::fs::File::open(path).map_err(|e| RegistryError::Io {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+    sha256_reader(path, file, max_bytes)
+}
+
+/// Hash `reader`, stopping before any byte past `max_bytes` is digested.
+fn sha256_reader(
+    path: &Path,
+    mut reader: impl std::io::Read,
+    max_bytes: u64,
+) -> Result<String, RegistryError> {
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 64 * 1024];
+    let mut hashed: u64 = 0;
     loop {
-        let n = reader.read(&mut buf).map_err(|e| RegistryError::Io {
-            path: path.to_path_buf(),
-            source: e,
-        })?;
+        if hashed == max_bytes {
+            let mut extra = [0u8; 1];
+            let n = reader.read(&mut extra).map_err(|e| RegistryError::Io {
+                path: path.to_path_buf(),
+                source: e,
+            })?;
+            if n > 0 {
+                return Err(exceeded_hash_cap(path, max_bytes));
+            }
+            break;
+        }
+        let room = usize::try_from(max_bytes - hashed).unwrap_or(usize::MAX);
+        let want = room.min(buf.len());
+        let n = reader
+            .read(&mut buf[..want])
+            .map_err(|e| RegistryError::Io {
+                path: path.to_path_buf(),
+                source: e,
+            })?;
         if n == 0 {
             break;
         }
         hasher.update(&buf[..n]);
+        hashed += n as u64;
     }
     Ok(format!("{:x}", hasher.finalize()))
 }
@@ -1014,6 +1079,78 @@ mod tests {
     fn local_dir_rejects_corrupt_bytes() {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("hello.bin"), b"goodbye").unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_manifest(manifest, tmp.path()).unwrap();
+        let err = r.ensure_local("hello_model").unwrap_err();
+        assert!(
+            matches!(err, RegistryError::ChecksumMismatch { .. }),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn sha256_reader_accepts_stream_exactly_at_cap() {
+        // Equal to the cap is still hashed. The digest is SHA-256 of "hello".
+        let got = sha256_reader(Path::new("ok.bin"), std::io::Cursor::new(b"hello"), 5).unwrap();
+        assert_eq!(
+            got,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+    }
+
+    #[test]
+    fn sha256_reader_rejects_stream_over_cap() {
+        let err = sha256_reader(
+            Path::new("stream.bin"),
+            std::io::Cursor::new(vec![0u8; 11]),
+            10,
+        )
+        .unwrap_err();
+        let msg = format!("{err}");
+        assert!(matches!(err, RegistryError::Io { .. }), "{msg}");
+        assert!(msg.contains("hash cap"), "{msg}");
+        assert!(msg.contains("10"), "{msg}");
+    }
+
+    #[test]
+    fn sha256_file_rejects_regular_file_over_cap() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("big.bin");
+        std::fs::write(&path, vec![0u8; 11]).unwrap();
+        let err = sha256_file(&path, 10).unwrap_err();
+        let msg = format!("{err}");
+        assert!(matches!(err, RegistryError::Io { .. }), "{msg}");
+        assert!(msg.contains("hash cap"), "{msg}");
+        assert!(msg.contains("10"), "{msg}");
+    }
+
+    #[test]
+    fn ensure_local_rejects_file_over_hash_cap() {
+        // TINY_MANIFEST declares size 5, so the cap is 10. Eleven bytes must
+        // fail the cap, not hash through to a checksum mismatch.
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("hello.bin"), vec![0u8; 11]).unwrap();
+        let manifest =
+            Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
+        let r = ModelRegistry::with_manifest(manifest, tmp.path()).unwrap();
+        let err = r.ensure_local("hello_model").unwrap_err();
+        let msg = format!("{err}");
+        assert!(matches!(err, RegistryError::Io { .. }), "{msg}");
+        assert!(msg.contains("hash cap"), "{msg}");
+        assert!(msg.contains("10"), "{msg}");
+        assert!(
+            !matches!(err, RegistryError::ChecksumMismatch { .. }),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn ensure_local_checks_checksum_at_exact_cap() {
+        // Declared size 5 → cap 10. A file of exactly 10 bytes is hashed,
+        // then rejected for the wrong checksum (not for the cap).
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("hello.bin"), vec![0u8; 10]).unwrap();
         let manifest =
             Manifest::from_toml_str(crate::models::tests_helpers::TINY_MANIFEST).unwrap();
         let r = ModelRegistry::with_manifest(manifest, tmp.path()).unwrap();

@@ -1,9 +1,4 @@
-//! Measurement harness: streaming latency presets, VAD parity, short-segment embedder EER.
-//!
-//! ```text
-//! cargo run --features "cli,vad-earshot" --bin polyvoice-measure -- streaming \
-//!   --dataset data/voxconverse-test --max-files 30 --output benchmarks/results/streaming-latency-measured.json
-//! ```
+//! Measurement harness for short-segment embedder EER.
 //!
 //! `streaming` and `vad-parity` always fail: those paths needed ONNX Runtime.
 //! `embedder-short` runs only with native ResNet34 plus tract CAM++; the helpers
@@ -45,7 +40,7 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Cmd {
-    /// Streaming presets: input-buffer latency (config), measured RTF, DER @ collar 0 and 0.25.
+    /// Always fails: this binary has no ONNX Runtime in the core crate.
     Streaming {
         #[arg(long)]
         dataset: PathBuf,
@@ -56,7 +51,7 @@ enum Cmd {
         #[arg(long)]
         output: Option<PathBuf>,
     },
-    /// Legacy pipeline DER: Silero vs Earshot VAD (same embedder/cluster).
+    /// Always fails: this binary has no ONNX Runtime in the core crate.
     VadParity {
         #[arg(long)]
         dataset: PathBuf,

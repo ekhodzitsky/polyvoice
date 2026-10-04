@@ -1,4 +1,4 @@
-//! Library-mode BYO embedder path: no onnx feature, no network, no model files.
+//! Library-mode BYO embedder path: no inference feature, no network, no model files.
 
 use polyvoice::{
     ClusterConfig, DiarizationConfig, Embedder, EmbedderError, EnergyVad, VadConfig,

@@ -192,8 +192,8 @@ impl PipelineBuilder {
     }
 }
 
-use crate::pipeline_v2::Pipeline;
 use crate::pipeline_v2::config::ClustererKind;
+use crate::pipeline_v2::{Pipeline, StageModelIds};
 use crate::resegmentation::OverlapResegmenter;
 
 // Clusterer construction lives in `clusterer_factory`; re-export so `build()`
@@ -236,6 +236,7 @@ impl PipelineBuilder {
                     embedder,
                     clusterer,
                     resegmenter,
+                    StageModelIds::default(),
                 ))
             }
             Profile::Mobile | Profile::Balanced | Profile::Fast => {
@@ -244,8 +245,7 @@ impl PipelineBuilder {
                 })?;
                 let ep = self.config.execution_provider;
                 tracing::info!("pipeline v2 execution provider: {ep:?}");
-                let (segmenter, embedder): (Box<dyn Segmenter>, Box<dyn Embedder>) =
-                    load_profile_stages(&registry, &self.config)?;
+                let stages = load_profile_stages(&registry, &self.config)?;
                 let clusterer: Box<dyn Clusterer> =
                     build_profile_clusterer(&self.config, &registry)?;
                 // Activate min_cluster_size pruning (this config field was
@@ -273,17 +273,23 @@ impl PipelineBuilder {
                 config.clusterer = resolve_clusterer_kind(&config);
                 Ok(Pipeline::from_components(
                     config,
-                    segmenter,
-                    embedder,
+                    stages.segmenter,
+                    stages.embedder,
                     clusterer,
                     resegmenter,
+                    StageModelIds::new(stages.segmenter_id, stages.embedder_id),
                 ))
             }
         }
     }
 }
 
-type StagePair = (Box<dyn Segmenter>, Box<dyn Embedder>);
+struct StagePair {
+    segmenter: Box<dyn Segmenter>,
+    embedder: Box<dyn Embedder>,
+    segmenter_id: &'static str,
+    embedder_id: &'static str,
+}
 
 /// True when native powerset + ResNet34 kernels are compiled in.
 ///

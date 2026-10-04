@@ -81,6 +81,35 @@ fn bench_skip_overlap_rejects_uem() {
 
 #[cfg(feature = "cli")]
 #[test]
+fn bench_rejects_non_finite_collar() {
+    bench_cmd()
+        .args(["/tmp/whatever", "--collar", "nan"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--collar NaN must be finite and >= 0",
+        ));
+}
+
+#[cfg(feature = "cli")]
+#[test]
+fn bench_rejects_empty_uem_before_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let uem = dir.path().join("empty.uem");
+    std::fs::write(&uem, "").unwrap();
+    let path = uem.to_str().unwrap().to_owned();
+    bench_cmd()
+        .args(["/tmp/whatever", "--uem", &path])
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains(path.clone())
+                .and(predicate::str::contains("there are no scored regions")),
+        );
+}
+
+#[cfg(feature = "cli")]
+#[test]
 fn bench_rejects_unknown_pipeline() {
     if !require_models(&["powerset_int8.onnx", "resnet34_int8.onnx"]) {
         return;
@@ -90,7 +119,7 @@ fn bench_rejects_unknown_pipeline() {
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "unknown --pipeline 'bogus' (expected 'legacy' or 'v2')",
+            "unknown --pipeline 'bogus' (accepted value is 'v2')",
         ));
 }
 
@@ -196,39 +225,6 @@ fn bench_v2_skip_overlap_mode_runs() {
         serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
     assert!(json["skip_overlap"].as_bool().unwrap());
     assert_eq!(json["files_processed"], 1);
-}
-
-#[cfg(all(feature = "cli", any()))]
-#[test]
-fn bench_legacy_end_to_end_runs() {
-    // Balanced profile embedder is the INT8 shipping pair (0.17+).
-    if !require_models(&["silero_vad.onnx", "resnet34_int8.onnx"]) {
-        return;
-    }
-    let dataset = make_dataset();
-    let report_path = dataset.path().join("report.json");
-    bench_cmd()
-        .args([
-            dataset.path().to_str().unwrap(),
-            "--pipeline",
-            "legacy",
-            "--min-cluster-size",
-            "1",
-            "--output",
-            report_path.to_str().unwrap(),
-        ])
-        .assert()
-        .success();
-    let json: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
-    assert_eq!(json["files_processed"], 1);
-    // Legacy pipeline has no per-stage timings: the fields are omitted.
-    assert!(json.get("stage_totals").is_none());
-    assert!(json["per_file"][0].get("stage_timings").is_none());
-    // The legacy arm reports Silero VAD as segmenter + profile embedder.
-    let hashes = json["model_hashes"].as_array().unwrap();
-    assert!(hashes.iter().any(|h| h["model_id"] == "silero_vad"));
-    assert!(hashes.iter().any(|h| h["model_id"] == "resnet34_int8"));
 }
 
 // ---------------------------------------------------------------------------

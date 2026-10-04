@@ -100,6 +100,58 @@ fn embedder_flag_parses_cam_pp() {
 }
 
 #[test]
+fn loader_model_ids_follow_the_compiled_stage_loader() {
+    let (seg, emb) = loader_model_ids(None);
+    if cfg!(all(
+        feature = "segmenter-native",
+        feature = "embedder-native"
+    )) {
+        assert_eq!((seg, emb), ("powerset_int8", "resnet34_int8"));
+        assert_eq!(
+            loader_model_ids(Some("cam_pp_int8")),
+            ("powerset_int8", "cam_pp_int8")
+        );
+        assert_eq!(
+            loader_model_ids(Some("cam_pp_fp32")),
+            ("powerset_int8", "cam_pp_fp32")
+        );
+        assert_eq!(
+            loader_model_ids(Some("wespeaker_resnet34")),
+            ("powerset_int8", "resnet34_int8")
+        );
+    } else {
+        assert_eq!((seg, emb), ("powerset_fp32_tract", "wespeaker_resnet34"));
+        assert_eq!(
+            loader_model_ids(Some("cam_pp_int8")),
+            ("powerset_fp32_tract", "wespeaker_resnet34")
+        );
+    }
+}
+
+#[test]
+fn report_embedder_hash_follows_loader_not_an_unknown_override() {
+    let mut args = default_args();
+    args.embedder = Some("not-a-loader-model".to_owned());
+    let registry = ModelRegistry::default().unwrap();
+    let (seg, emb) = loader_model_ids(args.embedder.as_deref());
+    let report = build_report(
+        &args,
+        &registry,
+        Profile::Balanced,
+        seg,
+        polyvoice::pipeline_v2::ExecutionProvider::Cpu,
+        "dataset".to_owned(),
+        Accum::default(),
+    );
+    let ids: Vec<_> = report
+        .model_hashes
+        .iter()
+        .map(|h| h.model_id.as_str())
+        .collect();
+    assert_eq!(ids, vec![seg, emb]);
+}
+
+#[test]
 fn hex_lower_formats_bytes_as_two_digit_hex() {
     assert_eq!(hex_lower(&[0x00, 0x0f, 0xa5, 0xff]), "000fa5ff");
     assert_eq!(hex_lower(&[]), "");
@@ -318,4 +370,156 @@ fn args_reject_unknown_flag_and_missing_dataset() {
     // skip-overlap parses as a plain flag.
     let args = Args::try_parse_from(["polyvoice-bench", "/tmp/ds", "--skip-overlap"]).unwrap();
     assert!(args.skip_overlap);
+}
+
+#[test]
+fn min_cluster_secs_is_rejected_before_registry() {
+    let args = Args::try_parse_from([
+        "polyvoice-bench",
+        "/tmp/dataset",
+        "--min-cluster-secs",
+        "0.5",
+    ])
+    .unwrap();
+    let Err(err) = build_runner(&args) else {
+        panic!("expected --min-cluster-secs to be rejected");
+    };
+    let msg = err.to_string();
+    assert!(
+        msg.contains("--min-cluster-secs is rejected"),
+        "unexpected error: {msg}"
+    );
+    assert!(
+        msg.contains("does not apply duration pruning"),
+        "unexpected error: {msg}"
+    );
+    assert!(msg.contains("omit the flag"), "unexpected error: {msg}");
+}
+
+#[test]
+fn non_finite_or_negative_collar_is_rejected_before_registry() {
+    for spec in ["nan", "inf", "-0.5"] {
+        let flag = format!("--collar={spec}");
+        let args = Args::try_parse_from(["polyvoice-bench", "/tmp/dataset", &flag]).unwrap();
+        let Err(err) = build_runner(&args) else {
+            panic!("expected --collar {spec} to be rejected");
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains(&args.collar.to_string()),
+            "unexpected error: {msg}"
+        );
+        assert!(
+            msg.contains("must be finite and >= 0"),
+            "unexpected error: {msg}"
+        );
+    }
+    // 0.0 is the no-collar score. Do not call build_runner: that walks the registry.
+    assert!(reject_invalid_collar(0.0).is_ok());
+}
+
+#[test]
+fn empty_or_comment_uem_is_rejected_before_registry() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, body) in [
+        ("empty.uem", ""),
+        ("comments.uem", "; ignored\n# also ignored\n\n"),
+    ] {
+        let path = dir.path().join(name);
+        std::fs::write(&path, body).unwrap();
+        let err = load_uem(&path).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains(&path.display().to_string()),
+            "unexpected error: {msg}"
+        );
+        assert!(
+            msg.contains("there are no scored regions"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    let other = dir.path().join("other.uem");
+    std::fs::write(&other, "someone 1 0.0 1.0\n").unwrap();
+    let map = load_uem(&other).unwrap();
+    assert!(map.contains_key("someone"));
+
+    let missing = dir.path().join("missing.uem");
+    let err = load_uem(&missing).unwrap_err();
+    assert!(
+        err.to_string().contains("missing.uem"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn uem_missing_stem_errors_and_known_stem_selects_slice() {
+    let whole = TimeRange {
+        start: 0.0,
+        end: 100.0,
+    };
+    let slice = TimeRange {
+        start: 1.0,
+        end: 2.5,
+    };
+    let mut map = HashMap::new();
+    map.insert("other".to_owned(), vec![whole]);
+    let err = scored_uem_regions(Some(&map), "absent.xyz").unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("absent.xyz"), "unexpected error: {msg}");
+    assert!(
+        msg.contains("there is no UEM region"),
+        "unexpected error: {msg}"
+    );
+
+    map.insert("meeting".to_owned(), vec![slice]);
+    let selected = scored_uem_regions(Some(&map), "meeting").unwrap().unwrap();
+    assert_eq!(selected, &[slice]);
+    assert_ne!(selected, &[whole]);
+
+    // Stem wins over the dotted prefix, which here is the whole-file span.
+    map.insert("rec".to_owned(), vec![whole]);
+    map.insert("rec.part".to_owned(), vec![slice]);
+    let selected = scored_uem_regions(Some(&map), "rec.part").unwrap().unwrap();
+    assert_eq!(selected, &[slice]);
+
+    let prefix_only = TimeRange {
+        start: 5.0,
+        end: 6.0,
+    };
+    map.insert("EN2002a".to_owned(), vec![prefix_only]);
+    let selected = scored_uem_regions(Some(&map), "EN2002a.Mix-Headset")
+        .unwrap()
+        .unwrap();
+    assert_eq!(selected, &[prefix_only]);
+
+    assert!(scored_uem_regions(None, "meeting").unwrap().is_none());
+}
+
+#[test]
+fn rttm_mismatched_file_id_is_rejected_and_match_loads_turns() {
+    let dir = tempfile::tempdir().unwrap();
+    let rttm = dir.path().join("clip.rttm");
+    std::fs::write(&rttm, "SPEAKER other 1 0.25 1.5 <NA> <NA> spk0 <NA> <NA>\n").unwrap();
+    let err = reference_turns(dir.path(), "clip").unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("clip"), "unexpected error: {msg}");
+    assert!(
+        msg.contains("the RTTM has no turns for that file id"),
+        "unexpected error: {msg}"
+    );
+
+    std::fs::write(&rttm, "SPEAKER clip 1 0.25 1.5 <NA> <NA> spk0 <NA> <NA>\n").unwrap();
+    let turns = reference_turns(dir.path(), "clip").unwrap();
+    assert_eq!(turns.len(), 1);
+    assert!((turns[0].time.start - 0.25).abs() < 1e-9);
+    assert!((turns[0].time.end - 1.75).abs() < 1e-9);
+
+    std::fs::write(
+        dir.path().join("EN2002a.Mix-Headset.rttm"),
+        "SPEAKER EN2002a 1 0.0 1.0 <NA> <NA> A <NA> <NA>\n",
+    )
+    .unwrap();
+    let turns = reference_turns(dir.path(), "EN2002a.Mix-Headset").unwrap();
+    assert_eq!(turns.len(), 1);
 }

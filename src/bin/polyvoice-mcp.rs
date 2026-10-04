@@ -15,7 +15,7 @@ use rmcp::model::{ErrorData, ServerCapabilities, ServerInfo};
 use rmcp::{ServerHandler, ServiceExt, schemars, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use polyvoice::cli_common;
 use polyvoice::models::ModelRegistry;
@@ -25,6 +25,7 @@ use polyvoice::wav::read_wav;
 
 // Numeric error codes mirror include/polyvoice.h (do not invent new ones).
 const ERR_INVALID_ARG: i32 = 1;
+const ERR_AUDIO_TOO_LONG: i32 = 3;
 const ERR_MODEL_LOAD: i32 = 10;
 const ERR_INFERENCE: i32 = 11;
 const ERR_REGISTRY: i32 = 30;
@@ -67,8 +68,7 @@ struct DiarizeInput {
     /// Optional directory with VBx PLDA `.npy` params (overrides env/registry).
     #[serde(default)]
     vbx_plda_dir: Option<String>,
-    /// Response detail: "concise" (per-speaker rollup only, default) or
-    /// "detailed" (also the full ordered turns).
+    /// Accepted for compatibility. Both values return the full result, including turns.
     #[serde(default)]
     verbosity: Option<String>,
 }
@@ -94,15 +94,59 @@ struct SpeakerRollup {
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
+struct TimeDto {
+    /// Start time in seconds.
+    start: f64,
+    /// End time in seconds.
+    end: f64,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+struct SegmentDto {
+    /// Time range of the segment.
+    time: TimeDto,
+    /// Numeric speaker id, or null if unassigned.
+    speaker: Option<u32>,
+    /// Assignment confidence, or null.
+    confidence: Option<f32>,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
 struct TurnDto {
-    /// Canonical speaker label, e.g. "SPEAKER_00".
-    speaker: String,
     /// Numeric speaker id.
+    speaker: u32,
+    /// Canonical speaker label, e.g. "SPEAKER_00".
+    label: String,
+    /// Numeric speaker id (same value as `speaker`).
     speaker_id: u32,
     /// Turn start, seconds from the beginning of the audio.
     start: f64,
     /// Turn end, seconds from the beginning of the audio.
     end: f64,
+    /// Turn time range. `start`/`end` match the flat keys above.
+    time: TimeDto,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+struct AudioDto {
+    /// Audio duration in seconds.
+    duration_secs: f64,
+    /// Sample rate in Hz.
+    sample_rate: u32,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+struct ProvenanceDto {
+    /// Crate version that produced the result.
+    version: String,
+    /// Profile id, or empty if not recorded.
+    profile: String,
+    /// Segmentation/VAD model id, or empty.
+    segmenter: String,
+    /// Embedding model id, or empty.
+    embedder: String,
+    /// Clustering backend id, or empty.
+    clusterer: String,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -111,13 +155,18 @@ struct DiarizeOutput {
     schema_version: String,
     /// Number of distinct speakers detected.
     num_speakers: usize,
-    /// Audio duration, in seconds.
-    duration_s: f64,
+    /// Per-window segments.
+    segments: Vec<SegmentDto>,
+    /// Ordered speaker turns. Always present.
+    turns: Vec<TurnDto>,
+    /// Audio metadata.
+    audio: AudioDto,
+    /// How this result was produced.
+    provenance: ProvenanceDto,
     /// Per-speaker rollup.
     speakers: Vec<SpeakerRollup>,
-    /// Ordered speaker turns. Present only when verbosity = "detailed".
-    #[serde(skip_serializing_if = "Option::is_none")]
-    turns: Option<Vec<TurnDto>>,
+    /// Audio duration, in seconds. Same value as `audio.duration_secs`.
+    duration_s: f64,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -173,7 +222,7 @@ impl PolyvoiceMcp {
 
     #[tool(
         name = "polyvoice.diarize",
-        description = "Diarize a WAV file (who spoke when). Returns the canonical DiarizationResult v1 (concise rollup, or full turns with verbosity=detailed)."
+        description = "Diarize a WAV file (who spoke when). Returns diarization-result-v1 fields (segments, turns with numeric speaker and time, num_speakers) plus the speaker rollup."
     )]
     fn diarize(
         &self,
@@ -235,7 +284,10 @@ fn asr_unavailable() -> ErrorData {
 }
 
 /// Project a canonical DiarizationResult v1 onto the MCP output DTO.
-fn project(result: &DiarizationResult, detailed: bool) -> DiarizeOutput {
+///
+/// `detailed` is still accepted so existing call sites can pass the verbosity
+/// flag; it no longer drops turns.
+fn project(result: &DiarizationResult, _detailed: bool) -> DiarizeOutput {
     let speakers = result
         .speakers
         .iter()
@@ -246,24 +298,51 @@ fn project(result: &DiarizationResult, detailed: bool) -> DiarizeOutput {
             turn_count: s.turn_count,
         })
         .collect();
-    let turns = detailed.then(|| {
-        result
-            .turns
-            .iter()
-            .map(|t| TurnDto {
-                speaker: t.speaker.to_string(),
-                speaker_id: t.speaker.0,
+    let segments = result
+        .segments
+        .iter()
+        .map(|s| SegmentDto {
+            time: TimeDto {
+                start: s.time.start,
+                end: s.time.end,
+            },
+            speaker: s.speaker.map(|id| id.0),
+            confidence: s.confidence,
+        })
+        .collect();
+    let turns = result
+        .turns
+        .iter()
+        .map(|t| TurnDto {
+            speaker: t.speaker.0,
+            label: t.speaker.to_string(),
+            speaker_id: t.speaker.0,
+            start: t.time.start,
+            end: t.time.end,
+            time: TimeDto {
                 start: t.time.start,
                 end: t.time.end,
-            })
-            .collect()
-    });
+            },
+        })
+        .collect();
     DiarizeOutput {
         schema_version: result.schema_version.clone(),
         num_speakers: result.num_speakers,
-        duration_s: result.audio.duration_secs,
-        speakers,
+        segments,
         turns,
+        audio: AudioDto {
+            duration_secs: result.audio.duration_secs,
+            sample_rate: result.audio.sample_rate,
+        },
+        provenance: ProvenanceDto {
+            version: result.provenance.version.clone(),
+            profile: result.provenance.profile.clone(),
+            segmenter: result.provenance.segmenter.clone(),
+            embedder: result.provenance.embedder.clone(),
+            clusterer: result.provenance.clusterer.clone(),
+        },
+        speakers,
+        duration_s: result.audio.duration_secs,
     }
 }
 
@@ -287,15 +366,69 @@ fn mcp_root() -> Result<Option<std::path::PathBuf>, ErrorData> {
 }
 
 fn reject_parent_dir(p: &Path, label: &str) -> Result<(), ErrorData> {
-    if p.components()
-        .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
+    if p.components().any(|c| matches!(c, Component::ParentDir)) {
         return Err(err(
             ERR_INVALID_ARG,
             format!("{label} path traversal rejected"),
         ));
     }
     Ok(())
+}
+
+/// Nearest existing ancestor of `path`, canonicalized. A missing leaf stops
+/// at the parent that does exist (`.` when nothing relative exists yet), so
+/// the caller can confine that ancestor without stating whether the leaf exists.
+fn canonical_existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
+    let mut acc = PathBuf::new();
+    let mut last_existing: Option<PathBuf> = None;
+    for component in path.components() {
+        acc.push(component.as_os_str());
+        match acc.try_exists() {
+            Ok(true) => last_existing = Some(acc.clone()),
+            Ok(false) => break,
+            Err(e) if last_existing.is_none() => return Err(e),
+            Err(_) => break,
+        }
+    }
+    last_existing
+        .unwrap_or_else(|| PathBuf::from("."))
+        .canonicalize()
+}
+
+/// Audio path for [`run_diarize`]. When `root` is set, an ancestor outside
+/// that root is rejected before any leaf existence check.
+fn open_audio_path(path: &Path, root: Option<&Path>) -> Result<PathBuf, ErrorData> {
+    reject_parent_dir(path, "audio")?;
+    if let Some(root) = root {
+        let ancestor = canonical_existing_ancestor(path)
+            .map_err(|e| err(ERR_INVALID_ARG, format!("audio: {e}")))?;
+        if !ancestor.starts_with(root) {
+            return Err(err(ERR_INVALID_ARG, "audio is outside POLYVOICE_MCP_ROOT"));
+        }
+        if !path.is_file() {
+            return Err(err(
+                ERR_INVALID_ARG,
+                format!("no such file: {}", path.display()),
+            ));
+        }
+    } else if !path.is_file() {
+        return Err(err(
+            ERR_INVALID_ARG,
+            format!("no such file: {}", path.display()),
+        ));
+    }
+    confine_path(path, root, "audio")
+}
+
+fn map_pipeline_run_error(e: polyvoice::pipeline_v2::PipelineError) -> ErrorData {
+    use polyvoice::pipeline_v2::PipelineError;
+    let code = match &e {
+        PipelineError::UnsupportedSampleRate { .. } => ERR_INVALID_ARG,
+        PipelineError::AudioTooLong { .. } => ERR_AUDIO_TOO_LONG,
+        PipelineError::Registry(_) => ERR_REGISTRY,
+        _ => ERR_INFERENCE,
+    };
+    err(code, e.to_string())
 }
 
 fn confine_path(
@@ -321,18 +454,12 @@ fn confine_path(
 /// Run the production (pipeline v2) diarization path quietly, mapping failures
 /// to FFI-coded MCP errors. Defaults match the CLI: VBx clusterer + registry
 /// PLDA auto-download when `vbx_plda_dir` is unset. `..` components are
-/// always rejected. When `POLYVOICE_MCP_ROOT` is set, paths must stay under it.
+/// always rejected. When `POLYVOICE_MCP_ROOT` is set, the nearest existing
+/// ancestor must stay under it — a missing leaf outside the root is "outside",
+/// not "no such file".
 fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
     let root = mcp_root()?;
-    let path = Path::new(&input.path);
-    reject_parent_dir(path, "audio")?;
-    if !path.is_file() {
-        return Err(err(
-            ERR_INVALID_ARG,
-            format!("no such file: {}", input.path),
-        ));
-    }
-    let path = confine_path(path, root.as_deref(), "audio")?;
+    let path = open_audio_path(Path::new(&input.path), root.as_deref())?;
     let profile: Profile = input
         .profile
         .as_deref()
@@ -352,14 +479,21 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
         .ensure_for_profile(profile)
         .map_err(|e| err(ERR_MODEL_LOAD, e.to_string()))?;
 
-    let mut config = PipelineConfig::default();
-    config.profile = profile;
-    config.clusterer = clusterer_kind;
-    config.max_speakers = max_speakers;
-    config.vbx_plda_dir = match input.vbx_plda_dir.as_ref() {
+    let vbx_plda_dir = match input.vbx_plda_dir.as_ref() {
         Some(s) => Some(confine_path(Path::new(s), root.as_deref(), "vbx_plda_dir")?),
+        // Unset: the builder reads POLYVOICE_VBX_PLDA_DIR. No extra root check.
         None => None,
     };
+    let config = cli_common::product_pipeline_config(cli_common::ProductParts {
+        profile,
+        clusterer: clusterer_kind,
+        vbx_plda_dir,
+        max_speakers: input.max_speakers.is_some().then_some(max_speakers),
+        embed_window_secs: None,
+        execution_provider: polyvoice::pipeline_v2::ExecutionProvider::auto(),
+        as_norm: None,
+        domain: None,
+    });
     let pipeline = cli_common::build_v2_pipeline(config, registry)
         .map_err(|e| err(ERR_MODEL_LOAD, format!("{e:#}")))?;
 
@@ -367,9 +501,7 @@ fn run_diarize(input: &DiarizeInput) -> Result<DiarizationResult, ErrorData> {
     let sr = SampleRate::new(sr_hz)
         .ok_or_else(|| err(ERR_INVALID_ARG, format!("invalid sample rate {sr_hz} Hz")))?;
 
-    pipeline
-        .run(&samples, sr)
-        .map_err(|e| err(ERR_INFERENCE, e.to_string()))
+    pipeline.run(&samples, sr).map_err(map_pipeline_run_error)
 }
 
 #[tokio::main]
@@ -460,7 +592,7 @@ mod tests {
         }
     }
 
-    use polyvoice::types::{SpeakerId, SpeakerTurn, TimeRange};
+    use polyvoice::types::{Segment, SpeakerId, SpeakerTurn, TimeRange};
 
     /// Minimal valid input pointing at `path`; every optional knob unset.
     fn input(path: &str) -> DiarizeInput {
@@ -484,7 +616,14 @@ mod tests {
             stable: true,
         };
         DiarizationResult::new(
-            Vec::new(),
+            vec![Segment {
+                time: TimeRange {
+                    start: 0.0,
+                    end: 1.0,
+                },
+                speaker: Some(SpeakerId(0)),
+                confidence: None,
+            }],
             vec![turn(0, 0.0, 1.0), turn(1, 1.0, 2.5), turn(0, 2.5, 3.0)],
             2,
         )
@@ -492,9 +631,16 @@ mod tests {
     }
 
     #[test]
-    fn project_concise_omits_turns_and_rolls_up_speakers() {
+    fn project_includes_schema_turns_and_rolls_up_speakers() {
         let out = project(&sample_result(), false);
-        assert!(out.turns.is_none());
+        assert_eq!(out.turns.len(), 3);
+        assert_eq!(out.turns[0].speaker, 0);
+        assert_eq!(out.turns[0].speaker_id, 0);
+        assert_eq!(out.turns[0].label, "SPEAKER_00");
+        assert!((out.turns[0].time.start - 0.0).abs() < 1e-9);
+        assert!((out.turns[0].time.end - 1.0).abs() < 1e-9);
+        assert!((out.turns[0].start - out.turns[0].time.start).abs() < 1e-9);
+        assert!((out.turns[0].end - out.turns[0].time.end).abs() < 1e-9);
         assert_eq!(out.num_speakers, 2);
         assert!((out.duration_s - 3.0).abs() < 1e-9);
         assert!(!out.schema_version.is_empty());
@@ -507,26 +653,40 @@ mod tests {
         let s1 = &out.speakers[1];
         assert_eq!(s1.label, "SPEAKER_01");
         assert_eq!(s1.turn_count, 1);
-        // Concise output must not carry a "turns" key at all.
         let json = serde_json::to_value(&out).unwrap();
-        assert!(json.get("turns").is_none());
+        assert_eq!(json["turns"].as_array().unwrap().len(), 3);
+        assert_eq!(json["turns"][0]["speaker"], 0);
+        assert_eq!(json["turns"][0]["label"], "SPEAKER_00");
+        assert!(json["segments"].is_array());
+        assert_eq!(json["segments"].as_array().unwrap().len(), 1);
+        assert_eq!(json["segments"][0]["speaker"], 0);
+        assert!(json["segments"][0]["confidence"].is_null());
         assert!(json["speakers"].as_array().unwrap().len() == 2);
+        assert!((json["audio"]["duration_secs"].as_f64().unwrap() - 3.0).abs() < 1e-9);
+        assert_eq!(json["audio"]["sample_rate"], 16000);
+        assert!(json["provenance"]["version"].is_string());
     }
 
     #[test]
     fn project_detailed_includes_ordered_turns() {
         let out = project(&sample_result(), true);
-        let turns = out.turns.as_ref().expect("detailed turns");
+        let turns = &out.turns;
         assert_eq!(turns.len(), 3);
-        assert_eq!(turns[0].speaker, "SPEAKER_00");
+        assert_eq!(turns[0].speaker, 0);
+        assert_eq!(turns[0].label, "SPEAKER_00");
         assert_eq!(turns[0].speaker_id, 0);
         assert!((turns[0].start - 0.0).abs() < 1e-9);
         assert!((turns[0].end - 1.0).abs() < 1e-9);
-        assert_eq!(turns[1].speaker, "SPEAKER_01");
+        assert!((turns[0].time.start - 0.0).abs() < 1e-9);
+        assert!((turns[0].time.end - 1.0).abs() < 1e-9);
+        assert_eq!(turns[1].speaker, 1);
+        assert_eq!(turns[1].label, "SPEAKER_01");
         assert!((turns[1].end - 2.5).abs() < 1e-9);
         assert_eq!(turns[2].speaker_id, 0);
         let json = serde_json::to_value(&out).unwrap();
         assert_eq!(json["turns"].as_array().unwrap().len(), 3);
+        assert_eq!(json["turns"][0]["speaker"], 0);
+        assert!(json["segments"].is_array());
     }
 
     #[test]
@@ -576,6 +736,68 @@ mod tests {
         let inside = tempfile::NamedTempFile::new_in(root.path()).unwrap();
         let got = confine_path(inside.path(), Some(&root_canon), "audio").unwrap();
         assert!(got.starts_with(&root_canon));
+    }
+
+    #[test]
+    fn missing_leaf_outside_root_does_not_report_no_such_file() {
+        let root = tempfile::TempDir::new().unwrap();
+        let root_canon = root.path().canonicalize().unwrap();
+        let outside = tempfile::TempDir::new().unwrap();
+        let missing = outside.path().join("missing.wav");
+        assert!(!missing.exists());
+        let msg = open_audio_path(&missing, Some(&root_canon))
+            .unwrap_err()
+            .data
+            .expect("data")["message"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(msg.contains("outside POLYVOICE_MCP_ROOT"), "{msg}");
+        assert!(!msg.contains("no such file"), "{msg}");
+
+        let inside_missing = root.path().join("missing.wav");
+        let msg = open_audio_path(&inside_missing, Some(&root_canon))
+            .unwrap_err()
+            .data
+            .expect("data")["message"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(msg.contains("no such file"), "{msg}");
+        assert!(!msg.contains("outside"), "{msg}");
+    }
+
+    #[test]
+    fn pipeline_run_errors_use_ffi_codes() {
+        use polyvoice::models::RegistryError;
+        use polyvoice::pipeline_v2::{ConfigError, PipelineError};
+        let cases = [
+            (
+                PipelineError::UnsupportedSampleRate { actual: 8000 },
+                ERR_INVALID_ARG,
+            ),
+            (
+                PipelineError::AudioTooLong {
+                    actual_samples: 9,
+                    max_samples: 8,
+                },
+                ERR_AUDIO_TOO_LONG,
+            ),
+            (
+                PipelineError::Registry(RegistryError::ModelNotFound {
+                    model_id: "x".into(),
+                }),
+                ERR_REGISTRY,
+            ),
+            (
+                PipelineError::Config(ConfigError::RegistryInCustomProfile),
+                ERR_INFERENCE,
+            ),
+        ];
+        for (error, code) in cases {
+            let data = map_pipeline_run_error(error).data.expect("data");
+            assert_eq!(data["code"], code);
+        }
     }
 
     #[test]

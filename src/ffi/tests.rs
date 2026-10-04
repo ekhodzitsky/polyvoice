@@ -72,6 +72,7 @@ fn cache_dir_accepts_absolute_and_relative_paths() {
 // pipeline_v2 mock components so no ONNX models or network are needed.
 // ---------------------------------------------------------------------
 
+use crate::pipeline_v2::StageModelIds;
 use crate::pipeline_v2::mocks::{MockClusterer, MockEmbedder, MockSegmenter, raw_segment};
 use crate::resegmentation::OverlapResegmenter;
 use std::ptr;
@@ -97,6 +98,7 @@ fn mock_handle(segments: Vec<crate::segmentation::RawSegment>) -> *mut Polyvoice
         Box::new(MockEmbedder::default()),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
     Box::into_raw(Box::new(PolyvoicePipeline { inner: pipeline }))
 }
@@ -133,6 +135,7 @@ fn failing_handle() -> *mut PolyvoicePipeline {
         Box::new(FailingEmbedder),
         Box::new(MockClusterer::default()),
         Box::new(OverlapResegmenter::default()),
+        StageModelIds::default(),
     );
     Box::into_raw(Box::new(PolyvoicePipeline { inner: pipeline }))
 }

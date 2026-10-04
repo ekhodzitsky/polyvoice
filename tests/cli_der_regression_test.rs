@@ -164,7 +164,7 @@ fn cli_der_regression_v2_ami_single() {
         );
     }
     // Shared AMI long-form gate (speaker-count collapse + clustering confusion
-    // + overlap-excluded DER floor); mirrors der_v2_baseline_test::v2_der_ami_test_single.
+    // + overlap-excluded DER floor) against `hybrid_ami_test_single`.
     let baseline = common::load_baseline(&common::der_baseline_path());
     common::gate_ami_longform(
         num_speakers,

@@ -89,6 +89,22 @@ impl ResNet34Native {
         l2_normalize(&mut embedding);
         Ok(embedding)
     }
+
+    /// One packed forward failed: every clip that entered it gets this error.
+    fn push_batch_inference_failure(
+        local: &mut Vec<(usize, Result<Vec<f32>, EmbedderError>)>,
+        slots: &[usize],
+        detail: &str,
+    ) {
+        for &idx in slots {
+            local.push((
+                idx,
+                Err(EmbedderError::InferenceFailed {
+                    detail: detail.to_string(),
+                }),
+            ));
+        }
+    }
 }
 
 impl Embedder for ResNet34Native {
@@ -154,8 +170,15 @@ impl Embedder for ResNet34Native {
             })
             .max(1);
         let threads = cores.min(jobs.len()).min(cap);
+        // Single-file runs set intra-op width to 3 for this scope and restore
+        // 1. Multi-file runs leave the process-wide count alone; the caller
+        // owns it for the whole run, so one file finishing cannot shrink it.
         #[cfg(not(target_vendor = "apple"))]
-        polyvoice_kernels::set_intra_threads(3);
+        let own_intra = polyvoice_kernels::file_parallelism() == 1;
+        #[cfg(not(target_vendor = "apple"))]
+        if own_intra {
+            polyvoice_kernels::set_intra_threads(3);
+        }
         let jobs = std::sync::Mutex::new(jobs);
         let result = std::thread::scope(|scope| {
             let handles: Vec<_> = (0..threads)
@@ -209,13 +232,11 @@ impl Embedder for ResNet34Native {
                                             }
                                         }
                                         Err(e) => {
-                                            let idx = ok_slots[0];
-                                            local.push((
-                                                idx,
-                                                Err(EmbedderError::InferenceFailed {
-                                                    detail: e.to_string(),
-                                                }),
-                                            ));
+                                            Self::push_batch_inference_failure(
+                                                &mut local,
+                                                &ok_slots,
+                                                &e.to_string(),
+                                            );
                                         }
                                     }
                                 }
@@ -261,83 +282,15 @@ impl Embedder for ResNet34Native {
             result
         });
         #[cfg(not(target_vendor = "apple"))]
-        polyvoice_kernels::set_intra_threads(1);
+        if own_intra {
+            polyvoice_kernels::set_intra_threads(1);
+        }
         result
     }
 
     fn embed(&self, samples: &[f32]) -> Result<Vec<f32>, EmbedderError> {
         let (flat, n_frames) = self.fbank_one(samples)?;
         self.embed_prepared(&flat, n_frames)
-    }
-}
-
-#[cfg(all(test, any()))]
-#[allow(clippy::unwrap_used)]
-mod tests {
-    use super::*;
-    use crate::embedder::ResNet34Adapter;
-    use crate::onnx::{ExecutionProvider, InferenceBackend};
-    use std::path::Path;
-
-    fn cosine(a: &[f32], b: &[f32]) -> f64 {
-        let mut dot = 0.0f64;
-        let mut na = 0.0f64;
-        let mut nb = 0.0f64;
-        for (&x, &y) in a.iter().zip(b.iter()) {
-            dot += f64::from(x) * f64::from(y);
-            na += f64::from(x) * f64::from(x);
-            nb += f64::from(y) * f64::from(y);
-        }
-        dot / (na.sqrt() * nb.sqrt()).max(1e-12)
-    }
-
-    /// Amplitude-modulated harmonic stack — closer to speech than a pure sine.
-    /// A lone sine lands in a degenerate corner of embedding space where
-    /// INT8-vs-float accumulation ordering swamps the signal (cosine ~0.95 on
-    /// the production Linux INT8 path, worse on the FP32 fallbacks), while the
-    /// DER gates prove end-task parity on real audio.
-    fn harmonic_pcm(secs: f32) -> Vec<f32> {
-        let n = (secs * 16_000.0) as usize;
-        (0..n)
-            .map(|i| {
-                let t = i as f32 / 16_000.0;
-                let pi = std::f32::consts::PI;
-                let env = 0.5 + 0.5 * (2.0 * pi * 3.0 * t).sin();
-                env * (0.30 * (2.0 * pi * 160.0 * t).sin()
-                    + 0.18 * (2.0 * pi * 320.0 * t).sin()
-                    + 0.12 * (2.0 * pi * 480.0 * t).sin()
-                    + 0.07 * (2.0 * pi * 900.0 * t).sin())
-            })
-            .collect()
-    }
-
-    #[test]
-    #[cfg_attr(miri, ignore)]
-    fn native_matches_onnx_resnet34() {
-        let path = Path::new("models/int8/resnet34_int8.onnx");
-        if !path.is_file() {
-            eprintln!("skip: resnet34_int8.onnx missing");
-            return;
-        }
-        InferenceBackend::force(Some(InferenceBackend::Ort));
-        let onnx = ResNet34Adapter::new(path, 1, ExecutionProvider::Cpu).unwrap();
-        InferenceBackend::force(None);
-        let native = ResNet34Native::from_onnx_path(path).unwrap();
-        let pcm = harmonic_pcm(1.0);
-        let a = onnx.embed(&pcm).unwrap();
-        let b = native.embed(&pcm).unwrap();
-        let c = cosine(&a, &b);
-        eprintln!("native↔ort ResNet34 cosine={c:.6}");
-        // Tripwire floor, not an exact-parity claim. The Linux aarch64 INT8
-        // path accumulates integer dot products like ort and measures ~0.975
-        // here; the FP32 fallbacks (Darwin BNNS, x86 in-crate) dequantize the
-        // same weights and land ~0.83. End-task parity is proven by the DER
-        // gates / scoreboard on real audio, not by synthetic-input cosine.
-        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-        let floor = 0.93;
-        #[cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
-        let floor = 0.70;
-        assert!(c > floor, "native ResNet34 diverged from ort, cosine={c}");
     }
 }
 
@@ -386,6 +339,23 @@ mod batch_tests {
             }
             let c = dot / (na.sqrt() * nb.sqrt()).max(1e-12);
             assert!(c > 0.999, "batch[{i}] cosine={c}");
+        }
+    }
+
+    #[test]
+    fn batch_inference_failure_is_copied_onto_every_slot() {
+        let detail = "non-finite activation";
+        let mut local = Vec::new();
+        ResNet34Native::push_batch_inference_failure(&mut local, &[4, 1, 9], detail);
+        assert_eq!(local.len(), 3);
+        for (i, (idx, res)) in local.iter().enumerate() {
+            assert_eq!(*idx, [4, 1, 9][i]);
+            match res {
+                Err(EmbedderError::InferenceFailed { detail: got }) => {
+                    assert_eq!(got, detail);
+                }
+                other => panic!("expected InferenceFailed, got {other:?}"),
+            }
         }
     }
 }

@@ -2,13 +2,15 @@
 //!
 //! Wires together VAD, embedding extraction, and AHC clustering into a
 //! single `run()` call that takes audio and returns `DiarizationResult`.
-//! This is the BYO / ort-free path; the production ONNX pipeline is
-//! `pipeline_v2::Pipeline` (feature-gated, re-exported at the crate root).
+//! This is the BYO / ort-free path. Production v2 is
+//! `pipeline_v2::Pipeline` on hand-written INT8 kernels
+//! (`pipeline-native` / `cli`), re-exported at the crate root.
 //!
 //! # Bring-your-own embedder
 //!
 //! `LegacyPipeline` is generic over [`crate::Embedder`]. Implement that trait on an
-//! external encoder (Candle, tract, custom) — no `onnx` feature required:
+//! external encoder (Candle, tract, custom) — no inference feature required
+//! (there is no `onnx` feature):
 //!
 //! ```rust
 //! use polyvoice::pipeline::LegacyPipeline;

@@ -14,6 +14,21 @@ use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
+/// Consecutive symphonia `IoError` / `DecodeError` skips before decode fails.
+/// A few soft errors are still skipped so a slightly dirty file can finish;
+/// past this budget a corrupt stream would spin.
+const MAX_CONSECUTIVE_SOFT_ERRORS: u32 = 32;
+
+fn note_soft_error(consecutive: &mut u32, site: &str) -> Result<(), WavError> {
+    *consecutive += 1;
+    if *consecutive >= MAX_CONSECUTIVE_SOFT_ERRORS {
+        return Err(WavError::Decode(format!(
+            "{site}: exceeded consecutive soft-error budget of {MAX_CONSECUTIVE_SOFT_ERRORS}"
+        )));
+    }
+    Ok(())
+}
+
 /// Decode any symphonia-supported file to mono f32 samples + native sample rate.
 pub(super) fn decode_with_symphonia(path: &Path) -> Result<(Vec<f32>, u32), WavError> {
     let metadata = std::fs::metadata(path).map_err(WavError::Metadata)?;
@@ -97,6 +112,7 @@ pub(super) fn decode_with_symphonia(path: &Path) -> Result<(Vec<f32>, u32), WavE
     let track_id = track.id;
     let mut mono_out: Vec<f32> = Vec::new();
     let mut packet_buf: Vec<f32> = Vec::new();
+    let mut consecutive_soft_errors: u32 = 0;
 
     loop {
         let packet = match format.next_packet() {
@@ -108,7 +124,7 @@ pub(super) fn decode_with_symphonia(path: &Path) -> Result<(Vec<f32>, u32), WavE
                 break;
             }
             Err(SymphoniaError::IoError(_)) | Err(SymphoniaError::DecodeError(_)) => {
-                // Soft errors: skip.
+                note_soft_error(&mut consecutive_soft_errors, "demux")?;
                 continue;
             }
             Err(e) => return Err(WavError::Decode(format!("demux: {e}"))),
@@ -123,9 +139,16 @@ pub(super) fn decode_with_symphonia(path: &Path) -> Result<(Vec<f32>, u32), WavE
                 packet_buf.resize(audio_buf.samples_interleaved(), f32::MID);
                 audio_buf.copy_to_slice_interleaved(&mut packet_buf);
                 let chunk_mono = downmix_to_mono(std::mem::take(&mut packet_buf), channels);
+                // Only a packet that actually yielded samples breaks the streak.
+                if !chunk_mono.is_empty() {
+                    consecutive_soft_errors = 0;
+                }
                 mono_out.extend_from_slice(&chunk_mono);
             }
-            Err(SymphoniaError::DecodeError(_)) | Err(SymphoniaError::IoError(_)) => continue,
+            Err(SymphoniaError::DecodeError(_)) | Err(SymphoniaError::IoError(_)) => {
+                note_soft_error(&mut consecutive_soft_errors, "decode")?;
+                continue;
+            }
             Err(e) => return Err(WavError::Decode(format!("decode: {e}"))),
         }
 

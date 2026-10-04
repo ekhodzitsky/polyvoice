@@ -38,23 +38,23 @@ Options:
       --json
           Machine mode: emit only the structured JSON result on stdout; route all human-readable output to stderr. Implies `--format json --quiet`
       --clusterer <CLUSTERER>
-          Clusterer for the default (v2) path: `vbx` (PLDA + VB-HMM, automatic speaker count — the accuracy gate default) or `ahc` (fixed-threshold cosine AHC). `vbx` loads PLDA from `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or auto-downloads via the model registry. Ignored with `--legacy` [default: vbx]
+          Clusterer for the default (v2) path: `vbx` (PLDA + VB-HMM, automatic speaker count — the accuracy gate default) or `ahc` (fixed-threshold cosine AHC). `vbx` loads PLDA from `--vbx-plda-dir` / `POLYVOICE_VBX_PLDA_DIR`, or auto-downloads via the model registry [default: vbx]
       --vbx-plda-dir <VBX_PLDA_DIR>
           Directory with the precomputed VBx PLDA params (overrides `POLYVOICE_VBX_PLDA_DIR` and the registry auto-download). Used when `--clusterer vbx` (the default)
       --as-norm
-          AS-norm score normalization for the AHC clusterer: pairwise cosine scores are z-normalized against an imposter cohort before merging, so one threshold generalizes across recording domains. Requires `--clusterer ahc`. Ignored with `--legacy`
+          AS-norm score normalization for the AHC clusterer: pairwise cosine scores are z-normalized against an imposter cohort before merging, so one threshold generalizes across recording domains. Requires `--clusterer ahc`
       --cohort <COHORT>
           Imposter cohort for --as-norm: (N, 256) '<f4' .npy of speaker embeddings. Omitted = model-registry cohort, with the POLYVOICE_ASNORM_COHORT env override
       --domain-profile <DOMAIN_PROFILE>
-          Per-domain scoring profile: voxconverse | ami | callhome. Replaces the default AHC threshold with the profile's calibrated value (an explicit --threshold wins) and sets the AS-norm cohort size. Requires `--clusterer ahc`. Ignored with `--legacy`
+          Per-domain scoring profile: voxconverse | ami | callhome. Replaces the default AHC threshold with the profile's calibrated value (an explicit --threshold wins) and sets the AS-norm cohort size. Requires `--clusterer ahc`
       --embed-window <EMBED_WINDOW>
-          v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment. Ignored with `--legacy`
+          v2 dense embedding window in seconds (e.g. `1.5`): split segments into overlapping sub-windows for more embeddings per speaker — lower confusion on clean audio at the cost of more embedder calls. Omit for one embedding/segment
       --execution-provider <EXECUTION_PROVIDER>
           Execution provider: `auto` or `cpu`. The product kernels run on the CPU only; `coreml`, `nnapi`, `cuda`, and `xnnpack` are parsed for tract builds and rejected before any model download when the build cannot execute them (no silent CPU fallback) [default: auto]
       --exclusive
           Also emit a single-speaker (exclusive) timeline. In JSON this is the additive `exclusive_turns` field beside the overlap-aware `turns`. For RTTM/SRT/VTT/TXT the exclusive timeline is written instead (ASR- reconciliation surface — concurrent speakers are collapsed per frame)
       --latency-preset <PRESET>
-          Streaming-aligned window geometry preset: `realtime` | `balanced` | `accurate`. Sets embedding window/hop (and max speakers ceiling) to match `polyvoice::streaming::LatencyPreset`. Default leaves config unchanged (balanced geometry is already the DiarizationConfig default)
+          Embedding-window preset: `realtime` | `balanced` | `accurate`. Sets the embedding window only (the preset's `window_secs`: 1.0 / 1.5 / 2.0). Hop stays half the window. It does not change max speakers. If both `--embed-window` and `--latency-preset` are set, `--embed-window` wins
   -h, --help
           Print help
   -V, --version

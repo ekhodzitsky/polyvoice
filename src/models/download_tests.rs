@@ -435,6 +435,11 @@ fn sha256_of_file(path: &Path) -> String {
 }
 
 #[test]
+fn https_agent_is_https_only() {
+    assert!(https_agent().config().https_only());
+}
+
+#[test]
 fn max_download_bytes_uses_declared_size_with_slack() {
     assert_eq!(max_download_bytes(None), DEFAULT_MAX_MODEL_BYTES);
     assert_eq!(max_download_bytes(Some(0)), DEFAULT_MAX_MODEL_BYTES);

@@ -48,5 +48,10 @@ pub(super) fn build_onnx_stages(
             }
         })?,
     );
-    Ok((segmenter, embedder))
+    Ok(StagePair {
+        segmenter,
+        embedder,
+        segmenter_id: "powerset_fp32_tract",
+        embedder_id: "wespeaker_resnet34",
+    })
 }

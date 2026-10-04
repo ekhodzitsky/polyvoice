@@ -5,7 +5,9 @@
 #   - profile balanced (powerset_int8 + resnet34_int8)
 #   - pipeline v2 + VBx
 #   - execution-provider cpu (never CoreML / auto)
-#   - powerset micro-batch N=8 (product default; override POLYVOICE_POWERSET_BATCH_SIZE)
+#   - kernels (default FEATURES=cli) do not use a powerset micro-batch.
+#     Native powerset ignores POLYVOICE_POWERSET_BATCH_SIZE. N=8 is the
+#     tract/ONNX segmenter behavior, not the kernel product default.
 #   - collar 0.25 run (JSON also carries no-collar micro/macro)
 #   - full splits when MAX_*=0: VoxConverse-test 232, AMI-test 16
 #
@@ -82,7 +84,8 @@ if [[ "${DOCKER:-0}" == "1" ]]; then
       cp "models/int8/$f" "$MODEL_CACHE/$f"
     fi
   done
-  # Ubuntu 24.04: ort download-binaries need glibc ≥ ~2.38.
+  # Ubuntu 24.04 image. The kernel default (FEATURES=cli) does not download
+  # ONNX Runtime binaries; the old glibc≥2.38 note was for ort download-binaries.
   IMG="${DOCKER_IMAGE:-ubuntu:24.04}"
   echo "=== Docker Linux gate (image=$IMG) ==="
   exec docker run --rm \
@@ -438,7 +441,7 @@ cat >"$OUT/NOTES.auto.md" <<EOF
 # Linux CPU DER gate (auto)
 
 **Date:** ${DATE}
-**Protocol:** INT8 balanced, pipeline v2 + VBx, EP=\`${EP}\`, powerset micro-batch N=\`${POLYVOICE_POWERSET_BATCH_SIZE}\`.
+**Protocol:** INT8 balanced, pipeline v2 + VBx, EP=\`${EP}\`, \`FEATURES=${FEATURES}\`. Native powerset ignores \`POLYVOICE_POWERSET_BATCH_SIZE\` (still exported as ${POLYVOICE_POWERSET_BATCH_SIZE} for a tract/ONNX run).
 **Assert baseline:** ${ASSERT_BASELINE} (\`${BASELINE_JSON}\`)
 **Command:** \`bash scripts/linux-cpu-der-gate.sh\`
 

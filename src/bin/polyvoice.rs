@@ -22,7 +22,6 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use polyvoice::cli_common;
 use polyvoice::format::{write_srt, write_txt, write_vtt};
 use polyvoice::models::ModelRegistry;
-use polyvoice::pipeline_v2::PipelineConfig;
 use polyvoice::rttm::write_rttm;
 use polyvoice::types::{DiarizationResult, Profile, SampleRate};
 use polyvoice::wav::load_audio;
@@ -96,7 +95,6 @@ struct DiarizeArgs {
     /// speaker count — the accuracy gate default) or `ahc` (fixed-threshold
     /// cosine AHC). `vbx` loads PLDA from `--vbx-plda-dir` /
     /// `POLYVOICE_VBX_PLDA_DIR`, or auto-downloads via the model registry.
-    /// Ignored with `--legacy`.
     #[arg(long, default_value = "vbx")]
     clusterer: String,
     /// Directory with the precomputed VBx PLDA params (overrides
@@ -107,7 +105,7 @@ struct DiarizeArgs {
     /// AS-norm score normalization for the AHC clusterer: pairwise cosine
     /// scores are z-normalized against an imposter cohort before merging, so
     /// one threshold generalizes across recording domains. Requires
-    /// `--clusterer ahc`. Ignored with `--legacy`.
+    /// `--clusterer ahc`.
     #[arg(long)]
     as_norm: bool,
     /// Imposter cohort for --as-norm: (N, 256) '<f4' .npy of speaker
@@ -118,13 +116,13 @@ struct DiarizeArgs {
     /// Per-domain scoring profile: voxconverse | ami | callhome. Replaces the
     /// default AHC threshold with the profile's calibrated value (an explicit
     /// --threshold wins) and sets the AS-norm cohort size. Requires
-    /// `--clusterer ahc`. Ignored with `--legacy`.
+    /// `--clusterer ahc`.
     #[arg(long)]
     domain_profile: Option<String>,
     /// v2 dense embedding window in seconds (e.g. `1.5`): split segments into
     /// overlapping sub-windows for more embeddings per speaker — lower confusion
     /// on clean audio at the cost of more embedder calls. Omit for one
-    /// embedding/segment. Ignored with `--legacy`.
+    /// embedding/segment.
     #[arg(long)]
     embed_window: Option<f32>,
     /// Execution provider: `auto` or `cpu`. The product kernels run on the
@@ -139,10 +137,11 @@ struct DiarizeArgs {
     /// reconciliation surface — concurrent speakers are collapsed per frame).
     #[arg(long)]
     exclusive: bool,
-    /// Streaming-aligned window geometry preset: `realtime` | `balanced` |
-    /// `accurate`. Sets embedding window/hop (and max speakers ceiling) to match
-    /// `polyvoice::streaming::LatencyPreset`. Default leaves config unchanged
-    /// (balanced geometry is already the DiarizationConfig default).
+    /// Embedding-window preset: `realtime` | `balanced` | `accurate`.
+    /// Sets the embedding window only (the preset's `window_secs`: 1.0 / 1.5 /
+    /// 2.0). Hop stays half the window. It does not change max speakers. If
+    /// both `--embed-window` and `--latency-preset` are set, `--embed-window`
+    /// wins.
     #[arg(long, value_name = "PRESET")]
     latency_preset: Option<String>,
 }
@@ -234,13 +233,16 @@ fn cmd_diarize(args: DiarizeArgs) -> Result<()> {
     if !wav.is_file() {
         anyhow::bail!("No such file: {}", wav.display());
     }
+    // ParentDir only: a name like `foo..bar` is not traversal, and the check
+    // does not depend on the path being UTF-8. Reject before the registry.
+    if let Some(ref cache) = models_cache {
+        reject_parent_dir(cache, "models_cache")?;
+    }
+    if let Some(ref plda) = vbx_plda_dir {
+        reject_parent_dir(plda, "vbx_plda_dir")?;
+    }
     let registry = match models_cache {
-        Some(p) => {
-            if p.to_str().is_some_and(|s| s.contains("..")) {
-                anyhow::bail!("models_cache path contains '..' (path traversal rejected)");
-            }
-            ModelRegistry::with_cache_dir(&p).context("failed to open models cache")?
-        }
+        Some(p) => ModelRegistry::with_cache_dir(&p).context("failed to open models cache")?,
         None => ModelRegistry::default().context("failed to resolve default models cache")?,
     };
 
@@ -342,6 +344,17 @@ fn write_output(
     Ok(())
 }
 
+/// Reject a path whose components include `..`. Absolute paths stay valid.
+fn reject_parent_dir(path: &Path, label: &str) -> Result<()> {
+    if path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        anyhow::bail!("{label} path traversal rejected");
+    }
+    Ok(())
+}
+
 fn inference_backend_label() -> &'static str {
     #[cfg(feature = "infer")]
     {
@@ -380,17 +393,20 @@ fn run_v2_pipeline(
         domain_profile.as_deref(),
     )?;
     let ep = cli_common::parse_execution_provider(execution_provider)?;
-    let mut config = PipelineConfig::default();
-    config.profile = profile;
-    config.clusterer = clusterer_kind;
-    config.vbx_plda_dir = vbx_plda_dir;
-    config.as_norm = as_norm_config;
-    config.domain = domain;
-    config.embed_window_secs = embed_window;
-    config.execution_provider = ep;
-    if let Some(n) = max_clusters {
-        config.max_speakers = cli_common::max_speakers_u8(n)?;
-    }
+    let max_speakers = match max_clusters {
+        Some(n) => Some(cli_common::max_speakers_u8(n)?),
+        None => None,
+    };
+    let config = cli_common::product_pipeline_config(cli_common::ProductParts {
+        profile,
+        clusterer: clusterer_kind,
+        vbx_plda_dir,
+        max_speakers,
+        embed_window_secs: embed_window,
+        execution_provider: ep,
+        as_norm: as_norm_config,
+        domain,
+    });
     let pipeline = cli_common::build_v2_pipeline(config, registry.clone())?;
 
     if !quiet {
@@ -550,6 +566,31 @@ fn main() -> Result<()> {
         None => cmd_diarize(cli.diarize),
     }
 }
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod path_checks {
+    use super::reject_parent_dir;
+    use std::path::Path;
+
+    #[test]
+    fn parent_component_rejected_but_dotdot_inside_a_name_is_kept() {
+        assert!(reject_parent_dir(Path::new("foo..bar"), "models_cache").is_ok());
+        assert!(reject_parent_dir(Path::new("/opt/polyvoice/models"), "vbx_plda_dir").is_ok());
+        let err = reject_parent_dir(Path::new("../escape"), "models_cache").unwrap_err();
+        assert!(format!("{err:#}").contains("path traversal"));
+        let err = reject_parent_dir(Path::new("a/../../b"), "vbx_plda_dir").unwrap_err();
+        assert!(format!("{err:#}").contains("vbx_plda_dir"));
+        #[cfg(unix)]
+        {
+            use std::ffi::OsStr;
+            use std::os::unix::ffi::OsStrExt;
+            let raw = Path::new(OsStr::from_bytes(b"cache/\xff/../x"));
+            let err = reject_parent_dir(raw, "models_cache").unwrap_err();
+            assert!(format!("{err:#}").contains("path traversal"));
+        }
+    }
+}
+
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 #[path = "polyvoice_prop_tests.rs"]

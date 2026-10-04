@@ -57,7 +57,9 @@ for turn in result["turns"]:
   `clusterer` is `"vbx"` (default, matching the CLI) or `"ahc"`. VBx resolves
   its PLDA params via `vbx_plda_dir`, then the `POLYVOICE_VBX_PLDA_DIR` env
   var, then a registry download.
-- `pipeline.run(samples, sample_rate)` → `dict` with `num_speakers` and `turns`.
+- `pipeline.run(samples, sample_rate)` → `dict` with `num_speakers` and flat
+  turn `start`/`end`/`speaker`, plus canonical v1 `schema_version`, `segments`,
+  `turns[].time`, `audio`, `provenance`, and `speakers`.
 - `pipeline.run_result(samples, sample_rate)` → typed `DiarizationResult` with
   `.to_json()` / `.to_rttm()` / `.to_srt()` / `.to_vtt()` / `.to_txt()` projections.
 - `polyvoice.DiarizationResult.from_json(json)` — re-hydrate a saved result.

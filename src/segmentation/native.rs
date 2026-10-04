@@ -1,14 +1,20 @@
 //! Pyannote powerset-3.0 via `polyvoice-kernels` (no ONNX runtime).
 
 use crate::segmentation::aggregator::{AggregationConfig, Aggregator, WindowOutput};
-use crate::segmentation::{MIN_AUDIO_SAMPLES, RawSegment, SegmentationError, Segmenter};
+use crate::segmentation::{
+    BinarizationConfig, MIN_AUDIO_SAMPLES, RawSegment, SegmentationError, Segmenter,
+};
 use polyvoice_kernels::{N_CLASSES, Powerset};
 use std::path::{Path, PathBuf};
 
 /// Hand-written powerset-3.0. Same 10 s / 2 s geometry as the shipping ONNX
 /// adapter; inference is SincNet + 4× biLSTM in `polyvoice-kernels`.
 pub struct PowersetNative {
+    #[cfg(not(test))]
     net: Powerset,
+    /// `None` only in aggregation tests that must not load an ONNX file.
+    #[cfg(test)]
+    net: Option<Powerset>,
     path: PathBuf,
     window_secs: f32,
     hop_secs: f32,
@@ -24,13 +30,36 @@ impl PowersetNative {
             detail: e.to_string(),
         })?;
         Ok(Self {
+            #[cfg(not(test))]
             net,
+            #[cfg(test)]
+            net: Some(net),
             path: path.to_path_buf(),
             window_secs: 10.0,
             hop_secs: 2.0,
             sample_rate: 16_000,
             aggregation: AggregationConfig::default(),
         })
+    }
+
+    /// Calibrated binarization for the aggregator. `None` keeps the default
+    /// argmax path (`AggregationConfig::default`).
+    pub(crate) fn with_binarization(mut self, binarization: Option<BinarizationConfig>) -> Self {
+        self.aggregation.binarization = binarization;
+        self
+    }
+
+    /// Aggregation-only stand-in. Does not load a net.
+    #[cfg(test)]
+    fn without_weights() -> Self {
+        Self {
+            net: None,
+            path: PathBuf::new(),
+            window_secs: 10.0,
+            hop_secs: 2.0,
+            sample_rate: 16_000,
+            aggregation: AggregationConfig::default(),
+        }
     }
 
     pub fn model_path(&self) -> &Path {
@@ -44,8 +73,17 @@ impl PowersetNative {
         n: usize,
         t: usize,
     ) -> Result<(Vec<f32>, usize), SegmentationError> {
-        self.net
-            .forward(waveforms, n, t)
+        #[cfg(not(test))]
+        let net = &self.net;
+        #[cfg(test)]
+        let net = self
+            .net
+            .as_ref()
+            .ok_or_else(|| SegmentationError::InferenceFailed {
+                window_idx: 0,
+                detail: "native powerset weights are not loaded".into(),
+            })?;
+        net.forward(waveforms, n, t)
             .map_err(|e| SegmentationError::InferenceFailed {
                 window_idx: 0,
                 detail: e.to_string(),
@@ -145,7 +183,12 @@ impl PowersetNative {
                                             Some(g.remove(0))
                                         }
                                     }
-                                    Err(_) => break,
+                                    Err(_) => {
+                                        return Err(SegmentationError::InferenceFailed {
+                                            window_idx: 0,
+                                            detail: "native window worker lock poisoned".into(),
+                                        });
+                                    }
                                 };
                                 let Some((off, ch)) = job else { break };
                                 match self.infer_chunk(audio, ch, win) {
@@ -279,97 +322,30 @@ impl Segmenter for PowersetNative {
     }
 }
 
-#[cfg(all(test, any()))]
-#[allow(clippy::unwrap_used)]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::onnx::{
-        ExecutionProvider, InferenceBackend, InferenceRuntime, InferenceTensor, NamedTensor,
-        build_session_with_ep,
-    };
-    use std::path::Path;
-
-    fn model_path() -> Option<&'static Path> {
-        [
-            Path::new("models/int8/powerset_int8.onnx"),
-            Path::new("models/powerset_int8.onnx"),
-        ]
-        .into_iter()
-        .find(|p| p.is_file())
-    }
-
-    fn cosine(a: &[f32], b: &[f32]) -> f64 {
-        let mut dot = 0.0f64;
-        let mut na = 0.0f64;
-        let mut nb = 0.0f64;
-        for (&x, &y) in a.iter().zip(b.iter()) {
-            dot += f64::from(x) * f64::from(y);
-            na += f64::from(x) * f64::from(x);
-            nb += f64::from(y) * f64::from(y);
-        }
-        dot / (na.sqrt() * nb.sqrt()).max(1e-12)
-    }
+    use crate::segmentation::BinarizationConfig;
 
     #[test]
-    #[cfg_attr(miri, ignore)]
-    fn native_matches_ort_one_second() {
-        let Some(path) = model_path() else {
-            eprintln!("skip: powerset onnx missing");
-            return;
+    fn default_binarization_is_none_and_some_is_stored() {
+        let plain = PowersetNative::without_weights();
+        assert!(plain.aggregation.binarization.is_none());
+        assert_eq!(plain.aggregation.min_segment_secs, 0.0);
+        assert_eq!(plain.aggregation.max_local_speakers, 3);
+
+        let bin = BinarizationConfig {
+            onset: 0.64,
+            offset: 0.42,
+            min_duration_on: 0.15,
+            min_duration_off: 0.05,
         };
-        let t = 16_000usize;
-        let wav: Vec<f32> = (0..t).map(|i| 0.05 * ((i as f32) * 0.02).sin()).collect();
+        let stored = plain.with_binarization(Some(bin));
+        assert_eq!(stored.aggregation.binarization, Some(bin));
+        assert_eq!(stored.aggregation.min_segment_secs, 0.0);
+        assert_eq!(stored.aggregation.max_local_speakers, 3);
 
-        let native = PowersetNative::from_onnx_path(path).unwrap();
-        let (nlog, nf) = native.infer_packed(&wav, 1, t).unwrap();
-
-        InferenceBackend::force(Some(InferenceBackend::Ort));
-        let mut sess = build_session_with_ep(path, ExecutionProvider::Cpu, Some(1)).unwrap();
-        let input = InferenceTensor::f32(vec![1, 1, t], wav);
-        let name = sess.primary_input_name().unwrap_or("x").to_owned();
-        let out = sess.run(&[NamedTensor::new(&name, &input)]).unwrap();
-        InferenceBackend::force(None);
-        let first = out.into_iter().next().unwrap();
-        let shape = first.shape.clone();
-        let olog = first.into_f32().unwrap();
-        assert_eq!(shape.len(), 3);
-        assert_eq!(shape[2], 7);
-        assert_eq!(shape[1], nf);
-        assert_eq!(olog.len(), nlog.len());
-
-        let c = cosine(&nlog, &olog);
-        let mut max_abs = 0.0f32;
-        let mut argmax_eq = 0usize;
-        let frames = nf;
-        for f in 0..frames {
-            let a = &nlog[f * 7..f * 7 + 7];
-            let b = &olog[f * 7..f * 7 + 7];
-            for i in 0..7 {
-                max_abs = max_abs.max((a[i] - b[i]).abs());
-            }
-            let ia = a
-                .iter()
-                .enumerate()
-                .max_by(|x, y| x.1.partial_cmp(y.1).unwrap())
-                .unwrap()
-                .0;
-            let ib = b
-                .iter()
-                .enumerate()
-                .max_by(|x, y| x.1.partial_cmp(y.1).unwrap())
-                .unwrap()
-                .0;
-            if ia == ib {
-                argmax_eq += 1;
-            }
-        }
-        eprintln!(
-            "native↔ort powerset cosine={c:.6} max_abs={max_abs:.5} argmax={argmax_eq}/{frames}"
-        );
-        assert!(c > 0.99, "log-softmax cosine {c}");
-        assert!(
-            argmax_eq * 100 >= frames * 95,
-            "argmax agreement {argmax_eq}/{frames}"
-        );
+        let cleared = stored.with_binarization(None);
+        assert!(cleared.aggregation.binarization.is_none());
     }
 }
