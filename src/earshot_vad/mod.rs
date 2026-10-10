@@ -9,7 +9,7 @@
 //!
 //! The CLI product segmenter is the powerset kernels, not this adapter and
 //! not Silero. Earshot stays optional (`vad-earshot`). Silero ONNX is an
-//! optional tract [`VoiceActivityDetector`](crate::vad::VoiceActivityDetector)
+//! optional tract [`VoiceActivityDetector`]
 //! behind `infer`, not the DER-parity reference.
 //!
 //! # Frame contract

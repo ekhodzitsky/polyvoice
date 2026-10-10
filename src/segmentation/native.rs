@@ -1,9 +1,7 @@
 //! Pyannote powerset-3.0 via `polyvoice-kernels` (no ONNX runtime).
 
 use crate::segmentation::aggregator::{AggregationConfig, Aggregator, WindowOutput};
-use crate::segmentation::{
-    BinarizationConfig, MIN_AUDIO_SAMPLES, RawSegment, SegmentationError, Segmenter,
-};
+use crate::segmentation::{MIN_AUDIO_SAMPLES, RawSegment, SegmentationError, Segmenter};
 use polyvoice_kernels::{N_CLASSES, Powerset};
 use std::path::{Path, PathBuf};
 
@@ -44,7 +42,20 @@ impl PowersetNative {
 
     /// Calibrated binarization for the aggregator. `None` keeps the default
     /// argmax path (`AggregationConfig::default`).
-    pub(crate) fn with_binarization(mut self, binarization: Option<BinarizationConfig>) -> Self {
+    #[cfg(any(
+        test,
+        all(
+            feature = "embedder-native",
+            feature = "local-models",
+            feature = "embedder",
+            feature = "clusterer",
+            feature = "resegmentation",
+        )
+    ))]
+    pub(crate) fn with_binarization(
+        mut self,
+        binarization: Option<crate::segmentation::BinarizationConfig>,
+    ) -> Self {
         self.aggregation.binarization = binarization;
         self
     }
