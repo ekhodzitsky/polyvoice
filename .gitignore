@@ -66,6 +66,12 @@ id_rsa
 id_rsa.pub
 
 # AI agent working directories (keep repo self-contained regardless of global gitignore)
+.serena/
+.codex/
+.gemini/
+.opencode/
+.windsurf/
+.copilot/
 .claude/
 .cody/
 .cursor/
