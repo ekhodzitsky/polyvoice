@@ -11,7 +11,7 @@
 
 use anyhow::Result;
 use rmcp::handler::server::wrapper::{Json, Parameters};
-use rmcp::model::{ErrorData, ServerCapabilities, ServerInfo};
+use rmcp::model::{ErrorData, ServerCapabilities, ServerConfig};
 use rmcp::{ServerHandler, ServiceExt, schemars, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -260,10 +260,10 @@ impl PolyvoiceMcp {
 
 #[tool_handler]
 impl ServerHandler for PolyvoiceMcp {
-    fn get_info(&self) -> ServerInfo {
-        // ServerInfo is #[non_exhaustive] — can't use a struct literal; mutate a
+    fn get_info(&self) -> ServerConfig {
+        // ServerConfig is #[non_exhaustive] — can't use a struct literal; mutate a
         // Default instead.
-        let mut info = ServerInfo::default();
+        let mut info = ServerConfig::default();
         info.capabilities = ServerCapabilities::builder().enable_tools().build();
         info.instructions = Some(
             "polyvoice speaker diarization (pipeline v2 + VBx by default, same as the CLI). \
